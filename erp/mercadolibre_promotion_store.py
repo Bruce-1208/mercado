@@ -350,6 +350,42 @@ class PromotionStore:
             for row in rows
         }
 
+    def all_applied_item_keys(
+        self,
+        *,
+        token_ids: Iterable[int] | None = None,
+        site_id: str = "",
+    ) -> set[tuple[int, str, str]]:
+        """Return all listing identities currently enrolled in a synced activity."""
+
+        applied_statuses = (
+            "pending_approval", "pending", "programmed", "scheduled",
+            "started", "active", "approved",
+        )
+        clauses = [f"LOWER(i.status_raw) IN ({','.join('?' for _ in applied_statuses)})"]
+        params: list[Any] = list(applied_statuses)
+        ids = sorted({int(value) for value in token_ids or () if int(value or 0) > 0})
+        if ids:
+            clauses.append(f"p.token_id IN ({','.join('?' for _ in ids)})")
+            params.extend(ids)
+        normalized_site = str(site_id or "").strip().upper()
+        if normalized_site:
+            clauses.append("p.site_id = ?")
+            params.append(normalized_site)
+        with self._connect() as db:
+            rows = db.execute(
+                """
+                SELECT DISTINCT p.token_id, p.site_id, i.item_id
+                FROM promotions AS p
+                INNER JOIN promotion_items AS i ON i.promotion_fk = p.id
+                WHERE """ + " AND ".join(clauses),
+                params,
+            ).fetchall()
+        return {
+            (int(row["token_id"]), str(row["site_id"] or "").upper(), str(row["item_id"] or "").upper())
+            for row in rows
+        }
+
     def set_item_status(self, promotion_fk: int, item_id: str, status: str) -> int:
         """Keep the local marker responsive immediately after a mutation."""
         with self._connect() as db:

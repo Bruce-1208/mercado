@@ -1909,6 +1909,15 @@ def resolve_browser_extension_dir():
 
 
 BROWSER_EXTENSION_DIR = resolve_browser_extension_dir()
+
+
+def browser_extension_version(extension_dir=None):
+    manifest_path = Path(extension_dir or BROWSER_EXTENSION_DIR) / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    return str(manifest.get("version") or "unknown")
+
+
+BROWSER_EXTENSION_VERSION = browser_extension_version()
 BROWSER_EXTENSION_PACKAGE_FILES = (
     "manifest.json",
     "background.js",
@@ -2679,7 +2688,7 @@ AI_WEIGHT_PRICE_STORE_METHODS = frozenset({
 @app.route("/api/db/ai-weight-price/store", methods=["POST"])
 @internal_api_required
 def api_db_ai_weight_price_store():
-    """Proxy the client execution process to the server-owned AWP MySQL store."""
+    """Proxy the local workbench service to its server-owned AWP store."""
     blocked = reject_db_api_client_mode()
     if blocked:
         return blocked
@@ -2702,6 +2711,7 @@ def api_db_ai_weight_price_store():
     except Exception as exc:
         logging.exception("AI核重核价 MySQL 数据接口失败：%s", method)
         return jsonify({"status": "error", "message": f"AI核重核价数据库操作失败：{exc}"}), 500
+
 
 from bit.mercado_promotion_routes import create_promotions_blueprint
 
@@ -7895,6 +7905,9 @@ def api_store_links():
             site_id=str(request.args.get("site_id") or "").strip(),
             group_name=str(request.args.get("group_name") or "").strip(),
             status=str(request.args.get("status") or "").strip(),
+            promotion_applied=str(request.args.get("promotion_applied") or "").strip(),
+            advertising_enabled=str(request.args.get("advertising_enabled") or "").strip(),
+            video_uploaded=str(request.args.get("video_uploaded") or "").strip(),
             management_category_id=str(
                 request.args.get("management_category_id") or ""
             ).strip(),
@@ -7990,6 +8003,32 @@ def _ai_video_create_response(*, internal=False):
     })
 
 
+def _ai_video_retry_response(job_id, *, internal=False):
+    uploads = request.files.getlist("files")
+    form = request.form.to_dict()
+    if request.is_json:
+        form = request.get_json(silent=True) or {}
+        uploads = []
+    try:
+        result = (
+            bit_ai_video.retry_job(job_id, form, uploads)
+            if internal
+            else bit_db_api.retry_ai_video_job(job_id, form, uploads)
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except RuntimeError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 503
+    except Exception as exc:
+        logging.exception("重试 AI 视频任务失败")
+        return jsonify({"status": "error", "message": f"重试 AI 视频任务失败：{exc}"}), 500
+    return jsonify({
+        "status": "success",
+        "message": "已根据历史任务创建新的 AI 视频重试任务",
+        "data": result,
+    })
+
+
 @app.route('/api/ai-videos/jobs', methods=['GET', 'POST'])
 @login_required
 def api_ai_video_jobs():
@@ -8004,6 +8043,12 @@ def api_ai_video_jobs():
         logging.exception("读取 AI 视频任务失败")
         return jsonify({"status": "error", "message": f"读取 AI 视频任务失败：{exc}"}), 502
     return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/ai-videos/jobs/<job_id>/retry', methods=['POST'])
+@login_required
+def api_ai_video_retry(job_id):
+    return _ai_video_retry_response(job_id)
 
 
 @app.route('/api/ai-videos/settings', methods=['GET', 'PATCH'])
@@ -8023,6 +8068,42 @@ def api_ai_video_settings():
         logging.exception("AI 视频配置保存失败")
         return jsonify({"status": "error", "message": str(exc)}), 502
     return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/ai-videos/jobs/<job_id>/assets/<asset_id>', methods=['GET'])
+@login_required
+def api_ai_video_asset(job_id, asset_id):
+    if not USE_DB_API:
+        try:
+            path = bit_ai_video.asset_path(job_id, asset_id)
+        except ValueError as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 404
+        return send_file(path, conditional=True)
+    try:
+        remote = bit_db_api.DB_API_SESSION.get(
+            f"{bit_db_api.DB_API_BASE_URL}/api/db/ai-videos/jobs/{job_id}/assets/{asset_id}",
+            headers=bit_db_api._headers(), timeout=(20, 120), stream=True,
+        )
+    except bit_db_api.requests.RequestException as exc:
+        return jsonify({"status": "error", "message": f"读取素材失败：{exc}"}), 502
+    if not remote.ok:
+        remote.close()
+        return jsonify({"status": "error", "message": "读取素材失败"}), remote.status_code
+
+    def generate_asset():
+        try:
+            yield from remote.iter_content(256 * 1024)
+        finally:
+            remote.close()
+
+    response = Response(
+        generate_asset(),
+        content_type=remote.headers.get("Content-Type") or "application/octet-stream",
+    )
+    if remote.headers.get("Content-Length"):
+        response.headers["Content-Length"] = remote.headers["Content-Length"]
+    response.headers["Cache-Control"] = "private, max-age=300"
+    return response
 
 
 @app.route('/api/ai-videos/jobs/<job_id>', methods=['GET', 'PATCH', 'DELETE'])
@@ -8177,6 +8258,15 @@ def api_db_ai_video_jobs():
     return jsonify({"status": "success", "data": data})
 
 
+@app.route('/api/db/ai-videos/jobs/<job_id>/retry', methods=['POST'])
+@internal_api_required
+def api_db_ai_video_retry(job_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return _ai_video_retry_response(job_id, internal=True)
+
+
 @app.route('/api/db/ai-videos/settings', methods=['GET', 'PATCH'])
 @internal_api_required
 def api_db_ai_video_settings():
@@ -8192,6 +8282,19 @@ def api_db_ai_video_settings():
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/db/ai-videos/jobs/<job_id>/assets/<asset_id>', methods=['GET'])
+@internal_api_required
+def api_db_ai_video_asset(job_id, asset_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        path = bit_ai_video.asset_path(job_id, asset_id)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    return send_file(path, conditional=True)
 
 
 @app.route('/api/db/ai-videos/jobs/<job_id>', methods=['GET', 'PATCH', 'DELETE'])
@@ -9578,8 +9681,11 @@ def api_ad_analysis_actions():
 def api_download_local_agent():
     user = get_current_workbench_user()
     if not any(workbench_user_has_permission(user, permission)
-               for permission in ("appeal.execute", "tasks.execute")):
-        return jsonify({"status": "error", "message": "当前账号没有 Agent 任务执行权限"}), 403
+               for permission in (
+                   "appeal.execute",
+                   "tasks.execute",
+               )):
+        return jsonify({"status": "error", "message": "当前账号没有本机 Agent 任务执行权限"}), 403
     try:
         target_platform = normalize_agent_platform(request.args.get("platform"))
     except ValueError as exc:
@@ -11655,6 +11761,7 @@ def api_update_mercado_product(product_item_id):
     allowed = {
         "title", "description_text", "main_image_url", "category_id", "price",
         "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
+        "variations", "variation_dimensions",
     }
     try:
         result = db_update_mercado_product_item(
@@ -14315,6 +14422,9 @@ def api_db_store_links():
             site_id=str(request.args.get("site_id") or "").strip(),
             group_name=str(request.args.get("group_name") or "").strip(),
             status=str(request.args.get("status") or "").strip(),
+            promotion_applied=str(request.args.get("promotion_applied") or "").strip(),
+            advertising_enabled=str(request.args.get("advertising_enabled") or "").strip(),
+            video_uploaded=str(request.args.get("video_uploaded") or "").strip(),
             management_category_id=str(
                 request.args.get("management_category_id") or ""
             ).strip(),
@@ -16931,6 +17041,47 @@ def api_account_integrations():
     return response
 
 
+@app.route("/api/account-integrations/private", methods=["GET"])
+@login_required
+def api_private_account_integrations():
+    """Reveal encrypted credentials only after an explicit user action."""
+    try:
+        user_id = _current_account_user_id()
+        data = {
+            "tokens": browser_extension_models.get_private_settings(
+                user_id, app.secret_key
+            ),
+            "email": {},
+            "webhook": {},
+        }
+        email_public = browser_extension_mail.get_public_settings(
+            user_id, app.secret_key
+        )
+        if email_public.get("password_configured"):
+            email_private = browser_extension_mail.get_private_settings(
+                user_id, app.secret_key
+            )
+            data["email"] = {
+                "smtp_password": str(email_private.get("smtp_password") or "")
+            }
+        webhook_public = account_webhook.get_public_settings(
+            user_id, app.secret_key
+        )
+        if webhook_public.get("configured"):
+            webhook_private = account_webhook.get_private_settings(
+                user_id, app.secret_key
+            )
+            data["webhook"] = {
+                "secret": str(webhook_private.get("secret") or "")
+            }
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    response = jsonify({"status": "success", "data": data})
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
 @app.route("/api/account-integrations/tokens", methods=["PUT"])
 @login_required
 def api_account_integration_tokens():
@@ -17136,7 +17287,7 @@ def api_browser_extension_download():
         max_age=0,
     )
     response.headers["Cache-Control"] = "no-store"
-    response.headers["X-Zeshun-Extension-Version"] = "1.8.2"
+    response.headers["X-Zeshun-Extension-Version"] = BROWSER_EXTENSION_VERSION
     return response
 
 
@@ -17496,18 +17647,29 @@ def api_browser_extension_stop_zying_infringement():
     return jsonify({"status": "success", "message": "已发送结束指令", "data": data})
 
 
-def _browser_extension_ai_weight_price_local_only():
-    """Keep browser-driven AI verification on the workstation that owns Edge."""
-    if request.remote_addr not in ("127.0.0.1", "::1", "localhost"):
-        return jsonify({
-            "status": "error",
-            "message": "AI核重核价只能连接本机泽顺控制台启动，请将插件控制台地址设为 http://127.0.0.1:5000",
-        }), 403
-    # The signed extension token is the authoritative task owner. Keep this
-    # scope on every request; the worker thread captures it when a run starts.
+def _browser_extension_ai_weight_price_actor():
+    user = getattr(g, "browser_extension_user", None) or {}
+    return {
+        "id": user.get("id"),
+        "username": user.get("username") or "",
+        "display_name": user.get("display_name") or user.get("username") or "",
+    }
+
+
+def _browser_extension_ai_weight_price_local_only(data=None):
+    """Select local Python execution for local tests or extension execution.
+
+    Public plugin requests are handled by the browser-extension client
+    workflow. The function name remains for compatibility with the local
+    console routes.
+    """
     ai_weight_price_service.bind_actor(
-        getattr(g, "browser_extension_user", None), view_all=False
+        _browser_extension_ai_weight_price_actor(), view_all=False
     )
+    if request.remote_addr in ("127.0.0.1", "::1", "localhost"):
+        g.awp_execution_target = "local"
+        return None
+    g.awp_execution_target = "extension"
     return None
 
 
@@ -17515,18 +17677,98 @@ def _browser_extension_ai_weight_price_snapshot():
     data = ai_weight_price_service.status()
     config = ai_weight_price_service.config.load()
     user = getattr(g, "browser_extension_user", None)
+    execution_target = getattr(g, "awp_execution_target", "local")
     execution_terminal = socket.gethostname()
-    return {
+    snapshot = {
         **data,
         "computer": execution_terminal,
         "execution_terminal": execution_terminal,
+        "execution_target": execution_target,
         "can_execute": bool(
             user and workbench_user_has_permission(user, "ai_weight_price.execute")
         ),
         "categories": ai_weight_price_service.store.state("categories", []),
         "categories_meta": ai_weight_price_service.store.state("categories_meta", {}),
         "max_pages": int(config.get("max_pages") or 100),
+        "client_config": {
+            "selectors": {
+                **(config.get("selectors") or {}),
+                "erp_edit_url": (config.get("selectors") or {}).get("erp_edit_link", ""),
+                "erp_detail": ".curd-detail-wrap",
+                "erp_weight": (config.get("selectors") or {}).get("erp_weight_input", ""),
+                "erp_net_income": (config.get("selectors") or {}).get("erp_net_income_input", ""),
+                "erp_save": (config.get("selectors") or {}).get("erp_save", ""),
+            },
+            "max_candidates": int(config.get("max_candidates") or 10),
+            "max_pages": int(config.get("max_pages") or 100),
+            "workflow_mode": config.get("workflow_mode") or "image_first",
+            "writeback_enabled": bool(config.get("writeback_enabled")),
+        },
     }
+    if execution_target == "extension":
+        snapshot.update({
+            "computer": "浏览器插件",
+            "execution_terminal": "浏览器插件",
+            "execution_target": "extension",
+        })
+    return snapshot
+
+
+def _enqueue_browser_extension_ai_weight_price(action, data):
+    """Keep the pre-client endpoints from accidentally starting Python AWP."""
+    return jsonify({
+        "status": "error",
+        "message": "请更新泽顺插件；核重核价由插件直接驱动 Edge 执行",
+    }), 409
+
+
+@app.route("/api/browser-extension/ai-weight-price/client/status", methods=["GET"])
+@browser_extension_login_required
+@browser_extension_permission_required("ai_weight_price.view")
+def api_browser_extension_ai_weight_price_client_status():
+    """Return server state for the extension-owned browser workflow."""
+    ai_weight_price_service.bind_actor(
+        _browser_extension_ai_weight_price_actor(), view_all=False
+    )
+    data = _browser_extension_ai_weight_price_snapshot()
+    data["execution_target"] = "extension"
+    data["execution_terminal"] = "浏览器插件"
+    data["computer"] = "浏览器插件"
+    response = jsonify({"status": "success", "data": data})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/api/browser-extension/ai-weight-price/client/<path:action>", methods=["POST"])
+@browser_extension_login_required
+@browser_extension_permission_required("ai_weight_price.execute")
+def api_browser_extension_ai_weight_price_client_action(action):
+    """Run one server-side step for the extension-owned Edge workflow."""
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"status": "error", "message": "插件核重核价参数无效"}), 400
+    try:
+        from bit.ai_weight_price_client import dispatch
+
+        ai_weight_price_service.bind_actor(
+            _browser_extension_ai_weight_price_actor(), view_all=False
+        )
+        user_id = int((g.browser_extension_user or {}).get("id") or 0)
+        if action in {"start", "search", "detail"}:
+            data = {
+                **data,
+                "runtime_api_key": browser_extension_models.get_api_key(
+                    user_id, "dashscope", app.secret_key
+                ),
+            }
+        result = dispatch(ai_weight_price_service, action, data)
+        result = result if isinstance(result, dict) else {}
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("插件 AI核重核价步骤失败：%s", action)
+        return jsonify({"status": "error", "message": f"插件核重核价执行失败：{exc}"}), 409
 
 
 @app.route("/api/browser-extension/ai-weight-price/status", methods=["GET"])
@@ -17548,9 +17790,13 @@ def api_browser_extension_ai_weight_price_status():
 @browser_extension_login_required
 @browser_extension_permission_required("ai_weight_price.execute")
 def api_browser_extension_ai_weight_price_open_login():
-    blocked = _browser_extension_ai_weight_price_local_only()
+    data = request.get_json(silent=True) or {}
+    blocked = _browser_extension_ai_weight_price_local_only(data)
     if blocked:
         return blocked
+    remote = _enqueue_browser_extension_ai_weight_price("login/open", data)
+    if remote is not None:
+        return remote
     try:
         ai_weight_price_service.open_login(include_supplier=False)
     except ValueError as exc:
@@ -17566,9 +17812,13 @@ def api_browser_extension_ai_weight_price_open_login():
 @browser_extension_login_required
 @browser_extension_permission_required("ai_weight_price.execute")
 def api_browser_extension_ai_weight_price_confirm_login():
-    blocked = _browser_extension_ai_weight_price_local_only()
+    data = request.get_json(silent=True) or {}
+    blocked = _browser_extension_ai_weight_price_local_only(data)
     if blocked:
         return blocked
+    remote = _enqueue_browser_extension_ai_weight_price("login/confirm", data)
+    if remote is not None:
+        return remote
     try:
         ai_weight_price_service.confirm_login()
     except ValueError as exc:
@@ -17584,9 +17834,13 @@ def api_browser_extension_ai_weight_price_confirm_login():
 @browser_extension_login_required
 @browser_extension_permission_required("ai_weight_price.execute")
 def api_browser_extension_ai_weight_price_refresh_categories():
-    blocked = _browser_extension_ai_weight_price_local_only()
+    data = request.get_json(silent=True) or {}
+    blocked = _browser_extension_ai_weight_price_local_only(data)
     if blocked:
         return blocked
+    remote = _enqueue_browser_extension_ai_weight_price("categories/refresh", data)
+    if remote is not None:
+        return remote
     try:
         ai_weight_price_service.categories()
     except ValueError as exc:
@@ -17602,10 +17856,16 @@ def api_browser_extension_ai_weight_price_refresh_categories():
 @browser_extension_login_required
 @browser_extension_permission_required("ai_weight_price.execute")
 def api_browser_extension_ai_weight_price_start():
-    blocked = _browser_extension_ai_weight_price_local_only()
+    data = request.get_json(silent=True) or {}
+    blocked = _browser_extension_ai_weight_price_local_only(data)
     if blocked:
         return blocked
-    data = request.get_json(silent=True) or {}
+    try:
+        remote = _enqueue_browser_extension_ai_weight_price("start", data)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    if remote is not None:
+        return remote
     try:
         from erp.ai_weight_price.config import selection_params
         config = ai_weight_price_service.config.load()
@@ -17643,9 +17903,13 @@ def api_browser_extension_ai_weight_price_start():
 @browser_extension_login_required
 @browser_extension_permission_required("ai_weight_price.execute")
 def api_browser_extension_ai_weight_price_open_supplier():
-    blocked = _browser_extension_ai_weight_price_local_only()
+    data = request.get_json(silent=True) or {}
+    blocked = _browser_extension_ai_weight_price_local_only(data)
     if blocked:
         return blocked
+    remote = _enqueue_browser_extension_ai_weight_price("login/supplier", data)
+    if remote is not None:
+        return remote
     try:
         ai_weight_price_service.open_supplier_login()
     except ValueError as exc:
@@ -17657,10 +17921,16 @@ def api_browser_extension_ai_weight_price_open_supplier():
 @browser_extension_login_required
 @browser_extension_permission_required("ai_weight_price.execute")
 def api_browser_extension_ai_weight_price_continue():
-    blocked = _browser_extension_ai_weight_price_local_only()
+    data = request.get_json(silent=True) or {}
+    blocked = _browser_extension_ai_weight_price_local_only(data)
     if blocked:
         return blocked
-    data = request.get_json(silent=True) or {}
+    try:
+        remote = _enqueue_browser_extension_ai_weight_price("continue", data)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    if remote is not None:
+        return remote
     if data.get("acknowledged") is not True:
         return jsonify(status="error", message="请先完成登录或人机验证，并勾选继续原任务"), 400
     try:
@@ -17680,9 +17950,13 @@ def api_browser_extension_ai_weight_price_continue():
 @browser_extension_login_required
 @browser_extension_permission_required("ai_weight_price.execute")
 def api_browser_extension_ai_weight_price_stop():
-    blocked = _browser_extension_ai_weight_price_local_only()
+    data = request.get_json(silent=True) or {}
+    blocked = _browser_extension_ai_weight_price_local_only(data)
     if blocked:
         return blocked
+    remote = _enqueue_browser_extension_ai_weight_price("stop", data)
+    if remote is not None:
+        return remote
     if not ai_weight_price_service.status().get("running"):
         return jsonify({"status": "error", "message": "当前没有正在运行的AI核重核价任务"}), 409
     ai_weight_price_service.stop()

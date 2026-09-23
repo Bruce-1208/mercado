@@ -96,6 +96,127 @@
     return products;
   }
 
+  function variationArrayScore(value) {
+    if (!Array.isArray(value) || !value.length || value.length > 500) return -1;
+    const rows = value.filter(item => item && typeof item === "object" && !Array.isArray(item));
+    if (!rows.length) return -1;
+    const useful = rows.filter(item => {
+      const combinations = item.attribute_combinations || item.attributeCombinations ||
+        item.combinations || item.variation_attributes || item.specifications;
+      return Array.isArray(combinations) && combinations.length ||
+        Array.isArray(item.attributes) && item.attributes.length ||
+        item.sku_id || item.skuId || item.seller_sku || item.sellerSku || item.skuCode ||
+        ((item.label || item.name || item.sku_name || item.skuName) &&
+          (item.price !== undefined || item.available_quantity !== undefined || item.stock !== undefined));
+    });
+    if (!useful.length) return -1;
+    const richRows = useful.filter(item => {
+      const combinations = item.attribute_combinations || item.attributeCombinations ||
+        item.combinations || item.variation_attributes || item.specifications || item.attributes;
+      return Array.isArray(combinations) && combinations.length;
+    }).length;
+    return richRows * 1000 + useful.length * 10 + Math.min(rows.length, 9);
+  }
+
+  function assignedJson(scriptText) {
+    const text = String(scriptText || "");
+    const marker = /(?:__PRELOADED_STATE__|__INITIAL_STATE__|__NEXT_DATA__|__APOLLO_STATE__|preloadedState)\s*[:=]\s*/i.exec(text);
+    if (!marker) return null;
+    const start = text.indexOf("{", marker.index + marker[0].length);
+    if (start < 0) return null;
+    let depth = 0;
+    let quote = "";
+    let escaped = false;
+    for (let index = start; index < text.length; index += 1) {
+      const char = text[index];
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === quote) quote = "";
+        continue;
+      }
+      if (char === '"') quote = char;
+      else if (char === "{" || char === "[") depth += 1;
+      else if (char === "}" || char === "]") {
+        depth -= 1;
+        if (depth === 0) {
+          try { return JSON.parse(text.slice(start, index + 1)); } catch (_) { return null; }
+        }
+      }
+    }
+    return null;
+  }
+
+  function extractProductVariations(doc, product) {
+    const candidates = [];
+    const add = value => {
+      const score = variationArrayScore(value);
+      if (score >= 0) candidates.push({value, score});
+    };
+    [product && product.variations, product && product.variants, product && product.hasVariant]
+      .forEach(add);
+    const parsedScripts = [];
+    if (doc && doc.querySelectorAll) {
+      doc.querySelectorAll("script").forEach(script => {
+        const content = String(script.textContent || "").trim();
+        if (!content || content.length > 5_000_000) return;
+        let parsed = null;
+        if (script.type === "application/ld+json" || script.type === "application/json") {
+          try { parsed = JSON.parse(content); } catch (_) {}
+        }
+        if (!parsed && /(?:__PRELOADED_STATE__|__INITIAL_STATE__|__NEXT_DATA__|__APOLLO_STATE__|variations|attribute_combinations)/i.test(content)) {
+          parsed = assignedJson(content);
+        }
+        if (parsed) parsedScripts.push(parsed);
+      });
+    }
+    let visited = 0;
+    const seen = new WeakSet();
+    const walk = (value, depth = 0) => {
+      if (!value || typeof value !== "object" || depth > 22 || visited > 120000 || seen.has(value)) return;
+      seen.add(value);
+      visited += 1;
+      if (Array.isArray(value)) {
+        add(value);
+        value.slice(0, 1000).forEach(child => walk(child, depth + 1));
+        return;
+      }
+      for (const [key, child] of Object.entries(value)) {
+        const collectionKey = /^(?:variations?|variants?|skus?|sku_list|skuList|item_skus|itemSkus|sku_map|skuMap|sku_info_map|skuInfoMap)$/i.test(key);
+        if (Array.isArray(child) && collectionKey) add(child);
+        else if (child && typeof child === "object" && !Array.isArray(child) && collectionKey) {
+          add(Object.values(child).slice(0, 500));
+        }
+        if (child && typeof child === "object" && !["parent", "owner", "_owner", "stateNode"].includes(key)) walk(child, depth + 1);
+      }
+    };
+    parsedScripts.forEach(value => walk(value));
+    if (!candidates.length) return [];
+    candidates.sort((left, right) => right.score - left.score);
+    const sourceRows = candidates[0].value.filter(item => item && typeof item === "object" && !Array.isArray(item)).slice(0, 200);
+    return sourceRows.map(raw => {
+      const variation = {...raw};
+      const combinations = raw.attribute_combinations || raw.attributeCombinations || raw.combinations || raw.variation_attributes;
+      if (Array.isArray(combinations) && combinations.length) variation.attribute_combinations = combinations;
+      else if (Array.isArray(raw.specifications) && raw.specifications.length) variation.attribute_combinations = raw.specifications;
+      else if (Array.isArray(raw.attributes)) {
+        const combinationAttributes = raw.attributes.filter(attribute => attribute &&
+          typeof attribute === "object" && !["SELLER_SKU", "SKU"].includes(String(attribute.id || "").toUpperCase()) &&
+          (attribute.value_name || attribute.value_id || attribute.values));
+        if (combinationAttributes.length) variation.attribute_combinations = combinationAttributes;
+      }
+      if (variation.id === undefined && (raw.variation_id !== undefined || raw.variationId !== undefined)) {
+        variation.id = raw.variation_id ?? raw.variationId;
+      }
+      if (variation.available_quantity === undefined) {
+        variation.available_quantity = raw.availableQuantity ?? raw.stock ?? raw.quantity ?? raw.available;
+      }
+      if (variation.price === undefined && raw.price_amount !== undefined) variation.price = raw.price_amount;
+      if (!variation.picture_ids && Array.isArray(raw.pictureIds)) variation.picture_ids = raw.pictureIds;
+      return variation;
+    });
+  }
+
   function extractItemId(doc, pageUrl, product) {
     const candidates = [];
     try {
@@ -547,6 +668,7 @@
     const description = clean((descriptionNode && descriptionNode.textContent) || product.description);
     const pictures = extractImages(doc, product);
     const specs = extractSpecs(doc);
+    const variations = extractProductVariations(doc, product);
     const plugin = pluginOverride || readPluginMetrics(doc);
     const metrics = plugin.metrics;
     const actualWeightComplete = Number.isFinite(Number(metrics.weight_g)) && Number(metrics.weight_g) > 0;
@@ -581,7 +703,7 @@
       permalink: finalUrl,
       pictures: pictures.map(url => ({source: url})),
       attributes: specs.map(row => ({name: row.name, value_name: row.value})),
-      variations: [],
+      variations,
       sale_terms: []
     };
     return {
@@ -608,6 +730,7 @@
         page_title: clean(doc.title),
         specs,
         pictures,
+        variation_count: variations.length,
         browser: "zeshun_browser_extension"
       },
       plugin_snapshot: {

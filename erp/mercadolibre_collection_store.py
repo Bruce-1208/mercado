@@ -2126,27 +2126,86 @@ def update_product_item(
         raise ValueError("产品记录编号无效") from exc
     if row_id <= 0:
         raise ValueError("产品记录编号无效")
-    normalized = _normalize_product_content_changes(changes)
+    raw_changes = dict(changes or {})
+    variations_changed = "variations" in raw_changes
+    dimensions_changed = "variation_dimensions" in raw_changes
+    variation_rows: list[dict[str, Any]] = []
+    if variations_changed:
+        if not isinstance(raw_changes.get("variations"), list):
+            raise ValueError("产品变体必须是数组")
+        if len(raw_changes["variations"]) > 200:
+            raise ValueError("每件产品最多保存 200 个变体")
+        variation_rows = _editor_variations(raw_changes["variations"])
+    variation_dimensions: list[dict[str, Any]] = []
+    if dimensions_changed:
+        variation_dimensions = _editor_variation_dimensions(raw_changes["variation_dimensions"])
+    normalized = _normalize_product_content_changes(
+        {key: value for key, value in raw_changes.items() if key not in {"variations", "variation_dimensions"}}
+    ) if any(key not in {"variations", "variation_dimensions"} for key in raw_changes) else {}
+    if not normalized and not variations_changed and not dimensions_changed:
+        raise ValueError("没有可保存的产品内容")
     assignments, values, profitability_stale = _product_content_update_plan(
         normalized, preserve_zying_net_proceeds=True
-    )
+    ) if normalized else ([], [], False)
 
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
-            cursor.execute(
-                f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} WHERE `id` = %s",
-                tuple(values + [row_id]),
-            )
-            changed = int(cursor.rowcount or 0)
-            if changed == 0:
+            if assignments:
                 cursor.execute(
-                    f"SELECT 1 FROM `{PRODUCT_TABLE}` WHERE `id` = %s",
+                    f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} WHERE `id` = %s",
+                    tuple(values + [row_id]),
+                )
+                changed = int(cursor.rowcount or 0)
+            else:
+                changed = 0
+            if changed == 0 or variations_changed or dimensions_changed:
+                cursor.execute(
+                    f"SELECT `id`, `collection_item_id`, `source_snapshot_json` "
+                    f"FROM `{PRODUCT_TABLE}` WHERE `id` = %s FOR UPDATE",
                     (row_id,),
                 )
-                if not cursor.fetchone():
+                current = cursor.fetchone()
+                if not current:
                     raise KeyError("产品记录不存在")
+            else:
+                current = None
+
+            if variations_changed or dimensions_changed:
+                snapshot = _loads(current.get("source_snapshot_json"), {})
+                if not isinstance(snapshot, dict):
+                    snapshot = {}
+                source = dict(snapshot.get("source") or {})
+                if variations_changed:
+                    source["variations"] = variation_rows
+                if dimensions_changed:
+                    source["variation_dimensions"] = variation_dimensions
+                snapshot["source"] = source
+                cursor.execute(
+                    f"UPDATE `{PRODUCT_TABLE}` SET `source_snapshot_json` = %s WHERE `id` = %s",
+                    (_dumps(snapshot), row_id),
+                )
+                changed = max(changed, int(cursor.rowcount or 0))
+                collection_item_id = int(current.get("collection_item_id") or 0)
+                if collection_item_id > 0 and (variations_changed or dimensions_changed):
+                    cursor.execute(
+                        f"SELECT `source_json` FROM `{COLLECTION_TABLE}` WHERE `id` = %s FOR UPDATE",
+                        (collection_item_id,),
+                    )
+                    collection_row = cursor.fetchone()
+                    if collection_row:
+                        collection_source = _loads(collection_row.get("source_json"), {})
+                        if not isinstance(collection_source, dict):
+                            collection_source = {}
+                        if variations_changed:
+                            collection_source["variations"] = variation_rows
+                        if dimensions_changed:
+                            collection_source["variation_dimensions"] = variation_dimensions
+                        cursor.execute(
+                            f"UPDATE `{COLLECTION_TABLE}` SET `source_json` = %s WHERE `id` = %s",
+                            (_dumps(collection_source), collection_item_id),
+                        )
 
             # The daily profitability worker reads collection rows, so mirror
             # edited pricing/weight data back there and mark the snapshot stale.
@@ -2649,6 +2708,35 @@ def _editor_variations(value: Any) -> list[dict[str, Any]]:
     return result
 
 
+def _editor_variation_dimensions(value: Any) -> list[dict[str, Any]]:
+    """Persist the editable dimension names and option values for SKU generation."""
+    if not isinstance(value, list):
+        raise ValueError("变体规格必须是数组")
+    result: list[dict[str, Any]] = []
+    for raw in value[:20]:
+        if not isinstance(raw, Mapping):
+            continue
+        name = str(raw.get("name") or "").strip()[:128]
+        if not name:
+            continue
+        raw_values = raw.get("values")
+        if isinstance(raw_values, str):
+            raw_values = re.split(r"[,，]", raw_values)
+        if not isinstance(raw_values, list):
+            raw_values = []
+        values = list(dict.fromkeys(
+            str(item or "").strip()[:255]
+            for item in raw_values
+            if str(item or "").strip()
+        ))[:200]
+        result.append({
+            "id": str(raw.get("id") or "").strip()[:64],
+            "name": name,
+            "values": values,
+        })
+    return result
+
+
 def update_ai_original_listing(
     product_item_id: int,
     listing: Mapping[str, Any],
@@ -2689,6 +2777,7 @@ def update_ai_original_listing(
             description_pt = _editor_text(data.get("description_pt"), 50000)
             attributes = _editor_attributes(data.get("attributes"))
             variations = _editor_variations(data.get("variations"))
+            variation_dimensions = _editor_variation_dimensions(data.get("variation_dimensions", []))
 
             if "source_title" in data and source_title:
                 original["title"] = source_title
@@ -2714,6 +2803,9 @@ def update_ai_original_listing(
             if "variations" in data:
                 prepared["variations"] = variations
                 source["variations"] = variations
+            if "variation_dimensions" in data:
+                prepared["variation_dimensions"] = variation_dimensions
+                source["variation_dimensions"] = variation_dimensions
             if "source_title" in data or "source_description" in data:
                 snapshot["original_1688"] = original
             snapshot["ai_original"] = prepared

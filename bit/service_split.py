@@ -27,6 +27,8 @@ STATEFUL_PREFIXES = (
     "/api/mercado-products/", "/api/db/mercado-products/",
     "/api/browser-extension/zying/", "/api/local-executor/tasks/daily/",
     "/api/local-executor/run_shensu",
+    "/api/browser-extension/ai-weight-price/client/",
+    "/api/db/ai-weight-price/store",
 )
 STATEFUL_PATHS = {
     "/api/overview-auto-sync", "/api/db/overview-auto-sync",

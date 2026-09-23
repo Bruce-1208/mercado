@@ -48,7 +48,7 @@ pymysql = _PooledPyMySQL()
 
 # 1. 配置数据库连接信息
 config = {
-    'host': os.environ.get('MYSQL_HOST', os.environ.get('DB_HOST', '192.168.1.11')),
+    'host': os.environ.get('MYSQL_HOST', os.environ.get('DB_HOST', '127.0.0.1')),
     'user': os.environ.get('MYSQL_USER', os.environ.get('DB_USER', 'mercado')),
     'password': os.environ.get('MYSQL_PASSWORD', os.environ.get('DB_PASSWORD', 'mercado')),
     'database': os.environ.get('MYSQL_DATABASE', os.environ.get('DB_NAME', 'mercado')),

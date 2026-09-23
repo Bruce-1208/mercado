@@ -543,7 +543,16 @@ class LocalAgentStore:
             ).fetchone()
             job = self._job_row(claimed)
             stored_payload = dict(job.get("payload") or {})
-            if stored_payload.pop("deepseek_api_key", None) is not None:
+            sensitive_payload_keys = (
+                "deepseek_api_key",
+                "dashscope_api_key",
+                "runtime_api_key",
+            )
+            scrubbed = False
+            for key in sensitive_payload_keys:
+                if stored_payload.pop(key, None) is not None:
+                    scrubbed = True
+            if scrubbed:
                 connection.execute(
                     "UPDATE local_agent_jobs SET payload_json = ? WHERE job_id = ?",
                     (json.dumps(stored_payload, ensure_ascii=False), job_id),

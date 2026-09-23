@@ -117,7 +117,7 @@ def test_apply_server_role_forces_direct_mysql_default_host():
     assert environment["BIT_RUNTIME_ROLE"] == "server"
     assert environment["BIT_DB_MODE"] == "mysql"
     assert environment["BIT_INTERFACE_DB_MODE"] == "direct"
-    assert environment["MYSQL_HOST"] == "192.168.1.11"
+    assert environment["MYSQL_HOST"] == "127.0.0.1"
     assert "BIT_DB_DIRECT_DISABLED" not in environment
 
 

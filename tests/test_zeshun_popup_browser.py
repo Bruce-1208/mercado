@@ -484,6 +484,48 @@ def test_real_extension_decodes_zying_protected_svg_metrics_across_isolated_worl
     assert product["plugin_snapshot"]["read_method"] == "browser_extension_protected_svg"
 
 
+def test_1688_extension_collection_reuses_weight_price_package_facts(browser):
+    page = browser.new_page()
+    page.route("https://detail.1688.com/**", lambda route: route.fulfill(body="""
+      <meta charset="utf-8"><h1>测试收纳袋</h1>
+      <img src="https://cbu01.alicdn.com/test.jpg">
+      <div id="skuSelection" data-module="od_sku_selection"></div>
+      <div id="productPackInfo" data-module="od_product_pack_info"></div>
+    """, content_type="text/html"))
+    page.add_init_script("""window.chrome={runtime:{
+      onMessage:{addListener:fn=>window.__zeshunMessageHandler=fn},
+      sendMessage:()=>Promise.resolve({ok:true})
+    }};""")
+    page.goto("https://detail.1688.com/offer/123456789.html")
+    page.evaluate("""() => {
+      document.querySelector('#skuSelection').__reactFiber$fixture={memoizedProps:{dataManager:{params:{skuItems:[
+        {skuId:22,specAttrs:'黑色&gt;大号',discountPrice:'2.50'},
+        {skuId:11,specAttrs:'黄色&gt;小号',discountPrice:'1.25'}
+      ]}}},return:null};
+      document.querySelector('#productPackInfo').__reactFiber$fixture={memoizedProps:{packInfoData:{skuInfo:[
+        {skuId:11,weight:40,length:11,width:10,height:17},
+        {skuId:22,weight:55,length:11,width:10,height:17}
+      ]}},return:null};
+    }""")
+    page.add_script_tag(path=str(EXTENSION / "content-1688.js"))
+    page.wait_for_timeout(100)
+    extracted = page.evaluate("""() => new Promise(resolve =>
+      window.__zeshunMessageHandler({type:'EXTRACT_PRODUCT'}, null, resolve))""")
+    detail = page.evaluate("""() => new Promise(resolve =>
+      window.__zeshunMessageHandler({type:'AI_WEIGHT_PRICE_READ_DETAIL'}, null, resolve))""")
+    page.close()
+
+    assert extracted["ok"] is True
+    assert extracted["product"]["weight_g"] == 55
+    assert [extracted["product"][key] for key in (
+        "package_length_cm", "package_width_cm", "package_height_cm")] == [11, 10, 17]
+    assert extracted["product"]["scrape_status"] == "ok"
+    assert detail["ok"] is True
+    assert detail["detail"]["weight_g"] == 55
+    assert [detail["detail"][key] for key in (
+        "package_length_cm", "package_width_cm", "package_height_cm")] == [11, 10, 17]
+
+
 def test_zying_sales_and_fulfillment_are_the_final_collection_filter(browser):
     page = browser.new_page()
     page.set_content("<div id='host'></div>")

@@ -954,6 +954,9 @@ def test_workbench_store_link_ui_and_routes():
     assert b'id="store-link-site-filter"' in response.data
     assert b'id="store-link-product-category-filter"' in response.data
     assert b'id="store-link-mercado-category-filter"' in response.data
+    assert b'id="store-link-promotion-filter"' in response.data
+    assert b'id="store-link-advertising-filter"' in response.data
+    assert b'id="store-link-video-filter"' in response.data
     assert b'<select id="store-link-mercado-category-filter"' in response.data
     assert b'id="store-link-delete-button"' in response.data
     assert b'id="store-link-pause-button"' in response.data
@@ -1024,6 +1027,7 @@ def test_workbench_store_link_ui_and_routes():
             "/api/store-links?search=MLM1&site_id=MLM&group_name="
             "%E8%BF%90%E8%90%A5%E4%B8%80%E7%BB%84&management_category_id=12"
             "&mercado_category=MLM123&sales_sort=asc&page_size=10"
+            "&promotion_applied=1&advertising_enabled=0&video_uploaded=1"
         )
     assert response.status_code == 200
     assert response.get_json()["data"]["rows"][0]["item_id"] == "MLM1"
@@ -1033,6 +1037,9 @@ def test_workbench_store_link_ui_and_routes():
     assert listing.call_args.kwargs["group_name"] == "运营一组"
     assert listing.call_args.kwargs["management_category_id"] == "12"
     assert listing.call_args.kwargs["mercado_category"] == "MLM123"
+    assert listing.call_args.kwargs["promotion_applied"] == "1"
+    assert listing.call_args.kwargs["advertising_enabled"] == "0"
+    assert listing.call_args.kwargs["video_uploaded"] == "1"
     assert listing.call_args.kwargs["sales_sort"] == "asc"
     assert listing.call_args.kwargs["page_size"] == 10
 

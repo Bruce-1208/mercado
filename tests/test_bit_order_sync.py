@@ -66,10 +66,12 @@ def test_manual_sync_passes_selected_datetime_range_to_mercado(monkeypatch):
         "access_token": "secret",
     }
     filters_seen = {}
+    options_seen = {}
     monkeypatch.setattr(bit_order_sync, "_token_records", lambda _ids: [token])
 
-    def fake_sync(_record, filters, **_options):
+    def fake_sync(_record, filters, **options):
         filters_seen.update(filters)
+        options_seen.update(options)
         return {
             "store": "泽顺巴西",
             "status": "success",
@@ -91,6 +93,10 @@ def test_manual_sync_passes_selected_datetime_range_to_mercado(monkeypatch):
         "sort": "date_asc",
         "date_created.from": "2026-08-29T00:30:00.000Z",
         "date_created.to": "2026-08-29T01:46:00.000Z",
+    }
+    assert options_seen == {
+        "enrich_images": True,
+        "force_refresh_financials": True,
     }
     assert state["start_date"] == "2026-08-29T08:30"
     assert state["end_date"] == "2026-08-29T09:45"
@@ -559,6 +565,7 @@ def test_scheduler_requests_daily_task_to_yield_when_recent_sync_is_due(monkeypa
 
 def test_daily_background_records_completed_run_from_shared_state(monkeypatch):
     saved = []
+    financial_refreshes = []
 
     class FakeLock:
         def __init__(self, *_args, **_kwargs):
@@ -586,6 +593,18 @@ def test_daily_background_records_completed_run_from_shared_state(monkeypatch):
     monkeypatch.setattr(bit_order_sync, "InterProcessLock", FakeLock)
     monkeypatch.setattr(bit_order_sync, "run_order_sync", fake_run)
     monkeypatch.setattr(
+        bit_order_sync,
+        "refresh_daily_order_financials",
+        lambda limit=200: financial_refreshes.append(limit) or {
+            "status": "completed",
+            "batches": 1,
+            "requested": 2,
+            "processed": 2,
+            "failed": 0,
+            "updated_orders": 2,
+        },
+    )
+    monkeypatch.setattr(
         bit_order_sync.bit_mysql,
         "set_mercado_order_sync_schedule_value",
         lambda key, value: saved.append((key, value)),
@@ -598,7 +617,48 @@ def test_daily_background_records_completed_run_from_shared_state(monkeypatch):
     assert saved == [
         (bit_order_sync.DAILY_STATUS_STATE_KEY, "2026-08-31")
     ]
+    assert financial_refreshes == [200]
     assert bit_order_sync._sync_state["daily_status_last_run_date"] == "2026-08-31"
+    assert bit_order_sync._sync_state["daily_financials"]["updated_orders"] == 2
+
+
+def test_daily_financial_refresh_drains_every_pending_batch(monkeypatch):
+    lock_events = []
+    batches = iter([
+        {"requested": 200, "processed": 200, "failed": 0, "updated_orders": 240},
+        {"requested": 200, "processed": 200, "failed": 1, "updated_orders": 215},
+        {"requested": 7, "processed": 7, "failed": 0, "updated_orders": 8},
+    ])
+
+    class FakeLock:
+        def __init__(self, key, **_kwargs):
+            assert key == bit_order_sync.FINANCIAL_BACKFILL_LOCK_KEY
+
+        def acquire(self, timeout=0):
+            lock_events.append(("acquire", timeout))
+            return True
+
+        def release(self):
+            lock_events.append(("release", None))
+
+    monkeypatch.setattr(bit_order_sync, "InterProcessLock", FakeLock)
+    monkeypatch.setattr(
+        bit_order_sync,
+        "backfill_order_financials",
+        lambda limit=200: next(batches),
+    )
+
+    result = bit_order_sync.refresh_daily_order_financials(limit=200)
+
+    assert result == {
+        "status": "partial",
+        "batches": 3,
+        "requested": 407,
+        "processed": 407,
+        "failed": 1,
+        "updated_orders": 463,
+    }
+    assert lock_events == [("acquire", 0), ("release", None)]
 
 
 def test_automatic_print_persists_activation_floor_and_uses_system_operator(monkeypatch):
@@ -1171,6 +1231,90 @@ def test_sync_order_financials_reads_official_shipment_cost(monkeypatch):
     assert saved_entries[0]["seller_cost"] == bit_order_sync.Decimal("6.71")
 
 
+def test_recent_order_financials_refreshes_cache_after_six_hours(monkeypatch):
+    saved_entries = []
+    calls = []
+
+    class Client:
+        def get_shipment_costs(self, shipment_id):
+            calls.append(shipment_id)
+            return {
+                "currency_id": "USD",
+                "senders": [{"cost": 8.2}],
+            }
+
+    monkeypatch.delenv(bit_order_sync.SHIPMENT_COST_CACHE_HOURS_ENV, raising=False)
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "list_mercado_shipment_cost_cache",
+        lambda _ids: {
+            "shipment-9": {
+                "shipping_id": "shipment-9",
+                "seller_cost": 2.6,
+                "currency_id": "USD",
+                "payload_json": "{}",
+                "checked_at": datetime.now() - timedelta(hours=7),
+                "last_error": "",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "save_mercado_shipment_costs",
+        lambda token_id, entries: saved_entries.extend(entries)
+        or {"shipments": len(entries), "orders": 1},
+    )
+
+    result = bit_order_sync._sync_order_financials(
+        Client(),
+        {"id": 9},
+        [{"shipping": {"id": "shipment-9"}}],
+    )
+
+    assert result["failed"] == 0
+    assert calls == ["shipment-9"]
+    assert saved_entries[0]["seller_cost"] == bit_order_sync.Decimal("8.2")
+
+
+def test_recent_order_financials_reuses_cache_within_six_hours(monkeypatch):
+    saved_entries = []
+
+    class Client:
+        def get_shipment_costs(self, shipment_id):
+            pytest.fail(f"新鲜缓存不应请求运单成本接口：{shipment_id}")
+
+    monkeypatch.delenv(bit_order_sync.SHIPMENT_COST_CACHE_HOURS_ENV, raising=False)
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "list_mercado_shipment_cost_cache",
+        lambda _ids: {
+            "shipment-9": {
+                "shipping_id": "shipment-9",
+                "seller_cost": 2.6,
+                "currency_id": "USD",
+                "payload_json": "{}",
+                "checked_at": datetime.now() - timedelta(hours=5),
+                "last_error": "",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "save_mercado_shipment_costs",
+        lambda token_id, entries: saved_entries.extend(entries)
+        or {"shipments": len(entries), "orders": 1},
+    )
+
+    result = bit_order_sync._sync_order_financials(
+        Client(),
+        {"id": 9},
+        [{"shipping": {"id": "shipment-9"}}],
+    )
+
+    assert result["failed"] == 0
+    assert saved_entries[0]["seller_cost"] == 2.6
+
+
 def test_daily_financial_sync_bypasses_fresh_shipment_cache(monkeypatch):
     saved_entries = []
     calls = []
@@ -1214,6 +1358,47 @@ def test_daily_financial_sync_bypasses_fresh_shipment_cache(monkeypatch):
     assert result["failed"] == 0
     assert calls == ["shipment-9"]
     assert saved_entries[0]["seller_cost"] == bit_order_sync.Decimal("8.25")
+
+
+def test_force_refresh_reuses_cost_already_fetched_in_same_store_run(monkeypatch):
+    saved_entries = []
+
+    class Client:
+        def get_shipment_costs(self, shipment_id):
+            pytest.fail(f"同一轮任务不应重复读取运单成本：{shipment_id}")
+
+    cached = {
+        "shipment-9": {
+            "shipping_id": "shipment-9",
+            "seller_cost": bit_order_sync.Decimal("8.2"),
+            "currency_id": "USD",
+            "payload": {"senders": [{"cost": 8.2}]},
+            "checked_at": datetime.now(),
+            "error": "",
+        }
+    }
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "list_mercado_shipment_cost_cache",
+        lambda _ids: {},
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "save_mercado_shipment_costs",
+        lambda token_id, entries: saved_entries.extend(entries)
+        or {"shipments": len(entries), "orders": 1},
+    )
+
+    result = bit_order_sync._sync_order_financials(
+        Client(),
+        {"id": 9},
+        [{"shipping": {"id": "shipment-9"}}],
+        cached,
+        force_refresh=True,
+    )
+
+    assert result["failed"] == 0
+    assert saved_entries[0]["seller_cost"] == bit_order_sync.Decimal("8.2")
 
 
 def test_historical_financial_backfill_propagates_interpreter_shutdown(monkeypatch):

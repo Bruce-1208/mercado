@@ -1448,6 +1448,22 @@ def _copy_variations(
 ) -> list[dict[str, Any]]:
     variations: list[dict[str, Any]] = []
     for index, variation in enumerate(source.get("variations") or [], start=1):
+        raw_stock = variation.get("available_quantity", variation.get("stock"))
+        try:
+            variation_stock = int(raw_stock) if raw_stock not in (None, "") else int(quantity)
+        except (TypeError, ValueError):
+            variation_stock = int(quantity)
+        if variation_stock < 0:
+            variation_stock = 0
+        source_attributes = variation.get("attributes") or []
+        source_sku = next((
+            str(attribute.get("value_name") or "").strip()
+            for attribute in source_attributes
+            if isinstance(attribute, Mapping)
+            and str(attribute.get("id") or "").upper() in {"SELLER_SKU", "SKU"}
+            and str(attribute.get("value_name") or "").strip()
+        ), "")
+        seller_sku = str(variation.get("seller_sku") or source_sku or "").strip()
         copied: dict[str, Any] = {
             "attribute_combinations": _copy_attributes(
                 variation.get("attribute_combinations") or [],
@@ -1456,10 +1472,10 @@ def _copy_variations(
                 source_schema=source_schema,
                 ensure_brand=False,
             ),
-            "available_quantity": quantity,
+            "available_quantity": variation_stock,
             "attributes": _copy_attributes(
-                variation.get("attributes") or [],
-                seller_sku=f"{sku_prefix}-V{index}",
+                source_attributes,
+                seller_sku=seller_sku or f"{sku_prefix}-V{index}",
                 allowed_ids=allowed_ids,
                 schema=schema,
                 source_schema=source_schema,
@@ -1473,6 +1489,17 @@ def _copy_variations(
             for picture_id in variation.get("picture_ids") or []
             if str(picture_id) in ids_to_urls
         ]
+        variation_images = variation.get("images")
+        if not isinstance(variation_images, list):
+            variation_images = []
+        for raw_image in [variation.get("image_url"), variation.get("image"), *variation_images]:
+            image_url = (
+                raw_image.get("secure_url") or raw_image.get("url") or raw_image.get("source")
+                if isinstance(raw_image, Mapping) else raw_image
+            )
+            image_url = _publishable_picture_url(image_url)
+            if image_url and image_url not in urls:
+                urls.append(image_url)
         if urls:
             copied["picture_ids"] = urls
         variations.append(copied)

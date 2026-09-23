@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import zipfile
 from pathlib import Path
+from urllib.request import Request
 
 import pytest
 
@@ -18,7 +19,7 @@ def test_manifest_is_chrome_edge_manifest_v3_and_declares_supported_sites():
     assert manifest["manifest_version"] == 3
     assert manifest["background"]["service_worker"] == "background.js"
     assert "default_popup" not in manifest["action"]
-    assert manifest["version"] == "1.8.2"
+    assert manifest["version"] == "1.8.3"
     matches = manifest["content_scripts"][0]["matches"]
     assert any("mercadolibre.com.mx" in pattern for pattern in matches)
     assert any("mercadolivre.com.br" in pattern for pattern in matches)
@@ -129,7 +130,7 @@ def test_console_downloads_complete_zeshun_extension_package():
 
     assert response.status_code == 200
     assert response.headers["Content-Type"].startswith("application/zip")
-    assert response.headers["X-Zeshun-Extension-Version"] == "1.8.2"
+    assert response.headers["X-Zeshun-Extension-Version"] == "1.8.3"
     assert "zeshun-collector-extension.zip" in response.headers["Content-Disposition"]
     with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
         names = set(archive.namelist())
@@ -235,6 +236,9 @@ def test_zying_collection_controls_live_in_extension_and_use_current_browser():
 def test_ai_weight_price_launch_controls_live_in_extension():
     popup = (EXTENSION / "popup.html").read_text(encoding="utf-8")
     background = (EXTENSION / "background.js").read_text(encoding="utf-8")
+    zying = (EXTENSION / "content-zying.js").read_text(encoding="utf-8")
+    supplier = (EXTENSION / "content-1688.js").read_text(encoding="utf-8")
+    options = (EXTENSION / "options.html").read_text(encoding="utf-8")
 
     assert 'id="weight-price-mode"' in popup
     assert 'id="weight-price-start-product-id"' in popup
@@ -243,9 +247,17 @@ def test_ai_weight_price_launch_controls_live_in_extension():
     assert 'id="weight-price-start"' in popup
     assert 'id="weight-price-stop"' in popup
     assert 'id="weight-price-current-meta"' in popup
-    assert "/api/browser-extension/ai-weight-price/status" in background
+    assert "/api/browser-extension/ai-weight-price/client/status" in background
+    assert "/api/browser-extension/ai-weight-price/client/" in background
     assert 'aiWeightPriceAction("start"' in background
     assert 'aiWeightPriceAction("stop"' in background
+    assert 'type: "AI_WEIGHT_PRICE_EXTRACT_PRODUCTS"' in background
+    assert 'type: "AI_WEIGHT_PRICE_SEARCH"' in background
+    assert 'type === "AI_WEIGHT_PRICE_WRITEBACK"' in zying
+    assert 'type === "AI_WEIGHT_PRICE_READ_DETAIL"' in supplier
+    assert 'type === "AI_WEIGHT_PRICE_SEARCH"' in supplier
+    assert 'id="execution-agent-id"' not in options
+    assert "executionAgentId" not in background
 
 
 def test_ai_weight_price_console_keeps_product_table_stable_and_shows_owner():
@@ -261,7 +273,7 @@ def test_ai_weight_price_console_keeps_product_table_stable_and_shows_owner():
     assert "entry.owner_name" in template
     assert "所有业务员商品" in template
     assert "ai_weight_price_service.bind_actor" in backend
-    assert 'actor = data.get("actor")' in backend
+    assert 'from bit.ai_weight_price_client import dispatch' in backend
 
 
 def test_integrated_ai_weight_price_page_points_launch_to_extension(monkeypatch):
@@ -537,6 +549,8 @@ def test_ai_original_source_image_proxy_allows_only_1688_cdn(monkeypatch):
 
     class Upstream(io.BytesIO):
         headers = {"Content-Type": "image/webp"}
+        is_redirect = False
+        is_permanent_redirect = False
 
         def geturl(self):
             return "https://cbu01.alicdn.com/img/ibank/test.webp"
@@ -547,11 +561,27 @@ def test_ai_original_source_image_proxy_allows_only_1688_cdn(monkeypatch):
         def __exit__(self, *_args):
             self.close()
 
+        def raise_for_status(self):
+            return None
+
+        def iter_content(self, _chunk_size):
+            yield self.getvalue()
+
     def fake_urlopen(request, timeout):
         captured.append((request, timeout))
         return Upstream(b"webp-image-bytes")
 
-    monkeypatch.setattr(workbench, "urlopen", fake_urlopen)
+    class FakeSession:
+        def mount(self, *_args):
+            return None
+
+        def get(self, url, headers, **_kwargs):
+            return fake_urlopen(Request(url, headers=headers), 15)
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(workbench.requests, "Session", FakeSession)
     workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
     workbench.app.secret_key = "extension-test-secret"
     client = workbench.app.test_client()
@@ -798,74 +828,43 @@ def test_browser_extension_starts_ai_weight_price_on_local_workstation(monkeypat
         lambda *_args: "account-dashscope-key",
     )
 
-    def start(
-        mode="pipeline", task_id=None, selection=None, max_items=10,
-        resume=False, runtime_api_key="",
-    ):
-        captured.update({
-            "mode": mode,
-            "task_id": task_id,
-            "selection": selection,
-            "max_items": max_items,
-            "resume": resume,
-            "runtime_api_key": runtime_api_key,
-        })
+    def dispatch(_service, action, payload):
+        captured.update({"action": action, "payload": payload})
+        return {"action": "search", "data": {"execution_target": "extension"}}
 
-    monkeypatch.setattr(workbench.ai_weight_price_service, "start", start)
+    monkeypatch.setattr("bit.ai_weight_price_client.dispatch", dispatch)
     client = workbench.app.test_client()
     response = client.post(
-        "/api/browser-extension/ai-weight-price/start",
+        "/api/browser-extension/ai-weight-price/client/start",
         json={
             "selection": {
                 "category": "",
                 "start_product_id": "848332340",
             },
             "max_items": 12,
+            "products": [{
+                "erp_goods_id": "848332340", "title": "测试商品",
+                "main_image_url": "https://img.example.test/product.jpg",
+            }],
         },
         headers=headers,
     )
     status = client.get(
-        "/api/browser-extension/ai-weight-price/status", headers=headers
-    )
-    remote = client.post(
-        "/api/browser-extension/ai-weight-price/start",
-        json={
-            "selection": {
-                "category": "",
-                "start_page": 1,
-                "end_page": 1,
-                "start_item": 1,
-            },
-            "max_items": 1,
-        },
-        headers=headers,
-        environ_base={"REMOTE_ADDR": "192.0.2.20"},
+        "/api/browser-extension/ai-weight-price/client/status", headers=headers
     )
 
     assert response.status_code == 200
-    assert captured == {
-        "mode": "pipeline",
-        "task_id": None,
-        "selection": {
-            "category": "",
-            "start_product_id": "848332340",
-        },
-        "max_items": 12,
-        "resume": False,
-        "runtime_api_key": "account-dashscope-key",
-    }
+    assert captured["action"] == "start"
+    assert captured["payload"]["runtime_api_key"] == "account-dashscope-key"
+    assert captured["payload"]["products"][0]["erp_goods_id"] == "848332340"
     assert status.status_code == 200
     assert "categories" in status.get_json()["data"]
-    assert remote.status_code == 403
-    assert "本机泽顺控制台" in remote.get_json()["message"]
 
 
 def test_weight_price_extension_login_and_resume_routes(monkeypatch):
     import bit.bit_interface as workbench
 
     calls = []
-    monkeypatch.setattr(workbench, "_browser_extension_user_from_token", lambda _: _browser_extension_user())
-    monkeypatch.setattr(workbench, "_browser_extension_ai_weight_price_snapshot", lambda: {"running": False})
     monkeypatch.setattr(
         workbench.browser_extension_models,
         "get_api_key",
@@ -874,26 +873,20 @@ def test_weight_price_extension_login_and_resume_routes(monkeypatch):
             or "account-dashscope-key"
         ),
     )
-    monkeypatch.setattr(workbench.ai_weight_price_service, "open_login", lambda **kw: calls.append(kw))
     monkeypatch.setattr(
-        workbench.ai_weight_price_service,
-        "continue_after_human",
-        lambda **kw: calls.append(("continue", kw)),
+        "bit.ai_weight_price_client.dispatch",
+        lambda _service, action, payload: calls.append((action, payload)) or {
+            "action": "done", "data": {"running": False}
+        },
     )
     client = workbench.app.test_client()
-    root = "/api/browser-extension/ai-weight-price/"
-    assert client.post(root + "login/open", json={}).status_code == 200
-    assert calls == [{"include_supplier": False}]
-    assert client.post(root + "continue", json={}).status_code == 400
-    assert client.post(root + "continue", json={"acknowledged": True},
-                       environ_base={"REMOTE_ADDR": "192.0.2.20"}).status_code == 403
-    assert calls == [{"include_supplier": False}]
-    assert client.post(root + "continue", json={"acknowledged": True}).status_code == 200
-    assert calls[-2:] == [
-        ("credential", 7, "dashscope"),
-        ("continue", {"runtime_api_key": "account-dashscope-key"}),
-    ]
+    token = workbench.create_browser_extension_token(_browser_extension_user())
+    headers = {"Authorization": f"Bearer {token}"}
+    root = "/api/browser-extension/ai-weight-price/client/"
+    assert client.post(root + "login/open", json={}, headers=headers).status_code == 200
+    assert calls[-1][0] == "login/open"
+    assert client.post(root + "continue", json={}, headers=headers).status_code == 200
+    assert calls[-1] == ("continue", {})
     monkeypatch.setattr(workbench, "_browser_extension_user_from_token", lambda _: {
         **_browser_extension_user(), "access_version": 1, "permissions": ["ai_weight_price.view"]})
-    assert client.post(root + "continue", json={"acknowledged": True}).status_code == 403
-    assert len(calls) == 3
+    assert client.post(root + "continue", json={"acknowledged": True}, headers=headers).status_code == 403

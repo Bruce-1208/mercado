@@ -1,6 +1,6 @@
 # 泽顺本机 Agent 部署说明
 
-本机 Agent 用于让公网泽顺控制台把申诉任务派发到指定 Windows 或 macOS 电脑。它是一个常驻的出站客户端：只访问 `https://wuhanzeshun.com`，不开放本机 HTTP 端口，也不依赖浏览器的“本地网络访问”权限。
+本机 Agent 用于让公网泽顺控制台把申诉和任务派发到指定 Windows 或 macOS 电脑。AI核重核价不使用 Agent，由浏览器插件直接驱动 Edge。Agent 是一个常驻的出站客户端：只访问 `https://wuhanzeshun.com`，不开放本机 HTTP 端口，也不依赖浏览器的“本地网络访问”权限。
 
 ## 工作方式
 
@@ -27,6 +27,8 @@ Agent 1.2.2 将任务领取合并到心跳请求，避免反向代理或滚动�
 Agent 1.2.3 在状态窗口增加“结束任务”按钮。按钮只结束当前电脑正在运行的任务，Agent 本身会保持在线并继续接收后续任务；没有运行任务时按钮不可用。
 
 Agent 默认数据目录在 Windows 为 `%LOCALAPPDATA%\Zeshun\MercadoLocalAgent`，在 macOS 为 `~/Library/Application Support/Zeshun/MercadoLocalAgent`。其中包含电脑身份、业务版本、`agent.log` 和运行日志所需的临时任务数据。Agent 保留最近两个业务版本。
+
+AI核重核价不需要安装或升级本机 Agent；请更新泽顺插件，由插件直接执行当前 Edge 的页面操作。
 
 ## 服务端部署
 

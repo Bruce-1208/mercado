@@ -647,6 +647,125 @@ def _decorate_store_link_markers(rows: list[dict[str, Any]]) -> None:
         row["video_clip_uuid"] = action.get("video_clip_uuid") or ""
 
 
+def _active_ad_marker_keys(
+    *,
+    token_ids: Iterable[int] | None = None,
+    site_id: str = "",
+) -> set[tuple[int, str, str]]:
+    """Load durable and snapshot-backed active Product Ads identities."""
+
+    try:
+        from erp.mercadolibre_store_link_marker_store import marked_item_keys
+
+        keys = marked_item_keys(
+            "advertising_enabled", token_ids=token_ids, site_id=site_id
+        )
+    except Exception:
+        keys = set()
+    allowed_ids = {
+        int(value) for value in token_ids or () if int(value or 0) > 0
+    }
+    normalized_site = str(site_id or "").strip().upper()
+    try:
+        from bit.bit_ad_analysis import _load_snapshot
+
+        snapshot = _load_snapshot()
+        for ad_row in snapshot.get("links") or []:
+            identity = (
+                int(ad_row.get("token_id") or 0),
+                str(ad_row.get("site_id") or "").strip().upper(),
+                str(ad_row.get("item_id") or "").strip().upper(),
+            )
+            campaign_status = str(ad_row.get("campaign_status") or "").strip().lower()
+            group_status = str(
+                ad_row.get("ad_group_status") or ad_row.get("status") or ""
+            ).strip().lower()
+            if (
+                identity[0] > 0
+                and identity[1]
+                and identity[2]
+                and group_status == "active"
+                and (not campaign_status or campaign_status == "active")
+                and (not allowed_ids or identity[0] in allowed_ids)
+                and (not normalized_site or identity[1] == normalized_site)
+            ):
+                keys.add(identity)
+    except Exception:
+        pass
+    return keys
+
+
+def _marker_filter_keys(
+    marker: str,
+    *,
+    token_ids: Iterable[int] | None = None,
+    site_id: str = "",
+) -> set[tuple[int, str, str]]:
+    if marker == "promotion_applied":
+        try:
+            from erp.mercadolibre_promotion_store import PromotionStore
+
+            return PromotionStore().all_applied_item_keys(
+                token_ids=token_ids, site_id=site_id
+            )
+        except Exception:
+            return set()
+    if marker == "advertising_enabled":
+        return _active_ad_marker_keys(token_ids=token_ids, site_id=site_id)
+    if marker == "video_uploaded":
+        try:
+            from erp.mercadolibre_store_link_marker_store import marked_item_keys
+
+            return marked_item_keys("video_uploaded", token_ids=token_ids, site_id=site_id)
+        except Exception:
+            return set()
+    raise ValueError(f"未知店铺链接标志：{marker}")
+
+
+def _append_marker_filter(
+    conditions: list[str],
+    values: list[Any],
+    *,
+    marker: str,
+    enabled: bool,
+    token_ids: Iterable[int] | None = None,
+    site_id: str = "",
+) -> None:
+    """Add a local-marker identity predicate to the MySQL listing query."""
+
+    identities = sorted(_marker_filter_keys(marker, token_ids=token_ids, site_id=site_id))
+    if not identities:
+        conditions.append("1 = 0" if enabled else "1 = 1")
+        return
+    chunks = [identities[index:index + 400] for index in range(0, len(identities), 400)]
+    groups = []
+    for chunk in chunks:
+        groups.append(" OR ".join(
+            "(links.`token_id` = %s AND links.`site_id` = %s AND links.`item_id` = %s)"
+            for _identity in chunk
+        ))
+        for identity in chunk:
+            values.extend(identity)
+    predicate = "(" + ") OR (".join(groups) + ")"
+    conditions.append(predicate if enabled else f"NOT ({predicate})")
+
+
+def _normalize_marker_filter(value: Any, label: str) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        raw = ""
+    else:
+        raw = str(value).strip().lower()
+    if raw in {"", "all", "any"}:
+        return None
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{label}筛选值无效")
+
+
 def _attribute_number(item: Mapping[str, Any], ids: set[str], *, weight: bool = False) -> Decimal | None:
     for attribute in item.get("attributes") or []:
         if not isinstance(attribute, Mapping) or str(attribute.get("id") or "").upper() not in ids:
@@ -1267,6 +1386,9 @@ def list_store_links(
     site_id: str = "",
     group_name: str = "",
     status: str = "",
+    promotion_applied: Any = None,
+    advertising_enabled: Any = None,
+    video_uploaded: Any = None,
     management_category_id: Any = None,
     mercado_category: str = "",
     sales_sort: str = "desc",
@@ -1282,6 +1404,11 @@ def list_store_links(
         1,
         min(int(page_size or STORE_LINK_DEFAULT_PAGE_SIZE), STORE_LINK_MAX_PAGE_SIZE),
     )
+    marker_filters = {
+        "promotion_applied": _normalize_marker_filter(promotion_applied, "活动标志"),
+        "advertising_enabled": _normalize_marker_filter(advertising_enabled, "广告标志"),
+        "video_uploaded": _normalize_marker_filter(video_uploaded, "视频标志"),
+    }
     conditions: list[str] = []
     values: list[Any] = []
     scoped_token_ids = None
@@ -1445,6 +1572,23 @@ def list_store_links(
                             filtered_values.extend([token_value, site_value])
                     else:
                         filtered_conditions.append("1 = 0")
+            marker_scope_token_ids = (
+                selected_token_ids
+                if selected_token_ids
+                else [int(token_id)]
+                if token_id not in (None, "")
+                else scoped_token_ids
+            )
+            for marker, enabled in marker_filters.items():
+                if enabled is not None:
+                    _append_marker_filter(
+                        filtered_conditions,
+                        filtered_values,
+                        marker=marker,
+                        enabled=enabled,
+                        token_ids=marker_scope_token_ids,
+                        site_id=site_id,
+                    )
             where_sql = (
                 " WHERE " + " AND ".join(filtered_conditions)
                 if filtered_conditions else ""
@@ -1459,6 +1603,7 @@ def list_store_links(
                 and not category_filter
                 and not mercado_category
                 and not search
+                and all(value is None for value in marker_filters.values())
             )
             if scoped_only_filter:
                 total = int(summary.get(

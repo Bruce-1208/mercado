@@ -137,6 +137,11 @@ def _private_settings(user_id, secret_key, path=None) -> dict:
     return {**record, "secret": secret}
 
 
+def get_private_settings(user_id, secret_key, path=None) -> dict:
+    """Return decrypted webhook settings for an explicit, authenticated view."""
+    return _private_settings(user_id, secret_key, path)
+
+
 def _is_public_destination(hostname: str) -> bool:
     """Reject private network targets except explicit localhost development URLs."""
     if hostname in {"localhost", "127.0.0.1", "::1"}:

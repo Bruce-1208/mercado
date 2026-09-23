@@ -185,9 +185,12 @@ def normalize_1688_product(product: Mapping[str, Any]) -> dict[str, Any]:
         "scrape_status": str(row.get("scrape_status") or "ok").strip()[:32],
         "error_message": str(row.get("error_message") or "").strip()[:1000],
         "weight_g": row.get("weight_g"),
+        "volumetric_weight_kg": row.get("volumetric_weight_kg"),
         "package_length_cm": row.get("package_length_cm"),
         "package_width_cm": row.get("package_width_cm"),
         "package_height_cm": row.get("package_height_cm"),
+        "dimensions_display": str(row.get("dimensions_display") or "").strip()[:255],
+        "weight_basis": str(row.get("weight_basis") or "").strip()[:64],
         "collected_at": str(row.get("collected_at") or "")[:64],
     }
 

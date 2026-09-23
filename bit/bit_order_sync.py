@@ -1,4 +1,4 @@
-"""Mercado Libre 订单手动回填、72 小时滚动同步与每日状态刷新。"""
+"""Mercado Libre 订单手动回填、72 小时滚动同步与每日状态/运费刷新。"""
 
 from __future__ import annotations
 
@@ -20,8 +20,11 @@ from mercado_api.client import MercadoAPIError, MercadoLibreClient
 
 
 ORDER_SYNC_LOCK_KEY = "mercado_order_sync_task"
+FINANCIAL_BACKFILL_LOCK_KEY = "mercado_order_financial_backfill"
 DEFAULT_SYNC_INTERVAL_SECONDS = 15 * 60
 RECENT_ORDER_WINDOW_HOURS = 72
+DEFAULT_SHIPMENT_COST_CACHE_HOURS = 6
+SHIPMENT_COST_CACHE_HOURS_ENV = "MERCADO_SHIPMENT_COST_CACHE_HOURS"
 WORKBENCH_LOCAL_TIMEZONE = timezone(timedelta(hours=8))
 DAILY_STATUS_MODE = "daily_status"
 DAILY_STATUS_STATE_KEY = "last_daily_old_order_status_refresh"
@@ -83,6 +86,7 @@ _sync_state = {
     "daily_status_run_date": "",
     "next_daily_status_at": "",
     "daily_status_hour": DEFAULT_DAILY_STATUS_HOUR,
+    "daily_financials": {},
     "auto_print": {},
 }
 _scheduler_guard = threading.Lock()
@@ -751,14 +755,33 @@ def _cached_cost_entry(row):
     }
 
 
-def _cache_is_fresh(entry, hours=24):
+def _shipment_cost_cache_hours():
+    """Return the polling interval for recent-order shipment costs."""
+    try:
+        hours = float(
+            os.environ.get(
+                SHIPMENT_COST_CACHE_HOURS_ENV,
+                DEFAULT_SHIPMENT_COST_CACHE_HOURS,
+            )
+        )
+    except (TypeError, ValueError):
+        hours = DEFAULT_SHIPMENT_COST_CACHE_HOURS
+    return max(0.25, min(24.0, hours))
+
+
+def _cache_is_fresh(entry, hours=None):
     checked_at = (entry or {}).get("checked_at")
     if isinstance(checked_at, str):
         try:
             checked_at = datetime.fromisoformat(checked_at)
         except ValueError:
             return False
-    return isinstance(checked_at, datetime) and checked_at >= datetime.now() - timedelta(hours=hours)
+    if not isinstance(checked_at, datetime):
+        return False
+    if hours is None:
+        hours = _shipment_cost_cache_hours()
+    current_time = datetime.now(checked_at.tzinfo) if checked_at.tzinfo else datetime.now()
+    return checked_at >= current_time - timedelta(hours=float(hours))
 
 
 def _sync_order_financials(
@@ -785,6 +808,7 @@ def _sync_order_financials(
     failed = 0
     fetch_metadata = {}
     for shipping_id in shipping_ids:
+        cached_in_this_run = shipping_id in shipment_cache
         cached = shipment_cache.get(shipping_id)
         if cached is None and shipping_id in database_cache:
             cached = _cached_cost_entry(database_cache[shipping_id])
@@ -793,6 +817,12 @@ def _sync_order_financials(
             and cached.get("seller_cost") is not None
             and cached.get("currency_id")
         )
+        if cached_in_this_run:
+            if cached_success:
+                entries.append(cached)
+            else:
+                failed += 1
+            continue
         if cached and not force_refresh and _cache_is_fresh(cached):
             shipment_cache[shipping_id] = cached
             if cached_success:
@@ -1097,9 +1127,64 @@ def backfill_order_financials(limit=200):
     }
 
 
+def refresh_daily_order_financials(limit=200):
+    """Refresh every shipment cost that has not been checked today.
+
+    The database query is deliberately paged.  A daily run drains all full
+    pages instead of refreshing only the first 200 shipments and waiting for
+    another background-loop wake-up.
+    """
+    limit = max(1, min(1000, int(limit or 200)))
+    lock = InterProcessLock(
+        FINANCIAL_BACKFILL_LOCK_KEY,
+        owner="bit_order_sync",
+        metadata={"task": "daily_shipment_cost_refresh"},
+    )
+    if not lock.acquire(timeout=0):
+        return {
+            "status": "busy",
+            "batches": 0,
+            "requested": 0,
+            "processed": 0,
+            "failed": 0,
+            "updated_orders": 0,
+        }
+
+    totals = {
+        "status": "completed",
+        "batches": 0,
+        "requested": 0,
+        "processed": 0,
+        "failed": 0,
+        "updated_orders": 0,
+    }
+    try:
+        while True:
+            _raise_if_interpreter_shutting_down()
+            result = backfill_order_financials(limit=limit)
+            requested = int(result.get("requested") or 0)
+            processed = int(result.get("processed") or 0)
+            totals["batches"] += 1
+            for field in ("requested", "processed", "failed", "updated_orders"):
+                totals[field] += int(result.get(field) or 0)
+            if requested < limit:
+                break
+            if processed < requested:
+                # Token/configuration failures leave rows pending. Avoid a hot
+                # retry loop; the result is reported and the normal worker can
+                # retry after the external problem is fixed.
+                totals["status"] = "partial"
+                break
+        if totals["failed"]:
+            totals["status"] = "partial"
+        return totals
+    finally:
+        lock.release()
+
+
 def _financial_backfill_loop():
     lock = InterProcessLock(
-        "mercado_order_financial_backfill",
+        FINANCIAL_BACKFILL_LOCK_KEY,
         owner="bit_order_sync",
         metadata={"task": "shipment_cost_backfill"},
     )
@@ -1170,7 +1255,13 @@ def ensure_order_financial_backfill_worker():
     return True
 
 
-def _sync_store(record, filters, *, enrich_images=True):
+def _sync_store(
+    record,
+    filters,
+    *,
+    enrich_images=True,
+    force_refresh_financials=False,
+):
     token_id = int(record["id"])
     display_name = str(record.get("display_name") or record.get("nickname") or token_id)
     seller_id = str(record.get("meli_user_id") or "").strip()
@@ -1193,7 +1284,13 @@ def _sync_store(record, filters, *, enrich_images=True):
                     if enrich_images:
                         _enrich_order_images(client, batch)
                     result = bit_mysql.upsert_mercado_synced_orders(record, batch)
-                    _sync_order_financials(client, record, batch, shipment_cost_cache)
+                    _sync_order_financials(
+                        client,
+                        record,
+                        batch,
+                        shipment_cost_cache,
+                        force_refresh=force_refresh_financials,
+                    )
                     totals["inserted"] += int(result.get("inserted") or 0)
                     totals["updated"] += int(result.get("updated") or 0)
                     batch = []
@@ -1208,7 +1305,13 @@ def _sync_store(record, filters, *, enrich_images=True):
                 if enrich_images:
                     _enrich_order_images(client, batch)
                 result = bit_mysql.upsert_mercado_synced_orders(record, batch)
-                _sync_order_financials(client, record, batch, shipment_cost_cache)
+                _sync_order_financials(
+                    client,
+                    record,
+                    batch,
+                    shipment_cost_cache,
+                    force_refresh=force_refresh_financials,
+                )
                 totals["inserted"] += int(result.get("inserted") or 0)
                 totals["updated"] += int(result.get("updated") or 0)
                 with _state_guard:
@@ -1409,7 +1512,7 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
     mode_messages = {
         "manual": f"正在拉取订单：{start_text} 至 {end_text}",
         "automatic": "正在更新最近 72 小时订单",
-        DAILY_STATUS_MODE: "正在执行每日老订单状态刷新",
+        DAILY_STATUS_MODE: "正在执行每日老订单状态及实际运费刷新",
     }
 
     _state_update(
@@ -1429,6 +1532,7 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
         started_at=_now_text(),
         finished_at="",
         daily_status_run_date=(daily_context or {}).get("run_date", ""),
+        daily_financials={},
         auto_print={},
         results=[],
         logs=[],
@@ -1436,7 +1540,10 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
     if mode == "automatic":
         _append_log(f"十五分钟任务启动：更新最近 {RECENT_ORDER_WINDOW_HOURS} 小时，共 {len(records)} 家店铺")
     elif mode == DAILY_STATUS_MODE:
-        _append_log(f"每日老订单状态刷新启动：更新 72 小时以前订单，共 {len(records)} 家店铺")
+        _append_log(
+            f"每日任务启动：刷新 72 小时以前订单状态并重读全部实际运费，"
+            f"共 {len(records)} 家店铺"
+        )
     else:
         _append_log(
             f"手动订单任务启动：北京时间 {start_text} 至 {end_text}，"
@@ -1465,7 +1572,12 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
                     record, filters["old_order_cutoff"], **daily_context,
                 )
             else:
-                result = _sync_store(record, filters, enrich_images=True)
+                sync_options = {"enrich_images": True}
+                if mode == "manual":
+                    # A manual date-range sync is an explicit request for current
+                    # financial data, so do not reuse a shipment-cost snapshot.
+                    sync_options["force_refresh_financials"] = True
+                result = _sync_store(record, filters, **sync_options)
             if result.get("yielded"):
                 _append_log(f"{store_name} 已保存增量断点，让出执行权给最近 72 小时任务")
             else:
@@ -1550,6 +1662,21 @@ def _run_background(start_date, end_date, token_ids, mode):
             auto_print_result = _run_automatic_order_print(token_ids)
             _state_update(auto_print=auto_print_result)
         if mode == DAILY_STATUS_MODE and final_status in ("completed", "partial"):
+            _state_update(
+                running=True,
+                status="running",
+                message="正在每日刷新全部 Shipment Costs 实际运费",
+            )
+            _append_log("每日实际运费刷新启动：重新读取今天尚未检查的全部运单")
+            financial_result = refresh_daily_order_financials(limit=200)
+            if financial_result.get("status") == "busy":
+                raise RuntimeError("实际运费刷新任务正在其他进程运行")
+            _append_log(
+                "每日实际运费刷新完成："
+                f"检查 {financial_result['processed']} 个运单，"
+                f"更新 {financial_result['updated_orders']} 笔订单，"
+                f"失败 {financial_result['failed']}"
+            )
             run_date = str(
                 daily_run_date
                 or datetime.now(WORKBENCH_LOCAL_TIMEZONE).date().isoformat()
@@ -1558,7 +1685,23 @@ def _run_background(start_date, end_date, token_ids, mode):
                 DAILY_STATUS_STATE_KEY,
                 run_date,
             )
-            _state_update(daily_status_last_run_date=run_date)
+            daily_status = (
+                "partial"
+                if final_status == "partial" or financial_result.get("status") == "partial"
+                else "completed"
+            )
+            _state_update(
+                running=False,
+                status=daily_status,
+                message=(
+                    "每日订单状态与实际运费刷新完成"
+                    if daily_status == "completed"
+                    else "每日刷新完成，部分运费读取失败"
+                ),
+                finished_at=_now_text(),
+                daily_status_last_run_date=run_date,
+                daily_financials=financial_result,
+            )
     except _InterpreterShutdownRequested:
         _state_update(
             running=False,
@@ -1600,7 +1743,7 @@ def start_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
             mode=mode,
             status="starting",
             message=(
-                "正在启动每日老订单状态刷新"
+                "正在启动每日老订单状态及实际运费刷新"
                 if mode == DAILY_STATUS_MODE
                 else "正在启动订单同步"
             ),

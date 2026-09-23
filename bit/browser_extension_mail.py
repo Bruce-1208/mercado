@@ -184,6 +184,11 @@ def _private_settings(user_id, secret_key, path=None) -> dict:
     return {**value, "smtp_password": password}
 
 
+def get_private_settings(user_id, secret_key, path=None) -> dict:
+    """Return decrypted mail settings for an explicit, authenticated view."""
+    return _private_settings(user_id, secret_key, path)
+
+
 def _smtp_ssl_context() -> ssl.SSLContext:
     """Build a verified SMTP TLS context with a usable CA bundle.
 

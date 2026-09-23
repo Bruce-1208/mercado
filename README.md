@@ -99,7 +99,7 @@ python3 scripts/install_argos_translation_models.py
 
 同一套工作台可以在每台电脑上灵活指定运行角色：
 
-- `server`：直接连接 `192.168.1.11:3306`，同时提供受令牌保护的 `/api/db/*` 数据库接口；
+- `server`：直接连接本机 `127.0.0.1:3306`，同时提供受令牌保护的 `/api/db/*` 数据库接口；
 - `client`：禁止直连 MySQL，所有数据库读写都通过指定服务端的 HTTP 接口完成。
 
 启动参数的优先级最高，适合临时切换：
@@ -108,7 +108,7 @@ python3 scripts/install_argos_translation_models.py
 # 两端必须使用同一个接口令牌
 $env:BIT_DB_API_TOKEN="replace-with-a-long-random-token"
 
-# 任意能访问 192.168.1.11 的电脑都可作为服务端
+# 在已安装本机 MySQL 的电脑上作为服务端启动
 python -m bit.bit_interface --role server
 
 # 客户端指向任意一台已启动的服务端

@@ -1199,6 +1199,9 @@ class LocalAgent:
                     getattr(self.config, "name", "") or ""
                 ),
                 "BIT_EXECUTION_HOSTNAME": socket.gethostname(),
+                # Keep the visible Edge profile and local AWP runtime files
+                # outside versioned business releases so an Agent update does
+                # not log the terminal out or lose its browser session.
                 "PYTHONUNBUFFERED": "1",
                 "PYTHONIOENCODING": "utf-8",
             }

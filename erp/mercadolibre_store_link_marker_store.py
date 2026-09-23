@@ -190,3 +190,39 @@ def markers_for_rows(rows: Iterable[Mapping[str, Any]]) -> dict[tuple[int, str, 
         }
         for row in rows
     }
+
+
+def marked_item_keys(
+    field: str,
+    *,
+    token_ids: Iterable[int] | None = None,
+    site_id: str = "",
+) -> set[tuple[int, str, str]]:
+    """Return identities with a durable positive workflow marker."""
+
+    column = {
+        "advertising_enabled": "advertising_enabled",
+        "video_uploaded": "video_uploaded",
+    }.get(str(field or "").strip())
+    if not column:
+        raise ValueError(f"未知店铺链接标志：{field}")
+    ids = sorted({int(value) for value in token_ids or () if int(value or 0) > 0})
+    clauses = [f"{column} = 1"]
+    params: list[Any] = []
+    if ids:
+        clauses.append(f"token_id IN ({','.join('?' for _ in ids)})")
+        params.extend(ids)
+    normalized_site = str(site_id or "").strip().upper()
+    if normalized_site:
+        clauses.append("site_id = ?")
+        params.append(normalized_site)
+    with _database() as connection:
+        rows = connection.execute(
+            "SELECT token_id, site_id, item_id FROM store_link_markers WHERE "
+            + " AND ".join(clauses),
+            params,
+        ).fetchall()
+    return {
+        (int(row["token_id"]), str(row["site_id"] or "").upper(), str(row["item_id"] or "").upper())
+        for row in rows
+    }

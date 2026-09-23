@@ -164,6 +164,32 @@ def update_ai_video_job(job_id, changes):
     )
 
 
+def retry_ai_video_job(job_id, changes=None, uploads=None):
+    if DB_MODE == "mysql":
+        from bit.bit_ai_video import retry_job
+
+        return retry_job(job_id, changes or {}, uploads or [])
+    files = []
+    for upload in uploads or []:
+        if upload is None or not upload.filename:
+            continue
+        files.append((
+            "files",
+            (
+                str(upload.filename),
+                upload.stream,
+                str(upload.mimetype or "application/octet-stream"),
+            ),
+        ))
+    return _request(
+        "POST",
+        f"/api/db/ai-videos/jobs/{job_id}/retry",
+        data={key: str(value or "") for key, value in dict(changes or {}).items()},
+        files=files,
+        timeout=(30, 360),
+    )
+
+
 def delete_ai_video_job(job_id):
     if DB_MODE == "mysql":
         from bit.bit_ai_video import delete_job
@@ -1024,6 +1050,9 @@ def list_mercado_store_links(
     site_id="",
     group_name="",
     status="",
+    promotion_applied=None,
+    advertising_enabled=None,
+    video_uploaded=None,
     management_category_id=None,
     mercado_category="",
     sales_sort="desc",
@@ -1038,6 +1067,9 @@ def list_mercado_store_links(
         "site_id": str(site_id or "").strip().upper(),
         "group_name": str(group_name or "").strip(),
         "status": status or "",
+        "promotion_applied": promotion_applied,
+        "advertising_enabled": advertising_enabled,
+        "video_uploaded": video_uploaded,
         "management_category_id": management_category_id,
         "mercado_category": str(mercado_category or "").strip(),
         "sales_sort": "asc" if str(sales_sort or "").strip().lower() == "asc" else "desc",
@@ -1071,6 +1103,9 @@ def list_mercado_store_links(
             site_id=params["site_id"],
             group_name=params["group_name"],
             status=params["status"],
+            promotion_applied=params["promotion_applied"],
+            advertising_enabled=params["advertising_enabled"],
+            video_uploaded=params["video_uploaded"],
             management_category_id=params["management_category_id"],
             mercado_category=params["mercado_category"],
             sales_sort=params["sales_sort"],

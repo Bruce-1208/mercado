@@ -67,9 +67,12 @@ def test_integration_page_documents_every_supported_credential():
     ):
         assert value in template
     assert "/api/account-integrations/tokens" in template
+    assert "/api/account-integrations/private" in template
     assert "/api/account-integrations/email" in template
     assert "/api/account-integrations/webhook" in template
     assert "简易配置教程" in template
+    assert 'type="password"' in template
+    assert "显示" in template
 
 
 def test_account_integration_api_uses_logged_in_user_id(monkeypatch):
@@ -104,6 +107,73 @@ def test_account_integration_api_uses_logged_in_user_id(monkeypatch):
         "secret_key": "integration-secret",
     }
     assert "private-key" not in response.get_data(as_text=True)
+
+
+def test_private_account_integrations_reveals_credentials_only_explicitly(monkeypatch):
+    from bit import bit_interface as workbench
+
+    workbench.app.config.update(TESTING=True, SECRET_KEY="integration-secret")
+    workbench.app.secret_key = "integration-secret"
+    monkeypatch.setattr(
+        workbench.browser_extension_models,
+        "get_private_settings",
+        lambda user_id, secret_key: {
+            "deepseek_api_key": "deepseek-secret",
+            "dashscope_api_key": "dashscope-secret",
+        },
+    )
+    monkeypatch.setattr(
+        workbench.browser_extension_mail,
+        "get_public_settings",
+        lambda user_id, secret_key: {"password_configured": True},
+    )
+    monkeypatch.setattr(
+        workbench.browser_extension_mail,
+        "get_private_settings",
+        lambda user_id, secret_key: {"smtp_password": "smtp-secret"},
+    )
+    monkeypatch.setattr(
+        workbench.account_webhook,
+        "get_public_settings",
+        lambda user_id, secret_key: {"configured": True},
+    )
+    monkeypatch.setattr(
+        workbench.account_webhook,
+        "get_private_settings",
+        lambda user_id, secret_key: {"secret": "webhook-secret"},
+    )
+    client = workbench.app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["workbench_user"] = {
+            "id": 31,
+            "username": "account-owner",
+            "access_version": 0,
+        }
+
+    response = client.get("/api/account-integrations/private")
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["Pragma"] == "no-cache"
+    assert response.get_json()["data"] == {
+        "tokens": {
+            "deepseek_api_key": "deepseek-secret",
+            "dashscope_api_key": "dashscope-secret",
+        },
+        "email": {"smtp_password": "smtp-secret"},
+        "webhook": {"secret": "webhook-secret"},
+    }
+
+
+def test_private_account_integrations_requires_login():
+    from bit import bit_interface as workbench
+
+    workbench.app.config.update(TESTING=True, SECRET_KEY="integration-secret")
+    workbench.app.secret_key = "integration-secret"
+
+    response = workbench.app.test_client().get("/api/account-integrations/private")
+
+    assert response.status_code in {302, 401}
 
 
 def test_plugin_alert_dispatches_email_and_webhook(monkeypatch):

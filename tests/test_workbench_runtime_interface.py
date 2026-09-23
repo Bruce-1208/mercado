@@ -10,7 +10,7 @@ def test_database_health_requires_shared_token_for_remote_clients(monkeypatch):
     monkeypatch.setattr(
         bit_interface,
         "mysql_config",
-        {"host": "192.168.1.11"},
+        {"host": "127.0.0.1"},
         raising=False,
     )
     monkeypatch.setattr(
@@ -43,7 +43,7 @@ def test_database_health_requires_shared_token_for_remote_clients(monkeypatch):
     assert allowed.status_code == 200
     assert allowed.get_json()["data"] == {
         "role": "server",
-        "database_host": "192.168.1.11",
+        "database_host": "127.0.0.1",
         "connection_pool": {
             "pool_count": 1,
             "active": 2,
@@ -320,7 +320,7 @@ def test_database_api_health_client_uses_http_route(monkeypatch):
         bit_db_api,
         "_request",
         lambda method, path, **kwargs: calls.append((method, path, kwargs))
-        or {"role": "server", "database_host": "192.168.1.11"},
+        or {"role": "server", "database_host": "127.0.0.1"},
     )
 
     result = bit_db_api.get_database_api_health()

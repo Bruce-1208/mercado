@@ -376,6 +376,12 @@ def _public_job(job: dict) -> dict:
             "kind": row.get("kind"),
             "size": row.get("size"),
             "source": "url" if row.get("source_url") else "upload",
+            "preview_url": (
+                f"/api/ai-videos/jobs/{quote(str(job['id']))}/assets/"
+                f"{quote(str(row.get('id') or ''))}"
+                if row.get("id")
+                else ""
+            ),
         }
         for row in job.get("assets") or []
     ]
@@ -874,7 +880,9 @@ def create_job(uploads, form: dict) -> dict:
             "publish_attempts": [],
         }
         job["fingerprint"] = _fingerprint(job)
-        reusable = _find_reusable_job(job["fingerprint"])
+        reusable = None if str(form.get("force_new") or "").lower() in {
+            "1", "true", "yes", "on",
+        } else _find_reusable_job(job["fingerprint"])
         if reusable:
             requested_name = " ".join(str(form.get("name") or "").split())[:120]
             if requested_name and requested_name != reusable.get("name"):
@@ -935,6 +943,130 @@ def update_job(job_id: str, changes: dict) -> dict:
         job["name"] = name
     _write_manifest(job)
     return _public_job(job)
+
+
+def _parse_retry_list(value: object, label: str) -> list:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{label}参数无效") from exc
+    if not isinstance(value, list):
+        raise ValueError(f"{label}参数无效")
+    return value
+
+
+def retry_job(job_id: str, changes: dict | None = None, uploads=None) -> dict:
+    """Create a fresh task from a terminal task while reusing its stored assets."""
+    source = get_job(job_id)
+    if source.get("status") in ACTIVE_STATUSES:
+        raise ValueError("当前视频任务仍在执行，完成或失败后才能重试")
+    if source.get("status") not in TERMINAL_STATUSES:
+        raise ValueError("当前视频任务状态不支持重试")
+
+    changes = dict(changes or {})
+    source_assets = {
+        str(asset.get("id")): asset
+        for asset in source.get("assets") or []
+        if isinstance(asset, dict) and asset.get("id")
+    }
+    source_ids_value = changes.get("source_asset_ids")
+    source_ids = (
+        [str(value) for value in _parse_retry_list(source_ids_value, "历史素材")]
+        if source_ids_value is not None
+        else list(source_assets)
+    )
+    if len(set(source_ids)) != len(source_ids):
+        raise ValueError("历史素材不能重复")
+    if any(asset_id not in source_assets for asset_id in source_ids):
+        raise ValueError("部分历史素材已不存在，请刷新任务后重试")
+
+    new_uploads = [upload for upload in uploads or [] if upload and upload.filename]
+    order_value = changes.get("asset_order")
+    if order_value is None:
+        order = (
+            [{"source": "history", "id": asset_id} for asset_id in source_ids]
+            + [{"source": "file", "index": index} for index in range(len(new_uploads))]
+        )
+    else:
+        order = _parse_retry_list(order_value, "素材顺序")
+    if len(order) != len(source_ids) + len(new_uploads):
+        raise ValueError("素材顺序参数无效")
+
+    expected_history = set(source_ids)
+    used_history = []
+    used_files = []
+    ordered_uploads = []
+    opened = []
+    try:
+        for row in order:
+            if not isinstance(row, dict):
+                raise ValueError("素材顺序参数无效")
+            source_type = str(row.get("source") or "")
+            if source_type == "history":
+                asset_id = str(row.get("id") or "")
+                if asset_id not in expected_history or asset_id in used_history:
+                    raise ValueError("素材顺序参数无效")
+                asset = source_assets[asset_id]
+                assets_dir = (_job_dir(job_id) / "assets").resolve()
+                path = (assets_dir / str(asset.get("stored_name") or "")).resolve()
+                if path.parent != assets_dir or not path.is_file():
+                    raise ValueError(f"历史素材“{asset.get('name') or asset_id}”已不存在")
+                handle = path.open("rb")
+                opened.append(handle)
+                ordered_uploads.append(FileStorage(
+                    stream=handle,
+                    filename=asset.get("name") or asset.get("stored_name") or f"asset-{asset_id}",
+                    content_type=asset.get("mime_type") or "application/octet-stream",
+                ))
+                used_history.append(asset_id)
+            elif source_type == "file":
+                try:
+                    index = int(row.get("index"))
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("素材顺序参数无效") from exc
+                if index < 0 or index >= len(new_uploads) or index in used_files:
+                    raise ValueError("素材顺序参数无效")
+                ordered_uploads.append(new_uploads[index])
+                used_files.append(index)
+            else:
+                raise ValueError("素材顺序参数无效")
+        if set(used_history) != expected_history or set(used_files) != set(range(len(new_uploads))):
+            raise ValueError("素材顺序参数无效")
+
+        source_target = source.get("target") if isinstance(source.get("target"), dict) else {}
+        target_changes = changes.get("target") if isinstance(changes.get("target"), dict) else {}
+        form = dict(changes)
+        for key in ("link_id", "item_id", "title", "store_name", "site_id", "thumbnail_url"):
+            if key in target_changes:
+                form[key] = target_changes[key]
+            elif key not in form:
+                form[key] = source_target.get(key, "")
+        if "name" not in form:
+            form["name"] = source.get("name") or ""
+        if "duration" not in form:
+            form["duration"] = source.get("duration") or 10
+        if "prompt" not in form:
+            form["prompt"] = source.get("user_prompt") or ""
+        if "local_transcode" not in form:
+            form["local_transcode"] = "1" if source.get("local_transcode") else "0"
+        if "local_fit_mode" not in form:
+            form["local_fit_mode"] = source.get("local_fit_mode") or "crop"
+        form["credential_owner_id"] = _job_owner(source)
+        form["force_new"] = "1"
+        # The files have already been assembled in the requested order above;
+        # these retry-only fields are not understood by the normal creator.
+        form.pop("source_asset_ids", None)
+        form.pop("asset_order", None)
+        created = create_job(ordered_uploads, form)
+    finally:
+        for handle in opened:
+            handle.close()
+
+    new_job = get_job(created["id"])
+    new_job["retry_of"] = str(source["id"])
+    _write_manifest(new_job)
+    return _public_job(new_job)
 
 
 def delete_job(job_id: str) -> dict:
@@ -1763,6 +1895,21 @@ def output_path(job_id: str) -> Path:
     path = (_job_dir(job_id) / str(job["output_filename"])).resolve()
     if path.parent != _job_dir(job_id) or not path.is_file():
         raise ValueError("成品视频文件不存在")
+    return path
+
+
+def asset_path(job_id: str, asset_id: str) -> Path:
+    job = get_job(job_id)
+    asset = next(
+        (row for row in job.get("assets") or [] if str(row.get("id")) == str(asset_id)),
+        None,
+    )
+    if not asset:
+        raise ValueError("素材不存在")
+    assets_dir = (_job_dir(job_id) / "assets").resolve()
+    path = (assets_dir / str(asset.get("stored_name") or "")).resolve()
+    if path.parent != assets_dir or not path.is_file():
+        raise ValueError("素材文件不存在")
     return path
 
 

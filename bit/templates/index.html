@@ -5825,7 +5825,7 @@
         }
 
         .mercado-product-edit-dialog {
-            width: min(820px, calc(100vw - 28px));
+            width: min(1320px, calc(100vw - 28px));
         }
 
         .mercado-product-edit-form {
@@ -5850,6 +5850,166 @@
             margin: 0;
             color: #b42318;
             font-size: 12px;
+        }
+
+        .mercado-product-variant-editor {
+            display: grid;
+            gap: 10px;
+            min-width: 0;
+            padding: 13px;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            background: #fff;
+        }
+
+        .mercado-product-variant-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .mercado-product-variant-head strong,
+        .mercado-product-variant-head small {
+            display: block;
+        }
+
+        .mercado-product-variant-head strong {
+            color: #33445a;
+            font-size: 13px;
+        }
+
+        .mercado-product-variant-head small {
+            margin-top: 3px;
+            color: #8491a3;
+            font-size: 10px;
+            font-weight: 400;
+        }
+
+        .mercado-product-variant-dimensions {
+            display: grid;
+            gap: 7px;
+        }
+
+        .mercado-product-dimension-row {
+            display: grid;
+            grid-template-columns: minmax(140px, .8fr) minmax(240px, 2fr) auto;
+            align-items: end;
+            gap: 8px;
+            padding: 8px;
+            border: 1px solid #edf1f5;
+            border-radius: 8px;
+            background: #fbfcfe;
+        }
+
+        .mercado-product-dimension-row label span {
+            display: block;
+            margin-bottom: 4px;
+            color: #77869a;
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .mercado-product-dimension-row input {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #d7e0ec;
+            border-radius: 6px;
+            padding: 7px 8px;
+            color: #2f4058;
+            font: inherit;
+            font-size: 11px;
+        }
+
+        .mercado-product-variant-dimension-actions {
+            display: flex;
+            gap: 7px;
+        }
+
+        .mercado-product-variant-hint {
+            color: #8a97a8;
+            font-size: 11px;
+        }
+
+        .mercado-product-variant-wrap {
+            overflow: auto;
+            border: 1px solid #e5ebf2;
+            border-radius: 8px;
+        }
+
+        .mercado-product-variant-wrap table {
+            width: 100%;
+            min-width: 1040px;
+            border-collapse: collapse;
+        }
+
+        .mercado-product-variant-wrap th,
+        .mercado-product-variant-wrap td {
+            padding: 7px;
+            border-bottom: 1px solid #edf1f5;
+            color: #43536a;
+            font-size: 11px;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        .mercado-product-variant-wrap th {
+            color: #78879a;
+            background: #f7f9fc;
+            white-space: nowrap;
+        }
+
+        .mercado-product-variant-wrap tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .mercado-product-variant-wrap input {
+            min-width: 76px;
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #d7e0ec;
+            border-radius: 6px;
+            padding: 6px 7px;
+            color: #2f4058;
+            font: inherit;
+            font-size: 11px;
+        }
+
+        .mercado-variant-picture-cell {
+            display: grid;
+            gap: 4px;
+            min-width: 150px;
+        }
+
+        .mercado-variant-picture-cell a {
+            display: inline-block;
+            width: 34px;
+            height: 34px;
+        }
+
+        .mercado-variant-picture-cell img {
+            width: 34px;
+            height: 34px;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            object-fit: cover;
+        }
+
+        .mercado-product-variant-empty {
+            padding: 12px !important;
+            color: #9aa5b4 !important;
+        }
+
+        @media (max-width: 680px) {
+            .mercado-product-edit-form {
+                grid-template-columns: 1fr;
+            }
+            .mercado-product-variant-head {
+                align-items: flex-start;
+            }
+            .mercado-product-dimension-row {
+                grid-template-columns: 1fr;
+            }
         }
 
         .market-bulk-edit-trigger {
@@ -9520,15 +9680,15 @@
         }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='console-ui.css') }}?v=20260921-align1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-products.css') }}?v=20260922-images1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-products.css') }}?v=20260923-variants1">
     <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-workbench.css') }}?v=20260921">
-    <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20260922-products2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20260923-variants1">
     <script src="{{ url_for('static', filename='console-ui.js') }}?v=20260915"></script>
     <script src="{{ url_for('static', filename='copy-anywhere.js') }}?v=20260922"></script>
     <script src="{{ url_for('static', filename='appeal-polling.js') }}?v=20260922"></script>
-    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260922-products2"></script>
+    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260923-variants1"></script>
     <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20260921"></script>
-    <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260922-products2"></script>
+    <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260923-variants1"></script>
     <style>
         .ai-video-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .75fr); gap: 18px; align-items: start; }
         .ai-video-panel { padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
@@ -9578,7 +9738,8 @@
         .ai-video-library-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
         .ai-video-library-head h3 { margin: 0; }
         .ai-video-jobs { display: grid; grid-template-columns: repeat(auto-fill, minmax(245px, 1fr)); gap: 14px; }
-        .ai-video-job { overflow: hidden; border: 1px solid #e0e6ee; border-radius: 14px; background: #fff; }
+        .ai-video-job { overflow: hidden; border: 1px solid #e0e6ee; border-radius: 14px; background: #fff; cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+        .ai-video-job:hover, .ai-video-job:focus-visible { border-color: #9dbcf4; box-shadow: 0 8px 24px rgba(44,91,185,.12); transform: translateY(-1px); outline: 0; }
         .ai-video-job-media { display: grid; place-items: center; aspect-ratio: 9 / 13; max-height: 340px; background: radial-gradient(circle at 50% 30%, #29384d, #111821); color: #d8e0eb; }
         .ai-video-job-media video { width: 100%; height: 100%; object-fit: contain; background: #0d1118; }
         .ai-video-job-progress { display: grid; place-items: center; gap: 10px; padding: 24px; text-align: center; }
@@ -9592,6 +9753,7 @@
         .ai-video-job-state.failed { background: #fff0f0; color: #bd3d3d; }
         .ai-video-job-copy p { min-height: 34px; margin: 7px 0; color: #718095; font-size: 11px; line-height: 1.5; }
         .ai-video-job-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+        .ai-video-job-actions button, .ai-video-job-actions a { position: relative; z-index: 1; }
         .ai-video-dialog { width: min(680px, calc(100vw - 28px)); max-height: 86vh; padding: 0; overflow: auto; border: 1px solid #dbe3ee; border-radius: 16px; box-shadow: 0 22px 70px rgba(24,35,52,.22); }
         .ai-video-dialog::backdrop { background: rgba(17,25,38,.46); backdrop-filter: blur(2px); }
         .ai-video-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 22px 14px; border-bottom: 1px solid #e7ebf1; }
@@ -9600,6 +9762,14 @@
         .ai-video-dialog-body { display: grid; gap: 13px; padding: 18px 22px; }
         .ai-video-dialog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .ai-video-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 0 22px 20px; }
+        .ai-video-edit-dialog { width: min(760px, calc(100vw - 28px)); }
+        .ai-video-edit-meta { color: #748195; font-size: 12px; line-height: 1.6; }
+        .ai-video-edit-section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; color: #344256; font-size: 12px; }
+        .ai-video-edit-section-head span { color: #8995a5; font-size: 11px; }
+        .ai-video-edit-assets { grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); }
+        .ai-video-edit-target { min-height: 36px; box-sizing: border-box; padding: 9px 10px; border: 1px solid #e0e6ee; border-radius: 8px; background: #f7f9fc; color: #627187; font-size: 12px; line-height: 1.5; }
+        .ai-video-edit-toolbar { margin: 9px 0 0; }
+        .ai-video-edit-toolbar .hint { margin-left: 0; }
         .ai-video-picker-list { display: grid; gap: 10px; min-height: 100px; }
         .ai-video-picker-item { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px; border: 1px solid #dfe6ef; border-radius: 12px; }
         .ai-video-picker-cover { width: 78px; height: 78px; overflow: hidden; border-radius: 9px; background: #edf1f6; }
@@ -10057,7 +10227,7 @@
                         <button class="order-detail-close" id="order-sync-close-x" type="button" aria-label="关闭拉取订单" onclick="closeOrderSyncDialog()">×</button>
                     </div>
                     <div class="order-sync-body">
-                        <p class="order-sync-note">后台每 15 分钟重新拉取全部授权店铺最近 72 小时内的订单；每天刷新老订单状态，并重新读取美客多 Shipment Costs 实际运费。官方 ready_to_ship 显示为待打印，仓库人员成功打印后进入待发。这里的手动任务用于按日期回填历史订单。</p>
+                        <p class="order-sync-note">后台每 15 分钟重新拉取全部授权店铺最近 72 小时内的订单，实际运费最多缓存 6 小时；每天自动分批重读全部历史 Shipment Costs，直到当天待刷新运单清空。手动按日期同步也会强制重新读取实际运费。官方 ready_to_ship 显示为待打印，仓库人员成功打印后进入待发。</p>
                         <div class="order-sync-range-toolbar">
                             <strong>自定义拉取时间段（北京时间）</strong>
                             <div class="order-sync-range-presets" aria-label="常用拉取时间段">
@@ -10476,8 +10646,10 @@
                         </section>
 
                         <section class="ai-original-editor-section">
-                            <div class="ai-original-editor-section-head"><div><b>4</b><span><strong>变体 / SKU</strong><small>规格、价格和库存会与上架数据同步；翻译也会同步规格文本</small></span></div><button class="secondary" type="button" onclick="addAiOriginalEditorVariation()">＋ 添加变体</button></div>
-                            <div class="ai-original-editor-variant-wrap"><table><thead><tr><th>规格组合</th><th>价格</th><th>库存</th><th>操作</th></tr></thead><tbody id="ai-original-editor-variations"></tbody></table></div>
+                            <div class="ai-original-editor-section-head"><div><b>4</b><span><strong>变体 / SKU</strong><small>规格、采购价、库存、加价、加重和图片会随商品保存</small></span></div><button class="secondary" type="button" onclick="addAiOriginalEditorVariation()">＋ 添加变体</button></div>
+                            <div class="ai-original-variant-dimensions" id="ai-original-editor-variation-dimensions"></div>
+                            <div class="ai-original-variant-dimension-actions"><button class="secondary" type="button" onclick="addAiOriginalEditorDimension()">＋ 添加规格</button><button class="secondary" type="button" onclick="generateAiOriginalEditorVariations()">按规格生成变体组合</button></div>
+                            <div class="ai-original-editor-variant-wrap"><table><thead><tr><th>变体</th><th>SKU（选填）</th><th>库存</th><th>采购价</th><th>加价</th><th>加重(g)</th><th>图片（可选）</th><th>操作</th></tr></thead><tbody id="ai-original-editor-variations"></tbody></table></div>
                         </section>
                     </div>
                     <div class="ai-original-editor-footer"><span class="ai-original-status" id="ai-original-editor-status">修改后点击保存；翻译前会先保存当前中文资料。</span><div><button class="secondary" type="button" onclick="closeAiOriginalEditor()">取消</button><button class="primary" type="button" onclick="saveAiOriginalEditor(true)">保存并同步</button></div></div>
@@ -11127,6 +11299,12 @@
                                 <label for="mercado-product-edit-description">产品描述</label>
                                 <textarea id="mercado-product-edit-description" maxlength="60000" rows="6" placeholder="可以修改上架时使用的产品描述"></textarea>
                             </div>
+                            <section class="mercado-product-variant-editor field wide">
+                                <div class="mercado-product-variant-head"><div><strong>产品变体 / SKU</strong><small>规格、SKU、库存和图片会随刊登保存；加价、加重保存在商品资料中</small></div><button class="secondary" type="button" onclick="addMercadoProductVariation()">＋ 添加变体</button></div>
+                                <div class="mercado-product-variant-dimensions" id="mercado-product-variant-dimensions"></div>
+                                <div class="mercado-product-variant-dimension-actions"><button class="secondary" type="button" onclick="addMercadoProductDimension()">＋ 添加规格</button><button class="secondary" type="button" onclick="generateMercadoProductVariants()">按规格生成变体组合</button></div>
+                                <div class="mercado-product-variant-wrap"><table><thead><tr><th>变体 / 规格组合</th><th>SKU（选填）</th><th>库存</th><th>价格</th><th>加价</th><th>加重(g)</th><th>图片编号 / URL</th><th>操作</th></tr></thead><tbody id="mercado-product-edit-variations"></tbody></table></div>
+                            </section>
                             <p class="mercado-product-edit-message wide" id="mercado-product-edit-message" role="status"></p>
                         </div>
                         <div class="order-detail-footer">
@@ -11921,7 +12099,7 @@
                 <div class="tab-heading">
                     <div>
                         <h2>AI 视频生成</h2>
-                        <p>把商品图片或短视频拖进来，也可以直接复制粘贴；生成完成后可一键提交到关联的美客多链接</p>
+                        <p>把商品图片或短视频拖进来，也可以直接复制粘贴；生成完成后可一键提交到关联的美客多链接。点击历史任务可回看素材和文案并修改重试</p>
                     </div>
                     <div class="header-actions">
                         <a class="secondary" href="https://www.mercadolibre.com.mx/ayuda/25505" target="_blank" rel="noopener noreferrer">美客多官方要求</a>
@@ -12027,6 +12205,35 @@
                     </div>
                 </section>
 
+                <dialog class="ai-video-dialog ai-video-edit-dialog" id="ai-video-edit-dialog">
+                    <div class="ai-video-dialog-head">
+                        <div><h3 id="ai-video-edit-title">查看 AI 视频任务</h3><p>保留历史素材，调整素材顺序、文案或时长后创建新的重试任务。</p></div>
+                        <button class="secondary" type="button" onclick="document.getElementById('ai-video-edit-dialog').close()">关闭</button>
+                    </div>
+                    <div class="ai-video-dialog-body">
+                        <div class="ai-video-edit-meta" id="ai-video-edit-meta"></div>
+                        <div>
+                            <div class="ai-video-edit-section-head"><strong>历史素材</strong><span>拖动排序；点击 × 移除</span></div>
+                            <div class="ai-video-assets ai-video-edit-assets" id="ai-video-edit-assets"></div>
+                            <div class="ai-video-toolbar ai-video-edit-toolbar">
+                                <button class="secondary" type="button" onclick="document.getElementById('ai-video-edit-file-input').click()">添加新素材</button>
+                                <input id="ai-video-edit-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/bmp,video/mp4,video/quicktime,video/x-msvideo,video/mpeg,video/x-matroska,video/webm,.mkv" multiple hidden>
+                                <span class="hint">至少保留或添加一个素材</span>
+                            </div>
+                        </div>
+                        <div class="ai-video-field"><label for="ai-video-edit-name">备选视频名称 / 备注</label><input id="ai-video-edit-name" type="text" maxlength="120"></div>
+                        <div class="ai-video-field"><label for="ai-video-edit-prompt">补充要求 / 文案（可编辑）</label><textarea id="ai-video-edit-prompt" rows="4" maxlength="1200" placeholder="请输入要补充给视频模型的要求"></textarea></div>
+                        <div class="ai-video-dialog-grid">
+                            <div class="ai-video-field"><label for="ai-video-edit-duration">视频时长</label><select id="ai-video-edit-duration"><option value="10">10 秒</option><option value="15">15 秒</option><option value="20">20 秒</option><option value="30">30 秒</option></select></div>
+                            <div class="ai-video-field"><label>关联商品</label><div class="ai-video-edit-target" id="ai-video-edit-target">未关联商品</div></div>
+                        </div>
+                        <div class="ai-video-field"><label><input id="ai-video-edit-local-transcode" type="checkbox"> 仅转换视频格式，不调用 AI</label></div>
+                        <div class="ai-video-field"><label for="ai-video-edit-fit-mode">非 9:16 画面处理</label><select id="ai-video-edit-fit-mode"><option value="crop">居中裁剪铺满 9:16（推荐）</option><option value="pad">完整保留画面并补黑边</option></select></div>
+                        <p class="ai-video-message" id="ai-video-edit-message" role="status" aria-live="polite"></p>
+                    </div>
+                    <div class="ai-video-dialog-actions"><button class="secondary" type="button" onclick="document.getElementById('ai-video-edit-dialog').close()">取消</button><button class="primary" id="ai-video-edit-retry" type="button" onclick="retryEditedAiVideoJob()">修改后重试</button></div>
+                </dialog>
+
                 <dialog class="ai-video-dialog" id="ai-video-settings-dialog">
                     <div class="ai-video-dialog-head">
                         <div><h3>视频模型配置</h3><p>Token 与 Workspace ID 已移到账号“集成与凭证设置”；此处仅保留模型运行参数。</p></div>
@@ -12124,6 +12331,30 @@
                             <label for="store-link-mercado-category-filter">美客多分类</label>
                             <select id="store-link-mercado-category-filter" onchange="loadStoreLinks(1)">
                                 <option value="">全部美客多分类</option>
+                            </select>
+                        </div>
+                        <div class="order-filter-field">
+                            <label for="store-link-promotion-filter">活动标志</label>
+                            <select id="store-link-promotion-filter" onchange="loadStoreLinks(1)">
+                                <option value="">全部</option>
+                                <option value="1">已报活动</option>
+                                <option value="0">未报活动</option>
+                            </select>
+                        </div>
+                        <div class="order-filter-field">
+                            <label for="store-link-advertising-filter">广告标志</label>
+                            <select id="store-link-advertising-filter" onchange="loadStoreLinks(1)">
+                                <option value="">全部</option>
+                                <option value="1">已开广告</option>
+                                <option value="0">未开广告</option>
+                            </select>
+                        </div>
+                        <div class="order-filter-field">
+                            <label for="store-link-video-filter">视频标志</label>
+                            <select id="store-link-video-filter" onchange="loadStoreLinks(1)">
+                                <option value="">全部</option>
+                                <option value="1">已上传视频</option>
+                                <option value="0">未上传视频</option>
                             </select>
                         </div>
                         <div class="order-filter-field">
@@ -14270,6 +14501,9 @@
         const storeLinkStatusFilter = document.getElementById("store-link-status-filter");
         const storeLinkProductCategoryFilter = document.getElementById("store-link-product-category-filter");
         const storeLinkMercadoCategoryFilter = document.getElementById("store-link-mercado-category-filter");
+        const storeLinkPromotionFilter = document.getElementById("store-link-promotion-filter");
+        const storeLinkAdvertisingFilter = document.getElementById("store-link-advertising-filter");
+        const storeLinkVideoFilter = document.getElementById("store-link-video-filter");
         const storeLinkSalesSort = document.getElementById("store-link-sales-sort");
         const storeLinkPageSize = document.getElementById("store-link-page-size");
         const storeLinkSearch = document.getElementById("store-link-search");
@@ -14736,6 +14970,9 @@
         let mercadoListPageSize = 500;
         let mercadoListTotal = 0;
         let mercadoProductEditingId = 0;
+        let mercadoProductEditVariations = [];
+        let mercadoProductEditDimensions = [];
+        let mercadoProductEditSource = {};
         let mercadoProductEditSaving = false;
         let mercadoBulkEditSaving = false;
         let mercadoCategorySaving = false;
@@ -17567,6 +17804,245 @@
             return String(description.plain_text || description.text || "");
         }
 
+        function mercadoProductSnapshot(row) {
+            let snapshot = row?.source_snapshot_json || {};
+            if (typeof snapshot === "string") {
+                try { snapshot = JSON.parse(snapshot); } catch (_) { snapshot = {}; }
+            }
+            return snapshot && typeof snapshot === "object" ? snapshot : {};
+        }
+
+        function mercadoProductVariationLabel(variation) {
+            const combinations = variation?.attribute_combinations || variation?.attributeCombinations || variation?.combinations || [];
+            const labels = Array.isArray(combinations) ? combinations.map((item, index) => {
+                const name = item?.name || item?.id || `规格${index + 1}`;
+                const value = item?.value_name ?? item?.value ?? item?.text ?? "";
+                return value ? `${name}: ${value}` : "";
+            }).filter(Boolean) : [];
+            return labels.join(" / ") || variation?.label || variation?.name || variation?.sku_name || "";
+        }
+
+        function mercadoProductVariationSku(variation) {
+            if (variation?.seller_sku || variation?.sku || variation?.sku_id) {
+                return String(variation.seller_sku || variation.sku || variation.sku_id);
+            }
+            const attributes = Array.isArray(variation?.attributes) ? variation.attributes : [];
+            const sku = attributes.find(item => String(item?.id || "").toUpperCase() === "SELLER_SKU");
+            return String(sku?.value_name || "");
+        }
+
+        function mercadoProductVariationImageUrls(variation) {
+            const pictures = Array.isArray(mercadoProductEditSource?.pictures) ? mercadoProductEditSource.pictures : [];
+            const byId = new Map(pictures.filter(item => item && typeof item === "object" && item.id)
+                .map(item => [String(item.id), item.secure_url || item.url || item.source || ""]));
+            const direct = [variation?.image_url, variation?.image,
+                ...(Array.isArray(variation?.images) ? variation.images : [])]
+                .map(value => typeof value === "object" ? (value.url || value.secure_url || value.source || "") : value);
+            const selected = (Array.isArray(variation?.picture_ids) ? variation.picture_ids : [])
+                .map(value => byId.get(String(value)) || "");
+            return [...new Set([...direct, ...selected].filter(value => /^https?:\/\//i.test(String(value || ""))))].slice(0, 4);
+        }
+
+        function renderMercadoProductVariations() {
+            const tbody = document.getElementById("mercado-product-edit-variations");
+            if (!tbody) return;
+            tbody.innerHTML = mercadoProductEditVariations.length
+                ? mercadoProductEditVariations.map((variation, index) => {
+                    const images = mercadoProductVariationImageUrls(variation);
+                    const pictures = [...(Array.isArray(variation.picture_ids) ? variation.picture_ids : []),
+                        variation.image_url || "",
+                        ...(Array.isArray(variation.images) ? variation.images.map(value => typeof value === "object" ? (value.url || value.secure_url || value.source || "") : value) : [])]
+                        .filter(Boolean).join(", ");
+                    return `<tr>
+                        <td><input data-mercado-variant="${index}" data-variant-field="label" value="${escapeHtml(mercadoProductVariationLabel(variation))}" placeholder="颜色: 黑色 / 尺寸: M"></td>
+                        <td><input data-mercado-variant="${index}" data-variant-field="sku" value="${escapeHtml(mercadoProductVariationSku(variation))}" placeholder="选填"></td>
+                        <td><input type="number" min="0" data-mercado-variant="${index}" data-variant-field="stock" value="${escapeHtml(variation.available_quantity ?? variation.stock ?? "")}" placeholder="库存"></td>
+                        <td><input type="number" min="0" step="any" data-mercado-variant="${index}" data-variant-field="price" value="${escapeHtml(variation.price ?? "")}" placeholder="价格"></td>
+                        <td><input type="number" step="any" data-mercado-variant="${index}" data-variant-field="extra-price" value="${escapeHtml(variation.price_addition ?? variation.additional_price ?? variation.markup ?? "")}" placeholder="加价"></td>
+                        <td><input type="number" step="any" data-mercado-variant="${index}" data-variant-field="extra-weight" value="${escapeHtml(variation.weight_addition_g ?? variation.additional_weight_g ?? "")}" placeholder="加重"></td>
+                        <td><div class="mercado-variant-picture-cell">${images.map(url => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(url)}" alt="变体图片" loading="lazy" referrerpolicy="no-referrer"></a>`).join("")}<input data-mercado-variant="${index}" data-variant-field="pictures" value="${escapeHtml(pictures)}" placeholder="图片编号或图片 URL"></div></td>
+                        <td><button class="text-button" type="button" onclick="removeMercadoProductVariation(${index})">删除</button></td>
+                    </tr>`;
+                }).join("")
+                : '<tr><td class="mercado-product-variant-empty" colspan="8">当前商品没有变体；点击“添加变体”创建规格行。</td></tr>';
+        }
+
+        function mercadoProductDimensionsFromSource(source, variations) {
+            const saved = Array.isArray(source?.variation_dimensions) ? source.variation_dimensions : [];
+            if (saved.length) return saved.map((item, index) => ({
+                id: String(item.id || ""),
+                name: String(item.name || `规格${index + 1}`),
+                values: Array.isArray(item.values) ? item.values.map(String) : String(item.values || "").split(/[，,]/).map(value => value.trim()).filter(Boolean),
+            }));
+            const dimensions = new Map();
+            (Array.isArray(variations) ? variations : []).forEach(variation => {
+                const combinations = variation?.attribute_combinations || variation?.attributeCombinations || variation?.combinations || [];
+                if (!Array.isArray(combinations)) return;
+                combinations.forEach((attribute, index) => {
+                    if (!attribute || typeof attribute !== "object") return;
+                    const id = String(attribute.id || "");
+                    if (["SELLER_SKU", "SKU"].includes(id.toUpperCase())) return;
+                    const name = String(attribute.name || id || `规格${index + 1}`);
+                    const key = (id || name).toLocaleLowerCase();
+                    const value = String(attribute.value_name ?? attribute.value ?? attribute.text ?? "").trim();
+                    if (!value) return;
+                    if (!dimensions.has(key)) dimensions.set(key, {id, name, values: []});
+                    const dimension = dimensions.get(key);
+                    if (!dimension.values.includes(value)) dimension.values.push(value);
+                });
+            });
+            return [...dimensions.values()];
+        }
+
+        function renderMercadoProductDimensions() {
+            const node = document.getElementById("mercado-product-variant-dimensions");
+            if (!node) return;
+            node.innerHTML = mercadoProductEditDimensions.length ? mercadoProductEditDimensions.map((dimension, index) => `
+                <div class="mercado-product-dimension-row">
+                    <label><span>规格名称</span><input data-mercado-dimension="${index}" data-dimension-field="name" value="${escapeHtml(dimension.name || "")}" placeholder="例如 Color"></label>
+                    <label><span>规格选项（逗号分隔）</span><input data-mercado-dimension="${index}" data-dimension-field="values" value="${escapeHtml((dimension.values || []).join(", "))}" placeholder="例如 Red, Blue"></label>
+                    <button class="text-button" type="button" onclick="removeMercadoProductDimension(${index})">删除</button>
+                </div>`).join("") : '<span class="mercado-product-variant-hint">按需添加规格名称和选项，再生成 SKU 组合。</span>';
+        }
+
+        function collectMercadoProductDimensions() {
+            const node = document.getElementById("mercado-product-variant-dimensions");
+            if (!node) return mercadoProductEditDimensions;
+            return mercadoProductEditDimensions.map((dimension, index) => {
+                const input = field => node.querySelector(`[data-mercado-dimension="${index}"][data-dimension-field="${field}"]`);
+                const name = input("name")?.value?.trim() || `规格${index + 1}`;
+                const values = (input("values")?.value || "").split(/[，,]/).map(value => value.trim()).filter(Boolean);
+                return {...dimension, name, values: [...new Set(values)].slice(0, 200)};
+            });
+        }
+
+        function addMercadoProductDimension() {
+            mercadoProductEditDimensions = collectMercadoProductDimensions();
+            mercadoProductEditDimensions.push({id: "", name: `规格${mercadoProductEditDimensions.length + 1}`, values: []});
+            renderMercadoProductDimensions();
+        }
+
+        function removeMercadoProductDimension(index) {
+            mercadoProductEditDimensions = collectMercadoProductDimensions().filter((_, position) => position !== Number(index));
+            renderMercadoProductDimensions();
+        }
+
+        function generateMercadoProductVariants() {
+            const dimensions = collectMercadoProductDimensions().filter(item => item.name && item.values.length);
+            if (!dimensions.length) {
+                mercadoProductEditMessage.textContent = "请先填写至少一个规格及其选项。";
+                return;
+            }
+            mercadoProductEditVariations = collectMercadoProductVariations();
+            let combinations = [[]];
+            for (const dimension of dimensions) {
+                combinations = combinations.flatMap(previous => dimension.values.map(value => [...previous, {dimension, value}]));
+                if (combinations.length > 200) {
+                    mercadoProductEditMessage.textContent = "规格组合超过 200 个，请减少规格选项。";
+                    return;
+                }
+            }
+            const previousRows = new Map(mercadoProductEditVariations.map(variation => [
+                mercadoProductVariationLabel(variation).toLocaleLowerCase(), variation
+            ]));
+            mercadoProductEditVariations = combinations.map(combination => {
+                const key = combination.map(({dimension, value}) => `${dimension.name}: ${value}`).join(" / ").toLocaleLowerCase();
+                const prior = previousRows.get(key) || {};
+                const oldAttributes = prior.attribute_combinations || prior.attributeCombinations || prior.combinations || [];
+                const attributes = combination.map(({dimension, value}, index) => {
+                    const old = Array.isArray(oldAttributes) ? oldAttributes.find(attribute =>
+                        String(attribute?.id || "").toLocaleLowerCase() === String(dimension.id || "").toLocaleLowerCase() ||
+                        String(attribute?.name || "").toLocaleLowerCase() === dimension.name.toLocaleLowerCase()
+                    ) || oldAttributes[index] || {} : {};
+                    const parsed = mercadoVariationAttributesFromLabel(`${dimension.name}: ${value}`, [old])[0] || {};
+                    if (dimension.id) parsed.id = dimension.id;
+                    return parsed;
+                });
+                return {...prior, label: key, attribute_combinations: attributes};
+            });
+            mercadoProductEditDimensions = dimensions;
+            mercadoProductEditMessage.textContent = `已生成 ${mercadoProductEditVariations.length} 个变体组合；已有匹配 SKU 的库存、价格和图片已保留。`;
+            renderMercadoProductVariations();
+        }
+
+        function addMercadoProductVariation() {
+            mercadoProductEditVariations.push({label: "", attribute_combinations: [], attributes: []});
+            renderMercadoProductVariations();
+        }
+
+        function removeMercadoProductVariation(index) {
+            mercadoProductEditVariations = mercadoProductEditVariations.filter((_, position) => position !== Number(index));
+            renderMercadoProductVariations();
+        }
+
+        function mercadoVariationAttributesFromLabel(label, previous) {
+            const previousRows = Array.isArray(previous) ? previous : [];
+            return String(label || "").split(/\s*\/\s*/).map((part, index) => {
+                const pieces = part.split(/[：:]/, 2).map(value => value.trim());
+                const old = previousRows[index] && typeof previousRows[index] === "object" ? {...previousRows[index]} : {};
+                const name = pieces.length > 1 ? pieces[0] : String(old.name || old.id || `规格${index + 1}`);
+                const value = pieces.length > 1 ? pieces[1] : pieces[0];
+                if (!value) return null;
+                if (name !== old.name && old.name) old.name = name;
+                else if (name) old.name = name;
+                if (!old.id && name) {
+                    const key = name.toLocaleLowerCase();
+                    old.id = /颜色|色|^color$|^colour$|^cor$/.test(key) ? "COLOR"
+                        : /尺寸|尺码|^size$|^talla$/.test(key) ? "SIZE"
+                            : /材质|材料|^material$/.test(key) ? "MATERIAL"
+                                : /风格|款式|^style$/.test(key) ? "STYLE" : name;
+                }
+                if (String(old.value_name || "") !== value) delete old.value_id;
+                old.value_name = value;
+                return old;
+            }).filter(Boolean).slice(0, 20);
+        }
+
+        function collectMercadoProductVariations() {
+            const tbody = document.getElementById("mercado-product-edit-variations");
+            return mercadoProductEditVariations.map((variation, index) => {
+                const next = {...variation};
+                const value = field => tbody?.querySelector(`[data-mercado-variant="${index}"][data-variant-field="${field}"]`)?.value?.trim() || "";
+                const label = value("label");
+                next.label = label;
+                next.attribute_combinations = mercadoVariationAttributesFromLabel(label, variation.attribute_combinations || variation.attributeCombinations || variation.combinations);
+                const sku = value("sku");
+                next.seller_sku = sku;
+                const attributes = Array.isArray(next.attributes) ? [...next.attributes] : [];
+                const sellerSku = attributes.find(item => String(item?.id || "").toUpperCase() === "SELLER_SKU");
+                if (sku) {
+                    if (sellerSku) sellerSku.value_name = sku;
+                    else attributes.push({id: "SELLER_SKU", value_name: sku});
+                } else if (sellerSku) {
+                    const skuIndex = attributes.indexOf(sellerSku);
+                    attributes.splice(skuIndex, 1);
+                }
+                next.attributes = attributes;
+                const setOptionalNumber = (field, key) => {
+                    const raw = value(field);
+                    if (!raw) { delete next[key]; return; }
+                    const number = Number(raw);
+                    next[key] = Number.isFinite(number) ? number : raw;
+                };
+                setOptionalNumber("stock", "available_quantity");
+                setOptionalNumber("price", "price");
+                setOptionalNumber("extra-price", "price_addition");
+                setOptionalNumber("extra-weight", "weight_addition_g");
+                const pictures = value("pictures").split(/[，,]/).map(item => item.trim()).filter(Boolean);
+                const pictureIds = pictures.filter(item => !/^https?:\/\//i.test(item));
+                const imageUrls = pictures.filter(item => /^https?:\/\//i.test(item));
+                if (pictureIds.length) next.picture_ids = pictureIds; else delete next.picture_ids;
+                if (imageUrls.length) {
+                    next.image_url = imageUrls[0];
+                    next.images = imageUrls.slice(1);
+                } else {
+                    delete next.image_url;
+                    delete next.images;
+                }
+                return next;
+            });
+        }
+
         function mercadoProductZyingCategory(row) {
             if (String(row.source_type || "").toLowerCase() !== "zying") return "-";
             let snapshot = row.source_snapshot_json || {};
@@ -17697,6 +18173,11 @@
             const row = mercadoListRows.find(item => Number(item.id) === Number(rowId));
             if (!row || mercadoListMode !== "products") return;
             mercadoProductEditingId = Number(rowId);
+            const snapshot = mercadoProductSnapshot(row);
+            mercadoProductEditSource = snapshot.source && typeof snapshot.source === "object" ? snapshot.source : {};
+            mercadoProductEditVariations = Array.isArray(mercadoProductEditSource.variations)
+                ? JSON.parse(JSON.stringify(mercadoProductEditSource.variations)) : [];
+            mercadoProductEditDimensions = mercadoProductDimensionsFromSource(mercadoProductEditSource, mercadoProductEditVariations);
             mercadoProductEditSubtitle.textContent = `${row.source_item_id || "产品"} · ${row.currency_id || "MXN"}`;
             mercadoProductEditTitle.value = row.title || "";
             mercadoProductEditImage.value = row.main_image_url || "";
@@ -17708,6 +18189,8 @@
             mercadoProductEditHeight.value = row.package_height_cm ?? "";
             mercadoProductEditDescription.value = mercadoProductDescription(row);
             mercadoProductEditMessage.textContent = "";
+            renderMercadoProductDimensions();
+            renderMercadoProductVariations();
             mercadoProductEditDialog.showModal();
             mercadoProductEditTitle.focus();
         }
@@ -17716,6 +18199,9 @@
             if (mercadoProductEditSaving) return;
             mercadoProductEditDialog.close();
             mercadoProductEditingId = 0;
+            mercadoProductEditVariations = [];
+            mercadoProductEditDimensions = [];
+            mercadoProductEditSource = {};
         }
 
         async function saveMercadoProductEditor(event) {
@@ -17732,6 +18218,8 @@
                 package_width_cm: Number(mercadoProductEditWidth.value),
                 package_height_cm: Number(mercadoProductEditHeight.value),
                 description_text: mercadoProductEditDescription.value.trim(),
+                variations: collectMercadoProductVariations(),
+                variation_dimensions: collectMercadoProductDimensions(),
             };
             mercadoProductEditSaving = true;
             mercadoProductEditSave.disabled = true;
@@ -23586,7 +24074,12 @@
             storeLinkRows.forEach(row => {
                 if (ids.has(Number(row.id))) row[field] = Boolean(value);
             });
-            if (ids.size) renderStoreLinkRows(storeLinkRows);
+            if (!ids.size) return;
+            renderStoreLinkRows(storeLinkRows);
+            if ([storeLinkPromotionFilter, storeLinkAdvertisingFilter, storeLinkVideoFilter]
+                .some(filter => filter?.value)) {
+                loadStoreLinks(storeLinkPage);
+            }
         }
 
         let storeLinkVideoBusy = false;
@@ -23726,6 +24219,9 @@
         let aiVideoUploadBusy = false;
         let aiVideoPollTimer = null;
         let aiVideoDraggedIndex = -1;
+        let aiVideoEditingJob = null;
+        let aiVideoEditAssets = [];
+        let aiVideoEditDraggedIndex = -1;
 
         function aiVideoSetMessage(text, state = "") {
             const target = document.getElementById("ai-video-message");
@@ -24169,6 +24665,189 @@
             return {queued: "排队中", submitting: "提交中", generating: "生成中", succeeded: "已完成", failed: "失败", canceled: "已取消"}[status] || status || "未知";
         }
 
+        function aiVideoEditSetMessage(text, state = "") {
+            const target = document.getElementById("ai-video-edit-message");
+            if (!target) return;
+            target.textContent = text || "";
+            target.className = `ai-video-message ${state}`.trim();
+        }
+
+        function aiVideoEditAssetSize(item) {
+            if (item.source === "history") return item.size ? aiVideoBytes(item.size) : "历史素材";
+            return aiVideoBytes(item.file?.size);
+        }
+
+        function renderAiVideoEditAssets() {
+            const container = document.getElementById("ai-video-edit-assets");
+            if (!container) return;
+            if (!aiVideoEditAssets.length) {
+                container.innerHTML = '<div class="empty-state">暂无素材，请添加或恢复至少一个素材。</div>';
+                return;
+            }
+            container.innerHTML = aiVideoEditAssets.map((item, index) => {
+                const name = item.name || item.file?.name || "素材";
+                const url = escapeHtml(item.url || item.preview_url || "");
+                const media = url
+                    ? (item.kind === "image" ? `<img src="${url}" alt="${escapeHtml(name)}">` : `<video src="${url}" muted playsinline preload="metadata"></video>`)
+                    : `<span>${item.kind === "image" ? "图片" : "视频"}</span>`;
+                return `<article class="ai-video-asset" draggable="true" data-index="${index}" ondragstart="startAiVideoEditAssetDrag(event, ${index})" ondragend="endAiVideoEditAssetDrag(event)">
+                    <div class="ai-video-asset-preview">${media}</div>
+                    <button class="ai-video-asset-remove" type="button" aria-label="移除素材" onclick="removeAiVideoEditAsset(${index}, event)">×</button>
+                    <div class="ai-video-asset-copy"><strong title="${escapeHtml(name)}">${index + 1}. ${escapeHtml(name)}</strong><small>${item.kind === "image" ? "图片" : "视频"} · ${escapeHtml(aiVideoEditAssetSize(item))}${item.source === "history" ? " · 历史" : " · 新增"}</small></div>
+                </article>`;
+            }).join("");
+        }
+
+        function releaseAiVideoEditAssets() {
+            aiVideoEditAssets.forEach(item => {
+                if (item.source === "file" && item.url) URL.revokeObjectURL(item.url);
+            });
+        }
+
+        function removeAiVideoEditAsset(index, event) {
+            event?.stopPropagation();
+            const [removed] = aiVideoEditAssets.splice(index, 1);
+            if (removed?.source === "file" && removed.url) URL.revokeObjectURL(removed.url);
+            renderAiVideoEditAssets();
+        }
+
+        function startAiVideoEditAssetDrag(event, index) {
+            aiVideoEditDraggedIndex = index;
+            event.currentTarget.classList.add("dragging");
+            event.dataTransfer.effectAllowed = "move";
+        }
+
+        function endAiVideoEditAssetDrag(event) {
+            event.currentTarget.classList.remove("dragging");
+            aiVideoEditDraggedIndex = -1;
+        }
+
+        function reorderAiVideoEditAsset(event) {
+            if (aiVideoEditDraggedIndex < 0) return;
+            const card = event.target.closest(".ai-video-asset");
+            const targetIndex = Number(card?.dataset.index);
+            if (!Number.isInteger(targetIndex) || targetIndex === aiVideoEditDraggedIndex) return;
+            const [moving] = aiVideoEditAssets.splice(aiVideoEditDraggedIndex, 1);
+            aiVideoEditAssets.splice(targetIndex, 0, moving);
+            aiVideoEditDraggedIndex = -1;
+            renderAiVideoEditAssets();
+        }
+
+        async function addAiVideoEditFiles(fileList) {
+            const incoming = Array.from(fileList || []);
+            if (!incoming.length) return;
+            const warnings = [];
+            for (const file of incoming) {
+                const isImage = file.type.startsWith("image/") || /\.(jpe?g|png|bmp|webp)$/i.test(file.name);
+                const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|avi|mpe?g|mkv|webm)$/i.test(file.name);
+                if (!isImage && !isVideo) {
+                    warnings.push(`${file.name} 格式不支持`);
+                    continue;
+                }
+                if ((isImage && file.size > 20 * 1024 * 1024) || (isVideo && file.size > 100 * 1024 * 1024) || file.size <= 0) {
+                    warnings.push(`${file.name} 文件大小不符合要求`);
+                    continue;
+                }
+                if (aiVideoEditAssets.length >= 20) {
+                    warnings.push("每个任务最多 20 个素材");
+                    break;
+                }
+                const duplicate = aiVideoEditAssets.some(item => item.source === "file" && item.file?.name === file.name && item.file?.size === file.size && item.file?.lastModified === file.lastModified);
+                if (duplicate) continue;
+                const metadata = await aiVideoInspectFile(file);
+                aiVideoEditAssets.push({
+                    source: "file",
+                    file,
+                    kind: isImage ? "image" : "video",
+                    name: file.name,
+                    size: file.size,
+                    metadata,
+                    url: URL.createObjectURL(file),
+                });
+            }
+            renderAiVideoEditAssets();
+            if (warnings.length) aiVideoEditSetMessage(warnings.slice(0, 3).join("；"), "error");
+        }
+
+        function openAiVideoJobEditor(jobId, event) {
+            if (event?.target?.closest("button, a, video")) return;
+            const job = aiVideoJobs.find(item => String(item.id) === String(jobId));
+            const dialog = document.getElementById("ai-video-edit-dialog");
+            if (!job || !dialog) return;
+            releaseAiVideoEditAssets();
+            aiVideoEditingJob = job;
+            aiVideoEditAssets = (Array.isArray(job.assets) ? job.assets : []).map(asset => ({
+                ...asset,
+                source: "history",
+                assetId: asset.id,
+                url: asset.preview_url || `/api/ai-videos/jobs/${encodeURIComponent(job.id)}/assets/${encodeURIComponent(asset.id || "")}`,
+            }));
+            const target = job.target || {};
+            const status = String(job.status || "");
+            document.getElementById("ai-video-edit-title").textContent = job.name || "AI 视频任务详情";
+            document.getElementById("ai-video-edit-meta").textContent = `${aiVideoJobState(status)} · ${job.message || ""} · 任务 ID ${String(job.id || "").slice(0, 8)}`;
+            document.getElementById("ai-video-edit-name").value = job.name || "";
+            document.getElementById("ai-video-edit-prompt").value = job.user_prompt || "";
+            document.getElementById("ai-video-edit-duration").value = String(job.duration || 10);
+            document.getElementById("ai-video-edit-local-transcode").checked = Boolean(job.local_transcode);
+            document.getElementById("ai-video-edit-fit-mode").value = job.local_fit_mode || "crop";
+            document.getElementById("ai-video-edit-target").textContent = target.link_id
+                ? `${target.item_id || "已关联商品"} · ${target.store_name || "-"} · ${target.site_id || "-"} · ${target.title || "未命名商品"}`
+                : "未关联商品";
+            const retryButton = document.getElementById("ai-video-edit-retry");
+            retryButton.disabled = status === "queued" || status === "submitting" || status === "generating";
+            retryButton.textContent = retryButton.disabled ? "任务进行中" : "修改后重试";
+            aiVideoEditSetMessage(retryButton.disabled ? "任务完成或失败后才能创建新的重试任务。" : "可删除或调整历史素材，并修改文案后重试。", retryButton.disabled ? "" : "success");
+            renderAiVideoEditAssets();
+            dialog.showModal();
+        }
+
+        async function retryEditedAiVideoJob() {
+            const job = aiVideoEditingJob;
+            const button = document.getElementById("ai-video-edit-retry");
+            if (!job || !button || button.disabled) return;
+            if (!aiVideoEditAssets.length) {
+                aiVideoEditSetMessage("请至少保留或添加一个素材。", "error");
+                return;
+            }
+            const form = new FormData();
+            const sourceAssetIds = [];
+            const assetOrder = [];
+            let fileIndex = 0;
+            aiVideoEditAssets.forEach(item => {
+                if (item.source === "history") {
+                    sourceAssetIds.push(item.assetId);
+                    assetOrder.push({source: "history", id: item.assetId});
+                } else if (item.file) {
+                    form.append("files", item.file, item.file.name);
+                    assetOrder.push({source: "file", index: fileIndex++});
+                }
+            });
+            form.append("source_asset_ids", JSON.stringify(sourceAssetIds));
+            form.append("asset_order", JSON.stringify(assetOrder));
+            form.append("name", document.getElementById("ai-video-edit-name").value.trim());
+            form.append("prompt", document.getElementById("ai-video-edit-prompt").value.trim());
+            form.append("duration", document.getElementById("ai-video-edit-duration").value);
+            form.append("local_transcode", document.getElementById("ai-video-edit-local-transcode").checked ? "1" : "0");
+            form.append("local_fit_mode", document.getElementById("ai-video-edit-fit-mode").value);
+            button.disabled = true;
+            button.textContent = "重试任务创建中…";
+            aiVideoEditSetMessage("正在根据历史素材创建新的重试任务…");
+            try {
+                const response = await fetch(`/api/ai-videos/jobs/${encodeURIComponent(job.id)}/retry`, {method: "POST", body: form});
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "重试任务创建失败");
+                document.getElementById("ai-video-edit-dialog").close();
+                aiVideoSetMessage("新的 AI 视频重试任务已创建。", "success");
+                aiVideoJobsLoaded = false;
+                await loadAiVideoJobs(true);
+            } catch (error) {
+                aiVideoEditSetMessage(error.message || String(error), "error");
+                button.disabled = false;
+                button.textContent = "修改后重试";
+            }
+        }
+
         function renderAiVideoJobs() {
             const container = document.getElementById("ai-video-jobs");
             if (!container) return;
@@ -24183,13 +24862,14 @@
                 let media = `<div class="ai-video-job-progress">${status === "failed" ? "⚠" : '<span class="ai-video-spinner"></span>'}<strong>${escapeHtml(aiVideoJobState(status))}</strong><small>${escapeHtml(job.message || "")}</small></div>`;
                 if (status === "succeeded" && job.content_url) media = `<video src="${escapeHtml(job.content_url)}" controls playsinline preload="metadata"></video>`;
                 const linkId = Number(target.link_id || 0);
-                const actions = status === "succeeded" ? `<a class="secondary" href="${escapeHtml(job.content_url)}" download="mercado-video.mp4">下载 MP4</a>
+                const editorAction = `<button class="secondary" type="button" onclick="openAiVideoJobEditor('${escapeHtml(job.id)}', event)">${status === "succeeded" ? "查看素材 / 修改重试" : "查看素材并重试"}</button>`;
+                const actions = editorAction + (status === "succeeded" ? ` <a class="secondary" href="${escapeHtml(job.content_url)}" download="mercado-video.mp4">下载 MP4</a>
                     <button class="secondary" type="button" onclick="renameAiVideoJob('${escapeHtml(job.id)}')">修改名称</button>
                     <button class="danger" type="button" onclick="deleteAiVideoJob('${escapeHtml(job.id)}')">删除视频</button>
-                    <button class="primary" type="button" onclick="publishAiVideoJob('${escapeHtml(job.id)}', ${linkId}, this)" ${linkId ? "" : "disabled title=\"该任务未关联店铺链接\""}>上传到关联链接</button>` : "";
+                    <button class="primary" type="button" onclick="publishAiVideoJob('${escapeHtml(job.id)}', ${linkId}, this)" ${linkId ? "" : "disabled title=\"该任务未关联店铺链接\""}>上传到关联链接</button>` : "");
                 const latestPublish = Array.isArray(job.publish_attempts) ? job.publish_attempts.at(-1) : null;
                 const publishLog = latestPublish ? `<span class="ai-video-publish-log ${escapeHtml(latestPublish.status || "")}">最近上传：${escapeHtml(latestPublish.message || latestPublish.status || "未知结果")}${latestPublish.clip_uuid ? ` · ${escapeHtml(latestPublish.clip_uuid)}` : ""}</span>` : "";
-                return `<article class="ai-video-job">
+                return `<article class="ai-video-job" role="button" tabindex="0" title="点击查看历史素材和文案，并修改后重试" onclick="openAiVideoJobEditor('${escapeHtml(job.id)}', event)" onkeydown="if(event.key === 'Enter' || event.key === ' '){event.preventDefault();openAiVideoJobEditor('${escapeHtml(job.id)}', event)}">
                     <div class="ai-video-job-media">${media}</div>
                     <div class="ai-video-job-copy">
                         <div class="ai-video-job-title"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong><span class="ai-video-job-state ${escapeHtml(status)}">${escapeHtml(aiVideoJobState(status))}</span></div>
@@ -24404,6 +25084,8 @@
         const aiVideoDropzone = document.getElementById("ai-video-dropzone");
         const aiVideoFileInput = document.getElementById("ai-video-file-input");
         const aiVideoAssetContainer = document.getElementById("ai-video-assets");
+        const aiVideoEditFileInput = document.getElementById("ai-video-edit-file-input");
+        const aiVideoEditAssetContainer = document.getElementById("ai-video-edit-assets");
         aiVideoDropzone?.addEventListener("click", () => aiVideoFileInput.click());
         aiVideoDropzone?.addEventListener("keydown", event => {
             if (event.key === "Enter" || event.key === " ") { event.preventDefault(); aiVideoFileInput.click(); }
@@ -24414,6 +25096,12 @@
         aiVideoFileInput?.addEventListener("change", event => addAiVideoFiles(event.target.files));
         aiVideoAssetContainer?.addEventListener("dragover", event => { if (aiVideoDraggedIndex >= 0) event.preventDefault(); });
         aiVideoAssetContainer?.addEventListener("drop", event => { event.preventDefault(); reorderAiVideoAsset(event); });
+        aiVideoEditFileInput?.addEventListener("change", event => {
+            addAiVideoEditFiles(event.target.files);
+            event.target.value = "";
+        });
+        aiVideoEditAssetContainer?.addEventListener("dragover", event => { if (aiVideoEditDraggedIndex >= 0) event.preventDefault(); });
+        aiVideoEditAssetContainer?.addEventListener("drop", event => { event.preventDefault(); reorderAiVideoEditAsset(event); });
         document.addEventListener("paste", event => {
             if (!document.getElementById("tab-ai-video")?.classList.contains("active")) return;
             const files = Array.from(event.clipboardData?.files || []);
@@ -24648,6 +25336,9 @@
                 site_id: storeLinkSiteFilter.value,
                 group_name: storeLinkGroupFilter.value,
                 status: storeLinkStatusFilter.value,
+                promotion_applied: storeLinkPromotionFilter.value,
+                advertising_enabled: storeLinkAdvertisingFilter.value,
+                video_uploaded: storeLinkVideoFilter.value,
                 management_category_id: storeLinkProductCategoryFilter.value,
                 mercado_category: storeLinkMercadoCategoryFilter.value,
                 sort_by: storeLinkSortBy || "sold_quantity",
