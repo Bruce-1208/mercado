@@ -37,6 +37,14 @@ function products1688DisplayImageUrl(value) {
 }
 
 function products1688ImageError(image) {
+  let candidates = [];
+  try { candidates = JSON.parse(image.dataset.imageCandidates || "[]"); } catch (_error) {}
+  const next = candidates.shift();
+  if (next) {
+    image.dataset.imageCandidates = JSON.stringify(candidates);
+    image.src = products1688DisplayImageUrl(next);
+    return;
+  }
   image.onerror = null;
   image.removeAttribute("src");
   image.classList.add("is-missing");
@@ -63,6 +71,20 @@ function products1688Images(row) {
   const original = products1688Original(row);
   const values = [original.main_image_url, ...(Array.isArray(original.images) ? original.images : [])];
   return [...new Set(values.map(value => String(value || "").trim()).filter(value => /^https?:\/\//i.test(value)))].slice(0, 20);
+}
+
+function products1688ImageFallbacks(images) {
+  const fallbacks = images.slice(1);
+  images.forEach(value => {
+    try {
+      const url = new URL(value);
+      if (/^cbu\d+\.alicdn\.com$/i.test(url.hostname) && /\.jpg$/i.test(url.pathname)) {
+        url.pathname = url.pathname.replace(/\.jpg$/i, ".webp");
+        fallbacks.push(url.href);
+      }
+    } catch (_error) {}
+  });
+  return [...new Set(fallbacks)];
 }
 
 function products1688Status(row) {
@@ -163,7 +185,7 @@ function products1688RenderRows() {
     const title = original.title || row.title || "未命名商品";
     const sourceUrl = products1688SourceUrl(row);
     const imageMarkup = image
-      ? `<img class="p1688-thumb" src="${products1688Escape(image)}" alt="1688 商品主图" loading="lazy" referrerpolicy="no-referrer" onerror="products1688ImageError(this)">`
+      ? `<img class="p1688-thumb" src="${products1688Escape(image)}" data-image-candidates="${products1688Escape(JSON.stringify(products1688ImageFallbacks(images)))}" alt="1688 商品主图" loading="lazy" referrerpolicy="no-referrer" onerror="products1688ImageError(this)">`
       : `<span class="p1688-thumb"></span>`;
     const linkedImage = sourceUrl
       ? `<a class="p1688-product-image-link" href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer" title="打开 1688 商品页">${imageMarkup}</a>`

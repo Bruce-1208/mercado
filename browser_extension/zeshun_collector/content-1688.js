@@ -33,7 +33,6 @@
   function absoluteImage(value) {
     let url = String(value || "").trim().replace(/&amp;/g, "&");
     if (url.startsWith("//")) url = `https:${url}`;
-    url = url.replace(/\.webp(?:_[^?]+)?(?=\?|$)/i, ".jpg");
     return /^https?:\/\//i.test(url) ? url : "";
   }
 

@@ -24165,6 +24165,7 @@
                 const linkId = Number(target.link_id || 0);
                 const actions = status === "succeeded" ? `<a class="secondary" href="${escapeHtml(job.content_url)}" download="mercado-video.mp4">下载 MP4</a>
                     <button class="secondary" type="button" onclick="renameAiVideoJob('${escapeHtml(job.id)}')">修改名称</button>
+                    <button class="danger" type="button" onclick="deleteAiVideoJob('${escapeHtml(job.id)}')">删除视频</button>
                     <button class="primary" type="button" onclick="publishAiVideoJob('${escapeHtml(job.id)}', ${linkId}, this)" ${linkId ? "" : "disabled title=\"该任务未关联店铺链接\""}>上传到关联链接</button>` : "";
                 const latestPublish = Array.isArray(job.publish_attempts) ? job.publish_attempts.at(-1) : null;
                 const publishLog = latestPublish ? `<span class="ai-video-publish-log ${escapeHtml(latestPublish.status || "")}">最近上传：${escapeHtml(latestPublish.message || latestPublish.status || "未知结果")}${latestPublish.clip_uuid ? ` · ${escapeHtml(latestPublish.clip_uuid)}` : ""}</span>` : "";
@@ -24287,6 +24288,25 @@
                 job.name = payload.data.name;
                 renderAiVideoJobs();
                 aiVideoSetMessage("备选视频名称已更新。", "success");
+            } catch (error) {
+                aiVideoSetMessage(error.message || String(error), "error");
+            }
+        }
+
+        async function deleteAiVideoJob(jobId) {
+            const job = aiVideoJobs.find(item => item.id === jobId);
+            if (!job) return;
+            const label = job.name || "这条视频";
+            if (!window.confirm(`确认删除“${label}”？删除后将从成品库移除，已提交美客多的视频不受影响。`)) return;
+            try {
+                const response = await fetch(`/api/ai-videos/jobs/${encodeURIComponent(jobId)}`, {
+                    method: "DELETE",
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "视频删除失败");
+                aiVideoJobs = aiVideoJobs.filter(item => item.id !== jobId);
+                renderAiVideoJobs();
+                aiVideoSetMessage("视频已从成品库删除。", "success");
             } catch (error) {
                 aiVideoSetMessage(error.message || String(error), "error");
             }

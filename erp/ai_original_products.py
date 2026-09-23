@@ -20,6 +20,8 @@ from typing import Any, Callable, Mapping
 from urllib.parse import urlparse
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -35,6 +37,53 @@ LOCAL_BACKGROUND_MODEL = "isnet-general-use"
 WHITE_BACKGROUND_METHODS = frozenset({"ai_image_edit", "local_background_removal"})
 _background_removal_session = None
 _background_removal_session_lock = threading.Lock()
+
+
+def _get_image_response(url: str, *, http_get=None, **kwargs):
+    """Retry transient 1688 CDN failures while keeping test/custom getters intact."""
+    if http_get is not None:
+        return http_get(url, **kwargs)
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        status=2,
+        backoff_factor=0.4,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset({"GET"}),
+    )
+    session = requests.Session()
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    try:
+        return session.get(url, **kwargs)
+    finally:
+        session.close()
+
+
+def _download_source_image(source_url: str, *, http_get=None) -> bytes:
+    parsed_source = urlparse(str(source_url or ""))
+    source_host = (parsed_source.hostname or "").lower()
+    if parsed_source.scheme not in {"http", "https"} or not (
+        source_host == "1688.com"
+        or source_host.endswith(".1688.com")
+        or source_host == "alicdn.com"
+        or source_host.endswith(".alicdn.com")
+    ):
+        raise ValueError("1688 商品缺少可用的首图")
+    response = _get_image_response(
+        source_url,
+        http_get=http_get,
+        timeout=45,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://detail.1688.com/",
+        },
+    )
+    response.raise_for_status()
+    image_bytes = bytes(response.content or b"")
+    if not image_bytes or len(image_bytes) > 15 * 1024 * 1024:
+        raise ValueError("1688 首图无效或超过 15 MB")
+    return image_bytes
 
 
 # 1688 collectors have emitted several property shapes over time. Keep the
@@ -529,6 +578,7 @@ def create_white_background_image(
     image_dir: Path | None = None,
     http_get: Callable[..., Any] | None = None,
     background_remove: Callable[[Any], Any] | None = None,
+    source_bytes: bytes | None = None,
 ) -> tuple[Path, str]:
     """Remove the background locally and place the product on a white square."""
     from PIL import Image, ImageOps
@@ -542,18 +592,8 @@ def create_white_background_image(
         or source_host.endswith(".alicdn.com")
     ):
         raise ValueError("1688 商品缺少可用的首图")
-    response = (http_get or requests.get)(
-        source_url,
-        timeout=45,
-        headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Referer": "https://detail.1688.com/",
-        },
-    )
-    response.raise_for_status()
-    if len(response.content) > 15 * 1024 * 1024:
-        raise ValueError("1688 首图超过 15 MB")
-    with Image.open(BytesIO(response.content)) as opened:
+    source_bytes = source_bytes or _download_source_image(source_url, http_get=http_get)
+    with Image.open(BytesIO(source_bytes)) as opened:
         image = ImageOps.exif_transpose(opened).convert("RGB")
     max_side = max(image.size)
     if max_side > 1600:
@@ -600,6 +640,7 @@ def generate_ai_white_background_image(
     image_generate: Callable[..., Any] | None = None,
     image_dir: Path | None = None,
     http_get: Callable[..., Any] | None = None,
+    source_bytes: bytes | None = None,
 ) -> tuple[Path, str]:
     """Generate a new square white-background image through an image model.
 
@@ -618,17 +659,7 @@ def generate_ai_white_background_image(
         or source_host.endswith(".alicdn.com")
     ):
         raise ValueError("1688 商品缺少可用的 AI 主图输入")
-    getter = http_get or requests.get
-    source_response = getter(
-        source_url,
-        timeout=45,
-        headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Referer": "https://detail.1688.com/",
-        },
-    )
-    source_response.raise_for_status()
-    source_bytes = bytes(source_response.content or b"")
+    source_bytes = source_bytes or _download_source_image(source_url, http_get=http_get)
     if not source_bytes or len(source_bytes) > 15 * 1024 * 1024:
         raise ValueError("1688 主图无效或超过 15 MB")
 
@@ -671,7 +702,7 @@ def generate_ai_white_background_image(
     if isinstance(generated, str) and generated.startswith("data:"):
         generated = generated.split(",", 1)[-1]
     if isinstance(generated, str) and generated.startswith(("http://", "https://")):
-        image_response = getter(generated, timeout=60)
+        image_response = _get_image_response(generated, http_get=http_get, timeout=60)
         image_response.raise_for_status()
         generated = image_response.content
     elif isinstance(generated, str):
@@ -718,7 +749,35 @@ def prepare_ai_original_product(
     copy = generate_marketplace_copy(
         original, api_key=api_key, model=model, base_url=base_url, chat=chat
     )
-    image_source = original.get("main_image_url") or row.get("main_image_url")
+    image_sources = list(dict.fromkeys(
+        str(value or "").strip()
+        for value in [
+            original.get("main_image_url"),
+            *(original.get("images") or []),
+            row.get("main_image_url"),
+        ]
+        if str(value or "").strip()
+    ))
+    image_sources += [
+        re.sub(r"\.jpg(?=([?#]|$))", ".webp", value, flags=re.I)
+        for value in image_sources
+        if re.match(r"https://cbu\d+\.alicdn\.com/", value, re.I)
+        and re.search(r"\.jpg(?=([?#]|$))", value, re.I)
+    ]
+    image_sources = list(dict.fromkeys(image_sources))
+    image_source = ""
+    source_bytes = None
+    last_image_error = None
+    for candidate in image_sources:
+        try:
+            source_bytes = _download_source_image(candidate, http_get=http_get)
+            image_source = candidate
+            break
+        except (requests.RequestException, ValueError) as exc:
+            last_image_error = exc
+    if not source_bytes:
+        detail = f"：{last_image_error}" if last_image_error else ""
+        raise ValueError(f"1688 商品图片均无法读取{detail}")
     image_item_id = original.get("source_1688_item_id") or row.get("source_item_id")
     if image_generate is not None or str(image_model or "").strip():
         _path, white_url = generate_ai_white_background_image(
@@ -730,6 +789,7 @@ def prepare_ai_original_product(
             image_generate=image_generate,
             image_dir=image_dir,
             http_get=http_get,
+            source_bytes=source_bytes,
         )
         image_generation_method = "ai_image_edit"
     else:
@@ -738,6 +798,7 @@ def prepare_ai_original_product(
             image_item_id,
             image_dir=image_dir,
             http_get=http_get,
+            source_bytes=source_bytes,
         )
         image_generation_method = "local_background_removal"
     generated_attributes = list(copy.get("attributes") or [])

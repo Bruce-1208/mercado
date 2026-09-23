@@ -922,6 +922,19 @@ def update_job(job_id: str, changes: dict) -> dict:
     return _public_job(job)
 
 
+def delete_job(job_id: str) -> dict:
+    job = get_job(job_id)
+    if job.get("status") in ACTIVE_STATUSES:
+        raise ValueError("视频生成尚未完成，不能删除")
+    job_dir = _job_dir(job_id)
+    shutil.rmtree(job_dir)
+    return {
+        "id": str(job_id),
+        "name": str(job.get("name") or ""),
+        "deleted": True,
+    }
+
+
 def _signing_secret(job=None) -> bytes:
     user_id = _job_owner(job)
     seedance = _provider_config(SEEDANCE_PROVIDER, user_id)
@@ -1782,6 +1795,7 @@ __all__ = (
     "build_provider_payload",
     "cover_path",
     "create_job",
+    "delete_job",
     "get_job",
     "list_jobs",
     "output_path",

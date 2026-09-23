@@ -24,8 +24,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 from urllib.request import Request, urlopen
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from flask import Flask, Response, request, render_template, jsonify, send_file, session, redirect, url_for, g, has_request_context
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -8005,15 +8009,16 @@ def api_ai_video_settings():
     return jsonify({"status": "success", "data": data})
 
 
-@app.route('/api/ai-videos/jobs/<job_id>', methods=['GET', 'PATCH'])
+@app.route('/api/ai-videos/jobs/<job_id>', methods=['GET', 'PATCH', 'DELETE'])
 @login_required
 def api_ai_video_job(job_id):
     try:
-        data = (
-            bit_db_api.update_ai_video_job(job_id, request.get_json(silent=True) or {})
-            if request.method == "PATCH"
-            else bit_db_api.get_ai_video_job(job_id)
-        )
+        if request.method == "DELETE":
+            data = bit_db_api.delete_ai_video_job(job_id)
+        elif request.method == "PATCH":
+            data = bit_db_api.update_ai_video_job(job_id, request.get_json(silent=True) or {})
+        else:
+            data = bit_db_api.get_ai_video_job(job_id)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 404
     except Exception as exc:
@@ -8173,18 +8178,19 @@ def api_db_ai_video_settings():
     return jsonify({"status": "success", "data": data})
 
 
-@app.route('/api/db/ai-videos/jobs/<job_id>', methods=['GET', 'PATCH'])
+@app.route('/api/db/ai-videos/jobs/<job_id>', methods=['GET', 'PATCH', 'DELETE'])
 @internal_api_required
 def api_db_ai_video_job(job_id):
     blocked = reject_db_api_client_mode()
     if blocked:
         return blocked
     try:
-        data = (
-            bit_ai_video.update_job(job_id, request.get_json(silent=True) or {})
-            if request.method == "PATCH"
-            else bit_ai_video.public_job(job_id)
-        )
+        if request.method == "DELETE":
+            data = bit_ai_video.delete_job(job_id)
+        elif request.method == "PATCH":
+            data = bit_ai_video.update_job(job_id, request.get_json(silent=True) or {})
+        else:
+            data = bit_ai_video.public_job(job_id)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 404
     return jsonify({"status": "success", "data": data})
@@ -18096,6 +18102,62 @@ def _validated_1688_image_url(value):
     return candidate
 
 
+def _fetch_1688_image(source_url):
+    """Fetch a 1688 CDN image with bounded retries and validated redirects."""
+    original_host = urlsplit(source_url).hostname
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        status=2,
+        backoff_factor=0.4,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset({"GET"}),
+    )
+    session = requests.Session()
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    current_url = source_url
+    try:
+        for _ in range(4):
+            response = session.get(
+                current_url,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 Chrome/136 Safari/537.36"
+                    ),
+                    "Referer": "https://detail.1688.com/",
+                    "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+                },
+                timeout=(8, 25),
+                allow_redirects=False,
+                stream=True,
+            )
+            if response.is_redirect or response.is_permanent_redirect:
+                next_url = _validated_1688_image_url(
+                    urljoin(current_url, response.headers.get("Location") or "")
+                )
+                response.close()
+                if urlsplit(next_url).hostname != original_host:
+                    raise ValueError("1688 图片跳转到了非预期地址")
+                current_url = next_url
+                continue
+            response.raise_for_status()
+            content_type = str(response.headers.get("Content-Type") or "")
+            image_buffer = bytearray()
+            for chunk in response.iter_content(1024 * 256):
+                if chunk:
+                    image_buffer.extend(chunk)
+                    if len(image_buffer) > 15 * 1024 * 1024:
+                        response.close()
+                        raise ValueError("1688 图片为空或超过 15 MB")
+            response.close()
+            return content_type, bytes(image_buffer)
+        raise ValueError("1688 图片跳转次数过多")
+    finally:
+        session.close()
+
+
 @app.route("/api/ai-original-products/source-image", methods=["GET"])
 @login_required
 def api_ai_original_source_image():
@@ -18103,37 +18165,17 @@ def api_ai_original_source_image():
 
     try:
         source_url = _validated_1688_image_url(request.args.get("url"))
-        upstream_request = Request(
-            source_url,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 Chrome/136 Safari/537.36"
-                ),
-                "Referer": "https://detail.1688.com/",
-                "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-            },
-        )
-        with urlopen(upstream_request, timeout=15) as upstream:
-            final_url = _validated_1688_image_url(upstream.geturl())
-            if (
-                final_url != source_url
-                and urlsplit(final_url).hostname != urlsplit(source_url).hostname
-            ):
-                raise ValueError("1688 图片跳转到了非预期地址")
-            content_type = str(
-                upstream.headers.get("Content-Type") or ""
-            ).split(";", 1)[0].strip().lower()
-            if content_type not in {
-                "image/jpeg", "image/jpg", "image/png", "image/webp", "image/avif",
-            }:
-                raise ValueError("1688 返回的内容不是受支持的图片")
-            image_bytes = upstream.read(15 * 1024 * 1024 + 1)
+        content_type_header, image_bytes = _fetch_1688_image(source_url)
+        content_type = str(content_type_header or "").split(";", 1)[0].strip().lower()
+        if content_type not in {
+            "image/jpeg", "image/jpg", "image/png", "image/webp", "image/avif",
+        }:
+            raise ValueError("1688 返回的内容不是受支持的图片")
         if not image_bytes or len(image_bytes) > 15 * 1024 * 1024:
             raise ValueError("1688 图片为空或超过 15 MB")
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
-    except (HTTPError, URLError, TimeoutError, OSError) as exc:
+    except (requests.RequestException, HTTPError, URLError, TimeoutError, OSError) as exc:
         logging.warning("代理读取 1688 图片失败: %s", exc)
         return jsonify({"status": "error", "message": "1688 图片暂时无法读取"}), 502
 

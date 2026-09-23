@@ -164,6 +164,14 @@ def update_ai_video_job(job_id, changes):
     )
 
 
+def delete_ai_video_job(job_id):
+    if DB_MODE == "mysql":
+        from bit.bit_ai_video import delete_job
+
+        return delete_job(job_id)
+    return _request("DELETE", f"/api/db/ai-videos/jobs/{job_id}", timeout=60)
+
+
 def get_ai_video_settings(user_id=None):
     if DB_MODE == "mysql":
         from bit.bit_ai_video import provider_settings

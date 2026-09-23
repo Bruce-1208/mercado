@@ -87,6 +87,23 @@ def test_identical_job_is_reused_without_new_generation(monkeypatch, tmp_path):
     renamed = video.update_job(first["id"], {"name": "墨西哥折叠演示 A"})
     assert renamed["name"] == "墨西哥折叠演示 A"
 
+    completed = video.get_job(first["id"])
+    completed["status"] = "succeeded"
+    video._write_manifest(completed)
+    deleted = video.delete_job(first["id"])
+    assert deleted == {"id": first["id"], "name": "墨西哥折叠演示 A", "deleted": True}
+    assert not (tmp_path / first["id"]).exists()
+    with pytest.raises(ValueError, match="找不到该视频任务"):
+        video.get_job(first["id"])
+
+
+def test_active_job_cannot_be_deleted(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    created = video.create_job([upload()], {"duration": "10", "prompt": "自然展示"})
+
+    with pytest.raises(ValueError, match="尚未完成"):
+        video.delete_job(created["id"])
+
 
 def test_asset_limits_and_signature(monkeypatch, tmp_path):
     configure(monkeypatch, tmp_path)
@@ -392,6 +409,7 @@ def test_workbench_contains_ai_video_module():
     assert b'id="ai-video-asset-url"' in response.data
     assert b'asset_urls' in response.data
     assert b'id="ai-video-jobs"' in response.data
+    assert b'deleteAiVideoJob' in response.data
     assert b'id="ai-video-settings-dialog"' in response.data
     assert b'id="ai-video-seedance-api-key"' in response.data
     assert b'id="ai-video-wan-api-key"' in response.data
@@ -423,9 +441,11 @@ def test_ai_video_routes_use_central_api(monkeypatch):
 
     listing = Mock(return_value={"rows": [], "settings": {"configured": True}})
     creating = Mock(return_value={"id": "job-1", "status": "queued"})
+    deleting = Mock(return_value={"id": "job-1", "name": "测试视频", "deleted": True})
     settings = Mock(return_value={"configured": True, "api_key_masked": "sk-a********bcde"})
     monkeypatch.setattr(app_module.bit_db_api, "list_ai_video_jobs", listing)
     monkeypatch.setattr(app_module.bit_db_api, "create_ai_video_job", creating)
+    monkeypatch.setattr(app_module.bit_db_api, "delete_ai_video_job", deleting)
     monkeypatch.setattr(app_module.bit_db_api, "get_ai_video_settings", settings)
 
     response = client.get("/api/ai-videos/jobs?limit=12")
@@ -440,6 +460,11 @@ def test_ai_video_routes_use_central_api(monkeypatch):
     assert response.status_code == 200
     assert response.json["data"]["id"] == "job-1"
     assert creating.call_args.args[0][0].filename == "product.png"
+
+    response = client.delete("/api/ai-videos/jobs/job-1")
+    assert response.status_code == 200
+    assert response.json["data"]["deleted"] is True
+    deleting.assert_called_once_with("job-1")
 
     response = client.get("/api/ai-videos/settings")
     assert response.status_code == 200

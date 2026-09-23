@@ -30,10 +30,32 @@ function aiOriginalDisplayImageUrl(value) {
 }
 
 function aiOriginalImageError(image) {
+  let candidates = [];
+  try { candidates = JSON.parse(image.dataset.imageCandidates || "[]"); } catch (_error) {}
+  const next = candidates.shift();
+  if (next) {
+    image.dataset.imageCandidates = JSON.stringify(candidates);
+    image.src = aiOriginalDisplayImageUrl(next);
+    return;
+  }
   image.onerror = null;
   image.removeAttribute("src");
   image.classList.add("is-missing");
   image.alt = "主图加载失败";
+}
+
+function aiOriginalSourceImageFallbacks(original) {
+  const sources = [original.main_image_url, ...(original.images || [])].filter(Boolean);
+  return [...new Set(sources.slice(1).concat(sources.flatMap(value => {
+    try {
+      const url = new URL(value);
+      if (/^cbu\d+\.alicdn\.com$/i.test(url.hostname) && /\.jpg$/i.test(url.pathname)) {
+        url.pathname = url.pathname.replace(/\.jpg$/i, ".webp");
+        return [url.href];
+      }
+    } catch (_error) {}
+    return [];
+  })))];
 }
 
 function aiOriginalStatus(message, kind = "") {
@@ -244,7 +266,7 @@ function renderAiOriginalProducts() {
     return `<article class="ai-original-card">
       <input type="checkbox" value="${Number(row.id)}" ${aiOriginalSelected.has(Number(row.id)) ? "checked" : ""} onchange="toggleAiOriginalProduct(${Number(row.id)}, this.checked)">
       <div class="ai-original-image-pair">
-        <figure>${sourceImage ? `<img src="${aiOriginalEscape(sourceImage)}" alt="1688 原始主图" loading="lazy" referrerpolicy="no-referrer" onerror="aiOriginalImageError(this)">` : '<span class="ai-original-image-placeholder">暂无原图</span>'}<figcaption>1688 原图</figcaption></figure>
+        <figure>${sourceImage ? `<img src="${aiOriginalEscape(sourceImage)}" data-image-candidates="${aiOriginalEscape(JSON.stringify(aiOriginalSourceImageFallbacks(original)))}" alt="1688 原始主图" loading="lazy" referrerpolicy="no-referrer" onerror="aiOriginalImageError(this)">` : '<span class="ai-original-image-placeholder">暂无原图</span>'}<figcaption>1688 原图</figcaption></figure>
         <figure>${aiImage ? `<img src="${aiOriginalEscape(aiImage)}" alt="AI 美客多白底主图" loading="lazy" referrerpolicy="no-referrer" onerror="aiOriginalImageError(this)">` : '<span class="ai-original-image-placeholder">待生成</span>'}<figcaption>AI 白底主图</figcaption></figure>
       </div>
       <div class="ai-original-source"><span class="ai-original-section-label source">1688 原始资料</span><h4>${aiOriginalEscape(original.title || row.title)}</h4><p>1688 编号：${aiOriginalEscape(original.source_1688_item_id || row.source_item_id)}</p><p>采购价：${aiOriginalEscape(original.price ?? row.price ?? "-")} CNY</p><a href="${aiOriginalEscape(original.source_url || row.source_url || "#")}" target="_blank" rel="noopener">打开 1688 详情页 ↗</a>${row.ai_error ? `<p class="bad">${aiOriginalEscape(row.ai_error)}</p>` : ""}</div>
