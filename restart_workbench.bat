@@ -2,6 +2,11 @@
 setlocal EnableExtensions
 title Restart Mercado Workbench
 
+rem Use the copied local MySQL instance by default. Set these variables before
+rem launching this file only when an explicit non-local database is required.
+if not defined MERCADO_MYSQL_HOST set "MERCADO_MYSQL_HOST=127.0.0.1"
+if not defined MERCADO_MYSQL_PORT set "MERCADO_MYSQL_PORT=3306"
+
 rem This launcher may be copied anywhere on this computer.
 rem Project lookup order:
 rem   1. The first command-line argument
@@ -24,6 +29,7 @@ echo ========================================
 echo   Restart Mercado Workbench
 echo ========================================
 echo Project: %PROJECT_ROOT%
+echo Database: %MERCADO_MYSQL_HOST%:%MERCADO_MYSQL_PORT%
 echo.
 
 if not exist "%START_SCRIPT%" (

@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
 import re
@@ -29,7 +28,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -60,8 +59,9 @@ class Order:
 
 
 def parse_args() -> argparse.Namespace:
-    today = date.today()
-    parser = argparse.ArgumentParser(description="读取拼多多买家端订单并导出 CSV/JSON")
+    today = datetime.now(timezone(timedelta(hours=8))).date()
+    parser = argparse.ArgumentParser(description="手动登录拼多多买家端并导出 Excel/JSON")
+    parser.add_argument('--interval', type=float, default=6, help='加载间隔秒数，至少 5 秒')
     parser.add_argument(
         "--start",
         default="2026-01-01",
@@ -144,7 +144,7 @@ def extract_date(value: str) -> date | None:
 
 
 def in_range(order: Order, start: date, end: date) -> bool:
-    parsed = extract_date(order.order_time or order.raw_text)
+    parsed = extract_date(order.order_time)
     return parsed is not None and start <= parsed <= end
 
 
@@ -167,15 +167,12 @@ def parse_order_card(card: dict[str, Any]) -> Order | None:
         re.I,
     )
     if not order_match:
-        # 某些版本只显示一串长数字，不显示“订单编号”标签。
-        order_match = re.search(r"(?<!\d)(\d{12,24})(?!\d)", text)
-    if not order_match:
         return None
 
     order_id = order_match.group(1)
     time_match = re.search(
-        r"20\d{2}[-/.年]\d{1,2}[-/.月]\d{1,2}日?"
-        r"(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?",
+        r"(?:下单时间|创建时间|订单时间)\s*[:：]?\s*(20\d{2}[-/.年]\d{1,2}[-/.月]\d{1,2}日?"
+        r"(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)",
         text,
     )
     amount_match = re.search(
@@ -236,7 +233,7 @@ def parse_order_card(card: dict[str, Any]) -> Order | None:
     amount = (amount_match.group(1) or amount_match.group(2)) if amount_match else ""
     return Order(
         order_id=order_id,
-        order_time=time_match.group(0) if time_match else "",
+        order_time=time_match.group(1) if time_match else "",
         status=status,
         amount=amount,
         product=clean_field(product, "商品"),
@@ -266,13 +263,14 @@ EXTRACT_CARDS_JS = r"""
   });
   const result = [];
   const seen = new Set();
+  nodes.sort((a,b) => a.innerText.length - b.innerText.length);
   for (const node of nodes) {
     let candidate = node;
     // 取最小的、同时包含订单号和日期的可见祖先，避免返回整个 body。
     for (let i = 0; i < 7 && candidate.parentElement; i++) {
       const parent = candidate.parentElement;
       const text = String(parent.innerText || '').replace(/\s+/g, ' ').trim();
-      if (text.length >= 80 && text.length <= 3500 &&
+      if ((text.match(/订单编号|订单号|订单\s*ID/gi) || []).length === 1 && text.length >= 80 && text.length <= 3500 &&
           (orderHint.test(text) || /\d{12,24}/.test(text))) {
         candidate = parent;
       } else {
@@ -282,7 +280,7 @@ EXTRACT_CARDS_JS = r"""
     const text = String(candidate.innerText || '').replace(/\s+/g, ' ').trim();
     const match = text.match(/(?:订单编号|订单号|订单\s*ID)\s*[:：]?\s*([A-Za-z0-9][A-Za-z0-9_-]{7,})/i)
       || text.match(/(?<!\d)(\d{12,24})(?!\d)/);
-    if (!match) continue;
+    if (!match || (text.match(/订单编号|订单号|订单\s*ID/gi) || []).length !== 1) continue;
     const id = match[1];
     if (seen.has(id)) continue;
     seen.add(id);
@@ -451,75 +449,164 @@ def click_all_tab(page: Any) -> None:
         pass
 
 
-def collect_orders(page: Any, start: date, end: date, max_rounds: int) -> list[Order]:
-    orders: dict[str, Order] = {}
-    old_rounds = 0
-    last_height = -1
+def response_orders(value: Any):
+    """只解析浏览器实际收到的响应；不构造、重放或并发请求接口。
 
-    for round_no in range(1, max_rounds + 1):
-        cards = page.evaluate(EXTRACT_CARDS_JS)
-        discovered = 0
-        oldest: date | None = None
-        for card in cards:
-            order = parse_order_card(card)
-            if not order:
-                continue
-            parsed = extract_date(order.order_time or order.raw_text)
-            if parsed and (oldest is None or parsed < oldest):
-                oldest = parsed
-            if parsed and start <= parsed <= end:
-                if order.order_id not in orders:
-                    discovered += 1
-                orders[order.order_id] = order
+    字段随网站版本变化，未知结构保留为空，不能据此保证完整性。
+    """
+    if isinstance(value, list):
+        for item in value:
+            yield from response_orders(item)
+    elif isinstance(value, dict):
+        oid = value.get('order_sn')
+        if oid:
+            created = value.get('order_time') or value.get('created_time')
+            when = ''
+            if isinstance(created, (float, int)) or (isinstance(created, str) and created.isdigit()):
+                try:
+                    ts = float(created)
+                    if ts > 10**12:
+                        ts /= 1000
+                    when = datetime.fromtimestamp(ts, timezone(timedelta(hours=8))).strftime('%Y-%m-%d %H:%M:%S')
+                except (ValueError, OSError, OverflowError):
+                    pass
+            elif isinstance(created, str) and extract_date(created):
+                when = created
+            goods = value.get('goods_list', [])
+            if not isinstance(goods, list):
+                goods = []
+            product = '；'.join(normalize_text(g.get('goods_name')) for g in goods if isinstance(g, dict))
+            yield Order(str(oid), when, normalize_text(value.get('order_status_desc')),
+                        product=product or normalize_text(value.get('goods_name')),
+                        raw_text=json.dumps(value, ensure_ascii=False))
+        for child in value.values():
+            if isinstance(child, (list, dict)):
+                yield from response_orders(child)
 
-        if discovered:
-            print(f"第 {round_no} 轮：累计找到 {len(orders)} 单")
 
-        if oldest and oldest < start:
-            print(f"已滚动到 {oldest.isoformat()}，早于起始日期，停止继续加载。")
-            break
+class Capture:
+    def __init__(self):
+        self.orders: dict[str, Order] = {}
+        self.blocked = False
+        self.reason = '尚未完成读取'
 
-        clicked = page.evaluate(LOAD_MORE_JS)
-        page.mouse.wheel(0, 1500)
-        page.wait_for_timeout(900 if clicked else 1200)
+    def merge(self, order: Order):
+        previous = self.orders.get(order.order_id)
+        if previous:
+            for field in Order.__dataclass_fields__:
+                if not getattr(order, field):
+                    setattr(order, field, getattr(previous, field))
+        self.orders[order.order_id] = order
 
+    def response(self, response):
+        from urllib.parse import urlparse
+        host = urlparse(response.url).hostname or ''
+        if not any(host == d or host.endswith('.' + d) for d in ('yangkeduo.com', 'pinduoduo.com')):
+            return
+        if response.status in (403, 429):
+            self.blocked = True
+        if response.request.resource_type not in ('xhr', 'fetch'):
+            return
+        if 'json' not in response.headers.get('content-type', ''):
+            return
         try:
-            height = page.evaluate("() => document.documentElement.scrollHeight")
+            for order in response_orders(response.json()):
+                self.merge(order)
         except Exception:
-            height = last_height
-        if height == last_height and not clicked and not discovered:
-            old_rounds += 1
-        else:
-            old_rounds = 0
-        last_height = height
-        if old_rounds >= 5:
-            print("连续多轮没有新订单，认为已到列表底部。")
-            break
-    else:
-        print(f"达到 max-rounds={max_rounds}，停止继续滚动。")
-
-    return sorted(
-        orders.values(),
-        key=lambda item: (extract_date(item.order_time or item.raw_text) or date.min, item.order_id),
-        reverse=True,
-    )
+            # HTML 验证页、空响应或结构不适配不等于没有订单。
+            pass
 
 
-def write_outputs(orders: list[Order], output_dir: Path, start: date, end: date) -> tuple[Path, Path]:
+def collect_orders(page, start, end, max_rounds, capture, checkpoint, interval=6):
+    idle = 0
+    previous = 0
+    for round_no in range(max_rounds):
+        text = page_text(page)
+        if capture.blocked or re.search(r'访问过于频繁|操作过于频繁|安全验证|请完成验证|滑块|验证码|请登录|立即登录', text) or not looks_logged_in(page):
+            capture.reason = '遇到验证、访问限制或登录失效'
+            checkpoint()
+            answer = input('请在浏览器手动处理验证/登录。处理好后输入 c 继续，其他输入保存退出：').strip().lower()
+            if answer != 'c':
+                return
+            capture.blocked = False
+            page.wait_for_timeout(interval * 1000)
+            continue
+        for card in page.evaluate(EXTRACT_CARDS_JS):
+            order = parse_order_card(card)
+            if order:
+                capture.merge(order)
+        capture.reason = '读取中，尚未核实完整性'
+        checkpoint()
+        count = len(capture.orders)
+        print(f'第 {round_no + 1} 轮：读取 {count} 单，范围内 {sum(in_range(o, start, end) for o in capture.orders.values())} 单')
+        idle = idle + 1 if count == previous else 0
+        previous = count
+        if idle >= 5:
+            capture.reason = '连续五轮无新增订单；可能到底或页面限制，完整性待核对'
+            checkpoint()
+            answer = input('没有新增订单。可手动滚动或进入订单详情后输入 c 继续，其他输入导出退出：').strip().lower()
+            if answer != 'c':
+                return
+            idle = 0
+        if not page.evaluate(LOAD_MORE_JS):
+            page.mouse.wheel(0, 650)
+        page.wait_for_timeout(interval * 1000)
+    capture.reason = '达到最大读取轮数，完整性待核对'
+
+
+def write_excel(orders, output_dir, start, end, reason, stem):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+    from openpyxl.utils import get_column_letter
     output_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    stem = output_dir / f"pdd_orders_{start.isoformat()}_{end.isoformat()}_{stamp}"
-    csv_path = stem.with_suffix(".csv")
-    json_path = stem.with_suffix(".json")
-    rows = [asdict(order) for order in orders]
-    fields = list(Order.__dataclass_fields__.keys())
-    with csv_path.open("w", newline="", encoding="utf-8-sig") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(rows)
-    with json_path.open("w", encoding="utf-8") as handle:
-        json.dump(rows, handle, ensure_ascii=False, indent=2)
-    return csv_path, json_path
+    book = Workbook()
+    book.remove(book.active)
+    headers = ['订单号', '下单时间', '状态', '金额（页面展示）', '商品', '运单号', '物流公司', '原始内容']
+    for name, selected in [('订单', [o for o in orders if in_range(o, start, end)]),
+                           ('日期待核对', [o for o in orders if not extract_date(o.order_time)])]:
+        sheet = book.create_sheet(name)
+        sheet.append(headers)
+        for order in selected:
+            sheet.append([ILLEGAL_CHARACTERS_RE.sub('', str(v))[:32767] for v in asdict(order).values()])
+            for cell in sheet[sheet.max_row]:
+                cell.data_type = 's'  # 商品文本不能变为公式，订单号不能转为科学计数法。
+            if order.amount:
+                try:
+                    sheet.cell(sheet.max_row, 4, float(order.amount)).number_format = '0.00'
+                except ValueError:
+                    pass
+            try:
+                sheet.cell(sheet.max_row, 2, datetime.fromisoformat(order.order_time)).number_format = 'yyyy-mm-dd hh:mm:ss'
+            except ValueError:
+                pass
+        sheet.freeze_panes = 'A2'
+        sheet.auto_filter.ref = sheet.dimensions
+        for i, width in enumerate([27, 23, 18, 22, 60, 27, 18, 80], 1):
+            sheet.column_dimensions[get_column_letter(i)].width = width
+        for cell in sheet[1]:
+            cell.font = Font(color='FFFFFF', bold=True)
+            cell.fill = PatternFill('solid', fgColor='264653')
+        for row in sheet.iter_rows(min_row=2):
+            for cell in row:
+                cell.alignment = Alignment(vertical='top')
+    meta = book.create_sheet('导出说明')
+    for row in [('项目', '内容'), ('来源', ORDERS_URL), ('起始日期', start.isoformat()),
+                ('结束日期（包含当天）', end.isoformat()), ('读取时间（北京时间）', datetime.now(timezone(timedelta(hours=8))).isoformat()),
+                ('停止原因', reason), ('完整性', '未核实；请与账号中全部订单核对，网页可能不提供全部历史订单'),
+                ('字段说明', '缺失字段留空；不推测金额单位。JSON 保存读取到的全部订单，日期未知的另列工作表。')]:
+        meta.append(row)
+    meta.column_dimensions['A'].width = 28
+    meta.column_dimensions['B'].width = 110
+    path = output_dir / (stem + '.xlsx')
+    temporary = path.with_suffix('.tmp.xlsx')
+    book.save(temporary)
+    temporary.replace(path)
+    raw = output_dir / (stem + '.json')
+    temp_json = raw.with_suffix('.tmp.json')
+    temp_json.write_text(json.dumps([asdict(o) for o in orders], ensure_ascii=False, indent=2), encoding='utf-8')
+    temp_json.replace(raw)
+    return path
 
 
 def run(args: argparse.Namespace) -> int:
@@ -527,6 +614,9 @@ def run(args: argparse.Namespace) -> int:
     end = parse_day(args.end)
     if start > end:
         raise SystemExit("--start 不能晚于 --end")
+    if args.interval < 5 or args.max_rounds < 1:
+        raise SystemExit('--interval 至少 5 秒，--max-rounds 必须大于 0')
+    import openpyxl  # 启动浏览器前检查导出依赖。
 
     args.profile_dir.mkdir(parents=True, exist_ok=True)
     edge_path = find_edge_executable(args.edge_path)
@@ -543,6 +633,10 @@ def run(args: argparse.Namespace) -> int:
     sync_playwright, _ = import_playwright()
     edge_process: subprocess.Popen[Any] | None = None
     browser = None
+    capture = Capture()
+    stem = 'pdd_orders_' + datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    def checkpoint():
+        return write_excel(list(capture.orders.values()), args.output_dir, start, end, capture.reason, stem)
 
     with sync_playwright() as playwright:
         try:
@@ -551,23 +645,23 @@ def run(args: argparse.Namespace) -> int:
             if not browser.contexts:
                 raise RuntimeError("Edge 没有可读取的浏览器上下文")
             context = browser.contexts[0]
+            context.on('response', capture.response)
             page = context.pages[-1] if context.pages else context.new_page()
             page.goto(ORDERS_URL, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(1500)
-            if not looks_logged_in(page):
-                raise RuntimeError(
-                    "当前专用 Edge 资料目录尚未登录，或登录态已失效。"
-                    "请先运行：python scripts\\pdd_orders.py --login-only --login-timeout 0，"
-                    "登录成功并关闭 Edge 后，再运行采集命令。"
-                )
+            input('请在浏览器手动登录并进入“全部订单”，确认后按回车开始读取：')
+            while not looks_logged_in(page):
+                input('尚未识别到订单页面，请完成登录并回到订单页，再按回车：')
 
             click_all_tab(page)
-            orders = collect_orders(page, start, end, args.max_rounds)
-            csv_path, json_path = write_outputs(orders, args.output_dir, start, end)
-            print(f"完成：共 {len(orders)} 单")
-            print(f"CSV：{csv_path}")
-            print(f"JSON：{json_path}")
+            collect_orders(page, start, end, args.max_rounds, capture, checkpoint, args.interval)
+            path = checkpoint()
+            print(f'已导出：{path}；{capture.reason}')
             return 0
+        except BaseException:
+            capture.reason = '用户中断或运行异常，已保存读取结果，完整性待核对'
+            print(f'中途保存：{checkpoint()}')
+            raise
         finally:
             if browser is not None:
                 try:

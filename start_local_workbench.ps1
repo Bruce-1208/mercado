@@ -4,13 +4,29 @@ $ErrorActionPreference = 'Stop'
 
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LogRoot = Join-Path $ProjectRoot 'runtime_logs\local_workbench'
-$MysqlRoot = 'C:\Users\1\AppData\Local\Programs\MySQL\MySQL Server 8.0.42'
+$MysqlRoot = if ([string]::IsNullOrWhiteSpace($env:MERCADO_MYSQL_ROOT)) {
+    'E:\MySQL8.0.42\mysql-8.0.42-winx64'
+} else {
+    $env:MERCADO_MYSQL_ROOT.Trim()
+}
 $MysqlExe = Join-Path $MysqlRoot 'bin\mysql.exe'
 $MysqldExe = Join-Path $MysqlRoot 'bin\mysqld.exe'
-$MysqlIni = Join-Path $MysqlRoot 'my.ini'
+$MysqlIni = if ([string]::IsNullOrWhiteSpace($env:MERCADO_MYSQL_CONFIG)) {
+    Join-Path (Split-Path -Parent $MysqlRoot) 'my.ini'
+} else {
+    $env:MERCADO_MYSQL_CONFIG.Trim()
+}
 
-$DbHost = '127.0.0.1'
-$DbPort = '3306'
+$DbHost = if ([string]::IsNullOrWhiteSpace($env:MERCADO_MYSQL_HOST)) {
+    '127.0.0.1'
+} else {
+    $env:MERCADO_MYSQL_HOST.Trim()
+}
+$DbPort = if ([string]::IsNullOrWhiteSpace($env:MERCADO_MYSQL_PORT)) {
+    '3306'
+} else {
+    $env:MERCADO_MYSQL_PORT.Trim()
+}
 $DbUser = 'mercado'
 $DbPassword = 'mercado'
 $DbName = 'mercado'
@@ -153,7 +169,7 @@ if (-not (Test-LocalMysql)) {
     Wait-LocalMysql
 }
 
-Write-Host 'Local MySQL is ready: 127.0.0.1:3306 / mercado'
+Write-Host "Database is ready: $($DbHost):$DbPort / $DbName"
 
 Stop-ProjectPort -Port 5000
 Stop-ProjectPort -Port 8011

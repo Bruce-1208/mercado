@@ -12,6 +12,12 @@ readonly LOG_FILE="${WORKBENCH_LOG_FILE:-$LOG_DIR/mercado-workbench.log}"
 readonly STOP_TIMEOUT="${WORKBENCH_STOP_TIMEOUT:-20}"
 readonly START_TIMEOUT="${WORKBENCH_START_TIMEOUT:-30}"
 
+# The copied local database is the safe default for every workbench restart.
+# Set MERCADO_MYSQL_HOST/MERCADO_MYSQL_PORT only when this launcher must use a
+# different database explicitly.
+export MYSQL_HOST="${MERCADO_MYSQL_HOST:-127.0.0.1}"
+export MYSQL_PORT="${MERCADO_MYSQL_PORT:-3306}"
+
 die() {
     printf '[失败] %s\n' "$*" >&2
     exit 1
@@ -168,6 +174,7 @@ main() {
     python_cmd="$(select_python)"
     printf 'Mercado Workbench 服务重启\n'
     printf '[项目] %s\n' "$PROJECT_ROOT"
+    printf '[数据库] %s:%s\n' "$MYSQL_HOST" "$MYSQL_PORT"
     stop_service
     start_service "$python_cmd"
 }
