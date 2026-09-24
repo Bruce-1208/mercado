@@ -1461,3 +1461,21 @@ def test_publish_record_list_supports_time_and_store_group_filters():
     )
     assert total_params == count_params
     assert rows_params == count_params + (500, 0)
+
+
+def test_1688_recollection_clears_unverified_old_weight_and_package():
+    connection = _FakeConnection()
+    with patch.object(store, 'ensure_collection_tables'):
+        store.upsert_ai_original_product({
+            'source_url': 'https://detail.1688.com/offer/907173727091.html',
+            'title': '正确标题', 'price': 12.5, 'weight_g': None,
+            'images': ['https://cbu01.alicdn.com/product.jpg'],
+            'variations': [{'sku_id': '11', 'price': 12.5, 'weight_g': 250}],
+        }, connection_factory=lambda: connection)
+    query, params = next((q, p) for q, p in connection.fake_cursor.queries if q.startswith('INSERT INTO'))
+    assert params[6:10] == (None, None, None, None)
+    for field in ('weight_g', 'package_length_cm', 'package_width_cm', 'package_height_cm'):
+        assert f'`{field}` = IF(`source_type` = \'ai_original\', VALUES(`{field}`), `{field}`)' in query
+    snapshot = json.loads(params[11])
+    assert snapshot['original_1688']['variations'][0]['weight_g'] == 250
+    assert connection.committed

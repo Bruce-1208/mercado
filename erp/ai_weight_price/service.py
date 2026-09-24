@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import os
 import random
 import re
 import socket
@@ -121,10 +122,26 @@ class Service:
     def status(self):
         lock = self.lock()
         owner = lock.read_owner()
-        running = bool(owner and not lock._is_stale())
         run = self.store.state("run", {}) or {}
+        identity = self.store.state("execution_identity", {}) or {}
+        # Agent workers own a lock file on their own computer, so the public
+        # workbench cannot observe that lock directly. The shared run state is
+        # authoritative for an Agent execution while it is still running.
+        running = bool(owner and not lock._is_stale()) or bool(
+            run.get("outcome") == "running"
+            and str(run.get("execution_target") or identity.get("target") or "") == "agent"
+        )
         actor = self.store.actor() or {}
         current_counts = None if actor.get("view_all") else self.store.run_counts(run.get("run_id"))
+        execution_target = str(
+            run.get("execution_target") or identity.get("target") or ""
+        ).strip()
+        execution_terminal = str(
+            run.get("execution_terminal")
+            or identity.get("agent_name")
+            or identity.get("hostname")
+            or socket.gethostname()
+        ).strip()
         return {"running": running, "counts": self.store.counts(),
                 "current_counts": current_counts, "quota": self.store.quota(),
                 "circuit": self.store.state("circuit"), "run": self.store.state("run", {}),
@@ -134,6 +151,9 @@ class Service:
                 "login": self.store.state("login", {"confirmed": False}),
                 "selection": self.store.state("run_selection"),
                 "visual_progress": self.store.state("visual_progress", {}),
+                "execution_target": execution_target,
+                "execution_terminal": execution_terminal,
+                "computer": execution_terminal,
                 "model_connection": {**self.store.state("model_connection", {}),
                                      "configured": bool(api_key(self.config.load()["api_key_env"]))}}
 
@@ -358,21 +378,49 @@ class Service:
             try:
                 self.stop_event.clear()
                 self.store.set_state("stop_requested", False)
+                self.store.set_state("agent_terminate_requested", None)
                 self.store.set_state("run_error", None)
                 self.store.set_state("action_error", None)
                 if selection:
                     self.store.set_state("run_selection", selection)
+                execution_identity = {
+                    "target": os.environ.get("BIT_EXECUTION_TARGET") or "local",
+                    "agent_id": os.environ.get("BIT_EXECUTION_AGENT_ID", ""),
+                    "agent_name": os.environ.get("BIT_EXECUTION_AGENT_NAME", ""),
+                    "hostname": os.environ.get("BIT_EXECUTION_HOSTNAME") or socket.gethostname(),
+                }
+                self.store.set_state("execution_identity", execution_identity)
                 if resume and previous_run.get("run_id") == config.get("run_id"):
-                    run_state = {**previous_run, "mode": mode, "selection": selection,
-                                 "started_at": time.time(), "finished_at": None,
-                                 "outcome": "running", "message": "正在连接本机Edge，继续处理下一件商品"}
+                    run_state = {
+                        **previous_run,
+                        "mode": mode,
+                        "selection": selection,
+                        "execution_target": execution_identity["target"],
+                        "execution_terminal": execution_identity["agent_name"] or execution_identity["hostname"],
+                        "started_at": time.time(),
+                        "finished_at": None,
+                        "outcome": "running",
+                        "message": "正在连接本机Edge，继续处理下一件商品",
+                    }
                 else:
-                    run_state = {"mode": mode, "selection": selection, "started_at": time.time(),
-                                 "task_id": task_id,
-                                 "run_id": config.get("run_id"), "max_items": config.get("max_items"), "processed_items": 0,
-                                 "current_item_index": 0,
-                                 "success_items": 0, "skipped_items": 0, "blocked_items": 0, "risk_items": 0,
-                                 "outcome": "running", "message": "正在连接本机Edge"}
+                    run_state = {
+                        "mode": mode,
+                        "selection": selection,
+                        "started_at": time.time(),
+                        "execution_target": execution_identity["target"],
+                        "execution_terminal": execution_identity["agent_name"] or execution_identity["hostname"],
+                        "task_id": task_id,
+                        "run_id": config.get("run_id"),
+                        "max_items": config.get("max_items"),
+                        "processed_items": 0,
+                        "current_item_index": 0,
+                        "success_items": 0,
+                        "skipped_items": 0,
+                        "blocked_items": 0,
+                        "risk_items": 0,
+                        "outcome": "running",
+                        "message": "正在连接本机Edge",
+                    }
                 self.store.set_state("run", run_state)
                 if config.get("run_id"):
                     self.store.save_run(self.store.state("run"))

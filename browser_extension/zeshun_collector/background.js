@@ -1,10 +1,11 @@
 "use strict";
 
 importScripts("zying-page.js");
+importScripts("1688-page.js");
 importScripts("product-batch.js");
 
 const DEFAULT_SETTINGS = {
-  consoleUrl: "https://wuhanzeshun.com",
+  consoleUrl: "http://127.0.0.1:5000",
   openConsoleAfterCollect: false
 };
 const AUTH_KEY = "browserExtensionAuth";
@@ -110,8 +111,16 @@ async function settings() {
 }
 
 async function authSession() {
-  const stored = await storageGet("session", [AUTH_KEY]);
-  const auth = stored[AUTH_KEY];
+  // Keep the short-lived token across an extension/service-worker reload. The
+  // password is never stored; using local storage here only prevents a code
+  // update from silently logging the operator out in the middle of a task.
+  const stored = await storageGet("local", [AUTH_KEY]);
+  let auth = stored[AUTH_KEY];
+  if (!auth) {
+    const legacy = await storageGet("session", [AUTH_KEY]);
+    auth = legacy[AUTH_KEY];
+    if (auth) await storageSet("local", {[AUTH_KEY]: auth});
+  }
   if (!auth || !auth.token) return null;
   if (auth.expiresAt && Date.now() >= Number(auth.expiresAt)) {
     await clearAuth();
@@ -121,6 +130,7 @@ async function authSession() {
 }
 
 async function clearAuth() {
+  await storageRemove("local", [AUTH_KEY]);
   await storageRemove("session", [AUTH_KEY]);
 }
 
@@ -422,7 +432,7 @@ async function login(username, password) {
       expiresAt: Date.now() + 6 * 60 * 60 * 1000
     };
   }
-  await storageSet("session", {[AUTH_KEY]: auth});
+  await storageSet("local", {[AUTH_KEY]: auth});
   flushQueue();
   return {ok: true, user: auth.user, expiresAt: auth.expiresAt};
 }
@@ -561,13 +571,15 @@ async function flushQueue() {
   return queueFlushPromise;
 }
 
-function sendTabMessage(tabId, message) {
+function sendTabMessage(tabId, message, frameId) {
   return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(tabId, message, response => {
+    const done = response => {
       const error = chrome.runtime.lastError;
       if (error) reject(new Error(error.message));
       else resolve(response || {});
-    });
+    };
+    if (Number.isInteger(frameId)) chrome.tabs.sendMessage(tabId, message, {frameId}, done);
+    else chrome.tabs.sendMessage(tabId, message, done);
   });
 }
 
@@ -585,6 +597,9 @@ async function collect1688ListProduct(candidate) {
   try {
     await aiWeightPriceWaitTab(tab.id);
     const product = await extractFromTab(tab.id);
+    if (String(product.source_item_id) !== String(candidate.source_item_id)) {
+      throw new Error("1688详情跳转到了其他商品，已停止采集");
+    }
     extracted = true;
     return await submitProduct(product);
   } catch (error) {
@@ -608,31 +623,37 @@ function normalizeZyingToken(value) {
   return String(token || "").trim();
 }
 
-async function readZyingContext(tabId) {
+async function readZyingContext(tabId, {includeDevelopers = true, developerTimeoutMs = 5000} = {}) {
   let page = {};
   try {
-    const results = await Promise.allSettled([
-      chrome.scripting.executeScript({
-        target: {tabId},
-        world: "MAIN",
-        func: zeshunReadZyingPageContext
-      }),
-      chrome.scripting.executeScript({
+    const contextResult = await chrome.scripting.executeScript({
+      target: {tabId},
+      world: "MAIN",
+      func: zeshunReadZyingPageContext
+    });
+    page = contextResult?.[0]?.result || {};
+  } catch (_) {
+    try { page = await sendTabMessage(tabId, {type: "READ_ZYING_CONTEXT"}); } catch (_) {}
+  }
+  if (includeDevelopers) {
+    let timeoutId;
+    try {
+      const developerScript = chrome.scripting.executeScript({
         target: {tabId},
         world: "MAIN",
         func: zeshunReadZyingProductDevelopers
-      })
-    ]);
-    if (results[0].status === "fulfilled") {
-      page = results[0].value?.[0]?.result || {};
-    } else {
-      try { page = await sendTabMessage(tabId, {type: "READ_ZYING_CONTEXT"}); } catch (_) {}
+      });
+      const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("读取智赢产品开发人员超时")), developerTimeoutMs
+        );
+      });
+      const developerResult = await Promise.race([developerScript, timeout]);
+      page.developers = developerResult?.[0]?.result || [];
+    } catch (_) {
+    } finally {
+      clearTimeout(timeoutId);
     }
-    if (results[1].status === "fulfilled") {
-      page.developers = results[1].value?.[0]?.result || [];
-    }
-  } catch (_) {
-    try { page = await sendTabMessage(tabId, {type: "READ_ZYING_CONTEXT"}); } catch (_) {}
   }
   let credential = String(page.credential || "").trim();
   if (!credential) {
@@ -672,14 +693,17 @@ async function openZyingLoginPage() {
 }
 
 async function loadZyingOptions(context) {
-  return apiRequest("/api/browser-extension/zying/options", {
+  const options = await apiRequest("/api/browser-extension/zying/options", {
     method: "POST",
     body: JSON.stringify({
       credential: context.credential,
       categories: context.categories || [],
-      developers: context.developers || []
+      developers: context.developers || [],
+      refresh: true
     })
   });
+  // Older servers may still return cached people after a live page refresh.
+  return {...options, developers: context.developers?.length ? context.developers : options.developers || []};
 }
 
 async function startZyingCollection(context, params) {
@@ -786,87 +810,402 @@ async function aiWeightPriceAction(action, body = {}) {
   });
 }
 
-async function aiWeightPriceTab(host, url) {
+async function aiWeightPriceTab(host, url, {active = false} = {}) {
   const tabs = await chrome.tabs.query({});
   const existing = tabs.find(tab => {
     try { return tab.id && new URL(tab.url || "").hostname.endsWith(host); }
     catch (_) { return false; }
   });
   if (existing) {
-    if (url && existing.url !== url) await chrome.tabs.update(existing.id, {url, active: true});
-    else await chrome.tabs.update(existing.id, {active: true});
+    if (url && existing.url !== url) await chrome.tabs.update(existing.id, {url, active});
+    else if (active) await chrome.tabs.update(existing.id, {active: true});
     return existing.id;
   }
-  const created = await chrome.tabs.create({url, active: true});
+  const created = await chrome.tabs.create({url, active});
   return created.id;
 }
 
 async function aiWeightPriceWaitTab(tabId, timeoutMs = 30000) {
-  const current = await chrome.tabs.get(tabId);
-  if (current.status === "complete") {
-    await new Promise(resolve => setTimeout(resolve, 700));
-    return current;
-  }
   return new Promise((resolve, reject) => {
     let done = false;
-    const finish = (error, tab) => {
+    let pollTimer;
+    const finish = async (error, tab) => {
       if (done) return;
       done = true;
       clearTimeout(timer);
+      clearTimeout(pollTimer);
       chrome.tabs.onUpdated.removeListener(listener);
-      if (error) reject(error); else resolve(tab);
+      if (error) reject(error);
+      else {
+        await new Promise(ready => setTimeout(ready, 250));
+        resolve(tab);
+      }
     };
     const listener = (updatedId, info, tab) => {
       if (updatedId === tabId && info.status === "complete") finish(null, tab);
     };
+    const poll = async () => {
+      if (done) return;
+      try {
+        const current = await chrome.tabs.get(tabId);
+        if (current?.status === "complete") return finish(null, current);
+      } catch (error) {
+        return finish(new Error(`浏览器标签页不可用：${error.message || error}`));
+      }
+      pollTimer = setTimeout(poll, 150);
+    };
     const timer = setTimeout(() => finish(new Error("浏览器页面加载超时")), timeoutMs);
     chrome.tabs.onUpdated.addListener(listener);
+    void poll();
   });
 }
 
-async function aiWeightPriceReadZyingTab() {
-  const tabId = await aiWeightPriceTab(ZYING_HOST, "https://meli.zying.net/#/product");
+async function aiWeightPriceSendTabMessage(tabId, message, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      return await sendTabMessage(tabId, message);
+    } catch (error) {
+      lastError = error;
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  }
+  throw lastError || new Error("浏览器页面脚本加载超时");
+}
+
+function aiWeightPriceMissingReceiver(error) {
+  return /Receiving end does not exist|Could not establish connection/i.test(
+    String(error?.message || error || "")
+  );
+}
+
+async function aiWeightPriceSendContentMessage(tabId, message, files, timeoutMs = 10000) {
+  try {
+    return await sendTabMessage(tabId, message);
+  } catch (error) {
+    if (!aiWeightPriceMissingReceiver(error)) throw error;
+    await chrome.scripting.executeScript({target: {tabId}, files});
+    return aiWeightPriceSendTabMessage(tabId, message, timeoutMs);
+  }
+}
+
+const AI_WEIGHT_PRICE_CONTENT_VERSION = "1.8.19";
+
+async function aiWeightPriceFrameIds(tabId) {
+  const ids = [0];
+  try {
+    const frames = await chrome.webNavigation?.getAllFrames?.({tabId});
+    for (const frame of Array.isArray(frames) ? frames : []) {
+      const id = Number(frame?.frameId);
+      if (Number.isInteger(id) && id >= 0 && !ids.includes(id)) ids.push(id);
+    }
+  } catch (_) {
+    // Older Chromium builds or restricted tabs may not expose webNavigation;
+    // the top frame remains a valid fallback.
+  }
+  return ids;
+}
+
+async function aiWeightPriceEnsureCurrentContent(tabId, {reloadIfStale = true} = {}) {
+  let marker = null;
+  try {
+    const result = await chrome.scripting.executeScript({
+      target: {tabId},
+      func: () => globalThis.__zeshun1688ContentVersion || ""
+    });
+    marker = result?.[0]?.result || "";
+  } catch (_) {}
+  if (marker === AI_WEIGHT_PRICE_CONTENT_VERSION) return true;
+  // No listener in a new document is an injection case, not a reason to
+  // restart the page (and its lazy-loaded upload widget) once more.
+  if (!marker) return false;
+  // A newly opened 1688 image-result tab may be in the middle of a SPA
+  // navigation. Reloading it during the result poll loses the search state
+  // and prevents the page from ever exposing its candidates. The caller can
+  // instead inject the current listener into this tab and keep polling.
+  if (!reloadIfStale) return false;
+  // Reloading is deliberate: injecting the new file beside an old listener
+  // would make both isolated-world listeners upload/click the same image.
+  if (typeof chrome.tabs.reload !== "function") return false;
+  await chrome.tabs.reload(tabId, {bypassCache: true});
+  await aiWeightPriceWaitTab(tabId, 30000);
+  return false;
+}
+
+async function aiWeightPriceSendFrameMessage(tabId, frameId, message, files, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      return await sendTabMessage(tabId, message, frameId);
+    } catch (error) {
+      // Only an absent receiver proves the action never started. A channel
+      // closed by navigation can mean search succeeded; never upload twice.
+      if (!aiWeightPriceMissingReceiver(error)) throw error;
+      lastError = error;
+    }
+    try {
+      await chrome.scripting.executeScript({target: {tabId, frameIds: [frameId]}, files});
+    } catch (error) {
+      if (!/frame.*(?:removed|not found)|No frame|Cannot access contents|document.*(?:unloaded|loading)/i.test(String(error?.message || error))) throw error;
+      lastError = error;
+      // A denied child frame must not prevent using the permitted top frame.
+      if (frameId !== 0) throw error;
+    }
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  throw new Error(`1688页面连接未就绪（等待${Math.round(timeoutMs / 1000)}秒）：${lastError?.message || "内容脚本未响应"}`);
+}
+
+async function aiWeightPriceSendImageMessage(tabId, message, files, timeoutMs = 10000) {
+  const isResultPoll = message?.type === "AI_WEIGHT_PRICE_SEARCH_RESULTS";
+  await aiWeightPriceEnsureCurrentContent(tabId, {
+    reloadIfStale: !isResultPoll
+  });
+  let lastError = null;
+  const frameIds = await aiWeightPriceFrameIds(tabId);
+  let fallback = null;
+  for (const frameId of frameIds) {
+    try {
+      const response = await aiWeightPriceSendFrameMessage(tabId, frameId, message, files, timeoutMs);
+      if (response?.ok === false || (isResultPoll && !response?.ready && !response?.empty)) {
+        fallback = fallback || response;
+        continue;
+      }
+      return response;
+    } catch (error) {
+      if (aiWeightPriceMessageLostDuringNavigation(error)) throw error;
+      lastError = error;
+    }
+  }
+  if (fallback) return fallback;
+  throw lastError || new Error("1688页面脚本尚未准备好");
+}
+
+function aiWeightPriceMessageLostDuringNavigation(error) {
+  return /message (?:port|channel) closed|frame was removed|context invalidated|tab was closed|asynchronous response.*channel closed/i.test(
+    String(error?.message || error || "")
+  );
+}
+
+function aiWeightPriceIs1688Tab(tab) {
+  try {
+    const host = new URL(tab?.url || "").hostname;
+    return host === "1688.com" || host.endsWith(".1688.com");
+  } catch (_) {
+    return false;
+  }
+}
+
+async function aiWeightPriceSearchSupplier(tabId, payload, timeoutMs = 35000) {
+  const beforeTabs = new Set((await chrome.tabs.query({})).map(tab => tab.id));
+  let started = null;
+  try {
+    started = await aiWeightPriceSendImageMessage(
+      tabId, {type: "AI_WEIGHT_PRICE_SEARCH", ...payload}, ["content-1688.js"], 10000
+    );
+  } catch (error) {
+    if (!aiWeightPriceMessageLostDuringNavigation(error)) throw error;
+  }
+  if (started && !started.ok) throw new Error(started.error || "1688以图搜货启动失败");
+  if (started?.ready && started.candidates?.length) {
+    return started.candidates.map(candidate => ({...candidate, result_tab_id: tabId}));
+  }
+  if (started?.empty) throw new Error(`1688以图搜货返回空结果：${started.empty}`);
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    const tabs = await chrome.tabs.query({});
+    const targets = tabs.filter(tab => tab.id === tabId ||
+      (!beforeTabs.has(tab.id) && aiWeightPriceIs1688Tab(tab)));
+    for (const tab of targets) {
+      if (!tab?.id || tab.status === "loading") continue;
+      try {
+        const snapshot = await aiWeightPriceSendImageMessage(
+          tab.id, {type: "AI_WEIGHT_PRICE_SEARCH_RESULTS"}, ["content-1688.js"], 5000
+        );
+        if (snapshot?.ready && snapshot.candidates?.length) {
+          return snapshot.candidates.map(candidate => ({...candidate, result_tab_id: tab.id}));
+        }
+        if (snapshot?.empty) throw new Error(`1688以图搜货返回空结果：${snapshot.empty}`);
+      } catch (error) {
+        if (/1688以图搜货返回空结果/.test(error.message || "")) throw error;
+        lastError = error;
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, 400));
+  }
+  throw new Error(
+    `搜索超时：主图上传后${Math.round(timeoutMs / 1000)}秒内1688未返回可读取的新结果` +
+    (lastError ? `；${lastError.message || lastError}` : "")
+  );
+}
+
+async function aiWeightPriceOpenSearchCandidate(candidate, timeoutMs = 20000) {
+  if (!candidate?.result_image_path) {
+    const url = candidate?.url || candidate?.source_url;
+    if (!url) throw new Error("服务器没有返回1688候选商品链接");
+    const tabId = await aiWeightPriceTab("1688.com", url);
+    await aiWeightPriceWaitTab(tabId);
+    return tabId;
+  }
+  const sourceTabId = Number(candidate.result_tab_id || 0);
+  if (!sourceTabId) throw new Error("1688图片结果缺少来源标签页");
+  const beforeTabs = new Set((await chrome.tabs.query({})).map(tab => tab.id));
+  try {
+    const clicked = await aiWeightPriceSendImageMessage(sourceTabId, {
+      type: "AI_WEIGHT_PRICE_OPEN_SEARCH_RESULT",
+      result_image_path: candidate.result_image_path,
+      main_image_url: candidate.main_image_url,
+    }, ["content-1688.js"], 5000);
+    if (clicked && !clicked.ok) throw new Error(clicked.error || "1688候选商品点击失败");
+  } catch (error) {
+    if (!aiWeightPriceMessageLostDuringNavigation(error)) throw error;
+  }
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const tabs = await chrome.tabs.query({});
+    const detail = tabs.find(tab => {
+      if (tab.id !== sourceTabId && beforeTabs.has(tab.id)) return false;
+      try {
+        const parsed = new URL(tab.url || "");
+        return parsed.hostname === "detail.1688.com" && /\/offer\/\d+\.html/.test(parsed.pathname);
+      } catch (_) { return false; }
+    });
+    if (detail?.id && detail.status !== "loading") return detail.id;
+    await new Promise(resolve => setTimeout(resolve, 300));
+  }
+  throw new Error("点击1688以图搜货候选后，没有进入对应商品详情页");
+}
+
+async function aiWeightPriceReadZyingTab({
+  requireCategories = false, includeDevelopers = false, timeoutMs = 15000, tabId: requestedTabId
+} = {}) {
+  const tabId = requestedTabId || await aiWeightPriceTab(ZYING_HOST, "https://meli.zying.net/#/product");
+  if (requestedTabId) {
+    const tab = await chrome.tabs.get(tabId);
+    if (new URL(tab.url || "").hostname !== ZYING_HOST) throw new Error("请选择智赢商品页面");
+    if (!String(tab.url).includes("#/product")) {
+      await chrome.tabs.update(tabId, {url: "https://meli.zying.net/#/product", active: false});
+    }
+  }
   await aiWeightPriceWaitTab(tabId);
-  return {tabId, context: await readZyingContext(tabId)};
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      const context = await readZyingContext(tabId, {includeDevelopers: false});
+      if (!requireCategories || context.categories.length) {
+        return {tabId, context: includeDevelopers ? await readZyingContext(tabId, {includeDevelopers: true}) : context};
+      }
+      lastError = new Error("智赢商品分类尚未加载完成");
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise(resolve => setTimeout(resolve, 400));
+  }
+  throw lastError || new Error("智赢商品页面尚未准备完成，请稍后重试");
+}
+
+function aiWeightPriceUiResult(result = {}) {
+  const snapshot = result?.data && typeof result.data === "object" ? result.data : {};
+  const extra = {...result};
+  delete extra.data;
+  return {...snapshot, ...extra};
 }
 
 async function aiWeightPriceImageDataUrl(url) {
   const source = String(url || "").trim();
   if (!source) throw new Error("智赢商品缺少主图地址");
-  const response = await fetch(source, {credentials: "include", cache: "no-store"});
-  if (!response.ok) throw new Error(`读取商品主图失败（HTTP ${response.status}）`);
-  const mime = response.headers.get("content-type") || "image/jpeg";
-  const buffer = await response.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let index = 0; index < bytes.length; index += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  try {
+    const response = await fetch(source, {credentials: "include", cache: "no-store"});
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const mime = response.headers.get("content-type") || "image/jpeg";
+    const buffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let index = 0; index < bytes.length; index += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+    }
+    return `data:${mime};base64,${btoa(binary)}`;
+  } catch (directError) {
+    const proxied = await aiWeightPriceAction("image", {url: source});
+    if (String(proxied?.data_url || "").startsWith("data:image/")) return proxied.data_url;
+    throw new Error(`读取智赢商品主图失败：${directError.message || directError}`);
   }
-  return `data:${mime};base64,${btoa(binary)}`;
 }
 
-async function aiWeightPriceReadProducts(clientConfig, selection, maxItems) {
+async function aiWeightPriceReadNextProduct(clientConfig, selection, cursor = {}) {
   const tabId = await aiWeightPriceTab(ZYING_HOST, "https://meli.zying.net/#/product");
   await aiWeightPriceWaitTab(tabId);
-  const startPage = Number(selection?.start_page || 1);
-  const endPage = Number(selection?.end_page || startPage);
-  const products = [];
-  for (let page = startPage; page <= endPage && products.length < maxItems; page += 1) {
-    const selected = await sendTabMessage(tabId, {
+  if ((selection?.category || selection?.product_developer_id) && !cursor.filters_applied) {
+    const deadline = Date.now() + 15000;
+    let applied = {};
+    while (Date.now() < deadline) {
+      const filterResult = await chrome.scripting.executeScript({
+        target: {tabId},
+        world: "MAIN",
+        func: zeshunApplyZyingProductFilters,
+        args: [selection || {}]
+      });
+      applied = filterResult?.[0]?.result || {};
+      if (applied.ok && (!selection.category || applied.category?.selected === true) &&
+          (!selection.product_developer_id || applied.developer?.selected === true)) break;
+      await new Promise(resolve => setTimeout(resolve, 400));
+    }
+    if (!applied.ok || (selection.category && applied.category?.selected !== true) ||
+        (selection.product_developer_id && applied.developer?.selected !== true)) {
+      throw new Error(applied.error || "智赢筛选条件未成功应用，已停止以避免读取错误商品");
+    }
+    // The SPA replaces cards asynchronously after the search click. Give the
+    // new list a short settling window before reading its first card.
+    await new Promise(resolve => setTimeout(resolve, 700));
+  }
+  const startPage = Math.max(1, Number(selection?.start_page || 1));
+  const endPage = Math.max(startPage, Number(selection?.end_page || startPage));
+  const seenIds = new Set((cursor.seen_ids || []).map(value => String(value || "")));
+  // A successful writeback can remove the previous card from the pending list.
+  // Rescan from the selected range and skip known ids so the shifted next card
+  // is never skipped, while dry runs that keep cards visible also make progress.
+  let page = seenIds.size ? startPage : Math.max(startPage, Number(cursor.page || startPage));
+  let index = seenIds.size ? 0 : Math.max(0, Number(cursor.index || 0));
+  const wanted = String(selection?.start_product_id || "").trim();
+  let seeking = cursor.seeking === undefined ? Boolean(wanted) : Boolean(cursor.seeking);
+  while (page <= endPage) {
+    const selected = await aiWeightPriceSendContentMessage(tabId, {
       type: "AI_WEIGHT_PRICE_SELECT_PAGE", page,
       selectors: clientConfig?.selectors || {}
-    });
-    if (!selected?.ok && page !== startPage) throw new Error(selected?.error || `无法切换到智赢第 ${page} 页`);
+    }, ["zying-page.js", "content-zying.js"]);
+    if (!selected?.ok && page !== 1) throw new Error(selected?.error || `无法切换到智赢第 ${page} 页`);
     if (selected?.changed) await new Promise(resolve => setTimeout(resolve, 1000));
-    const response = await sendTabMessage(tabId, {
+    const response = await aiWeightPriceSendContentMessage(tabId, {
       type: "AI_WEIGHT_PRICE_EXTRACT_PRODUCTS",
       selectors: clientConfig?.selectors || {},
-      max_items: maxItems - products.length
-    });
+      selection: selection || {},
+      start_index: index,
+      max_items: 1
+    }, ["zying-page.js", "content-zying.js"]);
     if (!response?.ok) throw new Error(response?.error || "插件没有读取到智赢商品列表");
-    products.push(...(response.products || []));
+    const product = response.products?.[0];
+    if (!product) {
+      page += 1;
+      index = 0;
+      continue;
+    }
+    index += 1;
+    const normalized = {
+      ...product,
+      source_page: page,
+      source_index: Number(product.source_index || index)
+    };
+    if (seenIds.has(String(normalized.erp_goods_id || ""))) continue;
+    if (seeking && String(normalized.erp_goods_id || "") !== wanted) continue;
+    seeking = false;
+    return {tabId, product: normalized, cursor: {page, index, seeking, filters_applied: true}};
   }
-  return {tabId, products: products.slice(0, maxItems)};
+  if (seeking) throw new Error(`当前智赢列表未找到起始产品编号 ${wanted}`);
+  return {tabId, product: null, cursor: {page, index, seeking: false, filters_applied: true}};
 }
 
 async function runAIWeightPriceClient(step) {
@@ -878,29 +1217,37 @@ async function runAIWeightPriceClient(step) {
     while (current && current.action !== "done") {
       const currentTask = current.task || task;
       const taskId = current.task_id || currentTask.erp_goods_id;
+      if (current.action === "collect") {
+        const next = await aiWeightPriceReadNextProduct(
+          clientConfig,
+          current.collection?.selection || {},
+          current.collection?.cursor || {}
+        );
+        current = await aiWeightPriceAction("collect", next.product
+          ? {product: next.product, cursor: next.cursor}
+          : {exhausted: true, cursor: next.cursor});
+        continue;
+      }
       if (!taskId) throw new Error("服务器没有返回当前核重核价商品");
       if (current.action === "search") {
         const supplierTab = await aiWeightPriceTab("1688.com", "https://www.1688.com/");
         await aiWeightPriceWaitTab(supplierTab);
         const dataUrl = await aiWeightPriceImageDataUrl(currentTask.main_image_url);
-        const response = await sendTabMessage(supplierTab, {
-          type: "AI_WEIGHT_PRICE_SEARCH",
+        const candidates = await aiWeightPriceSearchSupplier(supplierTab, {
           data_url: dataUrl,
           selectors: clientConfig.selectors || {},
           timeout_ms: 15000
         });
-        if (!response?.ok) throw new Error(response?.error || "1688 以图搜货失败");
         current = await aiWeightPriceAction("search", {
-          task_id: taskId, candidates: response.candidates || []
+          task_id: taskId, candidates
         });
         continue;
       }
       if (current.action === "detail") {
-        const url = current.candidate?.url || current.candidate?.source_url;
-        if (!url) throw new Error("服务器没有返回1688候选商品链接");
-        const supplierTab = await aiWeightPriceTab("1688.com", url);
-        await aiWeightPriceWaitTab(supplierTab);
-        const response = await sendTabMessage(supplierTab, {type: "AI_WEIGHT_PRICE_READ_DETAIL"});
+        const supplierTab = await aiWeightPriceOpenSearchCandidate(current.candidate || {});
+        const response = await aiWeightPriceSendContentMessage(
+          supplierTab, {type: "AI_WEIGHT_PRICE_READ_DETAIL"}, ["content-1688.js"], 20000
+        );
         if (!response?.ok) throw new Error(response?.error || "读取1688商品详情失败");
         current = await aiWeightPriceAction("detail", {
           task_id: taskId, detail: response.detail || {},
@@ -911,15 +1258,36 @@ async function runAIWeightPriceClient(step) {
       if (current.action === "writeback") {
         const erp = await aiWeightPriceTab(ZYING_HOST, current.task?.erp_edit_url || "https://meli.zying.net/#/product");
         await aiWeightPriceWaitTab(erp);
-        const response = await sendTabMessage(erp, {
+        const response = await aiWeightPriceSendContentMessage(erp, {
           type: "AI_WEIGHT_PRICE_WRITEBACK",
           selectors: clientConfig.selectors || {},
           erp_goods_id: taskId,
+          task: current.task || currentTask,
           changes: current.changes || {}
-        });
+        }, ["zying-page.js", "content-zying.js"], 20000);
         if (!response?.ok) throw new Error(response?.error || "智赢商品回写失败");
+        if (response.submitted !== true || !response.before) {
+          throw new Error("智赢保存请求未确认提交");
+        }
+        await chrome.tabs.reload(erp, {bypassCache: true});
+        await aiWeightPriceWaitTab(erp);
+        const verified = await aiWeightPriceSendContentMessage(erp, {
+          type: "AI_WEIGHT_PRICE_VERIFY_WRITEBACK",
+          selectors: clientConfig.selectors || {},
+          erp_goods_id: taskId,
+          task: current.task || currentTask,
+          changes: current.changes || {}
+        }, ["zying-page.js", "content-zying.js"], 20000);
+        if (!verified?.ok || verified.persisted !== true || !verified.after) {
+          throw new Error(verified?.error || "智赢保存后持久化回读失败");
+        }
         current = await aiWeightPriceAction("writeback", {
-          task_id: taskId, changes: current.changes || {}, actual: response.after || {}
+          task_id: taskId,
+          changes: current.changes || {},
+          before: response.before,
+          actual: verified.after,
+          submitted: true,
+          persisted: true
         });
         continue;
       }
@@ -928,11 +1296,19 @@ async function runAIWeightPriceClient(step) {
     await storageRemove("local", ["aiWeightPriceClientRun"]);
     return current;
   } catch (error) {
+    const failure = error.message || String(error);
     await storageSet("local", {aiWeightPriceClientRun: {
       action: current?.action || "error", task_id: current?.task_id || task?.erp_goods_id || "",
-      error: error.message || String(error), at: Date.now()
+      error: failure, at: Date.now()
     }});
-    void notifyAttention(error.message || String(error), {source: "AI核重核价"}).catch(() => {});
+    try {
+      await aiWeightPriceAction("fail", {
+        action: current?.action || "error",
+        task_id: current?.task_id || task?.erp_goods_id || "",
+        error: failure
+      });
+    } catch (_) {}
+    void notifyAttention(failure, {source: "AI核重核价"}).catch(() => {});
     throw error;
   }
 }
@@ -1045,6 +1421,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "STOP_PRODUCT_BATCH": return {ok: true, state: await stopProductBatch()};
       case "LOGIN": return login(String(message.username || "").trim(), String(message.password || ""));
       case "LOGOUT": return logout();
+      case "READ_1688_PAGE_DATA": {
+        if (!sender?.tab?.id || new URL(sender.tab.url || "").hostname !== "detail.1688.com") {
+          throw new Error("只能从1688详情页读取商品数据");
+        }
+        const result = await chrome.scripting.executeScript({
+          target: {tabId: sender.tab.id}, world: "MAIN", func: zeshunRead1688PageData
+        });
+        return {ok: true, data: result?.[0]?.result};
+      }
       case "SUBMIT_PRODUCT": {
         const senderHost = String(sender?.tab?.url || "").match(/^https?:\/\/([^/]+)/i)?.[1]?.toLowerCase() || "";
         if (senderHost === "s.1688.com" && message.product?.source_platform === "1688") {
@@ -1052,7 +1437,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         return submitProduct(message.product);
       }
-      case "READ_ZYING_CONTEXT": return {ok: true, ...(await readZyingContext(Number(message.tabId)))};
+      case "READ_ZYING_CONTEXT": {
+        const page = await aiWeightPriceReadZyingTab({tabId: Number(message.tabId), requireCategories: true, includeDevelopers: true});
+        return {ok: true, ...page.context};
+      }
       case "OPEN_ZYING_LOGIN": return {ok: true, ...(await openZyingLoginPage())};
       case "GET_ZYING_OPTIONS": return {ok: true, ...(await loadZyingOptions(message.context || {}))};
       case "START_ZYING_COLLECTION": return {
@@ -1073,40 +1461,55 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         ...(await notifyAttention(message.message, {source: message.source || "泽顺插件"}))
       };
       case "OPEN_AI_WEIGHT_PRICE_LOGIN": {
-        const result = await aiWeightPriceAction("login/open");
         const page = await openZyingLoginPage();
-        return {ok: true, ...result, ...page};
+        // Opening the ERP login page is a browser action and should return as
+        // soon as the tab is ready. The workbench audit/status update can take
+        // longer (for example while MySQL is busy), so send it in the
+        // background instead of making the login button wait for the API.
+        void aiWeightPriceAction("login/open").catch(() => {});
+        return {ok: true, ...page};
       }
       case "CONFIRM_AI_WEIGHT_PRICE_LOGIN": {
         const page = await aiWeightPriceReadZyingTab();
-        return {ok: true, ...(await aiWeightPriceAction("login/confirm", {context: page.context}))};
+        const result = await aiWeightPriceAction("login/confirm", {context: page.context});
+        return {ok: true, ...aiWeightPriceUiResult(result)};
       }
       case "OPEN_AI_WEIGHT_PRICE_SUPPLIER": {
-        const tabId = await aiWeightPriceTab("1688.com", "https://www.1688.com/");
+        const tabId = await aiWeightPriceTab("1688.com", "https://www.1688.com/", {active: true});
         return {ok: true, tab_id: tabId};
       }
       case "CONTINUE_AI_WEIGHT_PRICE": {
         const result = await aiWeightPriceAction("continue", message.params || {});
         launchAIWeightPriceClient(result);
-        return {ok: true, ...result};
+        return {ok: true, ...aiWeightPriceUiResult(result)};
       }
       case "REFRESH_AI_WEIGHT_PRICE_CATEGORIES": {
-        const page = await aiWeightPriceReadZyingTab();
-        return {ok: true, ...(await aiWeightPriceAction("categories/refresh", {context: page.context}))};
+        const page = await aiWeightPriceReadZyingTab({requireCategories: true, includeDevelopers: true});
+        if (!page.context.developers.length) {
+          const options = await loadZyingOptions(page.context);
+          page.context.developers = options.developers || [];
+        }
+        const result = await aiWeightPriceAction("categories/refresh", {context: page.context});
+        return {ok: true, ...aiWeightPriceUiResult(result)};
       }
       case "START_AI_WEIGHT_PRICE": {
         const status = await aiWeightPriceStatus();
         const maxItems = Number(message.params?.max_items || 10);
-        const page = await aiWeightPriceReadProducts(
-          status.client_config || {}, message.params || {}, maxItems
+        const page = await aiWeightPriceReadNextProduct(
+          status.client_config || {}, message.params?.selection || {}, {}
         );
+        if (!page.product) throw new Error("智赢所选范围没有可处理商品");
         const result = await aiWeightPriceAction("start", {
-          ...(message.params || {}), products: page.products, max_items: maxItems
+          ...(message.params || {}), products: [page.product], max_items: maxItems,
+          lazy_collection: true, collection_cursor: page.cursor
         });
         launchAIWeightPriceClient(result);
-        return {ok: true, ...result};
+        return {ok: true, ...aiWeightPriceUiResult(result)};
       }
-      case "STOP_AI_WEIGHT_PRICE": return {ok: true, ...(await aiWeightPriceAction("stop"))};
+      case "STOP_AI_WEIGHT_PRICE": {
+        const result = await aiWeightPriceAction("stop");
+        return {ok: true, ...aiWeightPriceUiResult(result)};
+      }
       case "GET_STATE": return state();
       case "GET_PURCHASE_TRACKING_REQUEST": return {
         ok: true,

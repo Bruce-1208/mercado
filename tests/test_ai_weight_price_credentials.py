@@ -13,6 +13,30 @@ from erp.ai_weight_price.service import Service
 from erp.ai_weight_price.web import create_blueprint
 
 
+def test_erp_writeback_is_enabled_by_default():
+    assert validate({})["writeback_enabled"] is True
+
+
+def test_authorized_remote_console_can_save_erp_writeback_setting(tmp_path):
+    service = Service(tmp_path)
+    app = Flask(__name__)
+    app.secret_key = "test-secret"
+    app.register_blueprint(create_blueprint(service, authorize=lambda _permission: None))
+    config = service.config.load()
+    config["writeback_enabled"] = False
+
+    response = app.test_client().put(
+        "/api/ai-weight-price/config",
+        base_url="https://wuhanzeshun.com",
+        json=config,
+        headers={"X-AWP-Request": "1"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["writeback_enabled"] is False
+    assert service.config.load()["writeback_enabled"] is False
+
+
 def test_process_value_wins_and_new_user_value_is_not_cached(monkeypatch):
     monkeypatch.setenv("TEST_MODEL_KEY", " process-value ")
     monkeypatch.setattr(credentials, "windows_user_environment", lambda name: "saved-value")

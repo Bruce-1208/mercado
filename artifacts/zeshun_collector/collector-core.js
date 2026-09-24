@@ -1,0 +1,957 @@
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === "object" && module.exports) {
+    module.exports = api;
+  }
+  root.ZeshunCollectorCore = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const ITEM_PATTERN = /\b(ML[A-Z]|CBT)-?(\d{5,})\b/i;
+  const SUPPORTED_HOST = /(^|\.)(mercadolibre\.com\.(mx|br|ar|co|uy)|mercadolibre\.cl|mercadolivre\.com\.br)$/i;
+  const CURRENCY_BY_HOST = {
+    "mercadolibre.com.mx": "MXN",
+    "mercadolibre.com.br": "BRL",
+    "mercadolivre.com.br": "BRL",
+    "mercadolibre.com.ar": "ARS",
+    "mercadolibre.cl": "CLP",
+    "mercadolibre.com.co": "COP",
+    "mercadolibre.com.uy": "UYU"
+  };
+
+  function clean(value) {
+    return String(value == null ? "" : value).replace(/\s+/g, " ").trim();
+  }
+
+  function unique(values) {
+    return Array.from(new Set((values || []).filter(Boolean)));
+  }
+
+  function finiteNumber(value) {
+    if (value === null || value === undefined || value === "") return null;
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    let raw = String(value).replace(/[^0-9,.-]/g, "").trim();
+    if (!raw) return null;
+    const comma = raw.lastIndexOf(",");
+    const dot = raw.lastIndexOf(".");
+    if (comma >= 0 && dot >= 0) {
+      const decimal = comma > dot ? "," : ".";
+      const thousands = decimal === "," ? /\./g : /,/g;
+      raw = raw.replace(thousands, "").replace(decimal, ".");
+    } else if (comma >= 0) {
+      const tail = raw.length - comma - 1;
+      raw = tail > 0 && tail <= 2 ? raw.replace(",", ".") : raw.replace(/,/g, "");
+    } else if (dot >= 0) {
+      const tail = raw.length - dot - 1;
+      if (tail === 3 && raw.indexOf(".") === dot) raw = raw.replace(".", "");
+    }
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function normalizeItemId(value) {
+    const decoded = (() => {
+      try { return decodeURIComponent(String(value || "")); } catch (_) { return String(value || ""); }
+    })();
+    const match = ITEM_PATTERN.exec(decoded);
+    return match ? `${match[1].toUpperCase()}${match[2]}` : "";
+  }
+
+  function meta(doc, selector) {
+    const node = doc && doc.querySelector ? doc.querySelector(selector) : null;
+    return clean(node && (node.content || node.getAttribute("content")));
+  }
+
+  function firstNode(doc, selectors) {
+    if (!doc || !doc.querySelector) return null;
+    for (const selector of selectors) {
+      const node = doc.querySelector(selector);
+      if (node) return node;
+    }
+    return null;
+  }
+
+  function structuredProducts(doc) {
+    const products = [];
+    if (!doc || !doc.querySelectorAll) return products;
+    for (const script of doc.querySelectorAll('script[type="application/ld+json"]')) {
+      try {
+        const parsed = JSON.parse(script.textContent || "null");
+        const queue = Array.isArray(parsed) ? parsed.slice() : [parsed];
+        while (queue.length) {
+          const value = queue.shift();
+          if (!value || typeof value !== "object") continue;
+          if (Array.isArray(value)) {
+            queue.push(...value);
+            continue;
+          }
+          const types = Array.isArray(value["@type"]) ? value["@type"] : [value["@type"]];
+          if (types.includes("Product")) products.push(value);
+          if (Array.isArray(value["@graph"])) queue.push(...value["@graph"]);
+        }
+      } catch (_) {
+        // Broken third-party JSON-LD should not block collection.
+      }
+    }
+    return products;
+  }
+
+  function variationArrayScore(value) {
+    if (!Array.isArray(value) || !value.length || value.length > 500) return -1;
+    const rows = value.filter(item => item && typeof item === "object" && !Array.isArray(item));
+    if (!rows.length) return -1;
+    const useful = rows.filter(item => {
+      const combinations = item.attribute_combinations || item.attributeCombinations ||
+        item.combinations || item.variation_attributes || item.specifications;
+      return Array.isArray(combinations) && combinations.length ||
+        Array.isArray(item.attributes) && item.attributes.length ||
+        item.sku_id || item.skuId || item.seller_sku || item.sellerSku || item.skuCode ||
+        ((item.label || item.name || item.sku_name || item.skuName) &&
+          (item.price !== undefined || item.available_quantity !== undefined || item.stock !== undefined));
+    });
+    if (!useful.length) return -1;
+    const richRows = useful.filter(item => {
+      const combinations = item.attribute_combinations || item.attributeCombinations ||
+        item.combinations || item.variation_attributes || item.specifications || item.attributes;
+      return Array.isArray(combinations) && combinations.length;
+    }).length;
+    return richRows * 1000 + useful.length * 10 + Math.min(rows.length, 9);
+  }
+
+  function assignedJson(scriptText) {
+    const text = String(scriptText || "");
+    const marker = /(?:__PRELOADED_STATE__|__INITIAL_STATE__|__NEXT_DATA__|__APOLLO_STATE__|preloadedState)\s*[:=]\s*/i.exec(text);
+    if (!marker) return null;
+    const start = text.indexOf("{", marker.index + marker[0].length);
+    if (start < 0) return null;
+    let depth = 0;
+    let quote = "";
+    let escaped = false;
+    for (let index = start; index < text.length; index += 1) {
+      const char = text[index];
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === quote) quote = "";
+        continue;
+      }
+      if (char === '"') quote = char;
+      else if (char === "{" || char === "[") depth += 1;
+      else if (char === "}" || char === "]") {
+        depth -= 1;
+        if (depth === 0) {
+          try { return JSON.parse(text.slice(start, index + 1)); } catch (_) { return null; }
+        }
+      }
+    }
+    return null;
+  }
+
+  function extractProductVariations(doc, product) {
+    const candidates = [];
+    const add = value => {
+      const score = variationArrayScore(value);
+      if (score >= 0) candidates.push({value, score});
+    };
+    [product && product.variations, product && product.variants, product && product.hasVariant]
+      .forEach(add);
+    const parsedScripts = [];
+    if (doc && doc.querySelectorAll) {
+      doc.querySelectorAll("script").forEach(script => {
+        const content = String(script.textContent || "").trim();
+        if (!content || content.length > 5_000_000) return;
+        let parsed = null;
+        if (script.type === "application/ld+json" || script.type === "application/json") {
+          try { parsed = JSON.parse(content); } catch (_) {}
+        }
+        if (!parsed && /(?:__PRELOADED_STATE__|__INITIAL_STATE__|__NEXT_DATA__|__APOLLO_STATE__|variations|attribute_combinations)/i.test(content)) {
+          parsed = assignedJson(content);
+        }
+        if (parsed) parsedScripts.push(parsed);
+      });
+    }
+    let visited = 0;
+    const seen = new WeakSet();
+    const walk = (value, depth = 0) => {
+      if (!value || typeof value !== "object" || depth > 22 || visited > 120000 || seen.has(value)) return;
+      seen.add(value);
+      visited += 1;
+      if (Array.isArray(value)) {
+        add(value);
+        value.slice(0, 1000).forEach(child => walk(child, depth + 1));
+        return;
+      }
+      for (const [key, child] of Object.entries(value)) {
+        const collectionKey = /^(?:variations?|variants?|skus?|sku_list|skuList|item_skus|itemSkus|sku_map|skuMap|sku_info_map|skuInfoMap)$/i.test(key);
+        if (Array.isArray(child) && collectionKey) add(child);
+        else if (child && typeof child === "object" && !Array.isArray(child) && collectionKey) {
+          add(Object.values(child).slice(0, 500));
+        }
+        if (child && typeof child === "object" && !["parent", "owner", "_owner", "stateNode"].includes(key)) walk(child, depth + 1);
+      }
+    };
+    parsedScripts.forEach(value => walk(value));
+    if (!candidates.length) return [];
+    candidates.sort((left, right) => right.score - left.score);
+    const sourceRows = candidates[0].value.filter(item => item && typeof item === "object" && !Array.isArray(item)).slice(0, 200);
+    return sourceRows.map(raw => {
+      const variation = {...raw};
+      const combinations = raw.attribute_combinations || raw.attributeCombinations || raw.combinations || raw.variation_attributes;
+      if (Array.isArray(combinations) && combinations.length) variation.attribute_combinations = combinations;
+      else if (Array.isArray(raw.specifications) && raw.specifications.length) variation.attribute_combinations = raw.specifications;
+      else if (Array.isArray(raw.attributes)) {
+        const combinationAttributes = raw.attributes.filter(attribute => attribute &&
+          typeof attribute === "object" && !["SELLER_SKU", "SKU"].includes(String(attribute.id || "").toUpperCase()) &&
+          (attribute.value_name || attribute.value_id || attribute.values));
+        if (combinationAttributes.length) variation.attribute_combinations = combinationAttributes;
+      }
+      if (variation.id === undefined && (raw.variation_id !== undefined || raw.variationId !== undefined)) {
+        variation.id = raw.variation_id ?? raw.variationId;
+      }
+      if (variation.available_quantity === undefined) {
+        variation.available_quantity = raw.availableQuantity ?? raw.stock ?? raw.quantity ?? raw.available;
+      }
+      if (variation.price === undefined && raw.price_amount !== undefined) variation.price = raw.price_amount;
+      if (!variation.picture_ids && Array.isArray(raw.pictureIds)) variation.picture_ids = raw.pictureIds;
+      return variation;
+    });
+  }
+
+  function extractItemId(doc, pageUrl, product) {
+    const candidates = [];
+    try {
+      const url = new URL(pageUrl);
+      for (const key of ["item_id", "itemId", "wid"]) candidates.push(url.searchParams.get(key));
+    } catch (_) {}
+    if (doc && doc.querySelectorAll) {
+      for (const node of doc.querySelectorAll("[data-item-id], [data-itemid], [data-id]")) {
+        candidates.push(node.getAttribute("data-item-id"));
+        candidates.push(node.getAttribute("data-itemid"));
+        const dataId = node.getAttribute("data-id");
+        if (ITEM_PATTERN.test(dataId || "")) candidates.push(dataId);
+      }
+    }
+    candidates.push(product && product.sku, product && product.productID);
+    candidates.push(meta(doc, 'meta[property="og:url"]'));
+    const canonical = doc && doc.querySelector ? doc.querySelector('link[rel="canonical"]') : null;
+    candidates.push(canonical && canonical.href, pageUrl);
+    for (const value of candidates) {
+      const itemId = normalizeItemId(value);
+      if (itemId) return itemId;
+    }
+    if (doc && doc.documentElement) {
+      const html = String(doc.documentElement.innerHTML || "");
+      const explicit = /(?:item_id|itemId|wid)["'\s:=\\/]+((?:ML[A-Z]|CBT)-?\d{5,})/i.exec(html);
+      if (explicit) return normalizeItemId(explicit[1]);
+    }
+    return "";
+  }
+
+  function imageUrl(image) {
+    if (!image) return "";
+    let value = clean(
+      image.currentSrc || image.getAttribute("data-src") || image.getAttribute("data-zoom") ||
+      image.getAttribute("src")
+    );
+    if (!value || value.startsWith("data:") || value.startsWith("blob:")) return "";
+    if (value.startsWith("//")) value = `https:${value}`;
+    return value;
+  }
+
+  function extractImages(doc, product) {
+    const values = [];
+    const add = value => {
+      let url = clean(value);
+      if (!url || url.startsWith("data:") || url.startsWith("blob:")) return;
+      if (url.startsWith("//")) url = `https:${url}`;
+      values.push(url);
+    };
+    const structured = Array.isArray(product && product.image) ? product.image : [product && product.image];
+    structured.forEach(value => add(typeof value === "object" ? value.url : value));
+    add(meta(doc, 'meta[property="og:image"]'));
+    if (doc && doc.querySelectorAll) {
+      doc.querySelectorAll(".ui-pdp-gallery img, figure img, img.ui-pdp-image").forEach(img => add(imageUrl(img)));
+    }
+    return unique(values).slice(0, 24);
+  }
+
+  function extractSpecs(doc) {
+    const rows = [];
+    if (!doc || !doc.querySelectorAll) return rows;
+    doc.querySelectorAll(
+      ".andes-table__row, .ui-pdp-specs__table tr, .ui-vpp-striped-specs__row"
+    ).forEach(row => {
+      const cells = Array.from(row.querySelectorAll(
+        "th, td, .andes-table__header, .andes-table__column, .ui-vpp-striped-specs__row__column"
+      )).map(node => clean(node.textContent)).filter(Boolean);
+      if (cells.length >= 2) rows.push({name: cells[0], value: cells.slice(1).join(" ")});
+    });
+    const seen = new Set();
+    return rows.filter(row => {
+      const key = `${row.name}\n${row.value}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 200);
+  }
+
+  function convertWeight(value, unit) {
+    const number = finiteNumber(value);
+    if (number === null) return null;
+    return /^(kg|公斤|千克)$/i.test(clean(unit)) ? number * 1000 : number;
+  }
+
+  function convertLength(value, unit) {
+    const number = finiteNumber(value);
+    if (number === null) return null;
+    const normalized = clean(unit).toLowerCase();
+    if (normalized === "mm") return number / 10;
+    if (normalized === "m") return number * 100;
+    return number;
+  }
+
+  function parsePluginMetrics(text) {
+    const normalized = clean(text);
+    const result = {
+      weight_g: null,
+      volumetric_weight_kg: null,
+      package_length_cm: null,
+      package_width_cm: null,
+      package_height_cm: null,
+      dimensions_display: "",
+      weight_display: "",
+      volumetric_display: ""
+    };
+    const dimensions = /(?:尺寸|长\s*[x×*]\s*宽\s*[x×*]\s*高|dimensiones?|dimensões?)?[^\d]{0,24}(\d+(?:[.,]\d+)?)\s*[x×*]\s*(\d+(?:[.,]\d+)?)\s*[x×*]\s*(\d+(?:[.,]\d+)?)\s*(mm|cm|m)?\b/i.exec(normalized);
+    if (dimensions) {
+      const unit = dimensions[4] || "cm";
+      result.package_length_cm = convertLength(dimensions[1], unit);
+      result.package_width_cm = convertLength(dimensions[2], unit);
+      result.package_height_cm = convertLength(dimensions[3], unit);
+      result.dimensions_display = `${dimensions[1]} × ${dimensions[2]} × ${dimensions[3]} ${unit}`;
+      if ([result.package_length_cm, result.package_width_cm, result.package_height_cm].every(value => value !== null)) {
+        result.volumetric_weight_kg = Number((
+          result.package_length_cm * result.package_width_cm * result.package_height_cm / 6000
+        ).toFixed(4));
+      }
+    }
+    const volumetric = /(?:计\s*抛|抛\s*重|体积\s*重(?:量)?|peso\s+volum[eé]trico)[^\d]{0,24}(\d+(?:[.,]\d+)?)\s*(kg|公斤|千克|g|克)\b/i.exec(normalized);
+    if (volumetric) {
+      const grams = convertWeight(volumetric[1], volumetric[2]);
+      if (grams !== null) result.volumetric_weight_kg = grams / 1000;
+      result.volumetric_display = `${volumetric[1]} ${volumetric[2]}`;
+    }
+    const withoutVolume = normalized.replace(/(?:计\s*抛|抛\s*重|体积\s*重(?:量)?|peso\s+volum[eé]trico)[^\d]{0,24}\d+(?:[.,]\d+)?\s*(?:kg|公斤|千克|g|克)/ig, " ");
+    const weight = /(?:商品\s*)?(?:重量|毛重|净重|peso(?:\s+bruto|\s+neto)?)[^\d]{0,24}(\d+(?:[.,]\d+)?)\s*(kg|公斤|千克|g|克)\b/i.exec(withoutVolume);
+    if (weight) {
+      result.weight_g = convertWeight(weight[1], weight[2]);
+      result.weight_display = `${weight[1]} ${weight[2]}`;
+    }
+    return result;
+  }
+
+  function parsePluginProfitability(text) {
+    const normalized = clean(text);
+    const amount = label => {
+      const match = new RegExp(
+        `(?:${label})[^0-9-]{0,36}\\$?\\s*(-?\\d+(?:[.,]\\d+)?)`, "i"
+      ).exec(normalized);
+      return match ? finiteNumber(match[1]) : null;
+    };
+    return {
+      net_proceeds_usd: amount("净\\s*收益|最终\\s*收益|net\\s*(?:profit|proceeds|revenue)|lucro\\s*(?:líquido|liquido)?"),
+      commission_amount_usd: amount("佣\\s*金|commission|comisi[oó]n|comiss[aã]o")
+    };
+  }
+
+  function parsePluginSales(text) {
+    const normalized = clean(text);
+    const labels = "(?:\u603b\s*\u9500\s*\u91cf|\u9500\s*\u91cf|\u5df2\s*\u552e|\u552e\s*\u51fa|sold(?:\s+quantity)?|sales|vendidos?|vendas?)";
+    const number = "([0-9]+(?:[.,][0-9]+)?)\\s*(\u4e07|k|mil)?";
+    const patterns = [
+      new RegExp(`${labels}[^0-9]{0,18}${number}`, "i"),
+      new RegExp(`${number}\\s*(?:\u4ef6|\u5355)?\\s*${labels}`, "i")
+    ];
+    for (const pattern of patterns) {
+      const match = pattern.exec(normalized);
+      if (!match) continue;
+      let value = finiteNumber(match[1]);
+      if (value === null) continue;
+      const suffix = String(match[2] || "").toLowerCase();
+      if (suffix === "\u4e07") value *= 10000;
+      else if (suffix === "k" || suffix === "mil") value *= 1000;
+      return Math.max(0, Math.round(value));
+    }
+    return null;
+  }
+
+  function parsePluginProductInfo(text, originCode = "") {
+    const normalized = clean(text);
+    const origin = clean(originCode).toUpperCase();
+    let fulfillmentType = "unknown";
+    let fulfillmentLabel = "\u672a\u8bc6\u522b";
+    if (/\u6d77\s*\u5916\s*\u4ed3|overseas\s+warehouse/i.test(normalized)) {
+      fulfillmentType = "overseas_warehouse";
+      fulfillmentLabel = "\u6d77\u5916\u4ed3";
+    } else if (/\u672c\s*(?:\u571f|\u5730)\s*\u4ed3|\u5f53\s*\u5730\s*\u4ed3|local\s+warehouse/i.test(normalized)) {
+      fulfillmentType = "local_warehouse";
+      fulfillmentLabel = "\u672c\u571f\u4ed3";
+    } else if (/\u5168\s*\u6258\s*\u7ba1|mercado\s+env[ií]os\s+full|enviado\s+por\s+mercado\s+libre|\bfulfillment\b|\bfull\b/i.test(normalized)) {
+      fulfillmentType = "full_managed";
+      fulfillmentLabel = "\u5168\u6258\u7ba1";
+    } else if (/\u534a\s*\u6258\s*\u7ba1/.test(normalized)) {
+      fulfillmentType = "semi_managed";
+      fulfillmentLabel = "\u534a\u6258\u7ba1";
+    } else if (/\u81ea\s*\u53d1\s*\u8d27|\u81ea\s*\u884c\s*\u53d1\s*\u8d27|seller\s+fulfilled|merchant\s+fulfilled/i.test(normalized) || origin === "CN") {
+      fulfillmentType = "self_ship";
+      fulfillmentLabel = "\u81ea\u53d1\u8d27";
+    } else if (origin) {
+      fulfillmentType = "overseas_warehouse";
+      fulfillmentLabel = `\u975e\u4e2d\u56fd\u4ed3/${origin}`;
+    }
+    return {
+      sales: parsePluginSales(normalized),
+      fulfillment_type: fulfillmentType,
+      fulfillment_label: fulfillmentLabel,
+      fulfillment_eligible: fulfillmentType === "self_ship" || fulfillmentType === "semi_managed"
+    };
+  }
+
+  function shadowRoots(doc) {
+    const roots = [];
+    const visited = new Set();
+    const hostedRoot = node => {
+      if (!node) return null;
+      try {
+        if (node.shadowRoot) return node.shadowRoot;
+      } catch (_) {}
+      // ZYing 5.1.18 deliberately renders its Mercado detail card in a
+      // closed shadow root.  Content scripts cannot reach that root through
+      // element.shadowRoot, but Chromium exposes a read-only extension API
+      // for exactly this case.  Do not patch Element.attachShadow: ZYing
+      // detects that mutation and stops rendering the card entirely.
+      try {
+        if (typeof chrome !== "undefined" && chrome.dom &&
+            typeof chrome.dom.openOrClosedShadowRoot === "function") {
+          return chrome.dom.openOrClosedShadowRoot(node) || null;
+        }
+      } catch (_) {}
+      return null;
+    };
+    const visit = root => {
+      if (!root || visited.has(root) || !root.querySelectorAll) return;
+      visited.add(root);
+      roots.push(root);
+      root.querySelectorAll("*").forEach(node => {
+        const nested = hostedRoot(node);
+        if (nested) visit(nested);
+      });
+    };
+    visit(doc);
+    return roots;
+  }
+
+  function readPluginMetrics(doc) {
+    const lines = [];
+    const seen = new Set();
+    let selfShipOrigin = "";
+    let originIconUrl = "";
+    const add = value => {
+      const text = clean(value);
+      if (text && text.length <= 1200 && !seen.has(text)) {
+        seen.add(text);
+        lines.push(text);
+      }
+    };
+    for (const root of shadowRoots(doc)) {
+      const containers = Array.from(root.querySelectorAll(
+        ".zying-meli-detail-metric-line, .zying-meli-detail-metric-column, " +
+        ".zying-meli-detail-metrics, [class*='zying-meli-detail'], #zyCardWrap"
+      ));
+      containers.forEach(node => add(node.innerText || node.textContent));
+      containers.forEach(container => {
+        // The origin icon may be a sibling of the metric row. A shadow root
+        // is already isolated to the ZYing widget, so use it as the fallback
+        // scope; for light DOM keep the old narrow scope to avoid marketplace
+        // page flags being mistaken for the plugin's origin.
+        let scope = root && root.nodeType === 11 ? root : container;
+        for (let node = container.parentElement; node && node !== root; node = node.parentElement) {
+          const marker = `${node.id || ""} ${node.className || ""}`;
+          if (/zying/i.test(marker)) scope = node;
+        }
+        // The origin icon can be a sibling of the weight column. Scan the
+        // nearest ZYing wrapper, never the whole marketplace document.
+        const nodes = [scope, ...Array.from(scope.querySelectorAll("*"))];
+        nodes.forEach(node => {
+          const assets = [
+            node.getAttribute && node.getAttribute("src"),
+            node.getAttribute && node.getAttribute("data-src"),
+            node.getAttribute && node.getAttribute("href"),
+            node.getAttribute && node.getAttribute("xlink:href"),
+            node.getAttribute && node.getAttribute("data"),
+            node.style && node.style.backgroundImage
+          ];
+          assets.forEach(asset => {
+            const value = String(asset || "");
+            const flag = /(?:^|[\\/])(CN|US|MX|BR|AR|CL|CO|UY|CA|GB|ES|PT|DE|FR|IT|JP|KR|AU)\.svg(?:[?#"')]|$)/i.exec(value);
+            if (flag && (!selfShipOrigin || flag[1].toUpperCase() !== "CN")) {
+              selfShipOrigin = flag[1].toUpperCase();
+              originIconUrl = value;
+            }
+          });
+        });
+      });
+    }
+    const text = lines.join(" ");
+    const metrics = parsePluginMetrics(text);
+    const productInfo = parsePluginProductInfo(text, selfShipOrigin);
+    return {
+      lines: lines.slice(0, 50),
+      text: text.slice(0, 12000),
+      metrics,
+      ...productInfo,
+      self_ship_origin: selfShipOrigin,
+      origin_icon_url: originIconUrl
+    };
+  }
+
+  function protectedVisualUrl(node) {
+    if (!node) return "";
+    const values = [];
+    try { values.push(node.style && node.style.backgroundImage); } catch (_) {}
+    try {
+      const view = node.ownerDocument && node.ownerDocument.defaultView;
+      if (view && typeof view.getComputedStyle === "function") {
+        values.push(view.getComputedStyle(node).backgroundImage);
+      }
+    } catch (_) {}
+    for (const value of values) {
+      const match = /url\(\s*["']?(blob:[^"')]+)["']?\s*\)/i.exec(String(value || ""));
+      if (match) return match[1];
+    }
+    return "";
+  }
+
+  async function decodeProtectedVisual(url, doc) {
+    if (!url || typeof fetch !== "function") return "";
+    let timer = null;
+    let controller = null;
+    try {
+      if (typeof AbortController === "function") {
+        controller = new AbortController();
+        timer = setTimeout(() => controller.abort(), 1800);
+      }
+      const response = await fetch(url, controller ? {signal: controller.signal} : undefined);
+      if (!response.ok) return "";
+      const svg = await response.text();
+      if (!svg || svg.length > 100000 || !/<(?:svg|text)\b/i.test(svg)) return "";
+      const Parser = (doc && doc.defaultView && doc.defaultView.DOMParser) ||
+        (typeof DOMParser !== "undefined" ? DOMParser : null);
+      if (!Parser) return "";
+      const parsed = new Parser().parseFromString(svg, "image/svg+xml");
+      if (parsed.querySelector("parsererror")) return "";
+      return clean(Array.from(parsed.querySelectorAll("text"))
+        .map(node => node.textContent || "").join(" "));
+    } catch (_) {
+      return "";
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  async function decodedProtectedText(scope, doc, cache) {
+    let nodes = [];
+    try { nodes = [scope, ...Array.from(scope.querySelectorAll("*"))]; } catch (_) { return ""; }
+    const urls = unique(nodes.map(protectedVisualUrl));
+    const values = await Promise.all(urls.map(async url => {
+      if (!cache.has(url)) cache.set(url, decodeProtectedVisual(url, doc));
+      return cache.get(url);
+    }));
+    return clean(values.filter(Boolean).join(" "));
+  }
+
+  async function readPluginMetricsAsync(doc) {
+    const fallback = readPluginMetrics(doc);
+    const decoded = [];
+    const seen = new Set();
+    const cache = new Map();
+    for (const root of shadowRoots(doc)) {
+      let scopes = [];
+      try {
+        scopes = Array.from(root.querySelectorAll(
+          "#zyCardWrap, [class*='zying-meli-detail-wrap'], " +
+          ".zying-meli-detail-metric-line, .zying-meli-detail-inline-tag"
+        ));
+      } catch (_) {}
+      for (const scope of scopes) {
+        const value = await decodedProtectedText(scope, doc, cache);
+        if (value && !seen.has(value)) {
+          seen.add(value);
+          decoded.push(value);
+        }
+      }
+    }
+    if (!decoded.length) return fallback;
+    const text = decoded.join(" ").slice(0, 12000);
+    const metrics = parsePluginMetrics(text);
+    const productInfo = parsePluginProductInfo(text, fallback.self_ship_origin);
+    return {
+      ...fallback,
+      lines: decoded.slice(0, 50),
+      text,
+      metrics,
+      ...productInfo,
+      read_method: "browser_extension_protected_svg"
+    };
+  }
+
+  function currencyForUrl(pageUrl) {
+    try {
+      const host = new URL(pageUrl).hostname.toLowerCase().replace(/^www\./, "");
+      return CURRENCY_BY_HOST[host] || Object.entries(CURRENCY_BY_HOST)
+        .find(([domain]) => host.endsWith(`.${domain}`))?.[1] || "";
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function pagePrice(doc, product) {
+    const offer = Array.isArray(product && product.offers) ? product.offers[0] : (product && product.offers) || {};
+    const metaPrice = meta(doc, 'meta[itemprop="price"]') || meta(doc, 'meta[property="product:price:amount"]');
+    const previous = firstNode(doc, [
+      ".ui-pdp-price__original-value .andes-money-amount",
+      ".ui-pdp-price__second-line .andes-money-amount--previous",
+      ".andes-money-amount--previous",
+      "s.andes-money-amount"
+    ]);
+    const amount = previous || firstNode(doc, [
+      ".ui-pdp-price__second-line .andes-money-amount",
+      ".ui-pdp-price .andes-money-amount"
+    ]);
+    let visible = "";
+    if (amount) {
+      const fraction = amount.querySelector(".andes-money-amount__fraction");
+      const cents = amount.querySelector(".andes-money-amount__cents");
+      visible = clean(fraction && fraction.textContent).replace(/\D/g, "");
+      if (visible && cents) visible += `.${clean(cents.textContent).replace(/\D/g, "")}`;
+    }
+    return finiteNumber(previous ? visible : (metaPrice || offer.price || visible));
+  }
+
+  function nowSql() {
+    const now = new Date();
+    const pad = value => String(value).padStart(2, "0");
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ` +
+      `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  }
+
+  function isSupportedUrl(value) {
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && SUPPORTED_HOST.test(url.hostname);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function extractProduct(doc, pageUrl, pluginOverride = null) {
+    if (!isSupportedUrl(pageUrl)) throw new Error("当前页面不是支持的 Mercado Libre 页面");
+    const product = structuredProducts(doc)[0] || {};
+    const itemId = extractItemId(doc, pageUrl, product);
+    if (!itemId) throw new Error("当前页面未识别到 Mercado Libre 商品编号，请打开商品详情页后重试");
+    const titleNode = firstNode(doc, ["h1.ui-pdp-title", "h1"]);
+    const title = clean((titleNode && titleNode.textContent) || product.name || meta(doc, 'meta[property="og:title"]'));
+    if (!title) throw new Error("当前页面未识别到商品标题，请等待详情页加载完成后重试");
+    const descriptionNode = firstNode(doc, [
+      ".ui-pdp-description__content", "[data-testid='description-content']", ".ui-pdp-description"
+    ]);
+    const description = clean((descriptionNode && descriptionNode.textContent) || product.description);
+    const pictures = extractImages(doc, product);
+    const specs = extractSpecs(doc);
+    const variations = extractProductVariations(doc, product);
+    const plugin = pluginOverride || readPluginMetrics(doc);
+    const metrics = plugin.metrics;
+    const actualWeightComplete = Number.isFinite(Number(metrics.weight_g)) && Number(metrics.weight_g) > 0;
+    const dimensionsComplete = [
+      metrics.package_length_cm, metrics.package_width_cm, metrics.package_height_cm
+    ].every(value => Number.isFinite(Number(value)) && Number(value) > 0);
+    const weightBasis = actualWeightComplete ? "plugin_actual" : "";
+    const profitability = parsePluginProfitability(plugin.text);
+    const price = pagePrice(doc, product);
+    const offer = Array.isArray(product.offers) ? product.offers[0] : (product.offers || {});
+    const currencyId = clean(
+      meta(doc, 'meta[itemprop="priceCurrency"]') ||
+      meta(doc, 'meta[property="product:price:currency"]') || offer.priceCurrency || currencyForUrl(pageUrl)
+    ).toUpperCase();
+    const canonical = doc.querySelector('link[rel="canonical"]');
+    const finalUrl = clean((canonical && canonical.href) || meta(doc, 'meta[property="og:url"]') || pageUrl);
+    const errors = [];
+    if (!pictures.length) errors.push("未识别到商品主图");
+    if (!plugin.lines.length) errors.push("未读取到智赢重量尺寸，可在泽顺控制台后续补充");
+    else if (!actualWeightComplete) errors.push("已检测到智赢浮层，但没有读取到实际重量");
+    if (plugin.lines.length && !dimensionsComplete) errors.push("已检测到智赢浮层，但没有读取到包装尺寸");
+    const complete = Boolean(title && pictures.length && actualWeightComplete && dimensionsComplete);
+    const source = {
+      id: itemId,
+      site_id: itemId.slice(0, 3),
+      title,
+      price,
+      currency_id: currencyId,
+      condition: "new",
+      sold_quantity: plugin.sales,
+      available_quantity: 1,
+      permalink: finalUrl,
+      pictures: pictures.map(url => ({source: url})),
+      attributes: specs.map(row => ({name: row.name, value_name: row.value})),
+      variations,
+      sale_terms: []
+    };
+    return {
+      source_item_id: itemId,
+      source_url: pageUrl,
+      final_url: finalUrl,
+      main_image_url: pictures[0] || "",
+      title,
+      price,
+      currency_id: currencyId,
+      weight_g: metrics.weight_g,
+      volumetric_weight_kg: metrics.volumetric_weight_kg,
+      package_length_cm: metrics.package_length_cm,
+      package_width_cm: metrics.package_width_cm,
+      package_height_cm: metrics.package_height_cm,
+      weight_basis: weightBasis,
+      net_proceeds_usd: profitability.net_proceeds_usd,
+      commission_amount_usd: profitability.commission_amount_usd,
+      scrape_status: complete ? "ok" : "partial",
+      error_message: errors.join("；"),
+      source,
+      description: {plain_text: description},
+      page_snapshot: {
+        page_title: clean(doc.title),
+        specs,
+        pictures,
+        variation_count: variations.length,
+        browser: "zeshun_browser_extension"
+      },
+      plugin_snapshot: {
+        source: "浏览器商品详情页与智赢插件浮层",
+        read_method: plugin.read_method || "browser_extension_shadow_dom",
+        dom_lines: plugin.lines,
+        dom_text: plugin.text,
+        weight_basis: weightBasis,
+        dimensions_display: metrics.dimensions_display,
+        weight_display: metrics.weight_display,
+        plugin_volumetric_display: metrics.volumetric_display,
+        volumetric_formula: "length_cm * width_cm * height_cm / 6000",
+        volumetric_weight_kg: metrics.volumetric_weight_kg,
+        net_proceeds_usd: profitability.net_proceeds_usd,
+        commission_amount_usd: profitability.commission_amount_usd,
+        sales: plugin.sales,
+        fulfillment_type: plugin.fulfillment_type,
+        fulfillment_label: plugin.fulfillment_label,
+        fulfillment_eligible: plugin.fulfillment_eligible,
+        self_ship_origin: plugin.self_ship_origin || "unknown",
+        origin_icon_url: plugin.origin_icon_url
+      },
+      collected_at: nowSql()
+    };
+  }
+
+  async function extractProductAsync(doc, pageUrl) {
+    const plugin = await readPluginMetricsAsync(doc);
+    return extractProduct(doc, pageUrl, plugin);
+  }
+
+  function cardCandidates(doc) {
+    if (!doc || !doc.querySelectorAll) return [];
+    const selectors = [
+      "li.ui-search-layout__item", ".ui-search-result", ".poly-card", "[data-testid='result']"
+    ];
+    const cards = unique(selectors.flatMap(selector => Array.from(doc.querySelectorAll(selector))));
+    return cards.map(card => {
+      const link = card.querySelector(
+        "a.poly-component__title, a.ui-search-link, a[href*='item_id='], a[href*='itemId='], " +
+        "a[href*='wid='], a[href*='/p/ML'], a[href*='/MLM-'], " +
+        "a[href*='/MLB-'], a[href*='/MLA-'], a[href*='/MLC-'], a[href*='/MCO-'], " +
+        "a[href*='/MLU-'], a[href*='/CBT-']"
+      );
+      return link && isSupportedUrl(link.href) ? {
+        card,
+        link,
+        url: link.href,
+        isUsOrigin: cardHasUsFlag(card)
+      } : null;
+    }).filter(Boolean);
+  }
+
+  function cardHasUsFlag(card) {
+    if (!card || !card.querySelectorAll) return false;
+    const isUsFlag = value => /(?:^|[\\/])US\.svg(?:[?#"')]|$)/i.test(String(value || ''));
+    const nodes = [card, ...Array.from(card.querySelectorAll('img, source, use, [style]'))];
+    return nodes.some(node => [
+      node.getAttribute && node.getAttribute('src'),
+      node.getAttribute && node.getAttribute('data-src'),
+      node.getAttribute && node.getAttribute('srcset'),
+      node.getAttribute && node.getAttribute('href'),
+      node.getAttribute && node.getAttribute('xlink:href'),
+      node.getAttribute && node.getAttribute('data'),
+      node.getAttribute && node.getAttribute('alt'),
+      node.getAttribute && node.getAttribute('title'),
+      node.style && node.style.backgroundImage
+    ].some(isUsFlag));
+  }
+
+  function cardShippingProfile(card, url = "") {
+    if (!card) return {origin: "", managed: false, eligible: false};
+    const assets = [card, ...Array.from(card.querySelectorAll("img, source, use, [style]"))]
+      .flatMap(node => [
+        node.getAttribute && node.getAttribute("src"),
+        node.getAttribute && node.getAttribute("data-src"),
+        node.getAttribute && node.getAttribute("srcset"),
+        node.getAttribute && node.getAttribute("href"),
+        node.getAttribute && node.getAttribute("xlink:href"),
+        node.getAttribute && node.getAttribute("data"),
+        node.getAttribute && node.getAttribute("alt"),
+        node.getAttribute && node.getAttribute("title"),
+        node.style && node.style.backgroundImage
+      ]).map(value => String(value || ""));
+    const text = clean(card.innerText || card.textContent);
+    const us = assets.some(value => /(?:^|[\\/])US\.svg(?:[?#"')]|$)/i.test(value)) ||
+      /(?:internacional.{0,24}(?:usa|eua|estados unidos|united states))|(?:(?:usa|eua|estados unidos|united states).{0,24}internacional)/i.test(text);
+    const china = !us && (assets.some(value => /(?:^|[\\/])CN\.svg(?:[?#"')]|$)/i.test(value)) ||
+      /(?:internacional.{0,30}china)|(?:china.{0,30}internacional)|(?:enviado|env[ií]o|origen|desde).{0,18}china/i.test(text));
+    const managed = /^CBT/i.test(normalizeItemId(url)) ||
+      /\b(?:full|fulfillment)\b|mercado\s+env[ií]os\s+full|enviado\s+por\s+mercado\s+libre/i.test(text);
+    const origin = us ? "US" : (china ? "CN" : "");
+    return {origin, managed, eligible: !us && (china || managed)};
+  }
+
+  function pluginLoginStatus(doc) {
+    const markers = [];
+    const runtimeMarkers = [];
+    for (const root of shadowRoots(doc)) {
+      try {
+        markers.push(...root.querySelectorAll(
+          ".zying-meli-detail-metric-line, .zying-meli-detail-metric-column, " +
+          "[class*='zying-meli'], [id*='zying-meli'], #zyCardWrap"
+        ));
+      } catch (_) {}
+    }
+    try {
+      // ZYing 5.x may have inserted its page bridge while the detail card is
+      // still loading. This proves the plugin is present even when its panel
+      // has not rendered any metric rows yet.
+      runtimeMarkers.push(...doc.querySelectorAll(
+        "script[data-zying-inject-bundle], script#zying, [data-zying-inject-bundle], #zyCardWrap"
+      ));
+    } catch (_) {}
+    const visibleText = clean(markers.map(node => node.innerText || node.textContent).join(" "));
+    const metrics = readPluginMetrics(doc);
+    const found = markers.length > 0 || runtimeMarkers.length > 0 || metrics.lines.length > 0;
+    const asksLogin = /(?:请先|立即|点击|尚未|未)\s*登录|登录\s*(?:智赢|账号)/i.test(visibleText);
+    return {
+      found,
+      logged_in: found && !asksLogin,
+      message: !found ? "未检测到智赢插件，请先安装并刷新当前美客多页面"
+        : asksLogin ? "智赢插件尚未登录，请先登录后刷新当前美客多页面"
+          : "智赢插件已检测并处于登录状态"
+    };
+  }
+
+  function extractCardProduct(card, pageUrl) {
+    if (!card || !isSupportedUrl(pageUrl)) throw new Error("未识别到可采集的商品卡片");
+    if (cardHasUsFlag(card)) {
+      throw new Error("商品列表检测到 US.svg：美国自发货商品不采集");
+    }
+    let decodedUrl = String(pageUrl || "");
+    try { decodedUrl = decodeURIComponent(decodedUrl); } catch (_) {}
+    const explicit = /(?:item_id|itemId|wid)\s*[:=]\s*((?:ML[A-Z]|CBT)-?\d{5,})/i.exec(decodedUrl);
+    const itemId = normalizeItemId(explicit ? explicit[1] : decodedUrl);
+    if (!itemId) throw new Error("商品卡片中没有可识别的商品编号");
+    const link = card.querySelector(
+      "a.poly-component__title, a.ui-search-link, a[href*='item_id='], a[href*='wid='], a[href]"
+    );
+    const titleNode = card.querySelector(
+      ".poly-component__title, .ui-search-item__title, h2, h3"
+    );
+    const title = clean((titleNode && titleNode.textContent) || (link && link.textContent));
+    if (!title) throw new Error("商品卡片中没有可识别的标题");
+    const image = card.querySelector("img");
+    const mainImage = imageUrl(image);
+    const originalPrice = card.querySelector(
+      ".andes-money-amount--previous, .ui-search-price__original-value .andes-money-amount, s.andes-money-amount"
+    );
+    const currentPrice = card.querySelector(
+      ".poly-price__current .andes-money-amount, .ui-search-price__second-line .andes-money-amount, .andes-money-amount"
+    );
+    const amount = originalPrice || currentPrice;
+    const fraction = amount && amount.querySelector(".andes-money-amount__fraction");
+    const cents = amount && amount.querySelector(".andes-money-amount__cents");
+    let priceText = clean(fraction && fraction.textContent).replace(/\D/g, "");
+    if (priceText && cents) priceText += `.${clean(cents.textContent).replace(/\D/g, "")}`;
+    const price = finiteNumber(priceText);
+    const currencyId = currencyForUrl(pageUrl);
+    const pictures = mainImage ? [mainImage] : [];
+    return {
+      source_item_id: itemId,
+      source_url: pageUrl,
+      final_url: pageUrl,
+      main_image_url: mainImage,
+      title,
+      price,
+      currency_id: currencyId,
+      weight_g: null,
+      volumetric_weight_kg: null,
+      package_length_cm: null,
+      package_width_cm: null,
+      package_height_cm: null,
+      weight_basis: "card_quick_collect",
+      scrape_status: "partial",
+      error_message: "列表页快速采集：未打开详情页，描述、规格及重量尺寸待补充",
+      source: {
+        id: itemId,
+        site_id: itemId.slice(0, 3),
+        title,
+        price,
+        currency_id: currencyId,
+        condition: "new",
+        available_quantity: 1,
+        permalink: pageUrl,
+        pictures: pictures.map(url => ({source: url})),
+        attributes: [],
+        variations: [],
+        sale_terms: []
+      },
+      description: {plain_text: ""},
+      page_snapshot: {
+        page_title: clean(card.ownerDocument && card.ownerDocument.title),
+        specs: [],
+        pictures,
+        browser: "zeshun_browser_extension_card"
+      },
+      plugin_snapshot: {
+        source: "Mercado Libre 商品列表卡片",
+        read_method: "browser_extension_card_no_navigation"
+      },
+      collected_at: nowSql()
+    };
+  }
+
+  return {
+    clean,
+    finiteNumber,
+    normalizeItemId,
+    parsePluginMetrics,
+    parsePluginProfitability,
+    parsePluginSales,
+    parsePluginProductInfo,
+    isSupportedUrl,
+    extractProduct,
+    extractProductAsync,
+    cardCandidates,
+    extractCardProduct,
+    cardHasUsFlag,
+    cardShippingProfile,
+    pluginLoginStatus
+  };
+});

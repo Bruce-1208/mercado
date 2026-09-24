@@ -12,6 +12,7 @@ import threading
 import time
 import traceback
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 def _watch_cancel(path, event):
@@ -123,6 +124,171 @@ def run_daily_task(payload, stop_event, job_file):
         task_lock.release()
 
 
+def _agent_awp_actor(job, payload):
+    """Build the signed-in workbench actor used by the remote AWP store."""
+    actor = payload.get("actor") if isinstance(payload, dict) else None
+    if isinstance(actor, dict) and actor.get("id") not in (None, ""):
+        return {
+            "id": actor.get("id"),
+            "username": actor.get("username") or "",
+            "display_name": actor.get("display_name") or actor.get("username") or "",
+        }
+    created_by_id = (job or {}).get("created_by_id")
+    if created_by_id in (None, ""):
+        raise ValueError("AI核重核价 Agent 任务缺少创建账号")
+    return {
+        "id": created_by_id,
+        "username": str((job or {}).get("created_by_name") or "").strip(),
+        "display_name": str((job or {}).get("created_by_name") or "").strip(),
+    }
+
+
+def _agent_awp_api_key(job_id, env_name="DASHSCOPE_API_KEY"):
+    """Read the account-bound DashScope key without putting it in job JSON."""
+    from erp.ai_weight_price.credentials import api_key
+
+    configured = api_key(env_name or "DASHSCOPE_API_KEY")
+    if configured:
+        return configured
+    from bit.bit_db_api import _request
+
+    data = _request(
+        "GET",
+        f"/api/local-agents/jobs/{job_id}/credentials",
+        params={"provider": "dashscope"},
+        timeout=30,
+    ) or {}
+    key = str(data.get("api_key") or "").strip()
+    if not key:
+        raise ValueError("当前账号未配置可用的 DashScope API Key")
+    return key
+
+
+def _agent_awp_runtime_api_key(service, job_id):
+    config = service.config.load()
+    if urlsplit(str(config.get("api_base_url") or "")).hostname in {
+        "localhost", "127.0.0.1", "::1",
+    }:
+        return ""
+    return _agent_awp_api_key(job_id, config.get("api_key_env"))
+
+
+def run_ai_weight_price(job, stop_event, job_file):
+    """Run the existing Playwright AWP service on the Agent's Edge."""
+    from erp.ai_weight_price.service import Service
+
+    payload = dict((job or {}).get("payload") or {})
+    # job.json lives at <agent-data>/jobs/<job-id>/job.json. Keep the Edge
+    # profile and local visual frames beside the jobs directory so releases
+    # can be replaced without logging the Agent computer out.
+    root = job_file.parents[2] / "ai-weight-price"
+    root.mkdir(parents=True, exist_ok=True)
+    service = Service(root, storage_backend="api", migrate_legacy_state=False)
+    actor = _agent_awp_actor(job, payload)
+    service.bind_actor(actor, view_all=False)
+    identity = {
+        "target": "agent",
+        "agent_id": os.environ.get("BIT_EXECUTION_AGENT_ID", ""),
+        "agent_name": os.environ.get("BIT_EXECUTION_AGENT_NAME", ""),
+        "hostname": os.environ.get("BIT_EXECUTION_HOSTNAME", socket.gethostname()),
+        "job_id": str((job or {}).get("job_id") or ""),
+    }
+    service.store.set_state("execution_identity", identity)
+
+    remote_log = service.store.log
+
+    def log(message, task_id=None, level="INFO"):
+        _write_log(f"[AI核重核价] {message}")
+        return remote_log(message, task_id, level)
+
+    # Browser/service code already records the same event to the central store;
+    # this wrapper only mirrors it to the Agent's live stdout for the console.
+    service.store.log = log
+    action = str(payload.get("action") or "").strip().lower()
+    if action not in {
+        "login/open", "login/confirm", "login/supplier", "categories/refresh",
+        "start", "continue", "stop", "terminate", "skip-current", "retry",
+        "manual-execute", "probe",
+    }:
+        raise ValueError("AI核重核价 Agent 操作无效")
+
+    if action == "login/open":
+        service.open_login()
+        return {"status": "success", "message": "已在 Agent 本机打开智赢和1688登录页面"}
+    if action == "login/supplier":
+        service.open_supplier_login()
+        return {"status": "success", "message": "已在 Agent 本机打开1688登录页面"}
+    if action == "login/confirm":
+        result = service.confirm_login()
+        return {"status": "success", "message": "Agent 已确认智赢登录", "login": result}
+    if action == "categories/refresh":
+        options = service.categories()
+        return {"status": "success", "message": f"Agent 已刷新智赢分类：{len(options)} 个", "options": options}
+    if action == "stop":
+        service.stop()
+        return {"status": "stopped", "message": "Agent 已请求停止核重核价"}
+    if action == "terminate":
+        return {"status": "success", "message": "Agent 已终止当前核重核价批次", **service.terminate_current()}
+    if action == "manual-execute":
+        result = service.manual_execute(
+            payload.get("task_id"),
+            {
+                "weight_g": payload.get("weight_g"),
+                "net_income_usd": payload.get("net_income_usd"),
+                "note": payload.get("note") or "",
+            },
+            actor.get("display_name") or actor.get("username") or "Agent",
+        )
+        return {"status": "success", "message": "Agent 已完成人工核验回写", "task": result}
+    if action == "probe":
+        service.start("probe")
+    elif action == "start":
+        runtime_api_key = _agent_awp_runtime_api_key(
+            service, str((job or {}).get("job_id") or "")
+        )
+        service.start(
+            str(payload.get("mode") or "pipeline"),
+            task_id=payload.get("task_id") or None,
+            selection=payload.get("selection"),
+            max_items=payload.get("max_items", 10),
+            resume=payload.get("resume") is True,
+            runtime_api_key=runtime_api_key,
+        )
+    elif action == "continue":
+        runtime_api_key = _agent_awp_runtime_api_key(
+            service, str((job or {}).get("job_id") or "")
+        )
+        service.continue_after_human(runtime_api_key=runtime_api_key)
+    elif action == "skip-current":
+        service.skip_current_exception()
+    elif action == "retry":
+        runtime_api_key = _agent_awp_runtime_api_key(
+            service, str((job or {}).get("job_id") or "")
+        )
+        task_id = str(payload.get("task_id") or "").strip()
+        if not task_id:
+            raise ValueError("重试任务缺少商品编号")
+        service.retry(task_id)
+        service.start("process", task_id=task_id, runtime_api_key=runtime_api_key)
+
+    # start/continue/skip/retry launch Service's own background thread. Keep
+    # the Agent job alive until that thread reaches a terminal state so the
+    # queue lease and cancellation file control the complete browser run.
+    while service.thread is not None and service.thread.is_alive():
+        if stop_event.is_set() and not service.stop_event.is_set():
+            service.stop()
+            if service.store.state("agent_terminate_requested") in {
+                str((job or {}).get("job_id") or ""),
+                True,
+            }:
+                service.terminate_current()
+            _write_log("Agent 收到停止指令，正在结束当前浏览器操作")
+        stop_event.wait(0.5)
+    if service.thread is not None:
+        service.thread.join(timeout=1)
+    return service.status()
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--job-file", required=True)
@@ -156,6 +322,12 @@ def main(argv=None):
         elif job_type == "daily_task":
             job_file = Path(args.job_file)
             result = run_daily_task(job.get("payload") or {}, stop_event, job_file)
+            job_file.with_name("result.json").write_text(
+                json.dumps(result, ensure_ascii=False), encoding="utf-8",
+            )
+        elif job_type == "ai_weight_price":
+            job_file = Path(args.job_file)
+            result = run_ai_weight_price(job, stop_event, job_file)
             job_file.with_name("result.json").write_text(
                 json.dumps(result, ensure_ascii=False), encoding="utf-8",
             )

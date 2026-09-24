@@ -2,6 +2,7 @@
 
 let aiOriginalRows = [];
 let aiOriginalSelected = new Set();
+let aiOriginalDeleteRunning = false;
 let aiOriginalTaskTimer = null;
 let aiOriginalPublishTimer = null;
 let aiOriginalEditorState = null;
@@ -12,7 +13,7 @@ function aiOriginalEscape(value) {
 }
 
 function aiOriginalDisplayImageUrl(value) {
-  const source = String(value || "").trim();
+  let source = String(value || "").trim();
   if (!source) return "";
   try {
     const parsed = new URL(source, window.location.origin);
@@ -21,6 +22,7 @@ function aiOriginalDisplayImageUrl(value) {
       return `${parsed.pathname}${parsed.search}`;
     }
     if (/^cbu\d+\.alicdn\.com$/.test(hostname) && parsed.pathname.startsWith("/img/ibank/")) {
+      parsed.pathname = parsed.pathname.replace(/\.(jpe?g|png|webp)(?:_[^/?#]*)+$/i, ".$1");
       return `/api/ai-original-products/source-image?url=${encodeURIComponent(parsed.href)}`;
     }
   } catch (_error) {
@@ -409,7 +411,8 @@ function renderAiOriginalProducts() {
     const titleEs = row.title_es || "等待 AI 生成西班牙语标题";
     const titlePt = row.title_pt || "等待 AI 生成葡萄牙语标题";
     const aiAttributes = aiOriginalAttributes(row.ai_original?.attributes);
-    const ready = status === "completed" && aiAttributes.some(attribute => !["BRAND", "ITEM_CONDITION"].includes(String(attribute.id || "").toUpperCase()));
+    const missingRequired = (row.ai_original?.missing_required_attributes || []).filter(item => !aiAttributes.some(attribute => attribute.id === item.id && (attribute.value_name || attribute.value_id)));
+    const ready = status === "completed" && !missingRequired.length && aiAttributes.some(attribute => !["BRAND", "ITEM_CONDITION"].includes(String(attribute.id || "").toUpperCase()));
     const aiImageReady = ["ai_image_edit", "local_background_removal"].includes(row.ai_original?.image_generation_method) && aiImage.includes("-ai-white.jpg");
     return `<article class="ai-original-card">
       <input type="checkbox" value="${Number(row.id)}" ${aiOriginalSelected.has(Number(row.id)) ? "checked" : ""} onchange="toggleAiOriginalProduct(${Number(row.id)}, this.checked)">
@@ -418,7 +421,7 @@ function renderAiOriginalProducts() {
         <figure>${aiImage ? `<img src="${aiOriginalEscape(aiImage)}" alt="AI 美客多白底主图" loading="lazy" referrerpolicy="no-referrer" onerror="aiOriginalImageError(this)">` : '<span class="ai-original-image-placeholder">待生成</span>'}<figcaption>AI 白底主图</figcaption></figure>
       </div>
       <div class="ai-original-source"><span class="ai-original-section-label source">1688 原始资料</span><h4>${aiOriginalEscape(original.title || row.title)}</h4><p>1688 编号：${aiOriginalEscape(original.source_1688_item_id || row.source_item_id)}</p><p>采购价：${aiOriginalEscape(original.price ?? row.price ?? "-")} CNY</p><a href="${aiOriginalEscape(original.source_url || row.source_url || "#")}" target="_blank" rel="noopener">打开 1688 详情页 ↗</a>${row.ai_error ? `<p class="bad">${aiOriginalEscape(row.ai_error)}</p>` : ""}</div>
-      <div class="ai-original-copy"><span class="ai-original-section-label generated">AI 美客多刊登稿</span><strong>西语标题 ${titleEs.length}/60</strong><p class="${titleEs.length > 60 ? "bad" : ""}">${aiOriginalEscape(titleEs)}</p><strong>葡语标题 ${titlePt.length}/60</strong><p class="${titlePt.length > 60 ? "bad" : ""}">${aiOriginalEscape(titlePt)}</p><strong>AI 商品属性（${aiAttributes.length}）</strong>${renderAiOriginalAttributes(row.ai_original?.attributes)}<details><summary>查看 AI 双语详情</summary><p>${aiOriginalEscape(row.description_es || "待生成西语详情")}</p><p>${aiOriginalEscape(row.description_pt || "待生成葡萄牙语详情")}</p></details><div class="ai-original-readiness"><span class="${ready ? "ok" : "pending"}">${ready ? "✓" : "!"} AI 属性</span><span class="${aiImageReady ? "ok" : "pending"}">${aiImageReady ? "✓" : "!"} AI 白底主图</span><span class="${row.category_id ? "ok" : "pending"}">${row.category_id ? "✓" : "!"} CBT 类目</span></div><button class="secondary ai-original-edit-button" type="button" onclick="openAiOriginalEditor(${Number(row.id)})">编辑分类、字段、详情与变体</button></div>
+      <div class="ai-original-copy"><span class="ai-original-section-label generated">AI 美客多刊登稿</span><strong>西语标题 ${titleEs.length}/60</strong><p class="${titleEs.length > 60 ? "bad" : ""}">${aiOriginalEscape(titleEs)}</p><strong>葡语标题 ${titlePt.length}/60</strong><p class="${titlePt.length > 60 ? "bad" : ""}">${aiOriginalEscape(titlePt)}</p><strong>AI 商品属性（${aiAttributes.length}）</strong>${renderAiOriginalAttributes(row.ai_original?.attributes)}${missingRequired.length ? `<p class="bad">必填属性待补充：${aiOriginalEscape(missingRequired.map(item => item.name || item.id).join("、"))}</p>` : ""}<details><summary>查看 AI 双语详情</summary><p>${aiOriginalEscape(row.description_es || "待生成西语详情")}</p><p>${aiOriginalEscape(row.description_pt || "待生成葡萄牙语详情")}</p></details><div class="ai-original-readiness"><span class="${ready ? "ok" : "pending"}">${ready ? "✓" : "!"} AI 属性</span><span class="${aiImageReady ? "ok" : "pending"}">${aiImageReady ? "✓" : "!"} AI 白底主图</span><span class="${row.category_id ? "ok" : "pending"}">${row.category_id ? "✓" : "!"} CBT 类目</span></div><button class="secondary ai-original-edit-button" type="button" onclick="openAiOriginalEditor(${Number(row.id)})">编辑分类、字段、详情与变体</button></div>
       <div class="ai-original-fields">
         <label>实重(g)<input id="ai-original-weight-${Number(row.id)}" type="number" min="1" step="1" value="${aiOriginalEscape(row.weight_g || "")}"></label>
         <label>净收益USD<input id="ai-original-net-${Number(row.id)}" type="number" min="0.01" step="0.01" value="${aiOriginalEscape(row.net_proceeds_usd || "")}"></label>
@@ -627,10 +630,65 @@ function updateAiOriginalSelection() {
   const count = aiOriginalSelected.size;
   const summary = document.getElementById("ai-original-selection");
   if (summary) summary.textContent = `已选择 ${count} 件`;
+  const deleteButton = document.getElementById("ai-original-delete");
+  if (deleteButton) deleteButton.disabled = !count || aiOriginalDeleteRunning;
+  const filter = document.getElementById("ai-original-status-filter")?.value || "";
+  const visible = aiOriginalRows.filter(row => !filter || row.ai_status === filter);
+  const selectedCount = visible.filter(row => aiOriginalSelected.has(Number(row.id))).length;
+  const selectAll = document.getElementById("ai-original-select-all");
+  if (selectAll) {
+    selectAll.checked = visible.length > 0 && selectedCount === visible.length;
+    selectAll.indeterminate = selectedCount > 0 && selectedCount < visible.length;
+  }
   const process = document.getElementById("ai-original-process");
   const publish = document.getElementById("ai-original-publish");
   if (process) process.disabled = !count;
   if (publish) publish.disabled = !count;
+}
+
+async function deleteSelectedAiOriginalProducts() {
+  await deleteAiOriginalProductSelection([...aiOriginalSelected], aiOriginalStatus);
+}
+
+// Both areas display the same product records and must refresh together.
+async function deleteAiOriginalProductSelection(ids, setStatus) {
+  if (!ids.length || aiOriginalDeleteRunning) return;
+  if (!window.confirm(`确定删除所选 ${ids.length} 件产品吗？删除后会同时从 AI 原创产品区和 1688 产品区移除，且无法撤销。`)) return;
+  aiOriginalDeleteRunning = true;
+  updateAiOriginalSelection();
+  if (typeof products1688UpdateSelection === "function") products1688UpdateSelection();
+  setStatus(`正在删除 ${ids.length} 件产品…`);
+  try {
+    const response = await fetch("/api/mercado-products", {
+      method: "DELETE", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({product_item_ids: ids})
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
+    const removed = new Set(ids);
+    ids.forEach(id => aiOriginalSelected.delete(id));
+    aiOriginalRows = aiOriginalRows.filter(row => !removed.has(Number(row.id)));
+    if (aiOriginalEditorState && removed.has(Number(aiOriginalEditorState.id))) closeAiOriginalEditor();
+    renderAiOriginalProducts();
+    if (typeof products1688Rows !== "undefined") {
+      ids.forEach(id => products1688Selected.delete(id));
+      products1688Rows = products1688Rows.filter(row => !removed.has(Number(row.id)));
+      products1688CloseDetail();
+      products1688RenderRows();
+    }
+    try {
+      const stored = JSON.parse(localStorage.getItem("mercado.aiOriginalSelected") || "[]");
+      if (Array.isArray(stored)) localStorage.setItem("mercado.aiOriginalSelected", JSON.stringify(stored.filter(id => !removed.has(Number(id)))));
+    } catch (_error) {}
+    await Promise.all([loadAiOriginalProducts(), ...(typeof load1688Products === "function" ? [load1688Products(false)] : [])]);
+    setStatus(`已删除 ${Number(payload.data?.deleted || 0)} 件产品`, "success");
+  } catch (error) {
+    setStatus(`删除失败：${error.message || error}`, "error");
+  } finally {
+    aiOriginalDeleteRunning = false;
+    updateAiOriginalSelection();
+    if (typeof products1688UpdateSelection === "function") products1688UpdateSelection();
+  }
 }
 
 async function processSelectedAiOriginalProducts() {
@@ -642,6 +700,7 @@ async function processSelectedAiOriginalProducts() {
   try {
     const response = await fetch("/api/ai-original-products/process", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({
       product_item_ids: ids,
+      token_id: aiOriginalEditorTokenId(),
       api_key: document.getElementById("ai-original-api-key")?.value || "",
       base_url: document.getElementById("ai-original-base-url")?.value || "",
       model: document.getElementById("ai-original-model")?.value || "",

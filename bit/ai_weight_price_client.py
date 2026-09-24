@@ -61,6 +61,7 @@ def _snapshot(service):
     data["execution_terminal"] = "浏览器插件"
     data["computer"] = "浏览器插件"
     data["client_config"] = _client_config(service)
+    data["developers"] = service.store.state("developers", []) or []
     return data
 
 
@@ -83,6 +84,9 @@ def login_confirm(service, context):
             "count": len(categories),
             "error": "",
         })
+    developers = context.get("developers")
+    if isinstance(developers, list) and developers:
+        service.store.set_state("developers", developers)
     credential_hash = hashlib.sha256(
         str(context.get("credential")).encode("utf-8", "replace")
     ).hexdigest()
@@ -113,7 +117,12 @@ def categories(service, context):
         "count": len(options),
         "error": "",
     })
-    return {"categories": options, "data": _snapshot(service)}
+    developers = context.get("developers")
+    if isinstance(developers, list) and developers:
+        service.store.set_state("developers", developers)
+    else:
+        developers = service.store.state("developers", []) or []
+    return {"categories": options, "developers": developers, "data": _snapshot(service)}
 
 
 def _next_action(service):
@@ -125,7 +134,27 @@ def _next_action(service):
         service.store.set_state("run", run)
         service.store.save_run(run)
         return {"action": "done", "data": _snapshot(service)}
-    if cursor >= len(task_ids) or int(run.get("processed_items") or 0) >= int(run.get("max_items") or len(task_ids) or 1):
+    if int(run.get("processed_items") or 0) >= int(run.get("max_items") or len(task_ids) or 1):
+        run.update({"outcome": "completed", "finished_at": time.time(), "message": "核重核价完成"})
+        service.store.set_state("run", run)
+        service.store.save_run(run)
+        return {"action": "done", "data": _snapshot(service)}
+    if cursor >= len(task_ids):
+        if run.get("lazy_collection"):
+            run["message"] = "当前商品已完成，正在读取下一件智赢商品"
+            service.store.set_state("run", run)
+            service.store.save_run(run)
+            return {
+                "action": "collect",
+                "collection": {
+                    "selection": run.get("selection") or {},
+                    "cursor": {
+                        **(run.get("collection_cursor") or {}),
+                        "seen_ids": task_ids,
+                    },
+                },
+                "data": _snapshot(service),
+            }
         run.update({"outcome": "completed", "finished_at": time.time(), "message": "核重核价完成"})
         service.store.set_state("run", run)
         service.store.save_run(run)
@@ -133,8 +162,11 @@ def _next_action(service):
     key = task_ids[cursor]
     run["current_task_id"] = key
     run["current_item_index"] = cursor + 1
+    run["message"] = f"第 {cursor + 1}/{run.get('max_items')} 件：正在1688以图搜货"
     service.store.set_state("run", run)
+    service.store.save_run(run)
     service.store.set_state("pipeline_current", {"task_id": key})
+    service.store.log(run["message"], key)
     return {"action": "search", "task": _task(service, key), "data": _snapshot(service)}
 
 
@@ -158,7 +190,7 @@ def start(service, payload):
         if not positions:
             raise ValueError(f"当前智赢列表未找到起始产品编号 {wanted}")
         products = products[positions[0]:]
-    products = products[:max_items]
+    products = products[:1] if payload.get("lazy_collection") else products[:max_items]
     run_id = uuid.uuid4().hex
     task_ids = []
     with service.store.actor_scope(service.store.actor()):
@@ -170,15 +202,23 @@ def start(service, payload):
             image = str(item.get("main_image_url") or "").strip()
             if not key or not title or not image:
                 continue
+            try:
+                source_index = int(item.get("source_index") or index)
+            except (TypeError, ValueError):
+                source_index = index
             record = {
                 **item,
                 "erp_goods_id": key,
                 "title": title,
                 "main_image_url": image,
-                "source_index": index,
+                "source_index": source_index,
                 "source_category": selection.get("category", ""),
                 "source_category_label": item.get("zying_category_name") or "",
                 "zying_category_name": item.get("zying_category_name") or "",
+                "source_product_developer_id": selection.get("product_developer_id", ""),
+                "source_product_developer_name": selection.get("product_developer_name", ""),
+                "product_developer_id": item.get("product_developer_id") or selection.get("product_developer_id", ""),
+                "product_developer_name": item.get("product_developer_name") or selection.get("product_developer_name", ""),
             }
             if not service.store.add(record):
                 service.store.update(key, **record)
@@ -189,8 +229,10 @@ def start(service, payload):
         "run_id": run_id,
         "mode": "pipeline",
         "selection": selection,
-        "max_items": len(task_ids),
+        "max_items": max_items if payload.get("lazy_collection") else len(task_ids),
         "task_ids": task_ids,
+        "lazy_collection": bool(payload.get("lazy_collection")),
+        "collection_cursor": payload.get("collection_cursor") or {},
         "cursor": 0,
         "processed_items": 0,
         "current_item_index": 1,
@@ -210,7 +252,71 @@ def start(service, payload):
     service.store.save_run(run)
     for key in task_ids:
         service.store.record_run_item(run_id, key, execution_result="待处理", execution_reason="插件执行中")
-    service.store.log(f"插件启动核重核价，共 {len(task_ids)} 件")
+    service.store.log(
+        f"插件启动严格逐件核重核价，计划最多 {max_items} 件；当前仅读取第 1 件"
+        if payload.get("lazy_collection")
+        else f"插件启动核重核价，共 {len(task_ids)} 件"
+    )
+    return _next_action(service)
+
+
+def collect(service, payload):
+    """Append exactly one freshly-read ZYing item after the previous item ended."""
+    run = _run(service)
+    if run.get("outcome") != "running" or not run.get("lazy_collection"):
+        raise ValueError("当前核重核价任务不接受逐件读取")
+    cursor = payload.get("cursor")
+    if isinstance(cursor, dict):
+        run["collection_cursor"] = cursor
+    if payload.get("exhausted") is True:
+        run.update({
+            "outcome": "completed",
+            "finished_at": time.time(),
+            "message": "智赢所选范围已读取完毕，核重核价完成",
+        })
+        service.store.set_state("run", run)
+        service.store.save_run(run)
+        return {"action": "done", "data": _snapshot(service)}
+    item = payload.get("product")
+    if not isinstance(item, dict):
+        raise ValueError("插件没有返回下一件智赢商品")
+    key = str(item.get("erp_goods_id") or "").strip()
+    title = str(item.get("title") or "").strip()
+    image = str(item.get("main_image_url") or "").strip()
+    if not key or not title or not image:
+        raise ValueError("下一件智赢商品缺少编号、标题或主图")
+    task_ids = list(run.get("task_ids") or [])
+    if key in task_ids:
+        service.store.set_state("run", run)
+        return _next_action(service)
+    selection = run.get("selection") or {}
+    record = {
+        **item,
+        "erp_goods_id": key,
+        "title": title,
+        "main_image_url": image,
+        "source_category": selection.get("category", ""),
+        "source_category_label": item.get("zying_category_name") or "",
+        "zying_category_name": item.get("zying_category_name") or "",
+        "source_product_developer_id": selection.get("product_developer_id", ""),
+        "source_product_developer_name": selection.get("product_developer_name", ""),
+        "product_developer_id": item.get("product_developer_id") or selection.get("product_developer_id", ""),
+        "product_developer_name": item.get("product_developer_name") or selection.get("product_developer_name", ""),
+    }
+    with service.store.actor_scope(service.store.actor()):
+        if not service.store.add(record):
+            service.store.update(key, **record)
+        service.store.record_run_item(
+            run.get("run_id"), key, execution_result="待处理", execution_reason="等待逐件执行"
+        )
+    run["task_ids"] = [*task_ids, key]
+    run["message"] = f"已读取下一件商品 {key}，开始1688以图搜货"
+    service.store.set_state("run", run)
+    service.store.save_run(run)
+    service.store.log(
+        f"严格逐件读取第 {int(run.get('processed_items') or 0) + 1}/{run.get('max_items')} 件商品",
+        key,
+    )
     return _next_action(service)
 
 
@@ -259,6 +365,7 @@ def search(service, payload):
         best_match_confidence=candidate.get("image_confidence"),
         best_match_approved=True,
     )
+    service.store.log("1688以图搜货完成，正在读取最佳匹配商品详情", task["erp_goods_id"])
     return {"action": "detail", "task_id": task["erp_goods_id"], "candidate": candidate, "data": _snapshot(service)}
 
 
@@ -310,28 +417,76 @@ def detail(service, payload):
         service.store.update(key, status="risk", stage="done", decision_status="risk", decision_reason=dry,
                              saved_at=time.time(), write_verified=False)
         return _advance(service, "risk", dry)
-    return {"action": "writeback", "task_id": key, "changes": {**changes, "review_status": "通过"},
+    service.store.log("1688核重核价完成，正在回填当前智赢商品", key)
+    return {"action": "writeback", "task_id": key, "task": task,
+            "changes": {**changes, "review_status": "通过"},
             "data": _snapshot(service)}
 
 
 def writeback(service, payload):
     task = _task(service, payload.get("task_id"))
+    before = payload.get("before")
     actual = payload.get("actual")
     changes = payload.get("changes")
-    if not isinstance(actual, dict) or not isinstance(changes, dict):
+    if payload.get("submitted") is not True or payload.get("persisted") is not True:
+        raise ValueError("插件未完成智赢保存提交及刷新后持久化回读")
+    if not isinstance(before, dict) or not isinstance(actual, dict) or not isinstance(changes, dict):
         raise ValueError("插件未返回有效的智赢保存回读结果")
-    for field, expected in changes.items():
-        if field == "review_status":
-            if str(actual.get(field) or "").replace(" ", "") != str(expected).replace(" ", ""):
-                raise ValueError("智赢审核状态保存回读不一致")
-        elif not erp_value_equal(field, actual.get(field), expected):
-            raise ValueError(f"智赢保存回读不一致：{field}")
+    key = str(task["erp_goods_id"])
+    if str(before.get("erp_goods_id") or "") != key or str(actual.get("erp_goods_id") or "") != key:
+        raise ValueError("智赢保存前后回读的商品编号与任务不一致")
+    if str(before.get("review_status") or "").replace(" ", "") != "待审核":
+        raise ValueError("智赢商品不是待审核状态，禁止回写")
+    attempt = {
+        "before": before,
+        "intent": {**changes, "at": time.time()},
+        "after": actual,
+        "verified": False,
+    }
+    history = [*(task.get("write_history") or []), attempt]
+    service.store.update(key, stage="writing", erp_before=before, erp_after=actual,
+                         write_verified=False, write_intent=changes, write_history=history)
+    try:
+        for field, expected in changes.items():
+            if field == "review_status":
+                if str(actual.get(field) or "").replace(" ", "") != str(expected).replace(" ", ""):
+                    raise ValueError("智赢审核状态保存回读不一致")
+            elif not erp_value_equal(field, actual.get(field), expected):
+                raise ValueError(f"智赢保存回读不一致：{field}")
+    except ValueError as exc:
+        history[-1]["error"] = str(exc)
+        service.store.update(key, write_history=history)
+        raise
     now = time.time()
-    service.store.update(task["erp_goods_id"], status="success", stage="done", saved_at=now,
+    history[-1].update(verified=True, saved_at=now)
+    service.store.update(key, status="success", stage="done", saved_at=now,
                          erp_after=actual, write_verified=True, write_intent=changes,
-                         decision_status="success", exception_reason="", exception_detail="")
-    service.store.log("插件完成智赢回填并回读确认", task["erp_goods_id"])
+                         write_history=history, decision_status="success",
+                         exception_reason="", exception_detail="")
+    service.store.log("插件完成智赢回填并在刷新页面后回读确认", key)
     return _advance(service, "success", "当前商品已回填并确认，继续下一件")
+
+
+def fail(service, payload):
+    message = str(payload.get("error") or "插件浏览器步骤执行失败").strip()[:1000]
+    action = str(payload.get("action") or "unknown").strip()[:80]
+    task_id = str(payload.get("task_id") or "").strip()
+    now = time.time()
+    run = _run(service)
+    run.update({
+        "outcome": "failed",
+        "finished_at": now,
+        "message": message,
+        "failed_action": action,
+        "failed_task_id": task_id,
+    })
+    service.store.set_state("run", run)
+    service.store.set_state("run_error", message)
+    service.store.save_run(run)
+    if task_id and _task(service, task_id):
+        service.store.exception(task_id, "插件浏览器步骤执行失败", f"{action}：{message}")
+    service.store.log(f"插件核重核价已停止：{action}：{message}", task_id or None, "ERROR")
+    return {"action": "done", "data": _snapshot(service)}
 
 
 def stop(service):
@@ -361,10 +516,12 @@ def dispatch(service, action, payload):
         "login/supplier": lambda: {"url": "https://www.1688.com/", "data": _snapshot(service)},
         "categories/refresh": lambda: categories(service, payload.get("context")),
         "start": lambda: start(service, payload),
+        "collect": lambda: collect(service, payload),
         "continue": lambda: continue_run(service, payload),
         "search": lambda: search(service, payload),
         "detail": lambda: detail(service, payload),
         "writeback": lambda: writeback(service, payload),
+        "fail": lambda: fail(service, payload),
         "stop": lambda: stop(service),
     }
     if action == "login/open":

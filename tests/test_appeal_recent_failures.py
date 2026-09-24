@@ -42,6 +42,12 @@ assert "cryptography" not in sys.modules
     assert result.returncode == 0, result.stderr
 
 
+def test_agent_import_does_not_require_browser_extension_manifest(tmp_path):
+    from bit import bit_interface
+
+    assert bit_interface.browser_extension_version(tmp_path) == "unknown"
+
+
 def response(status, payload=None):
     result = requests.Response()
     result.status_code = status
@@ -130,7 +136,7 @@ def test_lease_expired_worker_receives_stop_without_resurrecting_job(tmp_path):
     assert store.get_job("expired-job")["status"] == "error"
 
 
-@pytest.mark.parametrize("workers,windows,expected", [("15", "3", 3), ("2", "5", 2), ("bad", "4", 4), ("30", "bad", 3)])
+@pytest.mark.parametrize("workers,windows,expected", [("15", "3", 3), ("2", "5", 2), ("bad", "4", 4), ("30", "bad", 5)])
 def test_daily_workers_respect_admission_capacity(monkeypatch, workers, windows, expected):
     monkeypatch.setenv("BIT_DAILY_BROWSER_WORKER_LIMIT", workers)
     monkeypatch.setenv("BIT_BROWSER_MAX_OPEN_WINDOWS", windows)

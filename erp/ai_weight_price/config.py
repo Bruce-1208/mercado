@@ -14,7 +14,7 @@ DEFAULTS = {
     "poll_minutes": 15, "timeout_minutes": 30,
     "small_tolerance_g": 50, "large_tolerance_g": 30,
     "reference_mode": "erp", "match_threshold": 0.95,
-    "writeback_enabled": False, "max_candidates": 10, "max_pages": 100,
+    "writeback_enabled": True, "max_candidates": 10, "max_pages": 100,
     "supplier_auto_adapt": True,
     "sku_price_mode": "final", "usd_cny_rate": None,
     "phrases": ["您好，请问这款产品包装好之后重量大概多少克呢？",
@@ -130,12 +130,24 @@ def validate(value):
 def selection_params(value, config):
     if not isinstance(value, dict):
         raise ValueError("请先选择分类（可留空）、起始产品编号（可留空）和最多商品数")
-    if set(value) - {"category", "start_page", "end_page", "start_item", "start_product_id"}:
+    if set(value) - {
+        "category", "start_page", "end_page", "start_item", "start_product_id",
+        "product_developer_id", "product_developer_name",
+    }:
         raise ValueError("任务参数字段不正确")
     category = value.get("category", "")
     if not isinstance(category, str) or len(category) > 500:
         raise ValueError("分类格式不正确")
     result = {"category": category.strip()}
+    if "product_developer_id" in value or "product_developer_name" in value:
+        developer_id = value.get("product_developer_id", "")
+        developer_name = value.get("product_developer_name", "")
+        if not isinstance(developer_id, str) or len(developer_id) > 64:
+            raise ValueError("产品开发编号格式不正确")
+        if not isinstance(developer_name, str) or len(developer_name) > 200:
+            raise ValueError("产品开发名称格式不正确")
+        result["product_developer_id"] = developer_id.strip()
+        result["product_developer_name"] = developer_name.strip()
     if "start_product_id" in value:
         start_product_id = value.get("start_product_id", "")
         if not isinstance(start_product_id, str) or len(start_product_id) > 64:

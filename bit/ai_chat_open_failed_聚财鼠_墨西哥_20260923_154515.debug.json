@@ -1,0 +1,125 @@
+{
+  "captured_at": "2026-09-23T15:45:15",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "",
+    "inline_has_input": false,
+    "inline_open": false,
+    "inline_root_class": "",
+    "inline_shell": false,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [],
+    "frames": [
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_3340376",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=b2e795192e7144678fc01f9b50e383f1&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1790149162524
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/favicon.ico - Failed to load resource: the server responded with a status of 403 ()",
+      "source": "network",
+      "timestamp": 1790149162529
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/favicon.ico - Failed to load resource: the server responded with a status of 403 ()",
+      "source": "network",
+      "timestamp": 1790149162534
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/login/identification?challenge_id=e9753331-4aab-4c9f-aa20-c590949bfc09&platform_id=ml&redirect_url=https%3A%2F%2Fwww.mercadolibre.com%2Fjms%2Fcbt%2Flgz%2Fmsl%2Flogin%2FH4sIAAAAAAAEAz2QW5OqOBSF_4vPh27Ae7-pCEKboIggTE1RQCIEwuVIEKGr__uE7qp5g73X2uvL-prQKiFlwPoaTz4m-FVTEhM2-TOpacju1aMICOKLgvJRQxj-_Y2jH0n4CAvM8KOZfHyNhxKMtpibxlPs0WLuCVuWBndadXz0E8VnpAnwi9vKkAYdjp4Ej9t7SJv_HQ_8t8UN1_AFKZ8hJSioxzhuTyo-TBmrm4_39wZTygHeCvyIQ1RREj3wW1wV72EcV23JhAdp8sn3H36-YQF7hHE--RjZOFo9PjZkpCp_X7WQV6K4lJdL_jGfyyuehXBMSYl5Bf_8ywtoePTXhJE4x4xD4N5IIy0mJjEu10GXINEbvWC1v9MXOt1Ca5_Si8Zkd49OvmwUrgpvvuyUQLEGvHdsX5N6R4SSXaLPWKUSnFLtmiVrnXQEHWinZxW5UHTVS_FtzOL6OqLrJzpsiFn4aXSA9LgzUnSzqpvsN9H0hyX1ZEjjKSB8R_GozfYzUznLMMt7qGw4I00RZwR2PDPtfAqVRAS7joQ3OIyZ6Ga0ZqFKSEtYLDs9KpzeLMebsI7k-TDyhaVVj1pvOL88-dyZGmBAcXKwE0VYcC7XSMGwYX5GC88GL6AA0VQsOnpjmYq-s_7tqYCEszR6CYfwwnsrznNo08K0z7OjnUzBABhUdAn04gzaV_FoezMw7HtT8zPoetOfzksoeYR7S6ePsloameOhGsBwncJh38Fh048dPkvi2zKt9GBd7Kjgx44omztvf6-tReYU0Ne29cldu_hvt0cAtZm6b8sIvBy09J4CttFZPUgpa1J5CwGKU_9CiyB7Crm0cO9p8xR6K2XPnVZImpetsNoLRM_bQRc0q4lgYJTra38YzJe5gY-Xv7BsQ1U-V58vBZua4NEMn8UUVrXn35bKbtudjEtyzG0QrRXLk8JWPXRse54lR0m7Zd3cNPRW9qzOHYStMxdJDi_bBUjQjjI9ape2uZp5NNgZp1mSk2O-mjG8AVdyh-dQNYR7dX4ihE6Ve1EJvZn3EvW6CpncC9tt_7wV9u7l2pl-H06dtraqLl3O3W5jTN1uOvsrxlE_p4PwutXJ5Pv7Pz5qK0FHBAAA%2Fidentification_challenge%2Fcallback%3Fdps%3Darmor.207c2a12192c9b5fdf631a5e74e3cb31ec33fc6723d8d01adca190050b88c7322449bf7431077c4aa013d25d2d9572a027b88f1cfc757ab9e94d7fbb769c2d3701ac20d6ebdef2c6f7aba79c900b13e3c38994092f96e38f225d6ce5d16d4673.270e58d115de520b8651f0dc30eeda00%26rbms%3D - Access to fetch at 'https://www.mercadolibre.com/jms/lgz/background/session/armor.9e64643ea832bc6910d22bc304fc3a3ee17c4295dfa260c7792f9c1d1ec0e6aa01c56306a76245cf132bf152fec492093ec90383b28c0ad80d1ea820ce796d35ae26078fd78d667aa8d978b08dfdfe18d194ffa20d5f68776c302279976f2d5c.3f58c551a0f8f14e1f975b9ef9d5485e?background=armor.9e64643ea832bc6910d22bc304fc3a3ee17c4295dfa260c7792f9c1d1ec0e6aa01c56306a76245cf132bf152fec492093ec90383b28c0ad80d1ea820ce796d35ae26078fd78d667aa8d978b08dfdfe18d194ffa20d5f68776c302279976f2d5c.3f58c551a0f8f14e1f975b9ef9d5485e&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4IiwianNfb3BlcmF0aW9uIjoianNfcmVhZCJ9' from origin 'https://global-selling.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1790149162771
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/session/armor.9e64643ea832bc6910d22bc304fc3a3ee17c4295dfa260c7792f9c1d1ec0e6aa01c56306a76245cf132bf152fec492093ec90383b28c0ad80d1ea820ce796d35ae26078fd78d667aa8d978b08dfdfe18d194ffa20d5f68776c302279976f2d5c.3f58c551a0f8f14e1f975b9ef9d5485e?background=armor.9e64643ea832bc6910d22bc304fc3a3ee17c4295dfa260c7792f9c1d1ec0e6aa01c56306a76245cf132bf152fec492093ec90383b28c0ad80d1ea820ce796d35ae26078fd78d667aa8d978b08dfdfe18d194ffa20d5f68776c302279976f2d5c.3f58c551a0f8f14e1f975b9ef9d5485e&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4IiwianNfb3BlcmF0aW9uIjoianNfcmVhZCJ9 - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1790149162771
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/login/identification?challenge_id=98dc49d6-1e44-437f-9566-0f16a3302241&platform_id=ml&redirect_url=https%3A%2F%2Fwww.mercadolibre.com%2Fjms%2Fcbt%2Flgz%2Fmsl%2Flogin%2FH4sIAAAAAAAEAz2QXZNzShSF_0uuXzPI99wlhDDREhHCqVMK3aGlG2-0CFPz30-bqTp37L3WXk-vrwmpMlxGrK_R5GOCXjXBKWaTP5OaxOxWPWiEIV9QwkcNZuj3N01-JPEjpoihRzP5-BoPZQhuETeNp9ijRdwTtyyPbqTq-Ognis9wE6EXt5UxiTqUPDEat7eYNP87Huhvixqu4QtcPmOCYVSPcdyeVXyYM1Y3H-_vDSKEA7xR9EhjWBGcPNBbWtH3JiaoEZqW0vjRT77_8PsNi9gjTu-TjxGOs9Xja2OGq_L3WQt5JYpLebnkH_O5vOJhEKUEl4h38M-_vIGGZ39NGE7viHEK1Jt5oqfYxub5MhgSwEZjUFaHirEwyBY4u5ycdSb7O3gMZZP6GriGsldaqjOgneeGutR7IpDcEn6mGpHAlOiXIlsbuMNwTzqjqPCZwItRim9jFtfXCVk_4X6DbRrmyR6Qg2Lm8OpUVzlskukPSx7IgKRTC_MdQaO22M1s9SSD4t4DdcMZSQ45o-WmM9u9T4GaiZbS4fgKhjETXs3WppoE9YylstdD6vV2Od4EdSLPh5EvLp161AbD6RXIp87WLWap3t1SRBFQzuWbuTVsWFgQGrjWy1It0VYdMnpTmYiht_7tiQLMWRqjBEN85r3R0xy4hNruaXZws6k1WAyohmT14gy4F_HgBjNr2PW2HhbAD6Y_nZdACjD3ll6fFLU0MqdDNVjDZQqGXQeGTT92-Cxx6MqkMqI1VYgQpp4o20qwu9XOovAoCPVtffTXPvrb7aAF20LbtWVivTy4DJ4CcuFJ20s5a3J5CyyY5uGZ0Kh4Cndp4d_y5in0Ts6eik4lPShWSOsFbNzbwRB0p0lAZJbrS78f7Je9AY9XuHBcU1M_V58vFdm6EJACncQcVHUQXpeqsu2O5jk73F0rWatOIMWttu_Y9jTLDpJ-Lbq5bRqtHDidPwhbby7iOzhvF1YGFcKMpF269moWkEgxj7Psjg_31YyhjXXBN3CKNVO4VacnhPBY-WcNk6t9K2FvaIDJvbDd9s8rdZWX7xbGbTh2-tqpunw597uNOfW76eyvmCb9nAzC61pnk-_v_wBb7wUeSAQAAA%2Fidentification_challenge%2Fcallback%3Fdps%3Darmor.68b3970cd078d0e216589dec25f2b4aceea5eb30ad51639ad327efe40a5283881783cf7e78fc15d151836588261fd9af4eaac5b49cc59025ee2c409461f29d34e88b9b57cdba0f37f8a0fefcd49967c1b2ef7b80acede0254cc21a90e03002c5.5fef3b70cd837521682a9c4a994ec8fe%26rbms%3D - Access to fetch at 'https://www.mercadolibre.com/jms/lgz/background/session/armor.38b45a8d7f07820dc0168d7297f6a0bc46035521891a5aa0466f97901d6c5702464788da33d8c8fb33b5aaae9cae6b106b322d591853f3d5aca0cd7e833fc3e68800a05160779ac358d73a9f9fa0f39b3b4f7eade1b9f1f1b27353dc39617938.423e41253d6b4f0f199c23ae63e081a3?background=armor.38b45a8d7f07820dc0168d7297f6a0bc46035521891a5aa0466f97901d6c5702464788da33d8c8fb33b5aaae9cae6b106b322d591853f3d5aca0cd7e833fc3e68800a05160779ac358d73a9f9fa0f39b3b4f7eade1b9f1f1b27353dc39617938.423e41253d6b4f0f199c23ae63e081a3&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4IiwianNfb3BlcmF0aW9uIjoianNfcmVhZCJ9' from origin 'https://global-selling.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1790149162772
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/session/armor.38b45a8d7f07820dc0168d7297f6a0bc46035521891a5aa0466f97901d6c5702464788da33d8c8fb33b5aaae9cae6b106b322d591853f3d5aca0cd7e833fc3e68800a05160779ac358d73a9f9fa0f39b3b4f7eade1b9f1f1b27353dc39617938.423e41253d6b4f0f199c23ae63e081a3?background=armor.38b45a8d7f07820dc0168d7297f6a0bc46035521891a5aa0466f97901d6c5702464788da33d8c8fb33b5aaae9cae6b106b322d591853f3d5aca0cd7e833fc3e68800a05160779ac358d73a9f9fa0f39b3b4f7eade1b9f1f1b27353dc39617938.423e41253d6b4f0f199c23ae63e081a3&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4IiwianNfb3BlcmF0aW9uIjoianNfcmVhZCJ9 - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1790149162772
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/login/identification?challenge_id=e9753331-4aab-4c9f-aa20-c590949bfc09&platform_id=ml&redirect_url=https%3A%2F%2Fwww.mercadolibre.com%2Fjms%2Fcbt%2Flgz%2Fmsl%2Flogin%2FH4sIAAAAAAAEAz2QW5OqOBSF_4vPh27Ae7-pCEKboIggTE1RQCIEwuVIEKGr__uE7qp5g73X2uvL-prQKiFlwPoaTz4m-FVTEhM2-TOpacju1aMICOKLgvJRQxj-_Y2jH0n4CAvM8KOZfHyNhxKMtpibxlPs0WLuCVuWBndadXz0E8VnpAnwi9vKkAYdjp4Ej9t7SJv_HQ_8t8UN1_AFKZ8hJSioxzhuTyo-TBmrm4_39wZTygHeCvyIQ1RREj3wW1wV72EcV23JhAdp8sn3H36-YQF7hHE--RjZOFo9PjZkpCp_X7WQV6K4lJdL_jGfyyuehXBMSYl5Bf_8ywtoePTXhJE4x4xD4N5IIy0mJjEu10GXINEbvWC1v9MXOt1Ca5_Si8Zkd49OvmwUrgpvvuyUQLEGvHdsX5N6R4SSXaLPWKUSnFLtmiVrnXQEHWinZxW5UHTVS_FtzOL6OqLrJzpsiFn4aXSA9LgzUnSzqpvsN9H0hyX1ZEjjKSB8R_GozfYzUznLMMt7qGw4I00RZwR2PDPtfAqVRAS7joQ3OIyZ6Ga0ZqFKSEtYLDs9KpzeLMebsI7k-TDyhaVVj1pvOL88-dyZGmBAcXKwE0VYcC7XSMGwYX5GC88GL6AA0VQsOnpjmYq-s_7tqYCEszR6CYfwwnsrznNo08K0z7OjnUzBABhUdAn04gzaV_FoezMw7HtT8zPoetOfzksoeYR7S6ePsloameOhGsBwncJh38Fh048dPkvi2zKt9GBd7Kjgx44omztvf6-tReYU0Ne29cldu_hvt0cAtZm6b8sIvBy09J4CttFZPUgpa1J5CwGKU_9CiyB7Crm0cO9p8xR6K2XPnVZImpetsNoLRM_bQRc0q4lgYJTra38YzJe5gY-Xv7BsQ1U-V58vBZua4NEMn8UUVrXn35bKbtudjEtyzG0QrRXLk8JWPXRse54lR0m7Zd3cNPRW9qzOHYStMxdJDi_bBUjQjjI9ape2uZp5NNgZp1mSk2O-mjG8AVdyh-dQNYR7dX4ihE6Ve1EJvZn3EvW6CpncC9tt_7wV9u7l2pl-H06dtraqLl3O3W5jTN1uOvsrxlE_p4PwutXJ5Pv7Pz5qK0FHBAAA%2Fidentification_challenge%2Fcallback%3Fdps%3Darmor.207c2a12192c9b5fdf631a5e74e3cb31ec33fc6723d8d01adca190050b88c7322449bf7431077c4aa013d25d2d9572a027b88f1cfc757ab9e94d7fbb769c2d3701ac20d6ebdef2c6f7aba79c900b13e3c38994092f96e38f225d6ce5d16d4673.270e58d115de520b8651f0dc30eeda00%26rbms%3D - Access to XMLHttpRequest at 'https://www.mercadolibre.com/jms/lgz/background/etid' from origin 'https://global-selling.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1790149163262
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/etid - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1790149163262
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/login/identification?challenge_id=800a1766-b8fe-4746-9a9e-07a50ca0a3a1&platform_id=ml&redirect_url=https%3A%2F%2Fwww.mercadolibre.com%2Fjms%2Fcbt%2Flgz%2Fmsl%2Flogin%2FH4sIAAAAAAAEAz2QW5OqOBSF_4vPh27Ae78pCEKboIggTE1RQCIEw-VIEKGr__uE7qp5g73X2uvL-prQKiVlyPoaTz4m-FVTkhA2-TOpacRu1aMICeKLgvJRQxj-_U3iH0n0iArM8KOZfHyNh1KMtpibxlPs0WLuiVqWhTdadXz0E8VnpAnxi9vKiIYdjp8Ej9tbRJv_HQ_8t8UN1_AFKZ8RJSisxzhuTys-zBirm4_395RWcUSFBlNKyvStwI8kQhUl8QO_JVXx3kQUN0LTFkX06Cfff3hMw0L2iJL75GNk5Ij1-OiIkar8fd1CXoniUl4u-cd8Lq94JsIJv495Ff_8y4toOMLXhJHkjhmHwb2ZxXpCLGKeL4MhQWI0RsHqQDEWBt1Ce5fRs85kb4eOgWwWngavgeyWQLUHvHOdQJd6V4SSU6LPRKMSnFL9kqdrg3QE7Wln5BU5U3QxSvFtzOL6OqbrJ9pviFUEWbyH9KCYGbra1VUOmnj6w5L5MqTJFBC-o3jU5ruZpZ5kmN97qG44I80QZwROMrOc-xSqqQiUjkRXOIyZ6Gq2VqFJSE9ZIrs9KtzeKsebsI7l-TDyRaVdj1p_OL18-dRZOmBAde9AEUVYcC7PzMCwYUFOC98BL6AC0VJtOnoTmYqBu_7tqYCEszRGCYfozHsrTnPo0MJyTrODk07BABhUDQn04gw6F_Hg-DMw7HpLD3Lo-dOfzkso-YR7S7eP81oamZOhGsBwmcJh18Fh048dPksSODKtjHBdKFQIEleULcXf3Wp7kbsFDPRtffTWHv7b7RBAba7t2jIGLxct_aeAHXTS9lLGmkzeQoCSLDjTIsyfwl1aeLeseQq9nbGnoheS7ucrrPUCMe7tYAi63cQwNMv1pd8P1svawMcrWNiOqamfq8-Xii1d8GmOT2IGq9oPrktV2XZH85we7g6I16rtS1Gr7Tu2Pc3Sg6Rf825umUYr-3bnDcLWnYvkDs_bBUiRQpkRt0vHWs18GirmcZbeyeG-mjG8ARdyg6dIM4VbdXoihI6Vd9YIvVq3EvWGBpncC9tt_7wWjvLynNy4DcdOX9tVly3nXrcxp143nf0Vk7if00F4Xet08v39H_dZK8BPBAAA%2Fidentification_challenge%2Fcallback%3Fdps%3Darmor.db6593414ce2341acf46f1204e3b03688029464b1ba68bb1ba5235dc52d7bb3fa80367a2f6b00d8829e804c07265a363feefbf5796228f19f0e8f033b2a4030ee8d747e0dc552eb751cea49442ccd5c8b9ca2a714f787b1c6be51ffefa3394cd.16a4cb6dc95341821b9cc6c3a3e39670%26rbms%3D - Access to fetch at 'https://www.mercadolibre.com/jms/lgz/background/session/armor.51f75e207c10d65ff20bcc275114a0a133a54086467446996aa183c0f9427187984720becc9596afee7d11df6fad83e1b8977dedbae64abc75a0ba37107a092b19dc55864d9ef659329224f3329e61b1dd70a04bc87818229c46ac6c109145d4.e84c64a504351be0ef62b0e066a034c8?background=armor.51f75e207c10d65ff20bcc275114a0a133a54086467446996aa183c0f9427187984720becc9596afee7d11df6fad83e1b8977dedbae64abc75a0ba37107a092b19dc55864d9ef659329224f3329e61b1dd70a04bc87818229c46ac6c109145d4.e84c64a504351be0ef62b0e066a034c8&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4IiwianNfb3BlcmF0aW9uIjoianNfcmVhZCJ9' from origin 'https://global-selling.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1790149163266
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/session/armor.51f75e207c10d65ff20bcc275114a0a133a54086467446996aa183c0f9427187984720becc9596afee7d11df6fad83e1b8977dedbae64abc75a0ba37107a092b19dc55864d9ef659329224f3329e61b1dd70a04bc87818229c46ac6c109145d4.e84c64a504351be0ef62b0e066a034c8?background=armor.51f75e207c10d65ff20bcc275114a0a133a54086467446996aa183c0f9427187984720becc9596afee7d11df6fad83e1b8977dedbae64abc75a0ba37107a092b19dc55864d9ef659329224f3329e61b1dd70a04bc87818229c46ac6c109145d4.e84c64a504351be0ef62b0e066a034c8&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4IiwianNfb3BlcmF0aW9uIjoianNfcmVhZCJ9 - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1790149163266
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/login/identification?challenge_id=98dc49d6-1e44-437f-9566-0f16a3302241&platform_id=ml&redirect_url=https%3A%2F%2Fwww.mercadolibre.com%2Fjms%2Fcbt%2Flgz%2Fmsl%2Flogin%2FH4sIAAAAAAAEAz2QXZNzShSF_0uuXzPI99wlhDDREhHCqVMK3aGlG2-0CFPz30-bqTp37L3WXk-vrwmpMlxGrK_R5GOCXjXBKWaTP5OaxOxWPWiEIV9QwkcNZuj3N01-JPEjpoihRzP5-BoPZQhuETeNp9ijRdwTtyyPbqTq-Ognis9wE6EXt5UxiTqUPDEat7eYNP87Huhvixqu4QtcPmOCYVSPcdyeVXyYM1Y3H-_vDSKEA7xR9EhjWBGcPNBbWtH3JiaoEZqW0vjRT77_8PsNi9gjTu-TjxGOs9Xja2OGq_L3WQt5JYpLebnkH_O5vOJhEKUEl4h38M-_vIGGZ39NGE7viHEK1Jt5oqfYxub5MhgSwEZjUFaHirEwyBY4u5ycdSb7O3gMZZP6GriGsldaqjOgneeGutR7IpDcEn6mGpHAlOiXIlsbuMNwTzqjqPCZwItRim9jFtfXCVk_4X6DbRrmyR6Qg2Lm8OpUVzlskukPSx7IgKRTC_MdQaO22M1s9SSD4t4DdcMZSQ45o-WmM9u9T4GaiZbS4fgKhjETXs3WppoE9YylstdD6vV2Od4EdSLPh5EvLp161AbD6RXIp87WLWap3t1SRBFQzuWbuTVsWFgQGrjWy1It0VYdMnpTmYiht_7tiQLMWRqjBEN85r3R0xy4hNruaXZws6k1WAyohmT14gy4F_HgBjNr2PW2HhbAD6Y_nZdACjD3ll6fFLU0MqdDNVjDZQqGXQeGTT92-Cxx6MqkMqI1VYgQpp4o20qwu9XOovAoCPVtffTXPvrb7aAF20LbtWVivTy4DJ4CcuFJ20s5a3J5CyyY5uGZ0Kh4Cndp4d_y5in0Ts6eik4lPShWSOsFbNzbwRB0p0lAZJbrS78f7Je9AY9XuHBcU1M_V58vFdm6EJACncQcVHUQXpeqsu2O5jk73F0rWatOIMWttu_Y9jTLDpJ-Lbq5bRqtHDidPwhbby7iOzhvF1YGFcKMpF269moWkEgxj7Psjg_31YyhjXXBN3CKNVO4VacnhPBY-WcNk6t9K2FvaIDJvbDd9s8rdZWX7xbGbTh2-tqpunw597uNOfW76eyvmCb9nAzC61pnk-_v_wBb7wUeSAQAAA%2Fidentification_challenge%2Fcallback%3Fdps%3Darmor.68b3970cd078d0e216589dec25f2b4aceea5eb30ad51639ad327efe40a5283881783cf7e78fc15d151836588261fd9af4eaac5b49cc59025ee2c409461f29d34e88b9b57cdba0f37f8a0fefcd49967c1b2ef7b80acede0254cc21a90e03002c5.5fef3b70cd837521682a9c4a994ec8fe%26rbms%3D - Access to XMLHttpRequest at 'https://www.mercadolibre.com/jms/lgz/background/etid' from origin 'https://global-selling.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1790149163514
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/etid - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1790149163514
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/login/identification?challenge_id=800a1766-b8fe-4746-9a9e-07a50ca0a3a1&platform_id=ml&redirect_url=https%3A%2F%2Fwww.mercadolibre.com%2Fjms%2Fcbt%2Flgz%2Fmsl%2Flogin%2FH4sIAAAAAAAEAz2QW5OqOBSF_4vPh27Ae78pCEKboIggTE1RQCIEw-VIEKGr__uE7qp5g73X2uvL-prQKiVlyPoaTz4m-FVTkhA2-TOpacRu1aMICeKLgvJRQxj-_U3iH0n0iArM8KOZfHyNh1KMtpibxlPs0WLuiVqWhTdadXz0E8VnpAnxi9vKiIYdjp8Ej9tbRJv_HQ_8t8UN1_AFKZ8RJSisxzhuTys-zBirm4_395RWcUSFBlNKyvStwI8kQhUl8QO_JVXx3kQUN0LTFkX06Cfff3hMw0L2iJL75GNk5Ij1-OiIkar8fd1CXoniUl4u-cd8Lq94JsIJv495Ff_8y4toOMLXhJHkjhmHwb2ZxXpCLGKeL4MhQWI0RsHqQDEWBt1Ce5fRs85kb4eOgWwWngavgeyWQLUHvHOdQJd6V4SSU6LPRKMSnFL9kqdrg3QE7Wln5BU5U3QxSvFtzOL6OqbrJ9pviFUEWbyH9KCYGbra1VUOmnj6w5L5MqTJFBC-o3jU5ruZpZ5kmN97qG44I80QZwROMrOc-xSqqQiUjkRXOIyZ6Gq2VqFJSE9ZIrs9KtzeKsebsI7l-TDyRaVdj1p_OL18-dRZOmBAde9AEUVYcC7PzMCwYUFOC98BL6AC0VJtOnoTmYqBu_7tqYCEszRGCYfozHsrTnPo0MJyTrODk07BABhUDQn04gw6F_Hg-DMw7HpLD3Lo-dOfzkso-YR7S7eP81oamZOhGsBwmcJh18Fh048dPksSODKtjHBdKFQIEleULcXf3Wp7kbsFDPRtffTWHv7b7RBAba7t2jIGLxct_aeAHXTS9lLGmkzeQoCSLDjTIsyfwl1aeLeseQq9nbGnoheS7ucrrPUCMe7tYAi63cQwNMv1pd8P1svawMcrWNiOqamfq8-Xii1d8GmOT2IGq9oPrktV2XZH85we7g6I16rtS1Gr7Tu2Pc3Sg6Rf825umUYr-3bnDcLWnYvkDs_bBUiRQpkRt0vHWs18GirmcZbeyeG-mjG8ARdyg6dIM4VbdXoihI6Vd9YIvVq3EvWGBpncC9tt_7wWjvLynNy4DcdOX9tVly3nXrcxp143nf0Vk7if00F4Xet08v39H_dZK8BPBAAA%2Fidentification_challenge%2Fcallback%3Fdps%3Darmor.db6593414ce2341acf46f1204e3b03688029464b1ba68bb1ba5235dc52d7bb3fa80367a2f6b00d8829e804c07265a363feefbf5796228f19f0e8f033b2a4030ee8d747e0dc552eb751cea49442ccd5c8b9ca2a714f787b1c6be51ffefa3394cd.16a4cb6dc95341821b9cc6c3a3e39670%26rbms%3D - Access to XMLHttpRequest at 'https://www.mercadolibre.com/jms/lgz/background/etid' from origin 'https://global-selling.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1790149163765
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/etid - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1790149163765
+    }
+  ]
+}

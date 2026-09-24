@@ -28,6 +28,7 @@ function products1688DisplayImageUrl(value) {
     const parsed = new URL(source, window.location.origin);
     const hostname = parsed.hostname.toLowerCase();
     if (/^cbu\d+\.alicdn\.com$/.test(hostname) && parsed.pathname.startsWith("/img/ibank/")) {
+      parsed.pathname = parsed.pathname.replace(/\.(jpe?g|png|webp)(?:_[^/?#]*)+$/i, ".$1");
       return `/api/ai-original-products/source-image?url=${encodeURIComponent(parsed.href)}`;
     }
   } catch (_error) {
@@ -120,15 +121,20 @@ function products1688Date(value) {
   return new Intl.DateTimeFormat("zh-CN", {year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"}).format(date);
 }
 
+function products1688SourceValue(row, key) {
+  const original = products1688Original(row);
+  return Object.prototype.hasOwnProperty.call(original, key) ? original[key] : row[key];
+}
+
 function products1688Weight(row) {
   const original = products1688Original(row);
-  const weight = Number(original.weight_g ?? row.weight_g);
+  const weight = Number(products1688SourceValue(row, "weight_g"));
   return Number.isFinite(weight) && weight > 0 ? `${weight.toLocaleString("zh-CN")} g` : "—";
 }
 
 function products1688Dimensions(row) {
   const original = products1688Original(row);
-  const values = [original.package_length_cm ?? row.package_length_cm, original.package_width_cm ?? row.package_width_cm, original.package_height_cm ?? row.package_height_cm];
+  const values = ["package_length_cm", "package_width_cm", "package_height_cm"].map(key => products1688SourceValue(row, key));
   const present = values.map(value => Number(value)).filter(value => Number.isFinite(value) && value > 0);
   return present.length === 3 ? `${present.map(value => value.toLocaleString("zh-CN")).join(" × ")} cm` : "—";
 }
@@ -170,6 +176,8 @@ function products1688UpdateSelection() {
     selectAll.checked = visible > 0 && products1688Rows.every(row => products1688Selected.has(Number(row.id)));
     selectAll.indeterminate = count > 0 && !selectAll.checked;
   }
+  const deleteButton = document.getElementById("products-1688-delete");
+  if (deleteButton) deleteButton.disabled = !products1688Selected.size || aiOriginalDeleteRunning;
   const reviewButton = document.getElementById("products-1688-review-submit");
   if (reviewButton) reviewButton.disabled = count === 0 || !document.getElementById("products-1688-review-status")?.value;
 }
@@ -198,7 +206,7 @@ function products1688RenderRows() {
       <td class="p1688-check-cell"><input type="checkbox" aria-label="选择 ${products1688Escape(title)}" ${products1688Selected.has(Number(row.id)) ? "checked" : ""} onchange="products1688Toggle(${Number(row.id)}, this.checked)"></td>
       <td><div class="p1688-product-cell">${linkedImage}<div class="p1688-product-copy">${linkedTitle}</div></div></td>
       <td title="${products1688Escape(products1688Category(row))}">${products1688Escape(products1688Category(row))}</td>
-      <td><span class="p1688-price">${products1688Money(original.price ?? row.price)}</span><small class="p1688-muted"> CNY</small></td>
+      <td><span class="p1688-price">${products1688Money(products1688SourceValue(row, "price"))}</span><small class="p1688-muted"> CNY</small></td>
       <td>${row.net_proceeds_usd === null || row.net_proceeds_usd === undefined || row.net_proceeds_usd === "" ? '<span class="p1688-muted">—</span>' : `<span class="p1688-price">$${products1688Escape(Number(row.net_proceeds_usd).toFixed(2))}</span>`}</td>
       <td>${products1688Escape(products1688Weight(row))}</td>
       <td>${products1688Escape(products1688Dimensions(row))}</td>
@@ -287,6 +295,10 @@ async function products1688UpdateReviewStatus(itemIds, reviewStatus, control = n
   }
 }
 
+async function products1688DeleteSelected() {
+  await deleteAiOriginalProductSelection([...products1688Selected], products1688SetStatus);
+}
+
 async function products1688ApplyReviewStatus() {
   const status = document.getElementById("products-1688-review-status")?.value || "";
   await products1688UpdateReviewStatus([...products1688Selected], status);
@@ -302,6 +314,11 @@ async function load1688Products(resetPage = true) {
     const payload = await response.json();
     if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
     const data = payload.data || {};
+    const lastPage = Math.max(1, Math.ceil(Number(data.total || 0) / products1688PageSize));
+    if (products1688Page > lastPage) {
+      products1688Page = lastPage;
+      return await load1688Products(false);
+    }
     products1688Rows = Array.isArray(data.rows) ? data.rows : [];
     products1688Selected = new Set([...products1688Selected].filter(id => products1688Rows.some(row => Number(row.id) === id)));
     const totalValue = document.getElementById("products-1688-total-value");
@@ -347,7 +364,7 @@ function products1688VariationLabel(variation) {
 function products1688VariationRows(variations) {
   const rows = Array.isArray(variations) ? variations.filter(item => item && typeof item === "object").slice(0, 200) : [];
   if (!rows.length) return '<div class="p1688-variant-empty">采集快照没有 SKU 变体。</div>';
-  return `<div class="p1688-variant-wrap"><table><thead><tr><th>变体</th><th>SKU（选填）</th><th>库存</th><th>采购价</th><th>加价</th><th>加重</th><th>图片</th></tr></thead><tbody>${rows.map(variation => {
+  return `<div class="p1688-variant-wrap"><table><thead><tr><th>变体</th><th>SKU（选填）</th><th>库存</th><th>采购价</th><th>重量</th><th>包装尺寸</th><th>加价</th><th>加重</th><th>图片</th></tr></thead><tbody>${rows.map(variation => {
     const imageValues = [variation.image_url, variation.image, ...(Array.isArray(variation.images) ? variation.images : [])]
       .map(value => typeof value === "object" ? (value.url || value.source || value.src || "") : value)
       .filter(value => /^https?:\/\//i.test(String(value || ""))).slice(0, 4);
@@ -357,7 +374,7 @@ function products1688VariationRows(variations) {
     const extraPrice = variation.price_addition ?? variation.additional_price ?? variation.markup ?? "—";
     const extraWeight = variation.weight_addition_g ?? variation.additional_weight_g ?? variation.added_weight_g ?? "—";
     const images = imageValues.length ? imageValues.map(url => `<a href="${products1688Escape(url)}" target="_blank" rel="noopener noreferrer"><img src="${products1688Escape(products1688DisplayImageUrl(url))}" alt="变体图片" loading="lazy" referrerpolicy="no-referrer" onerror="products1688ImageError(this)"></a>`).join("") : "—";
-    return `<tr><td>${products1688Escape(products1688VariationLabel(variation))}</td><td>${products1688Escape(sku || "—")}</td><td>${products1688Escape(stock)}</td><td>${products1688Escape(price)}</td><td>${products1688Escape(extraPrice)}</td><td>${products1688Escape(extraWeight)}</td><td><div class="p1688-variant-images">${images}</div></td></tr>`;
+    return `<tr><td>${products1688Escape(products1688VariationLabel(variation))}</td><td>${products1688Escape(sku || "—")}</td><td>${products1688Escape(stock)}</td><td>${products1688Escape(price)}</td><td>${products1688Escape(products1688Weight(variation))}</td><td>${products1688Escape(products1688Dimensions(variation))}</td><td>${products1688Escape(extraPrice)}</td><td>${products1688Escape(extraWeight)}</td><td><div class="p1688-variant-images">${images}</div></td></tr>`;
   }).join("")}</tbody></table></div>`;
 }
 
@@ -378,7 +395,7 @@ function products1688OpenDetail(id) {
     <div class="p1688-detail-facts">
       <div class="p1688-detail-fact"><label>商品标题</label><span>${sourceUrl ? `<a href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">${products1688Escape(title)} ↗</a>` : products1688Escape(title)}</span></div>
       <div class="p1688-detail-fact"><label>产品分类</label><span>${products1688Escape(products1688Category(row))}</span></div>
-      <div class="p1688-detail-fact"><label>采购价</label><span class="p1688-price">${products1688Money(original.price ?? row.price)} CNY</span></div>
+      <div class="p1688-detail-fact"><label>采购价</label><span class="p1688-price">${products1688Money(products1688SourceValue(row, "price"))} CNY</span></div>
       <div class="p1688-detail-fact"><label>净收益</label><span>${row.net_proceeds_usd === null || row.net_proceeds_usd === undefined || row.net_proceeds_usd === "" ? "—" : `$${products1688Escape(Number(row.net_proceeds_usd).toFixed(2))} USD`}</span></div>
       <div class="p1688-detail-fact"><label>实重</label><span>${products1688Escape(products1688Weight(row))}</span></div>
       <div class="p1688-detail-fact"><label>包装尺寸</label><span>${products1688Escape(products1688Dimensions(row))}</span></div>

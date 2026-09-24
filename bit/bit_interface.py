@@ -1,5 +1,6 @@
 
 import queue
+import base64
 import json
 import ipaddress
 import random
@@ -408,6 +409,11 @@ DAILY_AGENT_DB_POST_PATHS = frozenset({
     "/api/db/appeal-chat-records",
     "/api/db/window-anomalies",
     "/api/db/window-anomalies/resolve",
+})
+# The Playwright核重核价 worker owns the browser on the Agent computer but
+# persists its business state through the same server-side Store proxy.
+AI_WEIGHT_PRICE_AGENT_DB_POST_PATHS = frozenset({
+    "/api/db/ai-weight-price/store",
 })
 INTERNAL_LOOPBACK_DENIED_PREFIXES = (
     "/api/db/workbench/",
@@ -1915,7 +1921,7 @@ BROWSER_EXTENSION_DIR = resolve_browser_extension_dir()
 def browser_extension_version(extension_dir=None):
     manifest_path = Path(extension_dir or BROWSER_EXTENSION_DIR) / "manifest.json"
     if not manifest_path.is_file():
-        return "unavailable"
+        return "unknown"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     return str(manifest.get("version") or "unknown")
 
@@ -1936,6 +1942,7 @@ BROWSER_EXTENSION_PACKAGE_FILES = (
     "content-1688.js",
     "content-zying.js",
     "zying-page.js",
+    "1688-page.js",
     "purchase-tracking-content.js",
     "content.css",
     "popup.html",
@@ -2267,7 +2274,14 @@ def local_agent_required(view_func):
                 "status": "error",
                 "message": "Agent 必须连接服务端工作台",
             }), 503
-        request_token = str(request.headers.get("X-Local-Agent-Token") or "")
+        # Business workers use the database API client, whose shared header is
+        # X-Internal-Token; accept it here as the same scoped Agent credential
+        # so a worker can fetch its one-time model key without persisting it.
+        request_token = str(
+            request.headers.get("X-Local-Agent-Token")
+            or request.headers.get("X-Internal-Token")
+            or ""
+        )
         shared_token = str(
             os.environ.get("BIT_LOCAL_AGENT_TOKEN")
             or os.environ.get("BIT_DB_API_TOKEN")
@@ -2350,7 +2364,7 @@ def internal_api_required(view_func):
             # exact Agent owns a running daily-task job.
             if request.path in INTERNAL_AGENT_ALLOWED_PATHS and request.method == "GET":
                 return view_func(*args, **kwargs)
-            if _daily_agent_internal_api_allowed(agent_claims):
+            if _agent_internal_api_allowed(agent_claims):
                 return view_func(*args, **kwargs)
         # Keep legacy loopback access for operational database routes used by
         # the single-machine server.  Sensitive account, token and role
@@ -2366,7 +2380,7 @@ def internal_api_required(view_func):
     return wrapper
 
 
-def _daily_agent_internal_api_allowed(claims):
+def _agent_internal_api_allowed(claims):
     method = str(request.method or "GET").upper()
     path = str(request.path or "")
     route_allowed = (
@@ -2375,21 +2389,35 @@ def _daily_agent_internal_api_allowed(claims):
             path in DAILY_AGENT_DB_GET_PATHS
             or re.fullmatch(r"/api/db/official-infractions/live/jobs/[A-Za-z0-9_-]+", path)
         )
-    ) or (method == "POST" and path in DAILY_AGENT_DB_POST_PATHS)
+    ) or (method == "POST" and path in DAILY_AGENT_DB_POST_PATHS | AI_WEIGHT_PRICE_AGENT_DB_POST_PATHS)
     if not route_allowed:
         return False
     agent_id = str((claims or {}).get("agent_id") or "").strip()
     if not agent_id or agent_id == "*":
         return False
+    job_types = []
+    if method == "POST" and path in AI_WEIGHT_PRICE_AGENT_DB_POST_PATHS:
+        job_types.append("ai_weight_price")
+    if method == "GET" and (
+        path in DAILY_AGENT_DB_GET_PATHS
+        or re.fullmatch(r"/api/db/official-infractions/live/jobs/[A-Za-z0-9_-]+", path)
+    ) or method == "POST" and path in DAILY_AGENT_DB_POST_PATHS:
+        job_types.append("daily_task")
     try:
-        jobs = get_local_agent_store().list_jobs(
-            agent_id=agent_id,
-            job_type="daily_task",
-            limit=10,
-        )
+        jobs = [
+            job
+            for job_type in job_types
+            for job in get_local_agent_store().list_jobs(
+                agent_id=agent_id, job_type=job_type, limit=10
+            )
+        ]
     except (KeyError, ValueError):
         return False
     return any(job.get("status") in {"running", "stopping"} for job in jobs)
+
+
+# Kept as a compatibility alias for older imports and tests.
+_daily_agent_internal_api_allowed = _agent_internal_api_allowed
 
 
 def _required_workbench_permissions(path, method):
@@ -2430,9 +2458,9 @@ def _required_workbench_permissions(path, method):
     if path.startswith("/api/run_shensu"):
         return ("appeal.execute",)
     if path == "/api/execution-agents":
-        return ("appeal.view", "tasks.view", "tasks.execute")
+        return ("appeal.view", "tasks.view", "tasks.execute", "ai_weight_price.view")
     if path == "/api/local-agents/download":
-        return ("appeal.execute", "tasks.execute")
+        return ("appeal.execute", "tasks.execute", "ai_weight_price.execute")
     if path == "/api/collections/options":
         return (
             "appeal.view",
@@ -2683,7 +2711,11 @@ ai_weight_price_service = AIWeightPriceService(
     # unrelated imports must not read or migrate AI-weight-price state.
     migrate_legacy_state=os.environ.get("BIT_EXECUTION_TARGET") != "agent",
 )
-app.register_blueprint(create_ai_weight_price_blueprint(ai_weight_price_service, _authorize_ai_weight_price))
+app.register_blueprint(create_ai_weight_price_blueprint(
+    ai_weight_price_service,
+    _authorize_ai_weight_price,
+    agent_dispatch=lambda action, data: enqueue_local_agent_ai_weight_price(action, data),
+))
 
 
 AI_WEIGHT_PRICE_STORE_METHODS = frozenset({
@@ -9466,6 +9498,34 @@ def api_local_agent_job_event(job_id):
         return jsonify({"status": "error", "message": str(exc)}), 400
 
 
+@app.route("/api/local-agents/jobs/<job_id>/credentials", methods=["GET"])
+@local_agent_required
+def api_local_agent_job_credentials(job_id):
+    """Serve one account credential only to its active AWP Agent job."""
+    provider = str(request.args.get("provider") or "").strip().lower()
+    if provider != "dashscope":
+        return jsonify({"status": "error", "message": "不支持的 Agent 模型凭证"}), 400
+    try:
+        job = get_local_agent_store().get_job(job_id)
+        claims = getattr(g, "local_agent_claims", {}) or {}
+        if (
+            not job
+            or job.get("job_type") != "ai_weight_price"
+            or job.get("agent_id") != claims.get("agent_id")
+            or job.get("status") not in {"running", "stopping"}
+        ):
+            return jsonify({"status": "error", "message": "Agent 核重核价任务不存在或已结束"}), 404
+        user_id = int(job.get("created_by_id") or 0)
+        if not user_id:
+            return jsonify({"status": "error", "message": "Agent 任务缺少创建账号"}), 409
+        credential = browser_extension_models.get_api_key(user_id, provider, app.secret_key)
+        if not credential:
+            return jsonify({"status": "error", "message": "当前账号未配置可用的 DashScope API Key"}), 409
+        return jsonify({"status": "success", "data": {"api_key": credential}})
+    except (KeyError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
 @app.route("/api/local-agents/business-bundle", methods=["GET"])
 @local_agent_required
 def api_local_agent_business_bundle():
@@ -9771,6 +9831,7 @@ def api_download_local_agent():
                for permission in (
                    "appeal.execute",
                    "tasks.execute",
+                   "ai_weight_price.execute",
                )):
         return jsonify({"status": "error", "message": "当前账号没有本机 Agent 任务执行权限"}), 403
     try:
@@ -9948,6 +10009,220 @@ def enqueue_local_agent_daily_task(agent_id, params):
         return jsonify({"status": "error", "message": str(exc)}), 409
     return jsonify({"status": "success", "data": daily_agent_task_snapshot(job),
                     "message": f"任务已提交到 {agent['name']}，等待 Agent 执行"})
+
+
+def ai_weight_price_agent_task_snapshot(job, *, include_log=False):
+    """Return the safe control-plane view for an Agent-hosted AWP action."""
+    payload = dict(job.get("payload") or {})
+    action = str(payload.get("action") or "").strip()
+    params = {
+        key: value
+        for key, value in payload.items()
+        if key not in {"actor", "runtime_api_key", "dashscope_api_key"}
+    }
+    active = job.get("status") not in TERMINAL_JOB_STATUSES
+
+    def timestamp(value):
+        return datetime.fromtimestamp(value).strftime("%Y-%m-%d %H:%M:%S") if value else ""
+
+    state = {
+        "task_id": job["job_id"],
+        "agent_id": job["agent_id"],
+        "agent_name": payload.get("agent_name") or job["agent_id"],
+        "name": "AI核重核价 · " + (action or "任务"),
+        "action": action,
+        "execution_target": "agent",
+        "execution_terminal": payload.get("agent_name") or job["agent_id"],
+        "running": active,
+        "can_stop": active,
+        "status": job.get("status"),
+        "message": job.get("message") or "",
+        "stop_requested": bool(job.get("cancel_requested")),
+        "started_at": timestamp(job.get("started_at")),
+        "created_at": timestamp(job.get("created_at")),
+        "finished_at": timestamp(job.get("finished_at")),
+        "params": params,
+        "result": job.get("result") or {},
+    }
+    if include_log:
+        state["log"] = get_local_agent_store().recent_log(job["job_id"])
+    return state
+
+
+def _ai_weight_price_active_jobs(store, agent_id):
+    return [
+        job for job in store.list_jobs(agent_id=agent_id, job_type="ai_weight_price", limit=100)
+        if job.get("status") in {"queued", "running", "stopping"}
+    ]
+
+
+def _mark_ai_weight_price_agent_cancelled(actor, *, terminate=False):
+    """Publish cancellation immediately because the Agent monitor may kill the worker."""
+    with ai_weight_price_service.store.actor_scope(actor, view_all=False):
+        run = ai_weight_price_service.store.state("run", {}) or {}
+        if run.get("outcome") != "running":
+            return
+        run_id = run.get("run_id")
+        if terminate:
+            ai_weight_price_service.store.clear_run(run_id)
+            for key, value in (
+                ("run", {}), ("pipeline_current", None), ("visual_progress", {}),
+                ("circuit", None), ("run_error", None), ("action_error", None),
+                ("run_selection", None), ("collection", None),
+                ("latest_run_id", None), ("discard_run_id", None),
+                ("stop_requested", False),
+            ):
+                ai_weight_price_service.store.set_state(key, value)
+            ai_weight_price_service.store.log("Agent 任务已终止并清空本次批次数据")
+            return
+        ai_weight_price_service.store.set_state("stop_requested", True)
+        ai_weight_price_service.store.set_state(
+            "run",
+            {
+                **run,
+                "outcome": "stopped",
+                "finished_at": time.time(),
+                "message": "已向 Agent 发送停止请求，当前操作结束后保留进度",
+            },
+        )
+
+
+def enqueue_local_agent_ai_weight_price(action, data):
+    """Dispatch one AWP browser action to the selected workstation Agent."""
+    data = dict(data or {})
+    action = str(action or "").strip().lower()
+    allowed_actions = {
+        "login/open", "login/confirm", "login/supplier", "categories/refresh",
+        "start", "continue", "stop", "terminate", "skip-current", "retry",
+        "manual-execute", "probe",
+    }
+    if action not in allowed_actions:
+        return jsonify({"status": "error", "message": "AI核重核价 Agent 操作无效"}), 400
+
+    store = get_local_agent_store()
+    try:
+        agent_id = normalize_agent_id(data.get("agent_id"))
+        agent = store.get_agent(agent_id, online_seconds=LOCAL_AGENT_ONLINE_SECONDS)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    if not agent or not agent.get("online"):
+        return jsonify({"status": "error", "message": "所选 Agent 不在线，请启动 Agent 并刷新电脑"}), 409
+    if "ai_weight_price" not in agent.get("capabilities", ()):
+        return jsonify({"status": "error", "message": "请将所选电脑的 Agent 更新至支持核重核价的版本"}), 409
+
+    user = get_current_workbench_user() or {}
+    user_id = user.get("id")
+    is_admin = bool(user.get("is_platform_admin") or user.get("role_key") == "super_admin")
+    active_jobs = _ai_weight_price_active_jobs(store, agent_id)
+    active_user_jobs = [
+        job for job in store.list_jobs(job_type="ai_weight_price", limit=500)
+        if job.get("status") in {"queued", "running", "stopping"}
+        and str(job.get("created_by_id") or "") == str(user_id or "")
+    ]
+    other_agent_job = next(
+        (job for job in active_user_jobs if job.get("agent_id") != agent_id),
+        None,
+    )
+    if other_agent_job and action not in {"stop", "terminate"}:
+        return jsonify({
+            "status": "error",
+            "message": "当前账号已有核重核价任务在另一台 Agent 上执行，请先停止或等待完成",
+        }), 409
+    foreign_job = next(
+        (
+            job for job in active_jobs
+            if not is_admin
+            and str(job.get("created_by_id") or "") != str(user_id or "")
+        ),
+        None,
+    )
+    if foreign_job:
+        return jsonify({
+            "status": "error",
+            "message": f"{agent['name']} 正在执行其他账号的核重核价任务，请稍后再试",
+        }), 409
+
+    # Stop/terminate are control-plane operations on the already-running job;
+    # enqueueing a second job would never be claimed while the browser worker
+    # is occupied.
+    if action in {"stop", "terminate"}:
+        job = active_jobs[0] if active_jobs else None
+        if not job:
+            return jsonify({"status": "error", "message": "当前 Agent 没有正在运行的核重核价任务"}), 409
+        if action == "terminate":
+            actor = {
+                "id": user_id,
+                "username": user.get("username") or "",
+                "display_name": user.get("display_name") or user.get("username") or "",
+            }
+            with ai_weight_price_service.store.actor_scope(actor, view_all=False):
+                ai_weight_price_service.store.set_state(
+                    "agent_terminate_requested", job["job_id"]
+                )
+            _mark_ai_weight_price_agent_cancelled(actor, terminate=True)
+        else:
+            actor = {
+                "id": user_id,
+                "username": user.get("username") or "",
+                "display_name": user.get("display_name") or user.get("username") or "",
+            }
+            _mark_ai_weight_price_agent_cancelled(actor, terminate=False)
+        store.request_cancel(job["job_id"])
+        updated = store.get_job(job["job_id"])
+        message = (
+            "已向 Agent 发送终止请求；当前浏览器操作结束后会清空本次批次"
+            if action == "terminate"
+            else "已向 Agent 发送停止请求；当前操作结束后保留进度"
+        )
+        return jsonify({
+            "status": "success",
+            "data": ai_weight_price_agent_task_snapshot(updated, include_log=True),
+            "message": message,
+        })
+
+    if active_jobs:
+        return jsonify({
+            "status": "error",
+            "message": "当前 Agent 已有核重核价操作正在执行，请先停止或等待完成",
+        }), 409
+    if action == "retry" and not str(data.get("task_id") or "").strip():
+        return jsonify({"status": "error", "message": "重试任务缺少商品编号"}), 400
+
+    actor = {
+        "id": user_id,
+        "username": user.get("username") or "",
+        "display_name": user.get("display_name") or user.get("username") or "",
+    }
+    # Keep browser-operation parameters explicit and never accept a model key
+    # from the browser. The Agent retrieves the account-bound key just-in-time.
+    payload = {
+        key: value for key, value in data.items()
+        if key not in {"agent_id", "runtime_api_key", "dashscope_api_key", "deepseek_api_key"}
+    }
+    payload.update({
+        "action": action,
+        "execution_target": "agent",
+        "agent_id": agent_id,
+        "agent_name": agent["name"],
+        "actor": actor,
+    })
+    try:
+        job = store.enqueue_job(
+            secrets.token_hex(16),
+            agent_id,
+            "ai_weight_price",
+            payload,
+            required_version=current_local_agent_bundle()["version"],
+            created_by_id=user_id,
+            created_by_name=actor["display_name"],
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 409
+    return jsonify({
+        "status": "success",
+        "data": ai_weight_price_agent_task_snapshot(job),
+        "message": f"已提交到 {agent['name']}，等待 Agent 执行",
+    })
 
 
 def enqueue_local_agent_appeal(
@@ -17558,7 +17833,7 @@ def api_browser_extension_zying_options():
         credential = _browser_extension_zying_credential(data)
         categories = _remember_browser_extension_zying_categories(data)
         cache_key = _browser_extension_zying_options_cache_key(credential, categories)
-        if _BROWSER_EXTENSION_ZYING_OPTIONS_CACHE_SECONDS:
+        if _BROWSER_EXTENSION_ZYING_OPTIONS_CACHE_SECONDS and not data.get("refresh") and not data.get("developers"):
             with _browser_extension_zying_options_cache_lock:
                 cached = _browser_extension_zying_options_cache.get(cache_key)
                 if cached and cached["expires_at"] > time.monotonic():
@@ -17566,8 +17841,30 @@ def api_browser_extension_zying_options():
         developers = bit_zying_caiji.normalize_zying_product_developers(
             data.get("developers")
         )
+        developer_warning = ""
         if developers:
             bit_zying_caiji.cache_zying_product_developers(credential, developers)
+        elif data.get("refresh"):
+            try:
+                developers = bit_zying_caiji.list_zying_product_developers(
+                    credential, force_refresh=True
+                )
+            except Exception as exc:
+                # The public server must never start a local Edge merely to
+                # populate this optional selector. Use names already observed
+                # in ZYing snapshots and keep category refresh available.
+                logging.warning("智赢实时开发人员读取失败，使用历史快照：%s", exc)
+                known = db_list_mercado_product_items(
+                    source_type="zying", limit=1000, offset=0
+                )
+                developers = bit_zying_caiji.normalize_zying_product_developers([
+                    {
+                        "id": row.get("product_developer_id"),
+                        "name": row.get("product_developer_name"),
+                    }
+                    for row in (known.get("rows") or [])
+                ])
+                developer_warning = "当前网页未返回人员目录，已使用历史智赢商品中的开发人员"
         else:
             developers = bit_zying_caiji.list_zying_product_developers(credential)
         synced = db_sync_zying_product_developers(developers)
@@ -17576,6 +17873,7 @@ def api_browser_extension_zying_options():
             "data": {
                 "categories": categories,
                 "developers": developers,
+                "developer_warning": developer_warning,
                 "synced": synced,
             },
         }
@@ -17776,6 +18074,7 @@ def _browser_extension_ai_weight_price_snapshot():
         ),
         "categories": ai_weight_price_service.store.state("categories", []),
         "categories_meta": ai_weight_price_service.store.state("categories_meta", {}),
+        "developers": ai_weight_price_service.store.state("developers", []),
         "max_pages": int(config.get("max_pages") or 100),
         "client_config": {
             "selectors": {
@@ -17799,6 +18098,51 @@ def _browser_extension_ai_weight_price_snapshot():
             "execution_target": "extension",
         })
     return snapshot
+
+
+_BROWSER_EXTENSION_AI_WEIGHT_PRICE_IMAGE_HOSTS = (
+    # 智赢的美客多版商品主图通常来自 Mercado Libre CDN；历史采集记录
+    # 也可能保存智赢 OSS 或 1688 CDN 地址。三者都是本流程的受信图片源。
+    "hzzying.com",
+    "mlstatic.com",
+    "alicdn.com",
+)
+
+
+def _browser_extension_ai_weight_price_image_host_allowed(hostname):
+    hostname = str(hostname or "").lower().rstrip(".")
+    return any(hostname == root or hostname.endswith("." + root)
+               for root in _BROWSER_EXTENSION_AI_WEIGHT_PRICE_IMAGE_HOSTS)
+
+
+def _browser_extension_ai_weight_price_image(url):
+    """Fetch a trusted ZYing/Mercado/1688 product image for image search."""
+    source = str(url or "").strip()
+    parsed = urlsplit(source)
+    hostname = str(parsed.hostname or "").lower()
+    if (
+        parsed.scheme != "https"
+        or parsed.username
+        or parsed.password
+        or parsed.port not in (None, 443)
+        or not _browser_extension_ai_weight_price_image_host_allowed(hostname)
+    ):
+        raise ValueError("智赢商品主图地址不受支持")
+    response = requests.get(
+        source,
+        headers={"Accept": "image/avif,image/webp,image/png,image/jpeg,*/*", "Referer": "https://meli.zying.net/"},
+        timeout=(5, 20),
+        allow_redirects=False,
+    )
+    response.raise_for_status()
+    content_type = str(response.headers.get("Content-Type") or "").split(";", 1)[0].lower()
+    if content_type not in {"image/jpeg", "image/png", "image/webp", "image/avif"}:
+        raise ValueError("智赢商品主图返回了非图片内容")
+    if len(response.content) > 8 * 1024 * 1024:
+        raise ValueError("智赢商品主图超过8MB，无法用于以图搜货")
+    return {
+        "data_url": f"data:{content_type};base64,{base64.b64encode(response.content).decode('ascii')}"
+    }
 
 
 def _enqueue_browser_extension_ai_weight_price(action, data):
@@ -17840,13 +18184,21 @@ def api_browser_extension_ai_weight_price_client_action(action):
         ai_weight_price_service.bind_actor(
             _browser_extension_ai_weight_price_actor(), view_all=False
         )
+        if action == "image":
+            return jsonify({
+                "status": "success",
+                "data": _browser_extension_ai_weight_price_image(data.get("url")),
+            })
         user_id = int((g.browser_extension_user or {}).get("id") or 0)
         if action in {"start", "search", "detail"}:
+            runtime_api_key = browser_extension_models.get_api_key(
+                user_id, "dashscope", app.secret_key
+            )
+            if action == "start" and not str(runtime_api_key or "").strip():
+                raise ValueError("请先在泽顺控制台配置可用的 DashScope API Key")
             data = {
                 **data,
-                "runtime_api_key": browser_extension_models.get_api_key(
-                    user_id, "dashscope", app.secret_key
-                ),
+                "runtime_api_key": runtime_api_key,
             }
         result = dispatch(ai_weight_price_service, action, data)
         result = result if isinstance(result, dict) else {}
@@ -18085,8 +18437,10 @@ def _run_ai_original_task(
     image_api_key="",
     image_model="",
     image_base_url="",
+    category_token_id=None,
 ):
     from erp.ai_original_products import prepare_ai_original_product
+    from erp.mercadolibre_batch_publish import DatabaseMercadoLibreClient
 
     rows = [dict(row) for row in product_rows or []]
     results = []
@@ -18104,8 +18458,20 @@ def _run_ai_original_task(
         ai_state = dict(snapshot.get("ai_original") or {})
         ai_state.update(status="processing", error="")
         snapshot["ai_original"] = ai_state
-        db_update_ai_original_product(product_id, {"source_snapshot_json": snapshot})
         try:
+            db_update_ai_original_product(product_id, {"source_snapshot_json": snapshot})
+
+            def save_generated_image(image_url, generation_method):
+                ai_state.update({
+                    "main_image_url": image_url,
+                    "image_generation_method": generation_method,
+                })
+                snapshot["ai_original"] = ai_state
+                db_update_ai_original_product(product_id, {
+                    "main_image_url": image_url,
+                    "source_snapshot_json": snapshot,
+                })
+
             prepared = prepare_ai_original_product(
                 row,
                 api_key=api_key,
@@ -18114,8 +18480,11 @@ def _run_ai_original_task(
                 image_api_key=image_api_key,
                 image_model=image_model,
                 image_base_url=image_base_url,
+                on_image_ready=save_generated_image,
+                category_client=(DatabaseMercadoLibreClient(category_token_id) if category_token_id else None),
             )
             saved = db_update_ai_original_product(product_id, {
+                **({"category_id": prepared["category_id"], "category_name": prepared.get("category_name") or "", "review_status": "unreviewed"} if prepared.get("category_id") else {}),
                 "title": prepared["title"],
                 "description_text": prepared["description_text"],
                 "main_image_url": prepared["main_image_url"],
@@ -18410,6 +18779,7 @@ def api_process_ai_original_products():
         image_api_key = str(data.get("image_api_key") or "").strip()
         image_model = str(data.get("image_model") or "").strip()[:128]
         image_base_url = str(data.get("image_base_url") or "").strip()[:2000]
+        _, category_token_id = _ai_original_category_client(data.get("token_id"))
         workers = max(1, min(int(data.get("workers") or 3), 6))
         if not api_key:
             provider = (
@@ -18434,7 +18804,7 @@ def api_process_ai_original_products():
         })
     threading.Thread(
         target=_run_ai_original_task,
-        args=(rows, api_key, model, base_url, workers, image_api_key, image_model, image_base_url),
+        args=(rows, api_key, model, base_url, workers, image_api_key, image_model, image_base_url, category_token_id),
         name="ai-original-products",
         daemon=True,
     ).start()
@@ -18467,7 +18837,9 @@ def api_ai_original_product_image(filename):
 def _validated_1688_image_url(value):
     """Return an allowlisted 1688 CDN image URL or raise ``ValueError``."""
 
-    candidate = str(value or "").strip()
+    from erp.ai_original_products import normalize_1688_image_url
+
+    candidate = normalize_1688_image_url(value)
     try:
         parsed = urlsplit(candidate)
     except ValueError as exc:

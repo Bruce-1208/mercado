@@ -353,7 +353,12 @@ class Store:
         return normalized
 
     def actor(self):
-        return self._actor_context.get()
+        # Fault-injection and recovery paths can construct a minimal Store
+        # around an already-open MySQL connection without running __init__.
+        # Treat that legacy/no-context shape as an anonymous actor instead of
+        # masking the database error that the caller is trying to handle.
+        context = getattr(self, "_actor_context", None)
+        return context.get() if context is not None else None
 
     @contextmanager
     def actor_scope(self, actor, *, view_all=None):
