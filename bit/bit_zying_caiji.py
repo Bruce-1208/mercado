@@ -1220,7 +1220,7 @@ def cache_zying_product_developers(auth_token, rows):
     return normalized
 
 
-def list_zying_product_developers(auth_token=None):
+def list_zying_product_developers(auth_token=None, *, force_refresh=False):
     """Return developers without repeating the expensive browser/API bootstrap."""
     token = _clean_text(auth_token) or load_zying_auth_token()
     if not token:
@@ -1231,7 +1231,7 @@ def list_zying_product_developers(auth_token=None):
     key = _zying_developer_cache_key(token)
     with _ZYING_DEVELOPER_CACHE_LOCK:
         entry = _ZYING_DEVELOPER_CACHE.get(key)
-        if entry and entry["expires_at"] > time.monotonic():
+        if not force_refresh and entry and entry["expires_at"] > time.monotonic():
             return [dict(row) for row in entry["rows"]]
         future = _ZYING_DEVELOPER_INFLIGHT.get(key)
         owner = future is None
@@ -2851,6 +2851,14 @@ def _zying_api_list_record(row, page_number, collected_at):
         "raw_text": json.dumps(row, ensure_ascii=False, default=str),
         "sale_price": _format_money(price, currency),
     }
+    # Keep the listing-side developer ID as a fallback. Some versions of
+    # sale.detail omit sale_loginid even though sale.stat returned it, and a
+    # local second-pass filter must still be able to reject other developers.
+    record["product_developer_id"] = _format_number(
+        row.get("sale_loginid")
+        or row.get("loginid")
+        or row.get("product_developer_id")
+    )
     for field_name in FIELD_DEFINITIONS:
         record.setdefault(field_name, "")
     return record
@@ -2868,6 +2876,20 @@ def _zying_api_record_matches_category(record, category_id):
     )
     # 只有数字 ID 才能做可靠的二次核验；手工输入名称时依赖接口筛选。
     return not requested.isdigit() or actual == requested
+
+
+def _zying_api_record_matches_developer(record, developer_id):
+    """Verify the selected developer after detail enrichment as a safety net."""
+    requested = _format_number(developer_id)
+    if not requested:
+        return True
+    detail = record.get("detail_data") or {}
+    actual = _format_number(
+        detail.get("sale_loginid")
+        or detail.get("loginid")
+        or record.get("product_developer_id")
+    )
+    return bool(actual and actual == requested)
 
 
 @_reuse_zying_frontend_signer
@@ -3040,6 +3062,22 @@ def collect_zying_products_api(
                 if mismatch_count:
                     print(
                         f"智赢接口第 {page_number} 页过滤掉 {mismatch_count} 条分类不匹配产品",
+                        flush=True,
+                    )
+            if requested_developer_id:
+                matched_records = [
+                    record
+                    for record in page_records
+                    if _zying_api_record_matches_developer(
+                        record, requested_developer_id
+                    )
+                ]
+                developer_mismatch_count = len(page_records) - len(matched_records)
+                page_records = matched_records
+                if developer_mismatch_count:
+                    print(
+                        f"智赢接口第 {page_number} 页过滤掉 "
+                        f"{developer_mismatch_count} 条产品开发不匹配产品",
                         flush=True,
                     )
             page_records, skipped_after_detail = _skip_existing_zying_records(

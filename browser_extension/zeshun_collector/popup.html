@@ -13,7 +13,7 @@
       <h1>泽顺插件</h1>
       <p>商品采集工作台</p>
     </div>
-    <span class="version">v1.8.3 · 商品变体支持</span>
+    <span class="version">v1.8.19 · 1688已上传图片弹层搜索修复</span>
   </header>
   <main>
     <div class="account-card">
@@ -144,13 +144,16 @@
           <button id="weight-price-open-login" class="secondary inline-action" type="button" disabled>打开智赢登录页面</button>
           <button id="weight-price-confirm-login" class="secondary inline-action" type="button" disabled>确认已登录</button>
         </div>
-        <button id="weight-price-refresh-categories" class="secondary inline-action" type="button" disabled>刷新智赢分类</button>
+        <button id="weight-price-refresh-categories" class="secondary inline-action" type="button" disabled>刷新智赢筛选项</button>
         <div id="weight-price-resume" hidden>
           <button id="weight-price-open-supplier" class="secondary inline-action" type="button">打开1688登录页面</button>
           <label class="zying-field"><input id="weight-price-acknowledged" type="checkbox">已完成登录或人机验证，继续原任务</label>
         </div>
         <label class="zying-field">商品分类
           <select id="weight-price-category"><option value="">全部分类</option></select>
+        </label>
+        <label class="zying-field">产品开发
+          <select id="weight-price-developer"><option value="">全部产品开发</option></select>
         </label>
         <div class="zying-grid">
           <label>起始产品编号（可选）<input id="weight-price-start-product-id" type="text" inputmode="numeric" maxlength="64" placeholder="留空则从分类首件开始"></label>

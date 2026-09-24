@@ -9,12 +9,14 @@ create an AI-edited white-background first image.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import base64
 import threading
 import unicodedata
 from io import BytesIO
+from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.parse import urlparse
@@ -39,6 +41,35 @@ _background_removal_session = None
 _background_removal_session_lock = threading.Lock()
 
 
+def normalize_1688_image_url(value: Any) -> str:
+    """Return the stable Alibaba CDN asset behind a resized image URL.
+
+    1688 currently exposes ``currentSrc`` values such as
+    ``photo.jpg_460x460q100.jpg_.jpg``.  Those transient variants can expire
+    while the original ``photo.jpg`` remains available, so persist and fetch
+    the canonical asset instead.
+    """
+    source = str(value or "").strip().replace("&amp;", "&")
+    if source.startswith("//"):
+        source = "https:" + source
+    try:
+        parsed = urlparse(source)
+    except ValueError:
+        return source
+    host = (parsed.hostname or "").lower()
+    if not (host == "alicdn.com" or host.endswith(".alicdn.com")):
+        return source
+    stable_path = re.sub(
+        r"\.(jpe?g|png|webp)(?:_[^/?#]*)+$",
+        lambda match: "." + match.group(1).lower(),
+        parsed.path,
+        flags=re.I,
+    )
+    if stable_path == parsed.path:
+        return source
+    return parsed._replace(path=stable_path).geturl()
+
+
 def _get_image_response(url: str, *, http_get=None, **kwargs):
     """Retry transient 1688 CDN failures while keeping test/custom getters intact."""
     if http_get is not None:
@@ -61,6 +92,7 @@ def _get_image_response(url: str, *, http_get=None, **kwargs):
 
 
 def _download_source_image(source_url: str, *, http_get=None) -> bytes:
+    source_url = normalize_1688_image_url(source_url)
     parsed_source = urlparse(str(source_url or ""))
     source_host = (parsed_source.hostname or "").lower()
     if parsed_source.scheme not in {"http", "https"} or not (
@@ -147,13 +179,11 @@ def normalize_1688_product(product: Mapping[str, Any]) -> dict[str, Any]:
     images = []
     for raw in row.get("images") or []:
         url = str(raw.get("url") if isinstance(raw, Mapping) else raw or "").strip()
-        if url.startswith("//"):
-            url = "https:" + url
+        url = normalize_1688_image_url(url)
         if url.startswith(("http://", "https://")) and url not in images:
             images.append(url)
     main_image = str(row.get("main_image_url") or (images[0] if images else "")).strip()
-    if main_image.startswith("//"):
-        main_image = "https:" + main_image
+    main_image = normalize_1688_image_url(main_image)
     if main_image and main_image not in images:
         images.insert(0, main_image)
     raw_properties = row.get("properties")
@@ -482,7 +512,9 @@ def build_copy_prompt(product: Mapping[str, Any]) -> str:
         "支持的属性；不确定的属性不要猜，也不要把同一个属性重复输出。属性使用数组，每项包含"
         "name_es、name_pt、value_name_es、value_name_pt（无法翻译时也要保留 name、value_name），"
         "可选 id、value_id；如果源属性有稳定 id/value_id 要原样保留。必须返回 JSON，字段为 title_es、title_pt、"
-        "description_es、description_pt、attributes、brand_terms（识别到的品牌词数组）。\n"
+        "description_es、description_pt、attributes、brand_terms（识别到的品牌词数组）、product_type_en。"
+        "product_type_en 必须根据标题、属性和详情识别商品本身是什么，以简洁完整的英文商品名称表达，"
+        "用于美客多分类推荐，不得使用营销词、店铺名或直接沿用货源分类。\n"
         + json.dumps(facts, ensure_ascii=False)
     )
 
@@ -495,10 +527,44 @@ def generate_marketplace_copy(
     base_url: str = "",
     chat: Callable[..., str] | None = None,
 ) -> dict[str, Any]:
+    # Reasoning models can exhaust the first output budget before emitting
+    # JSON. Regenerate invalid/incomplete copy with a bounded larger budget;
+    # never repair missing facts by inventing or publishing partial content.
+    for budget in (4000, 8000, 16000):
+        try:
+            return _generate_marketplace_copy_once(
+                product, api_key=api_key, model=model, base_url=base_url,
+                chat=chat, max_tokens=budget,
+            )
+        except ValueError as exc:
+            if budget == 16000:
+                raise
+            logging.warning(
+                "AI 原创文案校验失败，将扩大输出额度重试 (max_tokens=%s): %s",
+                budget, exc,
+            )
+
+
+def _generate_marketplace_copy_once(
+    product: Mapping[str, Any],
+    *,
+    api_key: str = "",
+    model: str = "",
+    base_url: str = "",
+    chat: Callable[..., str] | None = None,
+    max_tokens: int = 4000,
+) -> dict[str, Any]:
     if chat is None:
-        from AI_Agent.deepseek import chat_deepseek
+        from AI_Agent.deepseek import chat_deepseek, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
 
         chat = chat_deepseek
+        if (
+            urlparse(base_url or DEEPSEEK_BASE_URL).hostname == "api.deepseek.com"
+            and (model or DEEPSEEK_MODEL).startswith("deepseek-v4")
+        ):
+            # V4 enables thinking by default and spends max_tokens on it.
+            # Listing translation needs the JSON answer, not a reasoning pass.
+            chat = partial(chat_deepseek, thinking=False)
     response = chat(
         [{"role": "user", "content": build_copy_prompt(product)}],
         api_key=str(api_key or "").strip() or None,
@@ -508,7 +574,7 @@ def generate_marketplace_copy(
         # Keep enough room for a complete attribute array when the source
         # carries many explicit specifications; the deterministic source
         # merge below still protects against any omissions.
-        max_tokens=4000,
+        max_tokens=max_tokens,
         response_format={"type": "json_object"},
     )
     generated = _json_object(response)
@@ -530,6 +596,7 @@ def generate_marketplace_copy(
     ):
         raise ValueError("AI 返回了原始详情，必须重新生成原创描述")
     return {
+        "product_type_en": str(generated.get("product_type_en") or "").strip()[:160],
         "title_es": title_es,
         "title_pt": title_pt,
         "description_es": description_es[:50000],
@@ -730,6 +797,62 @@ def generate_ai_white_background_image(
     return path, f"{IMAGE_BASE_URL}/api/ai-original-products/images/{filename}"
 
 
+def complete_marketplace_category(original, copy, client, *, api_key="", model="", base_url="", chat=None):
+    """Resolve the real product through discovery, then fill the live schema."""
+    from erp.mercadolibre_follow_sell import _category_attribute_schema, _normalize_enumerated_attributes
+    from erp.mercadolibre_attribute_rules import is_read_only_attribute, is_required_attribute
+
+    query = str(copy.get("product_type_en") or "").strip()
+    if not query:
+        raise ValueError("AI 未识别商品实际类型（英文），请重新执行 AI 原创任务")
+    suggestions = client.request(
+        "GET", "/marketplace/domain_discovery/search", params={"q": query}
+    )
+    category = next((item for item in suggestions if isinstance(item, Mapping)
+                     and re.fullmatch(r"CBT[A-Z0-9_-]+", str(item.get("category_id") or ""))), None) if isinstance(suggestions, list) else None
+    if category is None:
+        raise ValueError(f"美客多未推荐对应分类：{query}")
+    category_id = category["category_id"]
+    schema = _category_attribute_schema(client, category_id)
+    if schema is None:
+        raise ValueError(f"无法读取分类 {category_id} 的属性规则")
+    writable = {str(item["id"]): item for item in schema if item.get("id") and not is_read_only_attribute(item)}
+    if chat is None:
+        from AI_Agent.deepseek import chat_deepseek
+        chat = chat_deepseek
+    response = chat(
+        [{"role": "user", "content": (
+            "根据原始商品事实和美客多目标分类属性规则补齐刊登属性。返回 JSON 对象 attributes 数组，"
+            "每项使用规则中的 id 和 value_name，可选 value_id；枚举值必须来自规则。"
+            "逐项检查必填和可选属性，仅填写明确事实，不得编造型号、认证、GTIN或规格。"
+            "未知值留空；不要把变体各自不同的值作为商品统一值。属性值使用英文。\n"
+            + json.dumps({"original": original, "generated": copy, "category": category,
+                          "schema": list(writable.values())}, ensure_ascii=False)
+        )}],
+        api_key=api_key or None, model=model or None, base_url=base_url or None,
+        temperature=0.1, max_tokens=8000, response_format={"type": "json_object"},
+    )
+    values = _json_object(response).get("attributes")
+    if not isinstance(values, list):
+        raise ValueError("AI 未返回分类属性数组")
+    attributes = {}
+    for item in values:
+        if not isinstance(item, Mapping):
+            continue
+        attribute_id = str(item.get("id") or "").strip()
+        if attribute_id not in writable or not (item.get("value_name") or item.get("value_id")):
+            continue
+        attributes[attribute_id] = {"id": attribute_id, "name": writable[attribute_id].get("name") or attribute_id,
+                                    **{key: str(item[key]) for key in ("value_name", "value_id") if item.get(key)}}
+    result = list(attributes.values())
+    _normalize_enumerated_attributes(result, schema)
+    present = {item["id"] for item in result}
+    missing = [{"id": key, "name": value.get("name") or key} for key, value in writable.items()
+               if is_required_attribute(value) and key not in present]
+    return {"category_id": category_id, "category_name": category.get("category_name") or category_id,
+            "category_prediction_query": query, "attributes": result, "missing_required_attributes": missing}
+
+
 def prepare_ai_original_product(
     row: Mapping[str, Any],
     *,
@@ -743,15 +866,14 @@ def prepare_ai_original_product(
     chat: Callable[..., str] | None = None,
     image_dir: Path | None = None,
     http_get: Callable[..., Any] | None = None,
+    on_image_ready: Callable[[str, str], Any] | None = None,
+    category_client: Any = None,
 ) -> dict[str, Any]:
     raw_snapshot = row.get("source_snapshot_json") or {}
     snapshot = dict(raw_snapshot) if isinstance(raw_snapshot, Mapping) else json.loads(str(raw_snapshot))
     original = dict(snapshot.get("original_1688") or {})
     if not original:
         raise ValueError("产品缺少 1688 原始快照，请重新采集")
-    copy = generate_marketplace_copy(
-        original, api_key=api_key, model=model, base_url=base_url, chat=chat
-    )
     image_sources = list(dict.fromkeys(
         str(value or "").strip()
         for value in [
@@ -804,6 +926,13 @@ def prepare_ai_original_product(
             source_bytes=source_bytes,
         )
         image_generation_method = "local_background_removal"
+    if on_image_ready is not None:
+        on_image_ready(white_url, image_generation_method)
+    # Persist the independently generated image before asking the text model.
+    # A malformed copy response must not discard a valid white-background asset.
+    copy = generate_marketplace_copy(
+        original, api_key=api_key, model=model, base_url=base_url, chat=chat
+    )
     generated_attributes = list(copy.get("attributes") or [])
     # These are safe marketplace defaults; category-specific attributes are
     # resolved and validated against Mercado's live schema during publication.
@@ -812,8 +941,15 @@ def prepare_ai_original_product(
         generated_attributes.insert(0, {"id": "BRAND", "name": "Brand", "value_name": "Generic"})
     if "ITEM_CONDITION" not in existing_ids:
         generated_attributes.append({"id": "ITEM_CONDITION", "name": "Condition", "value_name": "New"})
+    category_result = {}
+    if category_client is not None:
+        category_result = complete_marketplace_category(
+            original, copy, category_client, api_key=api_key, model=model, base_url=base_url, chat=chat,
+        )
+        generated_attributes = category_result["attributes"]
     output = {
         **copy,
+        **category_result,
         "attributes": generated_attributes,
         # Keep the collected SKU matrix available to the manual editor and
         # the final marketplace payload. Translation is applied separately so
@@ -831,8 +967,8 @@ def prepare_ai_original_product(
         "title": copy["title_es"],
         "price": row.get("price"),
         "currency_id": row.get("currency_id") or "USD",
-        "category_id": row.get("category_id") or "",
-        "category_name": row.get("category_name") or "",
+        "category_id": category_result.get("category_id") or row.get("category_id") or "",
+        "category_name": category_result.get("category_name") or row.get("category_name") or "",
         "permalink": row.get("source_url") or original.get("source_url"),
         "pictures": [{"source": white_url}] + [
             {"source": url} for url in original.get("images") or []
@@ -848,6 +984,7 @@ def prepare_ai_original_product(
         "main_image_url": white_url,
         "source_snapshot_json": json.dumps(snapshot, ensure_ascii=False),
         "ai_original": output,
+        **({key: category_result[key] for key in ("category_id", "category_name")} if category_result else {}),
     }
 
 

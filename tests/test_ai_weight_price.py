@@ -488,7 +488,7 @@ def test_dom_preflight_no_browser_side_effect(service):
 
 
 def test_auto_adaptation_preflight_keeps_upload_writeback_and_key_checks(service, monkeypatch):
-    config = validate({"api_base_url": "http://localhost:11434/v1"})
+    config = validate({"api_base_url": "http://localhost:11434/v1", "writeback_enabled": False})
     service.preflight(config, "pipeline")
     config["selectors"]["image_search_upload"] = ""
     with pytest.raises(ValueError, match="image_search_upload"):
@@ -499,7 +499,7 @@ def test_auto_adaptation_preflight_keeps_upload_writeback_and_key_checks(service
     monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
     monkeypatch.setattr("erp.ai_weight_price.credentials.windows_user_environment", lambda name: "")
     with pytest.raises(ValueError, match="模型密钥"):
-        service.preflight(validate({}), "process")
+        service.preflight(validate({"writeback_enabled": False}), "process")
 
 
 def test_supplier_adaptation_switch_requires_boolean():
@@ -645,6 +645,7 @@ def test_retry_endpoint_starts_only_selected_task(service,client,monkeypatch):
     service.store.exception("g1","ERP回写保存失败")
     started=[]
     monkeypatch.setattr(service,"require_login",lambda *args:None)
+    monkeypatch.setattr(service,"preflight",lambda *args:None)
     monkeypatch.setattr(service,"start",lambda *args:started.append(args))
     response=client.post("/api/ai-weight-price/tasks/g1/retry",json={},headers={"X-AWP-Request":"1"})
     assert response.status_code==200

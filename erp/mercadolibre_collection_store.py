@@ -2537,10 +2537,11 @@ def upsert_ai_original_product(
                         `source_snapshot_json`, '{{}}'), '$.ai_original.status')) <> 'completed',
                         VALUES(`title`), `title`),
                     `price` = IF(`source_type` = 'ai_original', VALUES(`price`), `price`),
-                    `weight_g` = IF(`source_type` = 'ai_original', COALESCE(VALUES(`weight_g`), `weight_g`), `weight_g`),
-                    `package_length_cm` = IF(`source_type` = 'ai_original', COALESCE(VALUES(`package_length_cm`), `package_length_cm`), `package_length_cm`),
-                    `package_width_cm` = IF(`source_type` = 'ai_original', COALESCE(VALUES(`package_width_cm`), `package_width_cm`), `package_width_cm`),
-                    `package_height_cm` = IF(`source_type` = 'ai_original', COALESCE(VALUES(`package_height_cm`), `package_height_cm`), `package_height_cm`),
+                    `weight_basis` = IF(`source_type` = 'ai_original', VALUES(`weight_basis`), `weight_basis`),
+                    `weight_g` = IF(`source_type` = 'ai_original', VALUES(`weight_g`), `weight_g`),
+                    `package_length_cm` = IF(`source_type` = 'ai_original', VALUES(`package_length_cm`), `package_length_cm`),
+                    `package_width_cm` = IF(`source_type` = 'ai_original', VALUES(`package_width_cm`), `package_width_cm`),
+                    `package_height_cm` = IF(`source_type` = 'ai_original', VALUES(`package_height_cm`), `package_height_cm`),
                     `source_snapshot_json` = IF(`source_type` = 'ai_original' AND
                         JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`),
                         `source_snapshot_json`, '{{}}'), '$.ai_original.status')) <> 'completed',
@@ -2580,7 +2581,7 @@ def update_ai_original_product(
     allowed = {
         "title", "description_text", "main_image_url", "source_snapshot_json",
         "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
-        "category_id", "net_proceeds_usd", "review_status", "currency_id",
+        "category_id", "category_name", "net_proceeds_usd", "review_status", "currency_id",
     }
     normalized = {key: value for key, value in dict(changes or {}).items() if key in allowed}
     if not normalized:

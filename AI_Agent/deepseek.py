@@ -93,6 +93,7 @@ def chat_deepseek(
     response_format: dict | None = None,
     api_key: str | None = None,
     base_url: str | None = None,
+    thinking: bool | None = None,
 ) -> str:
     kwargs = {
         "model": model or DEEPSEEK_MODEL,
@@ -104,6 +105,8 @@ def chat_deepseek(
         kwargs["max_tokens"] = max_tokens
     if response_format is not None:
         kwargs["response_format"] = response_format
+    if thinking is not None:
+        kwargs["extra_body"] = {"thinking": {"type": "enabled" if thinking else "disabled"}}
 
     response = _get_client(
         api_key=api_key,

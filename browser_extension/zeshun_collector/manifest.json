@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "泽顺插件",
-  "version": "1.8.3",
+  "version": "1.8.19",
   "description": "采集 Mercado Libre Internacional、1688 与智赢商品，检查智赢产品侵权风险，启动 AI 核重核价，并同步采购订单物流号。",
   "permissions": [
     "alarms",
@@ -10,13 +10,15 @@
     "scripting",
     "storage",
     "tabs",
-    "windows"
+    "windows",
+    "webNavigation"
   ],
   "host_permissions": [
     "http://127.0.0.1/*",
     "http://localhost/*",
     "https://*.1688.com/*",
     "https://*.alicdn.com/*",
+    "https://*.mlstatic.com/*",
     "https://*.taobao.com/*",
     "https://*.tmall.com/*",
     "https://*.yangkeduo.com/*",
@@ -25,6 +27,7 @@
     "https://*.xianyu.com/*",
     "https://meli.zying.net/*",
     "https://seller.zying.net/*",
+    "https://*.hzzying.com/*",
     "https://*.mercadolibre.com.mx/*",
     "https://*.mercadolibre.com.br/*",
     "https://*.mercadolivre.com.br/*",
@@ -121,6 +124,7 @@
       "css": [
         "content.css"
       ],
+      "all_frames": true,
       "run_at": "document_idle"
     },
     {

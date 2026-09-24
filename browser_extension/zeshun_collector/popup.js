@@ -44,6 +44,7 @@ const weightPriceOpenLoginButton = document.getElementById("weight-price-open-lo
 const weightPriceConfirmLoginButton = document.getElementById("weight-price-confirm-login");
 const weightPriceRefreshCategoriesButton = document.getElementById("weight-price-refresh-categories");
 const weightPriceCategory = document.getElementById("weight-price-category");
+const weightPriceDeveloper = document.getElementById("weight-price-developer");
 const weightPriceStartProductId = document.getElementById("weight-price-start-product-id");
 const weightPriceLimit = document.getElementById("weight-price-limit");
 const weightPriceStartButton = document.getElementById("weight-price-start");
@@ -270,6 +271,15 @@ function isZyingPage(tab) {
   try { return new URL(tab?.url || "").hostname === "meli.zying.net"; } catch (_) { return false; }
 }
 
+async function findZyingPageTab() {
+  const tabs = await chrome.tabs.query({windowType: "normal"});
+  return tabs.filter(tab => tab?.id && isZyingPage(tab)).sort((left, right) => (
+    Number(String(right.url).includes("#/product")) - Number(String(left.url).includes("#/product")) ||
+    Number(right.active) - Number(left.active) ||
+    Number(right.lastAccessed || 0) - Number(left.lastAccessed || 0)
+  ))[0] || null;
+}
+
 async function refreshState() {
   const response = await runtimeMessage({type: "GET_STATE"});
   queueCount.textContent = String(response.queueLength || 0);
@@ -463,7 +473,12 @@ purchaseConfirmLoginButton.addEventListener("click", async () => {
 });
 
 async function refreshZyingOptions() {
-  if (!activeTab?.id || !isZyingPage(activeTab)) {
+  // The extension UI is a persistent standalone window. `activeTab` therefore
+  // becomes stale after this window opens/focuses a ZYing tab. Resolve the tab
+  // again for every read so a logged-in product page is never mistaken for a
+  // missing page and redirected back to the login route.
+  const zyingTab = await findZyingPageTab();
+  if (!zyingTab) {
     zyingContext = null;
     zyingPageStatus.textContent = "正在打开智赢网页版登录页面；登录后重新打开插件并点击读取。";
     zyingInfringementPageStatus.textContent = zyingPageStatus.textContent;
@@ -472,20 +487,23 @@ async function refreshZyingOptions() {
     await refreshState();
     return;
   }
+  activeTab = zyingTab;
   zyingRefreshButton.disabled = true;
   zyingInfringementRefreshButton.disabled = true;
   zyingRefreshButton.textContent = "正在读取本地智赢网页…";
   try {
-    const contextResponse = await runtimeMessage({type: "READ_ZYING_CONTEXT", tabId: activeTab.id});
+    const contextResponse = await runtimeMessage({type: "READ_ZYING_CONTEXT", tabId: zyingTab.id});
     if (!contextResponse.ok) throw new Error(contextResponse.error || "未读取到智赢登录状态");
     zyingContext = {
       credential: contextResponse.credential,
-      categories: contextResponse.categories || []
+      categories: contextResponse.categories || [],
+      developers: contextResponse.developers || []
     };
     const options = await runtimeMessage({type: "GET_ZYING_OPTIONS", context: zyingContext});
     if (!options.ok) throw new Error(options.error || "读取智赢筛选项失败");
     renderZyingOptions(options);
     zyingPageStatus.textContent = `已连接当前智赢网页：${Number(options.categories?.length || 0)} 个分类，${Number(options.developers?.length || 0)} 位产品开发。`;
+    if (options.developer_warning) zyingPageStatus.textContent += ` ${options.developer_warning}`;
     if ((options.categories || []).some(row => !zyingCategoryDisplayName(row))) {
       zyingPageStatus.textContent += " 部分分类名称尚未读取，请等待智赢产品页加载完成后重新读取。";
     }
@@ -570,12 +588,37 @@ async function loadZyingInfringementStatus() {
 
 function renderWeightPriceCategories(rows) {
   const previous = weightPriceCategory.value;
-  const options = Array.isArray(rows) ? rows : [];
-  weightPriceCategory.innerHTML = '<option value="">全部分类</option>' + options.map(row => (
-    `<option value="${escapeHtml(String(row.value || ""))}">${escapeHtml(String(row.label || row.name || row.value || ""))}</option>`
+  const options = (Array.isArray(rows) ? rows : []).map(row => {
+    const label = zyingCategoryDisplayName(row);
+    return {value: String(row.category_id || row.value || ""), label, disabled: !label};
+  });
+  const current = [...weightPriceCategory.options].slice(1).map(option => ({
+    value: option.value, label: option.textContent === "分类名称待同步，请刷新智赢产品页" ? "" : option.textContent,
+    disabled: option.disabled
+  }));
+  if (JSON.stringify(current) === JSON.stringify(options)) return;
+  weightPriceCategory.innerHTML = '<option value="">全部分类</option>' + options.map(option => (
+    `<option value="${escapeHtml(option.value)}"${option.disabled ? " disabled" : ""}>${escapeHtml(option.label || "分类名称待同步，请刷新智赢产品页")}</option>`
   )).join("");
-  if ([...weightPriceCategory.options].some(option => option.value === previous)) {
+  if ([...weightPriceCategory.options].some(option => option.value === previous && !option.disabled)) {
     weightPriceCategory.value = previous;
+  }
+}
+
+function renderWeightPriceDevelopers(rows) {
+  const previous = weightPriceDeveloper.value;
+  const options = (Array.isArray(rows) ? rows : []).map(row => ({
+    value: String(row.id || ""), label: String(row.name || row.id || "")
+  }));
+  const current = [...weightPriceDeveloper.options].slice(1).map(option => ({
+    value: option.value, label: option.textContent
+  }));
+  if (JSON.stringify(current) === JSON.stringify(options)) return;
+  weightPriceDeveloper.innerHTML = '<option value="">全部产品开发</option>' + options.map(option => (
+    `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`
+  )).join("");
+  if ([...weightPriceDeveloper.options].some(option => option.value === previous)) {
+    weightPriceDeveloper.value = previous;
   }
 }
 
@@ -591,7 +634,11 @@ function weightPriceParams() {
   return {
     selection: {
       category: weightPriceCategory.value,
-      start_product_id: startProductId
+      start_product_id: startProductId,
+      product_developer_id: weightPriceDeveloper.value,
+      product_developer_name: weightPriceDeveloper.value
+        ? weightPriceDeveloper.selectedOptions[0]?.textContent || ""
+        : ""
     },
     max_items: maxItems
   };
@@ -629,7 +676,9 @@ function syncWeightPriceControls() {
   weightPriceStopButton.disabled = !authenticated || !canExecute || !weightPriceRunning || weightPriceBusy;
   weightPriceResume.hidden = !blocked;
   weightPriceAcknowledged.disabled = idleDisabled;
-  for (const element of [weightPriceCategory, weightPriceStartProductId, weightPriceLimit]) {
+  for (const element of [
+    weightPriceCategory, weightPriceDeveloper, weightPriceStartProductId, weightPriceLimit
+  ]) {
     element.disabled = weightPriceRunning || weightPriceBusy || blocked;
   }
 }
@@ -642,11 +691,16 @@ function renderWeightPriceStatus(state = {}) {
   weightPriceState = state;
   weightPriceRunning = Boolean(state.running);
   renderWeightPriceCategories(state.categories);
+  renderWeightPriceDevelopers(state.developers);
   if (!weightPriceSelectionRestored && state.selection) {
     weightPriceSelectionRestored = true;
     weightPriceStartProductId.value = String(state.selection.start_product_id || "");
     if ([...weightPriceCategory.options].some(option => option.value === state.selection.category)) {
       weightPriceCategory.value = state.selection.category;
+    }
+    const developerId = String(state.selection.product_developer_id || "");
+    if ([...weightPriceDeveloper.options].some(option => option.value === developerId)) {
+      weightPriceDeveloper.value = developerId;
     }
   }
   const confirmed = Boolean(state.login?.confirmed);
@@ -679,7 +733,7 @@ function renderWeightPriceStatus(state = {}) {
 
 function scheduleWeightPricePoll() {
   clearTimeout(weightPricePollTimer);
-  weightPricePollTimer = setTimeout(loadWeightPriceStatus, weightPriceRunning ? 1200 : 5000);
+  weightPricePollTimer = setTimeout(loadWeightPriceStatus, weightPriceRunning ? 3000 : 5000);
 }
 
 async function loadWeightPriceStatus() {
@@ -701,12 +755,12 @@ async function loadWeightPriceStatus() {
   }
 }
 
-async function runWeightPriceAction(type, pendingText) {
+async function runWeightPriceAction(type, pendingText, {render = true} = {}) {
   weightPriceTaskStatus.textContent = pendingText;
   syncWeightPriceControls();
   const response = await runtimeMessage({type});
   if (!response.ok) throw new Error(response.error || pendingText.replace("正在", "") + "失败");
-  renderWeightPriceStatus(response);
+  if (render) renderWeightPriceStatus(response);
   return response;
 }
 
@@ -717,9 +771,10 @@ function beginWeightPriceAction() {
   syncWeightPriceControls();
 }
 
-async function finishWeightPriceAction() {
+function finishWeightPriceAction() {
   weightPriceBusy = false;
-  await loadWeightPriceStatus();
+  syncWeightPriceControls();
+  scheduleWeightPricePoll();
 }
 
 collectButton.addEventListener("click", async () => {
@@ -767,7 +822,11 @@ document.getElementById("retry").addEventListener("click", async event => {
 productModeButton.addEventListener("click", () => showMode("product"));
 zyingModeButton.addEventListener("click", async () => {
   showMode("zying");
-  if (!activeTab?.id || !isZyingPage(activeTab)) {
+  const zyingTab = await findZyingPageTab();
+  if (zyingTab) {
+    activeTab = zyingTab;
+    zyingPageStatus.textContent = "已找到智赢网页；点击“读取当前网页分类与开发”。";
+  } else {
     zyingPageStatus.textContent = "正在打开智赢网页版登录页面；登录后重新打开插件并点击读取。";
     try { await runtimeMessage({type: "OPEN_ZYING_LOGIN"}); }
     catch (error) { showResult(error.message || String(error), "error"); }
@@ -775,7 +834,11 @@ zyingModeButton.addEventListener("click", async () => {
 });
 zyingInfringementModeButton.addEventListener("click", async () => {
   showMode("zying-infringement");
-  if (!activeTab?.id || !isZyingPage(activeTab)) {
+  const zyingTab = await findZyingPageTab();
+  if (zyingTab) {
+    activeTab = zyingTab;
+    zyingInfringementPageStatus.textContent = "已找到智赢网页；点击“读取当前网页分类与开发”。";
+  } else {
     zyingInfringementPageStatus.textContent = "正在打开智赢网页版登录页面；登录后重新打开插件并点击读取。";
     try { await runtimeMessage({type: "OPEN_ZYING_LOGIN"}); }
     catch (error) { showResult(error.message || String(error), "error"); }
@@ -829,7 +892,9 @@ weightPriceOpenLoginButton.addEventListener("click", async () => {
 weightPriceOpenSupplierButton.addEventListener("click", async () => {
   beginWeightPriceAction();
   try {
-    await runWeightPriceAction("OPEN_AI_WEIGHT_PRICE_SUPPLIER", "正在打开1688登录页面…");
+    await runWeightPriceAction(
+      "OPEN_AI_WEIGHT_PRICE_SUPPLIER", "正在打开1688登录页面…", {render: false}
+    );
     showResult("请在任务使用的窗口完成1688登录或人机验证，再勾选继续原任务。", "");
   } catch (error) {
     showResult(error.message || String(error), "error");
@@ -855,11 +920,11 @@ weightPriceRefreshCategoriesButton.addEventListener("click", async () => {
   weightPriceRefreshCategoriesButton.textContent = "正在刷新分类…";
   try {
     await runWeightPriceAction("REFRESH_AI_WEIGHT_PRICE_CATEGORIES", "正在从智赢读取分类…");
-    showResult("智赢商品分类已刷新。", "");
+    showResult("智赢商品分类与产品开发已刷新。", "");
   } catch (error) {
     showResult(error.message || String(error), "error");
   } finally {
-    weightPriceRefreshCategoriesButton.textContent = "刷新智赢分类";
+    weightPriceRefreshCategoriesButton.textContent = "刷新智赢筛选项";
     await finishWeightPriceAction();
   }
 });

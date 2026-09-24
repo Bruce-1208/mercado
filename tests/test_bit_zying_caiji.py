@@ -1384,6 +1384,50 @@ def test_api_collection_reads_list_and_details_without_opening_browser(monkeypat
     assert mirrored == written
 
 
+def test_api_collection_rechecks_selected_developer_after_detail_enrichment(monkeypatch):
+    written = []
+    calls = []
+
+    def api_post(_session, _token, command, payload):
+        calls.append((command, payload))
+        if command == "logins.select":
+            return {"logins": [{"id": 17, "name": "产品开发甲"}, {"id": 18, "name": "产品开发乙"}]}
+        # Simulate sale.stat returning an unfiltered row despite loginid.
+        return {"list": {"data": [
+            {"id": 1001, "title": "甲商品", "thumb": "https://img.test/1.jpg", "cost": 1, "cur": "USD", "sale_loginid": 17},
+            {"id": 1002, "title": "乙商品", "thumb": "https://img.test/2.jpg", "cost": 2, "cur": "USD", "sale_loginid": 18},
+        ]}}
+
+    monkeypatch.setattr(bit_zying_caiji, "_zying_api_post", api_post)
+
+    def enrich(_driver, records, token=None):
+        assert token == "test-token"
+        for record in records:
+            record["detail_data"] = {
+                "sale_id": record["product_id"],
+                "sale_title": record["title"],
+                "sale_cur": "USD",
+                "sale_cost": 1,
+                "sale_localid": 202170568,
+                "sale_loginid": 17 if record["product_id"] == "1001" else 18,
+            }
+        return records
+
+    monkeypatch.setattr(bit_zying_caiji, "_enrich_product_records", enrich)
+    result = bit_zying_caiji.collect_zying_products_api(
+        auth_token="test-token", number=1, category="202170568",
+        category_name="家居/家电类", product_developer_id="17",
+        product_developer_name="产品开发甲", existing_product_id_reader=lambda _ids: set(),
+        product_writer=lambda rows: written.extend(rows) or len(rows),
+        product_mirror_writer=lambda rows: {"count": len(rows)}, return_summary=True,
+    )
+
+    assert calls[-1][1]["localid"] == "202170568"
+    assert calls[-1][1]["loginid"] == 17
+    assert [row["product_id"] for row in written] == ["1001"]
+    assert result["inserted_count"] == 1
+
+
 def test_api_collection_product_cursor_is_inclusive_and_limits_across_pages(monkeypatch):
     written = []
 
@@ -1478,3 +1522,12 @@ def test_collection_honors_stop_event_before_opening_browser(monkeypatch):
             window_name="vngbjkk",
             stop_event=stop_event,
         )
+
+
+def test_developer_manual_refresh_bypasses_cache(monkeypatch):
+    monkeypatch.setattr(bit_zying_caiji, "ZYING_DEVELOPER_CACHE_SECONDS", 60)
+    credential = "manual-refresh-test"
+    bit_zying_caiji.cache_zying_product_developers(credential, [{"id": 17, "name": "旧人员"}])
+    monkeypatch.setattr(bit_zying_caiji, "_fetch_zying_product_developers", lambda token: [{"id": "18", "name": "新人员"}])
+    assert bit_zying_caiji.list_zying_product_developers(credential, force_refresh=True) == [{"id": "18", "name": "新人员"}]
+    assert bit_zying_caiji.list_zying_product_developers(credential) == [{"id": "18", "name": "新人员"}]

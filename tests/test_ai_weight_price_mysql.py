@@ -91,7 +91,7 @@ def test_log_reconnects_and_keeps_original_error_when_rollback_also_fails(make_s
     assert len(calls) == 2
     assert first.closed and second.closed
     assert len(committed) == 1
-    assert committed[0][1][-1] == 'progress'
+    assert committed[0][1][3] == 'progress'
     assert '重新连接重试 1/2' in caplog.text
     assert 'Lost connection during query' in caplog.text
 
@@ -169,4 +169,3 @@ def test_sqlite_begin_alias_does_not_restart_mysql_transaction(make_store):
         db.execute('UPDATE state SET value=? WHERE key=?', ('1', 'test'))
     assert connection.begins == 1
     assert len(committed) == 1
-

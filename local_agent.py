@@ -760,7 +760,7 @@ class AgentProcessLock:
 
 
 class LocalAgent:
-    capabilities = ("appeal", "daily_task", "heartbeat_claim")
+    capabilities = ("appeal", "daily_task", "ai_weight_price", "heartbeat_claim")
 
     def __init__(self, config):
         self.config = config

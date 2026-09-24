@@ -219,7 +219,7 @@ def test_failed_single_retry_keeps_original_scope_barrier(tmp_path, monkeypatch)
 
 def test_page_complete_does_not_require_chat_preflight(tmp_path, monkeypatch):
     service, browser, config = setup(tmp_path, monkeypatch)
-    config = validate({"api_base_url": "http://localhost:11434/v1", "selectors": {
+    config = validate({"api_base_url": "http://localhost:11434/v1", "writeback_enabled": False, "selectors": {
         field: ".test" for field in ("supplier_title", "supplier_image", "supplier_merchant", "sku_rows", "sku_label")}})
     service.preflight(config, "pipeline")
 

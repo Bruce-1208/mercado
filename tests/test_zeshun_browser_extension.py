@@ -19,7 +19,8 @@ def test_manifest_is_chrome_edge_manifest_v3_and_declares_supported_sites():
     assert manifest["manifest_version"] == 3
     assert manifest["background"]["service_worker"] == "background.js"
     assert "default_popup" not in manifest["action"]
-    assert manifest["version"] == "1.8.3"
+    assert manifest["version"] == "1.8.19"
+    assert "v1.8.19 · 1688已上传图片弹层搜索修复" in (EXTENSION / "popup.html").read_text(encoding="utf-8")
     matches = manifest["content_scripts"][0]["matches"]
     assert any("mercadolibre.com.mx" in pattern for pattern in matches)
     assert any("mercadolivre.com.br" in pattern for pattern in matches)
@@ -29,6 +30,8 @@ def test_manifest_is_chrome_edge_manifest_v3_and_declares_supported_sites():
         for pattern in content_script["matches"]
     )
     assert "https://meli.zying.net/*" in manifest["host_permissions"]
+    assert "https://*.hzzying.com/*" in manifest["host_permissions"]
+    assert "https://*.mlstatic.com/*" in manifest["host_permissions"]
     assert any(
         "meli.zying.net" in pattern
         for content_script in manifest["content_scripts"]
@@ -36,7 +39,10 @@ def test_manifest_is_chrome_edge_manifest_v3_and_declares_supported_sites():
     )
     assert "cookies" in manifest["permissions"]
     assert "scripting" in manifest["permissions"]
+    assert "webNavigation" in manifest["permissions"]
     assert "http://127.0.0.1/*" in manifest["host_permissions"]
+    image_script = next(item for item in manifest["content_scripts"] if item.get("js") == ["content-1688.js"])
+    assert image_script["all_frames"] is True
 
 
 def test_extension_files_referenced_by_manifest_exist():
@@ -65,6 +71,7 @@ def test_all_extension_javascript_has_valid_syntax():
         "content-1688.js",
         "content-zying.js",
         "zying-page.js",
+        "1688-page.js",
     ):
         subprocess.run(
             [shutil.which("node"), "--check", str(EXTENSION / filename)],
@@ -105,6 +112,18 @@ def test_1688_collector_targets_ai_original_products():
     assert "采集到泽顺" in content
 
 
+def test_1688_collector_uses_average_when_sku_weights_differ():
+    content = (EXTENSION / "content-1688.js").read_text(encoding="utf-8")
+
+    assert 'if (key === "weight_g")' in content
+    assert "const valid = values.map(value => Number(value))" in content
+    assert "valid.reduce((total, value) => total + value, 0) / valid.length" in content
+    assert "toFixed(4)" in content
+    # Packaging dimensions must not be averaged as a side effect of the
+    # weight fallback.
+    assert 'return values.every(value => Number.isFinite(value) && value > 0 && value === values[0])' in content
+
+
 def test_1688_search_results_expose_per_card_collection_buttons():
     content = (EXTENSION / "content-1688.js").read_text(encoding="utf-8")
 
@@ -130,7 +149,7 @@ def test_console_downloads_complete_zeshun_extension_package():
 
     assert response.status_code == 200
     assert response.headers["Content-Type"].startswith("application/zip")
-    assert response.headers["X-Zeshun-Extension-Version"] == "1.8.3"
+    assert response.headers["X-Zeshun-Extension-Version"] == "1.8.19"
     assert "zeshun-collector-extension.zip" in response.headers["Content-Disposition"]
     with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
         names = set(archive.namelist())
@@ -140,6 +159,7 @@ def test_console_downloads_complete_zeshun_extension_package():
         assert "zeshun_collector/content-1688.js" in names
         assert "zeshun_collector/content-zying.js" in names
         assert "zeshun_collector/zying-page.js" in names
+        assert "zeshun_collector/1688-page.js" in names
         assert "zeshun_collector/README.md" in names
 
 
@@ -213,6 +233,7 @@ def test_extension_options_do_not_store_model_api_settings():
 
 def test_zying_collection_controls_live_in_extension_and_use_current_browser():
     popup = (EXTENSION / "popup.html").read_text(encoding="utf-8")
+    popup_script = (EXTENSION / "popup.js").read_text(encoding="utf-8")
     content = (EXTENSION / "zying-page.js").read_text(encoding="utf-8")
 
     assert 'id="zying-mode"' in popup
@@ -231,6 +252,8 @@ def test_zying_collection_controls_live_in_extension_and_use_current_browser():
     assert "比特浏览器" not in popup
     assert 'localStorage.getItem("token")' in content
     assert "__reactFiber$" in content
+    assert "async function findZyingPageTab()" in popup_script
+    assert "developers: contextResponse.developers || []" in popup_script
 
 
 def test_ai_weight_price_launch_controls_live_in_extension():
@@ -244,6 +267,7 @@ def test_ai_weight_price_launch_controls_live_in_extension():
     assert 'id="weight-price-start-product-id"' in popup
     assert 'id="weight-price-limit"' in popup
     assert 'id="weight-price-category"' in popup
+    assert 'id="weight-price-developer"' in popup
     assert 'id="weight-price-start"' in popup
     assert 'id="weight-price-stop"' in popup
     assert 'id="weight-price-current-meta"' in popup
@@ -251,9 +275,20 @@ def test_ai_weight_price_launch_controls_live_in_extension():
     assert "/api/browser-extension/ai-weight-price/client/" in background
     assert 'aiWeightPriceAction("start"' in background
     assert 'aiWeightPriceAction("stop"' in background
+    assert "const context = await readZyingContext(tabId, {includeDevelopers: false})" in background
+    assert "{requireCategories: true, includeDevelopers: true}" in background
+    assert "aiWeightPriceUiResult" in background
     assert 'type: "AI_WEIGHT_PRICE_EXTRACT_PRODUCTS"' in background
     assert 'type: "AI_WEIGHT_PRICE_SEARCH"' in background
     assert 'type === "AI_WEIGHT_PRICE_WRITEBACK"' in zying
+    assert 'type === "AI_WEIGHT_PRICE_VERIFY_WRITEBACK"' in zying
+    assert "await chrome.tabs.reload(erp, {bypassCache: true})" in background
+    assert "response.submitted !== true" in background
+    assert "verified.persisted !== true" in background
+    assert "async function aiWeightPriceTab(host, url, {active = false} = {})" in background
+    assert "aiWeightPriceReadNextProduct" in background
+    assert "lazy_collection: true" in background
+    assert "max_items: 1" in background
     assert 'type === "AI_WEIGHT_PRICE_READ_DETAIL"' in supplier
     assert 'type === "AI_WEIGHT_PRICE_SEARCH"' in supplier
     assert 'id="execution-agent-id"' not in options
@@ -296,8 +331,18 @@ def test_integrated_ai_weight_price_page_points_launch_to_extension(monkeypatch)
 
 def test_integrated_ai_weight_price_is_read_only_from_other_terminals(monkeypatch):
     import bit.bit_interface as workbench
+    from erp.ai_weight_price.config import validate
 
     monkeypatch.setattr(workbench, "get_current_workbench_user", _browser_extension_user)
+    config_state = {"value": validate({})}
+
+    def fake_save(value):
+        config_state["value"] = validate(value)
+        return dict(config_state["value"])
+
+    monkeypatch.setattr(workbench.ai_weight_price_service.config, "load", lambda: dict(config_state["value"]))
+    monkeypatch.setattr(workbench.ai_weight_price_service.config, "save", fake_save)
+    monkeypatch.setattr(workbench.ai_weight_price_service.store, "log", lambda *_args, **_kwargs: None)
     workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
     client = workbench.app.test_client()
     with client.session_transaction() as login_session:
@@ -317,11 +362,13 @@ def test_integrated_ai_weight_price_is_read_only_from_other_terminals(monkeypatc
     )
 
     assert page.status_code == 200
-    assert "当前终端为只读查看" in page.text
+    assert "当前终端的浏览器任务为只读查看" in page.text
     assert 'id="live-console"' in page.text
     assert "const canExecute=false" in page.text
+    assert "const canConfigure=true" in page.text
     assert status.status_code == 200
-    assert write.status_code == 403
+    assert write.status_code == 200
+    assert write.get_json()["daily_limit"] == 13
 
 
 def test_list_card_collection_only_opens_china_or_managed_products():
@@ -542,7 +589,7 @@ def test_browser_extension_collect_routes_1688_to_ai_original_products(monkeypat
     assert "collector" in captured[0][1]
 
 
-def test_ai_original_source_image_proxy_allows_only_1688_cdn(monkeypatch):
+def test_ai_original_source_image_proxy_allows_only_1688_cdn(monkeypatch, isolated_legacy_console_user):
     import bit.bit_interface as workbench
 
     captured = []
@@ -607,6 +654,54 @@ def test_ai_original_source_image_proxy_allows_only_1688_cdn(monkeypatch):
     assert captured[0][0].get_header("Referer") == "https://detail.1688.com/"
     assert blocked.status_code == 400
     assert len(captured) == 1
+
+
+def test_ai_original_image_proxy_canonicalizes_1688_resize_url(monkeypatch):
+    import bit.bit_interface as workbench
+
+    fetched = []
+
+    class Upstream:
+        status_code = 200
+        is_redirect = False
+        is_permanent_redirect = False
+        headers = {"Content-Type": "image/jpeg"}
+
+        def raise_for_status(self):
+            return None
+
+        def iter_content(self, _chunk_size):
+            yield b"jpeg-image-bytes"
+
+        def close(self):
+            return None
+
+    class FakeSession:
+        def mount(self, *_args):
+            return None
+
+        def get(self, url, **_kwargs):
+            fetched.append(url)
+            return Upstream()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(workbench.requests, "Session", FakeSession)
+    workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
+    client = workbench.app.test_client()
+    with client.session_transaction() as login_session:
+        login_session["workbench_user"] = _browser_extension_user()
+
+    response = client.get(
+        "/api/ai-original-products/source-image",
+        query_string={
+            "url": "https://cbu01.alicdn.com/img/ibank/photo.jpg_460x460q100.jpg_.jpg",
+        },
+    )
+
+    assert response.status_code == 200
+    assert fetched == ["https://cbu01.alicdn.com/img/ibank/photo.jpg"]
 
 
 def test_browser_extension_starts_zying_collection_from_current_browser_credential(monkeypatch):
@@ -814,6 +909,87 @@ def test_browser_extension_zying_options_uses_developers_from_current_page(monke
     ]
 
 
+def test_browser_extension_zying_options_falls_back_to_known_developers(monkeypatch):
+    import bit.bit_interface as workbench
+
+    workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
+    workbench.app.secret_key = "extension-test-secret"
+    token = workbench.create_browser_extension_token(_browser_extension_user())
+    monkeypatch.setattr(workbench, "_browser_extension_zying_options_cache", {})
+    monkeypatch.setattr(
+        workbench.bit_zying_caiji,
+        "list_zying_product_developers",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("Edge unavailable")),
+    )
+    monkeypatch.setattr(
+        workbench,
+        "db_list_mercado_product_items",
+        lambda **_kwargs: {"rows": [
+            {"product_developer_id": "17", "product_developer_name": "产品开发甲"},
+            {"product_developer_id": "18", "product_developer_name": "产品开发乙"},
+        ]},
+    )
+    monkeypatch.setattr(
+        workbench,
+        "db_sync_zying_product_developers",
+        lambda rows: {"zying_products": len(rows), "product_list": len(rows)},
+    )
+    response = workbench.app.test_client().post(
+        "/api/browser-extension/zying/options",
+        json={
+            "credential": "page-credential",
+            "categories": [{"category_id": "8", "category_name": "家居"}],
+            "refresh": True,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["developers"] == [
+        {"id": "17", "name": "产品开发甲"},
+        {"id": "18", "name": "产品开发乙"},
+    ]
+    assert "历史智赢商品" in data["developer_warning"]
+
+
+def test_browser_extension_ai_weight_price_image_proxy(monkeypatch):
+    import bit.bit_interface as workbench
+
+    class ImageResponse:
+        content = b"test-image"
+        headers = {"Content-Type": "image/jpeg"}
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+    captured = {}
+
+    def get(url, **kwargs):
+        captured.update(url=url, kwargs=kwargs)
+        return ImageResponse()
+
+    monkeypatch.setattr(workbench.requests, "get", get)
+    result = workbench._browser_extension_ai_weight_price_image(
+        "https://oss.hzzying.com/8164/DC01B0F8C2487A78.jpg"
+    )
+
+    assert result["data_url"] == "data:image/jpeg;base64,dGVzdC1pbWFnZQ=="
+    assert captured["url"].startswith("https://oss.hzzying.com/")
+    assert captured["kwargs"]["allow_redirects"] is False
+    result = workbench._browser_extension_ai_weight_price_image(
+        "https://http2.mlstatic.com/D_736568-CBT94040779606_102025-F.jpg"
+    )
+    assert result["data_url"].startswith("data:image/jpeg;base64,")
+    result = workbench._browser_extension_ai_weight_price_image(
+        "https://cbu01.alicdn.com/img/ibank/test.jpg"
+    )
+    assert result["data_url"].startswith("data:image/jpeg;base64,")
+    with pytest.raises(ValueError, match="不受支持"):
+        workbench._browser_extension_ai_weight_price_image("https://127.0.0.1/private.jpg")
+
+
 def test_browser_extension_starts_ai_weight_price_on_local_workstation(monkeypatch):
     import bit.bit_interface as workbench
 
@@ -890,3 +1066,24 @@ def test_weight_price_extension_login_and_resume_routes(monkeypatch):
     monkeypatch.setattr(workbench, "_browser_extension_user_from_token", lambda _: {
         **_browser_extension_user(), "access_version": 1, "permissions": ["ai_weight_price.view"]})
     assert client.post(root + "continue", json={"acknowledged": True}, headers=headers).status_code == 403
+
+
+def test_zying_options_fresh_developers_override_cached_response(monkeypatch):
+    import bit.bit_interface as workbench
+
+    workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
+    workbench.app.secret_key = "extension-test-secret"
+    token = workbench.create_browser_extension_token(_browser_extension_user())
+    monkeypatch.setattr(workbench, "_browser_extension_zying_options_cache", {})
+    monkeypatch.setattr(workbench, "_BROWSER_EXTENSION_ZYING_OPTIONS_CACHE_SECONDS", 60)
+    monkeypatch.setattr(workbench, "_remember_browser_extension_zying_categories", lambda data: data["categories"])
+    monkeypatch.setattr(workbench, "db_sync_zying_product_developers", lambda rows: {})
+    monkeypatch.setattr(workbench.bit_zying_caiji, "cache_zying_product_developers", lambda *args: None)
+    client = workbench.app.test_client()
+    for name in ("旧开发人员", "新开发人员"):
+        response = client.post("/api/browser-extension/zying/options", json={
+            "credential": "refresh-test-token", "categories": [],
+            "developers": [{"id": "17", "name": name}],
+        }, headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        assert response.get_json()["data"]["developers"] == [{"id": "17", "name": name}]

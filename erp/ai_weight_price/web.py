@@ -1,4 +1,3 @@
-import socket
 import re
 import time
 from pathlib import Path
@@ -7,7 +6,7 @@ from urllib.parse import urlsplit
 from flask import Blueprint, Response, g, jsonify, render_template, request, send_file, session
 
 
-def create_blueprint(service, authorize=None):
+def create_blueprint(service, authorize=None, agent_dispatch=None):
     bp = Blueprint("ai_weight_price", __name__, template_folder=str(Path(__file__).resolve().parents[2] / "bit" / "templates"))
 
     @bp.before_request
@@ -24,18 +23,38 @@ def create_blueprint(service, authorize=None):
         g.awp_is_admin = is_admin
         # Read-only task data is shared through the server store and must remain
         # available from every authenticated workbench. Browser automation still
-        # belongs to the workstation that owns Edge, so mutations stay loopback-only.
+        # belongs to the workstation that owns Edge; remote mutations are only
+        # accepted when explicitly routed to a selected Agent.
         host = urlsplit(request.host_url).hostname
         local_request = (
             host in ("127.0.0.1", "localhost", "::1")
             and request.remote_addr in ("127.0.0.1", "::1")
         )
         g.awp_local_request = local_request
+        body = request.get_json(silent=True) if request.method != "GET" else {}
+        body = body if isinstance(body, dict) else {}
+        requested_target = str(
+            body.get("execution_target") or request.args.get("execution_target") or ""
+        ).strip().lower()
+        g.awp_execution_target = requested_target if requested_target in {"agent", "local"} else ""
+        g.awp_agent_request = bool(
+            agent_dispatch and requested_target == "agent"
+        )
         if not local_request and not authorize:
             if request.path == "/ai-weight-price":
                 return render_template("ai_weight_price.html", local_only=True, can_execute=False)
             return jsonify(message="请打开本机 http://127.0.0.1:5000 控制台使用AI核重核价"), 403
-        if not local_request and request.method != "GET":
+        remote_config_write = bool(
+            authorize
+            and request.path == "/api/ai-weight-price/config"
+            and request.method == "PUT"
+        )
+        if (
+            not local_request
+            and request.method != "GET"
+            and not remote_config_write
+            and not g.awp_agent_request
+        ):
             return jsonify(message="请打开本机 http://127.0.0.1:5000 控制台使用AI核重核价"), 403
         if request.method != "GET":
             if not request.is_json or request.headers.get("X-AWP-Request") != "1":
@@ -46,6 +65,13 @@ def create_blueprint(service, authorize=None):
             g.awp_action = True
             if not isinstance(request.get_json(silent=True), dict):
                 raise ValueError("请求体必须是 JSON 对象")
+
+    def dispatch_agent(action, body=None):
+        if not getattr(g, "awp_agent_request", False):
+            return None
+        if not agent_dispatch:
+            return jsonify(message="当前服务未配置 Agent 执行入口"), 503
+        return agent_dispatch(action, body or {})
 
     @bp.errorhandler(ValueError)
     def bad_request(exc):
@@ -70,21 +96,22 @@ def create_blueprint(service, authorize=None):
     @bp.get("/ai-weight-price")
     def page():
         local_request = bool(getattr(g, "awp_local_request", False))
-        can_execute = local_request and (not authorize or authorize("ai_weight_price.execute") is None)
+        has_execute_permission = not authorize or authorize("ai_weight_price.execute") is None
+        can_execute = has_execute_permission and (local_request or bool(agent_dispatch))
         return render_template(
             "ai_weight_price.html",
             local_only=False,
             can_execute=can_execute,
+            can_configure=has_execute_permission,
             remote_read_only=not local_request,
             plugin_launch_only=bool(authorize),
+            agent_launch_available=bool(agent_dispatch),
             is_admin=bool(getattr(g, "awp_is_admin", False)),
         )
 
     @bp.get("/api/ai-weight-price/status")
     def status():
-        execution_terminal = socket.gethostname()
-        return jsonify(**service.status(), computer=execution_terminal,
-                       execution_terminal=execution_terminal)
+        return jsonify(**service.status())
 
     @bp.post("/api/ai-weight-price/model/check")
     def check_model():
@@ -101,6 +128,9 @@ def create_blueprint(service, authorize=None):
 
     @bp.post("/api/ai-weight-price/login/open")
     def open_login():
+        dispatched = dispatch_agent("login/open", request.get_json(silent=True))
+        if dispatched is not None:
+            return dispatched
         service.open_login()
         return jsonify(message="已在 Edge 打开智赢和1688，请分别登录后回到控制台确认")
 
@@ -108,15 +138,24 @@ def create_blueprint(service, authorize=None):
     def confirm_login():
         if request.get_json().get("acknowledged") is not True:
             raise ValueError("请先人工完成登录，再点击“我已成功登录”")
+        dispatched = dispatch_agent("login/confirm", request.get_json(silent=True))
+        if dispatched is not None:
+            return dispatched
         return jsonify(message="已确认智赢和1688登录，请选择分类（可留空）和页码范围", login=service.confirm_login())
 
     @bp.post("/api/ai-weight-price/supplier/login/open")
     def open_supplier_login():
+        dispatched = dispatch_agent("login/supplier", request.get_json(silent=True))
+        if dispatched is not None:
+            return dispatched
         service.open_supplier_login()
         return jsonify(message="已在同一Edge窗口打开1688，请完成登录后继续；不影响智赢登录状态")
 
     @bp.post("/api/ai-weight-price/categories/refresh")
     def categories():
+        dispatched = dispatch_agent("categories/refresh", request.get_json(silent=True))
+        if dispatched is not None:
+            return dispatched
         return jsonify(options=service.categories(), meta=service.store.state("categories_meta", {}))
 
     @bp.get("/api/ai-weight-price/categories")
@@ -169,6 +208,9 @@ def create_blueprint(service, authorize=None):
 
     @bp.post("/api/ai-weight-price/tasks/<key>/manual-execute")
     def manual_execute(key):
+        body = request.get_json(silent=True) or {}
+        if getattr(g, "awp_agent_request", False):
+            return dispatch_agent("manual-execute", {**body, "task_id": key})
         from flask import session
         actor = (session.get("workbench_user") or {}).get("username", "本机操作者")
         result = service.manual_execute(key, request.get_json(), actor)
@@ -176,7 +218,10 @@ def create_blueprint(service, authorize=None):
 
     @bp.post("/api/ai-weight-price/tasks/<key>/retry")
     def retry(key):
-        run = request.get_json().get("run", True)
+        body = request.get_json(silent=True) or {}
+        if getattr(g, "awp_agent_request", False):
+            return dispatch_agent("retry", {**body, "task_id": key})
+        run = body.get("run", True)
         pending = service.store.get(key)["status"] == "pending"
         if run:
             service.require_login(service.config.load())
@@ -191,6 +236,9 @@ def create_blueprint(service, authorize=None):
     @bp.post("/api/ai-weight-price/start")
     def start():
         body = request.get_json()
+        dispatched = dispatch_agent("start", body)
+        if dispatched is not None:
+            return dispatched
         mode = body.get("mode", "pipeline")
         if mode != "probe" and not body.get("task_id"):
             from .config import selection_params
@@ -201,11 +249,17 @@ def create_blueprint(service, authorize=None):
 
     @bp.post("/api/ai-weight-price/stop")
     def stop():
+        dispatched = dispatch_agent("stop", request.get_json(silent=True))
+        if dispatched is not None:
+            return dispatched
         service.stop()
         return jsonify(message="停止请求已记录，当前操作结束后保留进度退出")
 
     @bp.post("/api/ai-weight-price/terminate")
     def terminate():
+        dispatched = dispatch_agent("terminate", request.get_json(silent=True))
+        if dispatched is not None:
+            return dispatched
         result = service.terminate_current()
         message = ("本次任务已终止并清空；历史商品与登录状态已保留" if result["cleared"]
                    else "终止请求已记录；当前操作退出后将自动清空本次任务数据")
@@ -215,11 +269,17 @@ def create_blueprint(service, authorize=None):
     def continue_after_human():
         if request.get_json().get("acknowledged") is not True:
             raise ValueError("请先在可见Edge完成1688登录或人机审核，并打开确认开关")
+        dispatched = dispatch_agent("continue", request.get_json(silent=True))
+        if dispatched is not None:
+            return dispatched
         service.continue_after_human()
         return jsonify(message="已从暂停的当前商品继续执行")
 
     @bp.post("/api/ai-weight-price/skip-current")
     def skip_current():
+        dispatched = dispatch_agent("skip-current", request.get_json(silent=True))
+        if dispatched is not None:
+            return dispatched
         service.skip_current_exception()
         return jsonify(message="已跳过当前异常商品，继续执行下一件")
 

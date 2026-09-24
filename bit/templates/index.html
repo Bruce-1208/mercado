@@ -9680,15 +9680,15 @@
         }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='console-ui.css') }}?v=20260921-align1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-products.css') }}?v=20260923-variants1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-products.css') }}?v=20260923-batch-delete1">
     <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-workbench.css') }}?v=20260921">
-    <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20260923-variants1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20260923-batch-delete1">
     <script src="{{ url_for('static', filename='console-ui.js') }}?v=20260915"></script>
     <script src="{{ url_for('static', filename='copy-anywhere.js') }}?v=20260922"></script>
     <script src="{{ url_for('static', filename='appeal-polling.js') }}?v=20260922"></script>
-    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260923-variants1"></script>
+    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260923-batch-delete1"></script>
     <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20260921"></script>
-    <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260923-variants1"></script>
+    <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260923-batch-delete1"></script>
     <style>
         .ai-video-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .75fr); gap: 18px; align-items: start; }
         .ai-video-panel { padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
@@ -10541,6 +10541,7 @@
                     <div class="p1688-batch-bar">
                         <label><input id="products-1688-select-all" type="checkbox" onchange="products1688ToggleAll(this.checked)"> 全选当前页</label>
                         <strong id="products-1688-selection">已选择 0 件</strong>
+                        <button class="danger" id="products-1688-delete" type="button" onclick="products1688DeleteSelected()" disabled>删除所选</button>
                         <label class="p1688-batch-review"><span>批量审核状态</span><select id="products-1688-review-status"><option value="">选择状态</option><option value="unreviewed">未审核</option><option value="approved">已审核</option><option value="suspected">疑似风险</option><option value="infringing">侵权</option><option value="risk">待复核</option></select></label>
                         <button class="secondary" id="products-1688-review-submit" type="button" onclick="products1688ApplyReviewStatus()" disabled>更新审核状态</button>
                         <button class="primary" type="button" onclick="products1688SendSelectedToWorkflow()">送入 AI 原创任务</button>
@@ -10609,6 +10610,7 @@
                     <div class="ai-original-list-head">
                         <label><input id="ai-original-select-all" type="checkbox" onchange="toggleAllAiOriginalProducts(this.checked)"> 全选当前结果</label>
                         <strong id="ai-original-selection">已选择 0 件</strong>
+                        <button class="danger" id="ai-original-delete" type="button" onclick="deleteSelectedAiOriginalProducts()" disabled>删除所选</button>
                         <span id="ai-original-total">共 0 件</span>
                     </div>
                     <div class="ai-original-grid" id="ai-original-grid"><div class="empty-state">打开模块后加载 1688 商品</div></div>
@@ -11684,7 +11686,7 @@
 
                         <div class="field">
                             <label for="daily-task-max-workers">并发进程</label>
-                            <input type="number" id="daily-task-max-workers" value="10" min="1" max="30">
+                            <input type="number" id="daily-task-max-workers" value="10" min="1" max="10">
                         </div>
 
                         <div class="field">
