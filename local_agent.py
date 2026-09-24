@@ -34,10 +34,11 @@ from urllib.parse import urlsplit
 import requests
 
 
-AGENT_VERSION = "1.2.3"
+AGENT_VERSION = "1.2.4"
 DEFAULT_SERVER_URL = "https://wuhanzeshun.com"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
+RUNNING_HEARTBEAT_SECONDS = 5.0
 LOG_FLUSH_SECONDS = 2.0
 LOG_UPLOAD_MIN_INTERVAL_SECONDS = 5.0
 RATE_LIMIT_MIN_SECONDS = 60.0
@@ -1198,6 +1199,9 @@ class LocalAgent:
                     getattr(self.config, "name", "") or ""
                 ),
                 "BIT_EXECUTION_HOSTNAME": socket.gethostname(),
+                # Keep the visible Edge profile and local AWP runtime files
+                # outside versioned business releases so an Agent update does
+                # not log the terminal out or lose its browser session.
                 "PYTHONUNBUFFERED": "1",
                 "PYTHONIOENCODING": "utf-8",
             }
@@ -1301,9 +1305,8 @@ class LocalAgent:
                 else:
                     heartbeat_failures = 0
                     last_heartbeat_success = now
-                    next_heartbeat_at = time.monotonic() + min(
-                        1.0, self.config.heartbeat_seconds
-                    )
+                    interval = min(RUNNING_HEARTBEAT_SECONDS, self.config.heartbeat_seconds)
+                    next_heartbeat_at = time.monotonic() + interval + random.uniform(0, interval * 0.1)
                     if not pending_logs:
                         self._rate_limit_failures = 0
                     cancel_ids = set(heartbeat.get("cancel_job_ids") or ())
@@ -1409,7 +1412,7 @@ class LocalAgent:
                 self._rate_limit_failures = 0
                 if self.config.once:
                     return 0
-                if self.shutdown_event.wait(self.config.poll_seconds):
+                if self.shutdown_event.wait(self.config.poll_seconds + random.uniform(0, self.config.poll_seconds * 0.1)):
                     self.log("Agent 已停止")
                     return 0
             except KeyboardInterrupt:

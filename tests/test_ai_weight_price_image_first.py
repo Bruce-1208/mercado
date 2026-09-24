@@ -1,5 +1,6 @@
 """Current workflow regressions using isolated in-memory ERP/supplier fixtures."""
 import io
+import json
 import threading
 
 import pytest
@@ -560,10 +561,16 @@ def test_1688_login_pause_keeps_current_item_and_resume_starts_it_before_collect
     assert browser.records['1'] == {'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '待审核'}
 
     started = []
-    monkeypatch.setattr(service, 'start', lambda *args: started.append(args))
-    service.continue_after_human()
+    monkeypatch.setattr(service, 'start', lambda *args, **kwargs: started.append((args, kwargs)))
+    service.continue_after_human(runtime_api_key='account-dashscope-key')
     assert service.store.state('circuit') is None
-    assert started == [('pipeline', None, config['run_selection'], 10, True)]
+    assert started == [(('pipeline', None, config['run_selection'], 10, True), {
+        'runtime_api_key': 'account-dashscope-key',
+    })]
+    assert 'account-dashscope-key' not in json.dumps({
+        'run': service.store.state('run', {}),
+        'logs': service.store.logs(limit=2000),
+    })
 
     released['value'] = True
     before_resume = len(browser.operations)
@@ -589,11 +596,13 @@ def test_old_login_redirect_exception_is_migrated_to_resume_switch(tmp_path, mon
     service = Service(tmp_path)
     assert service.store.state('circuit')['kind'] == 'browser_attention'
     started = []
-    monkeypatch.setattr(service, 'start', lambda *args: started.append(args))
+    monkeypatch.setattr(service, 'start', lambda *args, **kwargs: started.append((args, kwargs)))
     service.continue_after_human()
     assert service.store.get('old-1')['status'] == 'pending'
     assert service.store.state('circuit') is None
-    assert started == [('pipeline', None, selection, 10, True)]
+    assert started == [(('pipeline', None, selection, 10, True), {
+        'runtime_api_key': '',
+    })]
 
 
 @pytest.mark.parametrize('score,approved', [(.94999, False), (.95, True), (.99, True)])

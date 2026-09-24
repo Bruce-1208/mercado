@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .request_budget import admission
+
 import json
 import logging
 import os
@@ -132,14 +134,15 @@ class MercadoLibreClient:
             try:
                 request_headers = dict(headers or {})
                 request_headers["Authorization"] = f"Bearer {self.access_token}"
-                response = self.session.request(
-                    method,
-                    url,
-                    params=params,
-                    headers=request_headers,
-                    json=json_body,
-                    timeout=self.timeout,
-                )
+                with admission(self.access_token):
+                    response = self.session.request(
+                        method,
+                        url,
+                        params=params,
+                        headers=request_headers,
+                        json=json_body,
+                        timeout=self.timeout,
+                    )
             except requests.RequestException as exc:
                 if attempt < attempts - 1:
                     delay = min(2**attempt, 8)
@@ -215,13 +218,14 @@ class MercadoLibreClient:
         attempts = max(1, min(4, int(max_attempts or 1)))
         for attempt in range(attempts):
             try:
-                response = self.session.request(
-                    method,
-                    url,
-                    params=params,
-                    headers={"Authorization": f"Bearer {self.access_token}"},
-                    timeout=self.timeout,
-                )
+                with admission(self.access_token):
+                    response = self.session.request(
+                        method,
+                        url,
+                        params=params,
+                        headers={"Authorization": f"Bearer {self.access_token}"},
+                        timeout=self.timeout,
+                    )
             except requests.RequestException as exc:
                 if attempt < attempts - 1:
                     delay = min(2**attempt, 8)

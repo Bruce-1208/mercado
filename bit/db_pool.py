@@ -86,7 +86,7 @@ def _pooling_disabled() -> bool:
 
 def default_connection_config() -> dict[str, Any]:
     return {
-        "host": os.environ.get("MYSQL_HOST", os.environ.get("DB_HOST", "192.168.1.11")),
+        "host": os.environ.get("MYSQL_HOST", os.environ.get("DB_HOST", "127.0.0.1")),
         "port": int(os.environ.get("MYSQL_PORT", os.environ.get("DB_PORT", "3306"))),
         "user": os.environ.get("MYSQL_USER", os.environ.get("DB_USER", "mercado")),
         "password": os.environ.get(

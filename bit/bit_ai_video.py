@@ -46,6 +46,13 @@ SEEDANCE_PROVIDER = "volcengine-seedance"
 WAN_PROVIDER = "dashscope-wan3"
 LOCAL_PROVIDER = "local-ffmpeg"
 PROVIDER_ORDER = (SEEDANCE_PROVIDER, WAN_PROVIDER)
+LOCAL_FIT_MODES = {"crop", "pad"}
+LOCAL_FIT_MODE_LABELS = {
+    "crop": "居中裁剪铺满 9:16",
+    "pad": "完整保留画面并补黑边",
+}
+LOCAL_OUTPUT_WIDTH = 720
+LOCAL_OUTPUT_HEIGHT = 1280
 SEEDANCE_MODEL = "doubao-seedance-2-5-260628"
 WAN_MODELS = {"wan3.0-video-prime", "wan3.0-video"}
 WAN_REGIONS = {
@@ -369,6 +376,12 @@ def _public_job(job: dict) -> dict:
             "kind": row.get("kind"),
             "size": row.get("size"),
             "source": "url" if row.get("source_url") else "upload",
+            "preview_url": (
+                f"/api/ai-videos/jobs/{quote(str(job['id']))}/assets/"
+                f"{quote(str(row.get('id') or ''))}"
+                if row.get("id")
+                else ""
+            ),
         }
         for row in job.get("assets") or []
     ]
@@ -635,6 +648,11 @@ def _parse_positive_int(value: object, default: int, minimum: int, maximum: int)
     return max(minimum, min(maximum, parsed))
 
 
+def _normalize_local_fit_mode(value: object) -> str:
+    mode = str(value or "crop").strip().lower()
+    return mode if mode in LOCAL_FIT_MODES else "crop"
+
+
 def _save_assets(job_id: str, uploads, *, require_any: bool = True, start_index: int = 1) -> list[dict]:
     uploads = [upload for upload in uploads or [] if upload and upload.filename]
     if not uploads:
@@ -762,6 +780,7 @@ def _fingerprint(job: dict) -> str:
         "provider_order": job.get("provider_order") or list(PROVIDER_ORDER),
         "models": job.get("models") or {},
         "local_transcode": bool(job.get("local_transcode")),
+        "local_fit_mode": _normalize_local_fit_mode(job.get("local_fit_mode")),
     }
     return hashlib.sha256(
         json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")
@@ -793,6 +812,7 @@ def create_job(uploads, form: dict) -> dict:
         local_transcode = str(form.get("local_transcode") or "").strip().lower() in {
             "1", "true", "yes", "on",
         }
+        local_fit_mode = _normalize_local_fit_mode(form.get("local_fit_mode"))
         file_assets = _save_assets(job_id, uploads, require_any=False)
         url_assets = _save_url_assets(
             job_id,
@@ -851,6 +871,7 @@ def create_job(uploads, form: dict) -> dict:
             },
             "model": "ffmpeg-h264-aac" if local_transcode else seedance["model"],
             "local_transcode": local_transcode,
+            "local_fit_mode": local_fit_mode,
             "provider_task_id": "",
             "provider_attempts": [],
             "credential_owner_id": credential_owner_id,
@@ -859,7 +880,9 @@ def create_job(uploads, form: dict) -> dict:
             "publish_attempts": [],
         }
         job["fingerprint"] = _fingerprint(job)
-        reusable = _find_reusable_job(job["fingerprint"])
+        reusable = None if str(form.get("force_new") or "").lower() in {
+            "1", "true", "yes", "on",
+        } else _find_reusable_job(job["fingerprint"])
         if reusable:
             requested_name = " ".join(str(form.get("name") or "").split())[:120]
             if requested_name and requested_name != reusable.get("name"):
@@ -920,6 +943,143 @@ def update_job(job_id: str, changes: dict) -> dict:
         job["name"] = name
     _write_manifest(job)
     return _public_job(job)
+
+
+def _parse_retry_list(value: object, label: str) -> list:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{label}参数无效") from exc
+    if not isinstance(value, list):
+        raise ValueError(f"{label}参数无效")
+    return value
+
+
+def retry_job(job_id: str, changes: dict | None = None, uploads=None) -> dict:
+    """Create a fresh task from a terminal task while reusing its stored assets."""
+    source = get_job(job_id)
+    if source.get("status") in ACTIVE_STATUSES:
+        raise ValueError("当前视频任务仍在执行，完成或失败后才能重试")
+    if source.get("status") not in TERMINAL_STATUSES:
+        raise ValueError("当前视频任务状态不支持重试")
+
+    changes = dict(changes or {})
+    source_assets = {
+        str(asset.get("id")): asset
+        for asset in source.get("assets") or []
+        if isinstance(asset, dict) and asset.get("id")
+    }
+    source_ids_value = changes.get("source_asset_ids")
+    source_ids = (
+        [str(value) for value in _parse_retry_list(source_ids_value, "历史素材")]
+        if source_ids_value is not None
+        else list(source_assets)
+    )
+    if len(set(source_ids)) != len(source_ids):
+        raise ValueError("历史素材不能重复")
+    if any(asset_id not in source_assets for asset_id in source_ids):
+        raise ValueError("部分历史素材已不存在，请刷新任务后重试")
+
+    new_uploads = [upload for upload in uploads or [] if upload and upload.filename]
+    order_value = changes.get("asset_order")
+    if order_value is None:
+        order = (
+            [{"source": "history", "id": asset_id} for asset_id in source_ids]
+            + [{"source": "file", "index": index} for index in range(len(new_uploads))]
+        )
+    else:
+        order = _parse_retry_list(order_value, "素材顺序")
+    if len(order) != len(source_ids) + len(new_uploads):
+        raise ValueError("素材顺序参数无效")
+
+    expected_history = set(source_ids)
+    used_history = []
+    used_files = []
+    ordered_uploads = []
+    opened = []
+    try:
+        for row in order:
+            if not isinstance(row, dict):
+                raise ValueError("素材顺序参数无效")
+            source_type = str(row.get("source") or "")
+            if source_type == "history":
+                asset_id = str(row.get("id") or "")
+                if asset_id not in expected_history or asset_id in used_history:
+                    raise ValueError("素材顺序参数无效")
+                asset = source_assets[asset_id]
+                assets_dir = (_job_dir(job_id) / "assets").resolve()
+                path = (assets_dir / str(asset.get("stored_name") or "")).resolve()
+                if path.parent != assets_dir or not path.is_file():
+                    raise ValueError(f"历史素材“{asset.get('name') or asset_id}”已不存在")
+                handle = path.open("rb")
+                opened.append(handle)
+                ordered_uploads.append(FileStorage(
+                    stream=handle,
+                    filename=asset.get("name") or asset.get("stored_name") or f"asset-{asset_id}",
+                    content_type=asset.get("mime_type") or "application/octet-stream",
+                ))
+                used_history.append(asset_id)
+            elif source_type == "file":
+                try:
+                    index = int(row.get("index"))
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("素材顺序参数无效") from exc
+                if index < 0 or index >= len(new_uploads) or index in used_files:
+                    raise ValueError("素材顺序参数无效")
+                ordered_uploads.append(new_uploads[index])
+                used_files.append(index)
+            else:
+                raise ValueError("素材顺序参数无效")
+        if set(used_history) != expected_history or set(used_files) != set(range(len(new_uploads))):
+            raise ValueError("素材顺序参数无效")
+
+        source_target = source.get("target") if isinstance(source.get("target"), dict) else {}
+        target_changes = changes.get("target") if isinstance(changes.get("target"), dict) else {}
+        form = dict(changes)
+        for key in ("link_id", "item_id", "title", "store_name", "site_id", "thumbnail_url"):
+            if key in target_changes:
+                form[key] = target_changes[key]
+            elif key not in form:
+                form[key] = source_target.get(key, "")
+        if "name" not in form:
+            form["name"] = source.get("name") or ""
+        if "duration" not in form:
+            form["duration"] = source.get("duration") or 10
+        if "prompt" not in form:
+            form["prompt"] = source.get("user_prompt") or ""
+        if "local_transcode" not in form:
+            form["local_transcode"] = "1" if source.get("local_transcode") else "0"
+        if "local_fit_mode" not in form:
+            form["local_fit_mode"] = source.get("local_fit_mode") or "crop"
+        form["credential_owner_id"] = _job_owner(source)
+        form["force_new"] = "1"
+        # The files have already been assembled in the requested order above;
+        # these retry-only fields are not understood by the normal creator.
+        form.pop("source_asset_ids", None)
+        form.pop("asset_order", None)
+        created = create_job(ordered_uploads, form)
+    finally:
+        for handle in opened:
+            handle.close()
+
+    new_job = get_job(created["id"])
+    new_job["retry_of"] = str(source["id"])
+    _write_manifest(new_job)
+    return _public_job(new_job)
+
+
+def delete_job(job_id: str) -> dict:
+    job = get_job(job_id)
+    if job.get("status") in ACTIVE_STATUSES:
+        raise ValueError("视频生成尚未完成，不能删除")
+    job_dir = _job_dir(job_id)
+    shutil.rmtree(job_dir)
+    return {
+        "id": str(job_id),
+        "name": str(job.get("name") or ""),
+        "deleted": True,
+    }
 
 
 def _signing_secret(job=None) -> bytes:
@@ -1475,11 +1635,6 @@ def _validate_local_video_info(
 ) -> dict:
     if width <= 0 or height <= 0:
         raise RuntimeError("无法识别源视频分辨率")
-    if abs((width / height) - (9 / 16)) > 0.015:
-        raise RuntimeError(
-            f"仅转换格式要求源视频已是 9:16，当前识别为 {width}×{height}；"
-            "如需重构画面请使用 AI 生成模式"
-        )
     if not 9.5 <= duration <= 60.5:
         raise RuntimeError(
             f"仅转换格式要求源视频为 10–60 秒，当前识别为 {duration:g} 秒"
@@ -1488,8 +1643,27 @@ def _validate_local_video_info(
         "duration": duration,
         "width": width,
         "height": height,
+        "source_ratio": width / height,
         "has_audio": bool(has_audio),
     }
+
+
+def _local_video_filter(fit_mode: str) -> str:
+    """Build a non-AI 9:16 conversion filter without distorting the source."""
+    mode = _normalize_local_fit_mode(fit_mode)
+    if mode == "pad":
+        return (
+            f"scale={LOCAL_OUTPUT_WIDTH}:{LOCAL_OUTPUT_HEIGHT}:"
+            "force_original_aspect_ratio=decrease,"
+            f"pad={LOCAL_OUTPUT_WIDTH}:{LOCAL_OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,"
+            "setsar=1"
+        )
+    return (
+        f"scale={LOCAL_OUTPUT_WIDTH}:{LOCAL_OUTPUT_HEIGHT}:"
+        "force_original_aspect_ratio=increase,"
+        f"crop={LOCAL_OUTPUT_WIDTH}:{LOCAL_OUTPUT_HEIGHT},"
+        "setsar=1"
+    )
 
 
 def _run_local_transcode(job: dict) -> None:
@@ -1504,6 +1678,8 @@ def _run_local_transcode(job: dict) -> None:
     if source.parent != (_job_dir(job["id"]) / "assets").resolve() or not source.is_file():
         raise RuntimeError("找不到待转换的源视频")
     info = _probe_local_video(source, ffmpeg, ffprobe)
+    fit_mode = _normalize_local_fit_mode(job.get("local_fit_mode"))
+    fit_label = LOCAL_FIT_MODE_LABELS[fit_mode]
     destination = _job_dir(job["id"]) / "mercado-video.mp4"
     temporary = destination.with_suffix(".part.mp4")
     command = [ffmpeg, "-y", "-i", str(source)]
@@ -1512,7 +1688,7 @@ def _run_local_transcode(job: dict) -> None:
     command.extend(["-map", "0:v:0", "-map", "0:a:0" if info["has_audio"] else "1:a:0"])
     command.extend(
         [
-            "-vf", "scale=720:1280,setsar=1",
+            "-vf", _local_video_filter(fit_mode),
             "-c:v", "libx264",
             "-preset", "medium",
             "-crf", "20",
@@ -1530,7 +1706,10 @@ def _run_local_transcode(job: dict) -> None:
     if not info["has_audio"]:
         command.append("-shortest")
     command.append(str(temporary))
-    job.update(status="generating", message="正在本地转换为美客多兼容 MP4，不调用 AI")
+    job.update(
+        status="generating",
+        message=f"正在本地转换为美客多兼容 MP4（{fit_label}），不调用 AI",
+    )
     _write_manifest(job)
     try:
         completed = subprocess.run(
@@ -1567,12 +1746,18 @@ def _run_local_transcode(job: dict) -> None:
     os.replace(temporary, destination)
     job.update(
         status="succeeded",
-        message="本地格式转换完成，未调用 AI 模型",
+        message=f"本地格式转换完成，未调用 AI 模型（{fit_label}）",
         duration=max(10, min(60, int(round(info["duration"])))),
         output_filename=destination.name,
         output_size=output_size,
         completed_at=_now_iso(),
-        provider_usage={"local_transcode": True, **info},
+        provider_usage={
+            "local_transcode": True,
+            "fit_mode": fit_mode,
+            "output_width": LOCAL_OUTPUT_WIDTH,
+            "output_height": LOCAL_OUTPUT_HEIGHT,
+            **info,
+        },
     )
     _write_manifest(job)
 
@@ -1713,6 +1898,21 @@ def output_path(job_id: str) -> Path:
     return path
 
 
+def asset_path(job_id: str, asset_id: str) -> Path:
+    job = get_job(job_id)
+    asset = next(
+        (row for row in job.get("assets") or [] if str(row.get("id")) == str(asset_id)),
+        None,
+    )
+    if not asset:
+        raise ValueError("素材不存在")
+    assets_dir = (_job_dir(job_id) / "assets").resolve()
+    path = (assets_dir / str(asset.get("stored_name") or "")).resolve()
+    if path.parent != assets_dir or not path.is_file():
+        raise ValueError("素材文件不存在")
+    return path
+
+
 def cover_path(job_id: str) -> Path:
     job = get_job(job_id)
     asset = next(
@@ -1782,6 +1982,7 @@ __all__ = (
     "build_provider_payload",
     "cover_path",
     "create_job",
+    "delete_job",
     "get_job",
     "list_jobs",
     "output_path",

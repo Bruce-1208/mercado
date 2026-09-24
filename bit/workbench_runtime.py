@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Mapping, MutableMapping, Sequence
 
 
-DEFAULT_SERVER_DB_HOST = "192.168.1.11"
+DEFAULT_SERVER_DB_HOST = "127.0.0.1"
 DEFAULT_DB_API_BASE_URL = "https://wuhanzeshun.com"
 DEFAULT_CONFIG_FILENAME = "workbench-runtime.json"
 

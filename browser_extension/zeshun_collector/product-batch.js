@@ -168,6 +168,31 @@ async function closeProductBatchWindow(run) {
   } catch (_) {}
 }
 
+function productBatchTabUrl(tab) {
+  const candidates = [tab && tab.pendingUrl, tab && tab.url]
+    .map(value => String(value || "").trim())
+    .filter(Boolean);
+  let invalidUrl = "";
+  for (const value of candidates) {
+    // During a new tab navigation Chromium may expose about:blank (or an
+    // internal error page) in `url` while the real destination is still in
+    // `pendingUrl`. Keep polling instead of treating that short transition as
+    // a login or verification redirect.
+    if (/^(?:about:blank|chrome(?:-error)?:\/\/|edge(?:-error)?:\/\/|view-source:)/i.test(value)) {
+      continue;
+    }
+    try {
+      return productBatchUrl(value);
+    } catch (_) {
+      invalidUrl = value;
+    }
+  }
+  if (invalidUrl) {
+    throw new Error("页面跳转到登录或验证地址，请先在前端页面完成验证");
+  }
+  return "";
+}
+
 async function readProductBatchPage(run, url, type, consume) {
   if (run.stop) return null;
   // Mercado 列表和智赢详情浮层都可能只在激活标签页完成渲染。
@@ -183,8 +208,11 @@ async function readProductBatchPage(run, url, type, consume) {
       let lastError = "页面未加载完成";
       while (!run.stop && Date.now() < deadline) {
         const current = await chrome.tabs.get(tab.id);
-        try { productBatchUrl(current.url); } catch (_) {
-          throw new Error("页面跳转到登录或验证地址，请先在前端页面完成验证");
+        const currentUrl = productBatchTabUrl(current);
+        if (!currentUrl) {
+          lastError = "页面正在打开，等待商品页加载";
+          await new Promise(resolve => setTimeout(resolve, 500));
+          continue;
         }
         // Mercado 页面可能长期保持 loading（统计、推荐和浮层请求不会结束），
         // 不能把 tabs.status === complete 当作内容脚本已经可用的前置条件。

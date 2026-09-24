@@ -326,14 +326,15 @@ def daily_agent_interface(agent_interface):
     return user, store, client
 
 
-def test_daily_task_uses_agent_queue_and_reports_logs(daily_agent_interface, monkeypatch):
+@pytest.mark.parametrize("appeal_types", [["侵权", "延误率"], ["算法模式"]])
+def test_daily_task_uses_agent_queue_and_reports_logs(daily_agent_interface, monkeypatch, appeal_types):
     _user, store, client = daily_agent_interface
     def unexpected_local_run(**_kwargs):
         pytest.fail("Agent job must not run on the web server")
     monkeypatch.setattr(bit_interface.bit_daily_task, "acquire_daily_task_lock", unexpected_local_run)
     response = client.post("/api/tasks/daily/start", json={
         "execution_target": "agent", "agent_id": "agent-daily-pc", "mode": "once",
-        "appeal_types": ["侵权", "延误率"], "salespeople": ["业务员A"], "max_workers": 4,
+        "appeal_types": appeal_types, "salespeople": ["业务员A"], "max_workers": 4,
     })
     assert response.status_code == 200
     task = response.get_json()["data"]
@@ -341,6 +342,7 @@ def test_daily_task_uses_agent_queue_and_reports_logs(daily_agent_interface, mon
     assert task["execution_target"] == "agent"
     assert task["status"] == "queued"
     assert store.get_job(job_id)["payload"]["max_workers"] == 4
+    assert store.get_job(job_id)["payload"]["appeal_types"] == appeal_types
     assert store.get_job(job_id)["payload"]["agent_name"] == "任务电脑"
     claimed = store.claim_job("agent-daily-pc")
     assert claimed["job_type"] == "daily_task"

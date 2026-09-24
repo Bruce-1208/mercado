@@ -37,6 +37,14 @@ function products1688DisplayImageUrl(value) {
 }
 
 function products1688ImageError(image) {
+  let candidates = [];
+  try { candidates = JSON.parse(image.dataset.imageCandidates || "[]"); } catch (_error) {}
+  const next = candidates.shift();
+  if (next) {
+    image.dataset.imageCandidates = JSON.stringify(candidates);
+    image.src = products1688DisplayImageUrl(next);
+    return;
+  }
   image.onerror = null;
   image.removeAttribute("src");
   image.classList.add("is-missing");
@@ -63,6 +71,20 @@ function products1688Images(row) {
   const original = products1688Original(row);
   const values = [original.main_image_url, ...(Array.isArray(original.images) ? original.images : [])];
   return [...new Set(values.map(value => String(value || "").trim()).filter(value => /^https?:\/\//i.test(value)))].slice(0, 20);
+}
+
+function products1688ImageFallbacks(images) {
+  const fallbacks = images.slice(1);
+  images.forEach(value => {
+    try {
+      const url = new URL(value);
+      if (/^cbu\d+\.alicdn\.com$/i.test(url.hostname) && /\.jpg$/i.test(url.pathname)) {
+        url.pathname = url.pathname.replace(/\.jpg$/i, ".webp");
+        fallbacks.push(url.href);
+      }
+    } catch (_error) {}
+  });
+  return [...new Set(fallbacks)];
 }
 
 function products1688Status(row) {
@@ -163,7 +185,7 @@ function products1688RenderRows() {
     const title = original.title || row.title || "未命名商品";
     const sourceUrl = products1688SourceUrl(row);
     const imageMarkup = image
-      ? `<img class="p1688-thumb" src="${products1688Escape(image)}" alt="1688 商品主图" loading="lazy" referrerpolicy="no-referrer" onerror="products1688ImageError(this)">`
+      ? `<img class="p1688-thumb" src="${products1688Escape(image)}" data-image-candidates="${products1688Escape(JSON.stringify(products1688ImageFallbacks(images)))}" alt="1688 商品主图" loading="lazy" referrerpolicy="no-referrer" onerror="products1688ImageError(this)">`
       : `<span class="p1688-thumb"></span>`;
     const linkedImage = sourceUrl
       ? `<a class="p1688-product-image-link" href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer" title="打开 1688 商品页">${imageMarkup}</a>`
@@ -312,6 +334,33 @@ function products1688PropertyRows(properties) {
   return rows.map(item => `<div class="p1688-property"><b>${products1688Escape(item.name || item.key || "属性")}</b><span>${products1688Escape(item.value ?? item.value_name ?? "—")}</span></div>`).join("");
 }
 
+function products1688VariationLabel(variation) {
+  const combinations = variation?.attribute_combinations || variation?.attributes || variation?.properties || [];
+  const labels = Array.isArray(combinations) ? combinations.map((item, index) => {
+    const name = item?.name || item?.id || `规格${index + 1}`;
+    const value = item?.value_name ?? item?.value ?? item?.text ?? item?.name_value ?? "";
+    return value ? `${name}: ${value}` : "";
+  }).filter(Boolean) : [];
+  return labels.join(" / ") || variation?.label || variation?.name || variation?.sku_name || "—";
+}
+
+function products1688VariationRows(variations) {
+  const rows = Array.isArray(variations) ? variations.filter(item => item && typeof item === "object").slice(0, 200) : [];
+  if (!rows.length) return '<div class="p1688-variant-empty">采集快照没有 SKU 变体。</div>';
+  return `<div class="p1688-variant-wrap"><table><thead><tr><th>变体</th><th>SKU（选填）</th><th>库存</th><th>采购价</th><th>加价</th><th>加重</th><th>图片</th></tr></thead><tbody>${rows.map(variation => {
+    const imageValues = [variation.image_url, variation.image, ...(Array.isArray(variation.images) ? variation.images : [])]
+      .map(value => typeof value === "object" ? (value.url || value.source || value.src || "") : value)
+      .filter(value => /^https?:\/\//i.test(String(value || ""))).slice(0, 4);
+    const sku = variation.seller_sku || variation.sku || variation.sku_id || variation.skuId || variation.id || "";
+    const price = variation.price ?? variation.price_text ?? "—";
+    const stock = variation.available_quantity ?? variation.stock ?? variation.stock_text ?? "—";
+    const extraPrice = variation.price_addition ?? variation.additional_price ?? variation.markup ?? "—";
+    const extraWeight = variation.weight_addition_g ?? variation.additional_weight_g ?? variation.added_weight_g ?? "—";
+    const images = imageValues.length ? imageValues.map(url => `<a href="${products1688Escape(url)}" target="_blank" rel="noopener noreferrer"><img src="${products1688Escape(products1688DisplayImageUrl(url))}" alt="变体图片" loading="lazy" referrerpolicy="no-referrer" onerror="products1688ImageError(this)"></a>`).join("") : "—";
+    return `<tr><td>${products1688Escape(products1688VariationLabel(variation))}</td><td>${products1688Escape(sku || "—")}</td><td>${products1688Escape(stock)}</td><td>${products1688Escape(price)}</td><td>${products1688Escape(extraPrice)}</td><td>${products1688Escape(extraWeight)}</td><td><div class="p1688-variant-images">${images}</div></td></tr>`;
+  }).join("")}</tbody></table></div>`;
+}
+
 function products1688OpenDetail(id) {
   const row = products1688Rows.find(item => Number(item.id) === Number(id));
   if (!row) return;
@@ -339,6 +388,7 @@ function products1688OpenDetail(id) {
     </div>
   </div>
   <section class="p1688-detail-section"><h4>商品属性（${Array.isArray(original.properties) ? original.properties.length : 0}）</h4><div class="p1688-property-grid">${products1688PropertyRows(original.properties) || '<span class="p1688-muted">页面未采集到规格属性</span>'}</div></section>
+  <section class="p1688-detail-section"><h4>商品变体 / SKU（${Array.isArray(original.variations) ? original.variations.length : 0}）</h4>${products1688VariationRows(original.variations)}</section>
   <section class="p1688-detail-section"><h4>1688 商品详情</h4><p class="p1688-description">${products1688Escape(original.description_text || "页面未采集到详情描述")}</p></section>`;
   dialog.showModal();
 }

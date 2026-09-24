@@ -30,10 +30,32 @@ function aiOriginalDisplayImageUrl(value) {
 }
 
 function aiOriginalImageError(image) {
+  let candidates = [];
+  try { candidates = JSON.parse(image.dataset.imageCandidates || "[]"); } catch (_error) {}
+  const next = candidates.shift();
+  if (next) {
+    image.dataset.imageCandidates = JSON.stringify(candidates);
+    image.src = aiOriginalDisplayImageUrl(next);
+    return;
+  }
   image.onerror = null;
   image.removeAttribute("src");
   image.classList.add("is-missing");
   image.alt = "主图加载失败";
+}
+
+function aiOriginalSourceImageFallbacks(original) {
+  const sources = [original.main_image_url, ...(original.images || [])].filter(Boolean);
+  return [...new Set(sources.slice(1).concat(sources.flatMap(value => {
+    try {
+      const url = new URL(value);
+      if (/^cbu\d+\.alicdn\.com$/i.test(url.hostname) && /\.jpg$/i.test(url.pathname)) {
+        url.pathname = url.pathname.replace(/\.jpg$/i, ".webp");
+        return [url.href];
+      }
+    } catch (_error) {}
+    return [];
+  })))];
 }
 
 function aiOriginalStatus(message, kind = "") {
@@ -161,16 +183,134 @@ function aiOriginalVariationLabel(variation) {
   return combinations.map(item => `${item.name || item.id || "规格"}: ${item.value_name || item.value || item.text || ""}`).filter(Boolean).join(" / ");
 }
 
+function aiOriginalVariationDimensionsFromRows(rows) {
+  const dimensions = new Map();
+  (Array.isArray(rows) ? rows : []).forEach(variation => {
+    const combinations = variation?.attribute_combinations || variation?.attributes || variation?.properties || [];
+    if (!Array.isArray(combinations)) return;
+    combinations.forEach((attribute, index) => {
+      if (!attribute || typeof attribute !== "object") return;
+      const id = String(attribute.id || "");
+      if (["SELLER_SKU", "SKU"].includes(id.toUpperCase())) return;
+      const name = String(attribute.name || id || `规格${index + 1}`);
+      const key = (id || name).toLocaleLowerCase();
+      const value = String(attribute.value_name ?? attribute.value ?? attribute.text ?? "").trim();
+      if (!value) return;
+      if (!dimensions.has(key)) dimensions.set(key, {id, name, values: []});
+      if (!dimensions.get(key).values.includes(value)) dimensions.get(key).values.push(value);
+    });
+  });
+  return [...dimensions.values()];
+}
+
+function renderAiOriginalEditorDimensions() {
+  const node = document.getElementById("ai-original-editor-variation-dimensions");
+  if (!node) return;
+  const rows = Array.isArray(aiOriginalEditorState?.variationDimensions) ? aiOriginalEditorState.variationDimensions : [];
+  node.innerHTML = rows.length ? rows.map((dimension, index) => `<div class="ai-original-variant-dimension-row">
+    <label><span>规格名称</span><input data-variation-dimension="${index}" data-dimension-field="name" value="${aiOriginalEscape(dimension.name || "")}" placeholder="例如 Color"></label>
+    <label><span>规格选项（逗号分隔）</span><input data-variation-dimension="${index}" data-dimension-field="values" value="${aiOriginalEscape((dimension.values || []).join(", "))}" placeholder="例如 Red, Blue"></label>
+    <button type="button" class="text-button" onclick="removeAiOriginalEditorDimension(${index})">删除</button>
+  </div>`).join("") : '<span class="ai-original-variant-hint">按需填写规格和选项，再生成 SKU 组合。</span>';
+}
+
+function collectAiOriginalEditorDimensions() {
+  const node = document.getElementById("ai-original-editor-variation-dimensions");
+  const rows = Array.isArray(aiOriginalEditorState?.variationDimensions) ? aiOriginalEditorState.variationDimensions : [];
+  if (!node) return rows;
+  return rows.map((dimension, index) => {
+    const field = name => node.querySelector(`[data-variation-dimension="${index}"][data-dimension-field="${name}"]`);
+    const name = field("name")?.value?.trim() || `规格${index + 1}`;
+    const values = (field("values")?.value || "").split(/[，,]/).map(value => value.trim()).filter(Boolean);
+    return {...dimension, name, values: [...new Set(values)].slice(0, 200)};
+  });
+}
+
+function addAiOriginalEditorDimension() {
+  if (!aiOriginalEditorState) return;
+  aiOriginalEditorState.variationDimensions = collectAiOriginalEditorDimensions();
+  aiOriginalEditorState.variationDimensions.push({id: "", name: `规格${aiOriginalEditorState.variationDimensions.length + 1}`, values: []});
+  renderAiOriginalEditorDimensions();
+}
+
+function removeAiOriginalEditorDimension(index) {
+  if (!aiOriginalEditorState) return;
+  aiOriginalEditorState.variationDimensions = collectAiOriginalEditorDimensions().filter((_, position) => position !== Number(index));
+  renderAiOriginalEditorDimensions();
+}
+
+function aiOriginalVariationAttributeId(name) {
+  const key = String(name || "").toLocaleLowerCase();
+  if (/颜色|色|^color$|^colour$|^cor$/.test(key)) return "COLOR";
+  if (/尺寸|尺码|^size$|^talla$|^tamanho$/.test(key)) return "SIZE";
+  if (/材质|材料|^material$|^materia$/.test(key)) return "MATERIAL";
+  if (/风格|款式|^style$|^estilo$/.test(key)) return "STYLE";
+  return String(name || "").trim();
+}
+
+function generateAiOriginalEditorVariations() {
+  if (!aiOriginalEditorState) return;
+  const dimensions = collectAiOriginalEditorDimensions().filter(item => item.name && item.values.length);
+  const status = document.getElementById("ai-original-editor-status");
+  if (!dimensions.length) { if (status) status.textContent = "请先填写至少一个规格及其选项。"; return; }
+  aiOriginalEditorState.variations = collectAiOriginalEditorVariations();
+  let combinations = [[]];
+  for (const dimension of dimensions) {
+    combinations = combinations.flatMap(previous => dimension.values.map(value => [...previous, {dimension, value}]));
+    if (combinations.length > 200) { if (status) status.textContent = "规格组合超过 200 个，请减少规格选项。"; return; }
+  }
+  const previousRows = new Map(aiOriginalEditorState.variations.map(variation => [
+    aiOriginalVariationLabel(variation).toLocaleLowerCase(), variation
+  ]));
+  aiOriginalEditorState.variations = combinations.map(combination => {
+    const label = combination.map(({dimension, value}) => `${dimension.name}: ${value}`).join(" / ");
+    const prior = previousRows.get(label.toLocaleLowerCase()) || {};
+    const oldAttributes = prior.attribute_combinations || prior.attributes || prior.properties || [];
+    const attributes = combination.map(({dimension, value}, index) => {
+      const old = Array.isArray(oldAttributes) ? oldAttributes.find(attribute =>
+        String(attribute?.id || "").toLocaleLowerCase() === String(dimension.id || "").toLocaleLowerCase() ||
+        String(attribute?.name || "").toLocaleLowerCase() === dimension.name.toLocaleLowerCase()
+      ) || oldAttributes[index] || {} : {};
+      const attribute = {...old, id: String(dimension.id || old.id || aiOriginalVariationAttributeId(dimension.name)),
+        name: dimension.name, value_name: value};
+      const nameChanged = String(old.name || old.id || "") !== dimension.name;
+      const valueChanged = String(old.value_name || old.value || "") !== value;
+      if (valueChanged) delete attribute.value_id;
+      if (nameChanged || valueChanged) {
+        for (const key of ["name_es", "name_pt", "value_name_es", "value_name_pt", "value_es", "value_pt"]) delete attribute[key];
+      }
+      return attribute;
+    });
+    return {...prior, label, attribute_combinations: attributes};
+  });
+  aiOriginalEditorState.variationDimensions = dimensions;
+  renderAiOriginalEditorVariations();
+  renderAiOriginalEditorDimensions();
+  if (status) status.textContent = `已生成 ${aiOriginalEditorState.variations.length} 个规格组合；已有匹配 SKU 的库存、价格和图片已保留。`;
+}
+
 function renderAiOriginalEditorVariations() {
   const node = document.getElementById("ai-original-editor-variations");
   if (!node) return;
   const rows = Array.isArray(aiOriginalEditorState?.variations) ? aiOriginalEditorState.variations : [];
   node.innerHTML = rows.length ? rows.map((variation, index) => `<tr>
     <td><input data-variant-index="${index}" data-variant-field="label" value="${aiOriginalEscape(aiOriginalVariationLabel(variation))}" placeholder="颜色 / 尺码"></td>
-    <td><input data-variant-index="${index}" data-variant-field="price" value="${aiOriginalEscape(variation.price ?? variation.price_text ?? "")}" placeholder="1688价格"></td>
-    <td><input data-variant-index="${index}" data-variant-field="stock" value="${aiOriginalEscape(variation.available_quantity ?? variation.stock ?? variation.stock_text ?? "")}" placeholder="库存"></td>
+    <td><input data-variant-index="${index}" data-variant-field="sku" value="${aiOriginalEscape(variation.seller_sku ?? variation.sku ?? variation.skuCode ?? "")}" placeholder="SKU（选填）"></td>
+    <td><input type="number" min="0" data-variant-index="${index}" data-variant-field="stock" value="${aiOriginalEscape(variation.available_quantity ?? variation.stock ?? variation.stock_text ?? "")}" placeholder="库存"></td>
+    <td><input type="number" min="0" step="any" data-variant-index="${index}" data-variant-field="price" value="${aiOriginalEscape(variation.price ?? variation.price_text ?? "")}" placeholder="采购价"></td>
+    <td><input type="number" step="any" data-variant-index="${index}" data-variant-field="extra-price" value="${aiOriginalEscape(variation.price_addition ?? variation.additional_price ?? variation.markup ?? "")}" placeholder="加价"></td>
+    <td><input type="number" step="any" data-variant-index="${index}" data-variant-field="extra-weight" value="${aiOriginalEscape(variation.weight_addition_g ?? variation.additional_weight_g ?? variation.added_weight_g ?? "")}" placeholder="加重(g)"></td>
+    <td><div class="ai-original-variant-image-cell">${aiOriginalVariantImages(variation)}<input data-variant-index="${index}" data-variant-field="image" value="${aiOriginalEscape(variation.image_url ?? variation.image ?? "")}" placeholder="图片链接"></div></td>
     <td><button type="button" class="text-button" onclick="removeAiOriginalEditorVariation(${index})">删除</button></td>
-  </tr>`).join("") : '<tr><td colspan="4" class="ai-original-editor-empty">采集快照没有变体；可以手动新增。</td></tr>';
+  </tr>`).join("") : '<tr><td colspan="8" class="ai-original-editor-empty">采集快照没有变体；可以手动新增。</td></tr>';
+}
+
+function aiOriginalVariantImages(variation) {
+  const urls = [variation?.image_url, variation?.image,
+    ...(Array.isArray(variation?.images) ? variation.images : [])]
+    .map(value => typeof value === "object" ? (value.url || value.source || value.src || "") : value)
+    .filter(value => /^https?:\/\//i.test(String(value || ""))).slice(0, 4);
+  return urls.length ? `<span class="ai-original-variant-thumbnails">${urls.map(url => `<a href="${aiOriginalEscape(url)}" target="_blank" rel="noopener noreferrer"><img src="${aiOriginalEscape(url)}" alt="变体图片" loading="lazy" referrerpolicy="no-referrer"></a>`).join("")}</span>` : "";
 }
 
 function collectAiOriginalEditorVariations() {
@@ -180,12 +320,42 @@ function collectAiOriginalEditorVariations() {
     const value = field => document.querySelector(`[data-variant-index="${index}"][data-variant-field="${field}"]`)?.value?.trim() || "";
     const label = value("label");
     if (label) next.label = label; else delete next.label;
+    if (label) {
+      const previous = next.attribute_combinations || next.attributes || next.properties || [];
+      next.attribute_combinations = label.split(/\s*\/\s*/).map((part, attributeIndex) => {
+        const pieces = part.split(/[：:]/, 2).map(item => item.trim());
+        const old = Array.isArray(previous) ? previous.find(attribute =>
+          String(attribute?.name || attribute?.id || "").toLocaleLowerCase() === String(pieces.length > 1 ? pieces[0] : "").toLocaleLowerCase()
+        ) || previous[attributeIndex] || {} : {};
+        const name = pieces.length > 1 ? pieces[0] : String(old.name || old.id || `规格${attributeIndex + 1}`);
+        const valueName = pieces.length > 1 ? pieces[1] : pieces[0];
+        if (!name || !valueName) return null;
+        const attribute = {...old, id: old.id || aiOriginalVariationAttributeId(name), name, value_name: valueName};
+        const nameChanged = String(old.name || old.id || "") !== name;
+        const valueChanged = String(old.value_name || old.value || "") !== valueName;
+        if (valueChanged) delete attribute.value_id;
+        if (nameChanged || valueChanged) {
+          for (const key of ["name_es", "name_pt", "value_name_es", "value_name_pt", "value_es", "value_pt"]) delete attribute[key];
+        }
+        return attribute;
+      }).filter(Boolean).slice(0, 20);
+    }
+    const sku = value("sku");
+    if (sku) next.seller_sku = sku; else delete next.seller_sku;
     const price = value("price");
-    if (price) { next.price_text = price; if (Object.prototype.hasOwnProperty.call(next, "price")) next.price = Number(price) || price; }
+    if (price) { next.price_text = price; next.price = Number.isFinite(Number(price)) ? Number(price) : price; }
     else if (next.price_text) delete next.price_text;
     const stock = value("stock");
-    if (stock) { next.stock_text = stock; if (Object.prototype.hasOwnProperty.call(next, "available_quantity")) next.available_quantity = Number(stock) || stock; }
+    if (stock) { next.stock_text = stock; next.available_quantity = Number.isFinite(Number(stock)) ? Number(stock) : stock; }
     else if (next.stock_text) delete next.stock_text;
+    const extraPrice = value("extra-price");
+    if (extraPrice) next.price_addition = Number.isFinite(Number(extraPrice)) ? Number(extraPrice) : extraPrice;
+    else delete next.price_addition;
+    const extraWeight = value("extra-weight");
+    if (extraWeight) next.weight_addition_g = Number.isFinite(Number(extraWeight)) ? Number(extraWeight) : extraWeight;
+    else delete next.weight_addition_g;
+    const image = value("image");
+    if (image) next.image_url = image; else if (next.image_url) delete next.image_url;
     return next;
   });
 }
@@ -244,7 +414,7 @@ function renderAiOriginalProducts() {
     return `<article class="ai-original-card">
       <input type="checkbox" value="${Number(row.id)}" ${aiOriginalSelected.has(Number(row.id)) ? "checked" : ""} onchange="toggleAiOriginalProduct(${Number(row.id)}, this.checked)">
       <div class="ai-original-image-pair">
-        <figure>${sourceImage ? `<img src="${aiOriginalEscape(sourceImage)}" alt="1688 原始主图" loading="lazy" referrerpolicy="no-referrer" onerror="aiOriginalImageError(this)">` : '<span class="ai-original-image-placeholder">暂无原图</span>'}<figcaption>1688 原图</figcaption></figure>
+        <figure>${sourceImage ? `<img src="${aiOriginalEscape(sourceImage)}" data-image-candidates="${aiOriginalEscape(JSON.stringify(aiOriginalSourceImageFallbacks(original)))}" alt="1688 原始主图" loading="lazy" referrerpolicy="no-referrer" onerror="aiOriginalImageError(this)">` : '<span class="ai-original-image-placeholder">暂无原图</span>'}<figcaption>1688 原图</figcaption></figure>
         <figure>${aiImage ? `<img src="${aiOriginalEscape(aiImage)}" alt="AI 美客多白底主图" loading="lazy" referrerpolicy="no-referrer" onerror="aiOriginalImageError(this)">` : '<span class="ai-original-image-placeholder">待生成</span>'}<figcaption>AI 白底主图</figcaption></figure>
       </div>
       <div class="ai-original-source"><span class="ai-original-section-label source">1688 原始资料</span><h4>${aiOriginalEscape(original.title || row.title)}</h4><p>1688 编号：${aiOriginalEscape(original.source_1688_item_id || row.source_item_id)}</p><p>采购价：${aiOriginalEscape(original.price ?? row.price ?? "-")} CNY</p><a href="${aiOriginalEscape(original.source_url || row.source_url || "#")}" target="_blank" rel="noopener">打开 1688 详情页 ↗</a>${row.ai_error ? `<p class="bad">${aiOriginalEscape(row.ai_error)}</p>` : ""}</div>
@@ -271,7 +441,9 @@ function openAiOriginalEditor(id) {
     row,
     schema: [],
     attributes: Array.isArray(prepared.attributes) ? JSON.parse(JSON.stringify(prepared.attributes)) : [],
-    variations: Array.isArray(prepared.variations) ? JSON.parse(JSON.stringify(prepared.variations)) : (Array.isArray(original.variations) ? JSON.parse(JSON.stringify(original.variations)) : [])
+    variations: Array.isArray(prepared.variations) ? JSON.parse(JSON.stringify(prepared.variations)) : (Array.isArray(original.variations) ? JSON.parse(JSON.stringify(original.variations)) : []),
+    variationDimensions: Array.isArray(prepared.variation_dimensions) ? JSON.parse(JSON.stringify(prepared.variation_dimensions))
+      : (Array.isArray(original.variation_dimensions) ? JSON.parse(JSON.stringify(original.variation_dimensions)) : aiOriginalVariationDimensionsFromRows(prepared.variations || original.variations || []))
   };
   document.getElementById("ai-original-editor-title").textContent = original.title || row.title || "编辑 1688 商品";
   document.getElementById("ai-original-editor-source-title").value = original.title || "";
@@ -285,6 +457,7 @@ function openAiOriginalEditor(id) {
   document.getElementById("ai-original-editor-category-results").innerHTML = "";
   document.getElementById("ai-original-editor-category-hint").textContent = row.category_id ? `当前类目：${row.category_id}${row.category_name ? ` · ${row.category_name}` : ""}` : "输入商品关键词搜索 Mercado CBT 类目";
   renderAiOriginalCategoryFields();
+  renderAiOriginalEditorDimensions();
   renderAiOriginalEditorVariations();
   dialog.showModal();
   if (row.category_id) loadAiOriginalCategoryAttributes(row.category_id, false);
@@ -353,6 +526,8 @@ function removeAiOriginalEditorVariation(index) {
 }
 
 function collectAiOriginalEditorPayload() {
+  const variations = collectAiOriginalEditorVariations();
+  const variationDimensions = collectAiOriginalEditorDimensions();
   const data = {
     source_title: document.getElementById("ai-original-editor-source-title")?.value?.trim() || "",
     source_description: document.getElementById("ai-original-editor-source-description")?.value?.trim() || "",
@@ -363,10 +538,12 @@ function collectAiOriginalEditorPayload() {
     description_es: document.getElementById("ai-original-editor-description-es")?.value?.trim() || "",
     description_pt: document.getElementById("ai-original-editor-description-pt")?.value?.trim() || "",
     attributes: collectAiOriginalEditorAttributes(),
-    variations: collectAiOriginalEditorVariations()
+    variations,
+    variation_dimensions: variationDimensions
   };
   aiOriginalEditorState.attributes = data.attributes;
   aiOriginalEditorState.variations = data.variations;
+  aiOriginalEditorState.variationDimensions = data.variation_dimensions;
   return data;
 }
 

@@ -600,7 +600,7 @@ function weightPriceParams() {
 function weightPriceStartReason() {
   if (weightPriceBusy) return "正在处理操作，请稍候…";
   if (!authenticated) return "请先打开插件设置，登录泽顺账号。";
-  if (!weightPriceState) return weightPriceStatusError || "正在连接本机控制台，请稍候…";
+  if (!weightPriceState) return weightPriceStatusError || "正在连接核重核价服务，请稍候…";
   if (weightPriceState.can_execute === false) return "当前账号没有核重核价执行权限，请联系管理员开通。";
   if (weightPriceRunning) return "任务正在运行，可查看进度或停止任务。";
   if (!weightPriceState.login?.confirmed) return "请打开智赢登录页面，完成登录后点击“确认已登录”。";
@@ -880,7 +880,12 @@ weightPriceStartButton.addEventListener("click", async () => {
     const response = await runtimeMessage({type: resuming ? "CONTINUE_AI_WEIGHT_PRICE" : "START_AI_WEIGHT_PRICE", params});
     if (!response.ok) throw new Error(response.error || "启动AI核重核价失败");
     renderWeightPriceStatus(response);
-    showResult(resuming ? "已从暂停商品继续核重核价，原任务进度保留。" : "AI核重核价已从泽顺插件启动。", "");
+    showResult(
+      resuming
+        ? "已从暂停商品继续核重核价，原任务进度保留；自动步骤将在后台执行。"
+        : "AI核重核价已在后台启动，不会切换你当前使用的窗口。",
+      ""
+    );
   } catch (error) {
     showResult(error.message || String(error), "error");
   } finally {

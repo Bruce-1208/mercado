@@ -38,13 +38,17 @@ class Service:
         self.stop_event = threading.Event()
         self.thread = None
         self.guard = threading.RLock()
+        self.migrate_legacy_state = migrate_legacy_state
         self.lock_key = "ai_weight_price_" + hashlib.sha256(str(self.store.root.resolve()).encode()).hexdigest()[:16]
         if migrate_legacy_state:
             self._migrate_browser_attention_pause()
 
     def bind_actor(self, actor, *, view_all=False):
         """Bind task/state reads and writes to the signed-in workbench account."""
-        return self.store.set_actor(actor, view_all=view_all)
+        result = self.store.set_actor(actor, view_all=view_all)
+        if self.migrate_legacy_state:
+            self._migrate_browser_attention_pause()
+        return result
 
     def _migrate_browser_attention_pause(self):
         """Expose old login-redirect exceptions through the resumable pause UI."""
@@ -63,6 +67,28 @@ class Service:
                 current = (self.store.state("pipeline_current", {}) or {}).get("task_id")
                 self.store.log("已清除旧版“未知域名”误判暂停；当前商品进度保留，开始按钮已恢复",
                                current, "WARNING")
+            return
+        run = self.store.state("run", {}) or {}
+        legacy_pagination_failure = "翻页后商品未变化" in str(
+            run.get("message") or self.store.state("run_error") or ""
+        )
+        if run.get("outcome") == "failed" and legacy_pagination_failure:
+            reason = (
+                "智赢翻页后商品列表未及时刷新；旧版已中断的任务"
+                "已转为可恢复暂停，请点击继续原任务"
+            )
+            self.store.set_state("circuit", {
+                "kind": "collection_page_stale", "reason": reason, "at": time.time(),
+            })
+            self.store.set_state("run_error", None)
+            self.store.set_state("run", {
+                **run, "outcome": "blocked", "message": reason,
+            })
+            current = (self.store.state("pipeline_current", {}) or {}).get("task_id")
+            self.store.log(
+                "已将旧版智赢翻页误中断迁移为可恢复暂停，原批次进度已保留",
+                current, "WARNING",
+            )
             return
         current = self.store.state("pipeline_current", {}) or {}
         key = current.get("task_id")
@@ -424,7 +450,7 @@ class Service:
         self.store.log("检测到上次1688搜索/读取阶段的技术失败，已从当前页面位置自动重新处理", key, "WARNING")
         return True
 
-    def continue_after_human(self):
+    def continue_after_human(self, *, runtime_api_key=""):
         """Clear a browser-attention pause and resume from the retained item."""
         with self.idle():
             pause = self.store.state("circuit")
@@ -452,7 +478,10 @@ class Service:
         try:
             # Keep the original run id so the current-run list and its
             # progress remain intact after a human login/captcha pause.
-            self.start(mode, task_id, selection, remaining, True)
+            self.start(
+                mode, task_id, selection, remaining, True,
+                runtime_api_key=runtime_api_key,
+            )
         except Exception:
             self.store.set_state("circuit", pause)
             raise

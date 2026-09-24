@@ -28,7 +28,7 @@ AI 原创产品的白底首图使用服务器本地 `rembg` 与 `isnet-general-u
 完整变量及兼容旧部署的变量名见 [.env.example](.env.example)。也可在工作台“AI生成视频 → 模型 Token 配置”中保存主备凭证。
 
 对于内容已经完成、只需改变封装和编码格式的视频，可以选择“仅转换视频格式，不调用 AI”。
-该模式要求服务器安装 FFmpeg/FFprobe，源视频已是 9:16 且时长为 10–60 秒；系统只在本地转换成 720×1280、H.264/AAC MP4，不使用模型 Token。
+该模式要求服务器安装 FFmpeg/FFprobe，源视频时长为 10–60 秒；源视频即使不是 9:16，也会由 FFmpeg 在本地转换成 720×1280、H.264/AAC MP4，不使用模型 Token。默认居中裁剪铺满画面，也可以选择完整保留画面并补黑边，不会拉伸商品或人物。
 
 ## 工作台服务端 / 客户端运行角色
 
@@ -64,12 +64,17 @@ MySQL 默认使用进程内共享连接池：所有配置池合计最多 12 条�
 
 | 更新任务 | 默认并发 | 环境变量 |
 | --- | --- | --- |
-| 店铺链接同步 | 16 家店铺 × 每家 32 个详情线程 | `MERCADO_STORE_LINK_STORE_WORKERS` / `MERCADO_STORE_LINK_DETAIL_WORKERS` |
+| 店铺链接同步 | 4 家店铺 × 每家 8 个详情线程 | `MERCADO_STORE_LINK_STORE_WORKERS` / `MERCADO_STORE_LINK_DETAIL_WORKERS` |
 | 链接批量回写 | 16 线程 | `MERCADO_STORE_LINK_REMOTE_UPDATE_WORKERS` |
-| 订单同步、每日老订单刷新 | 8 家店铺 × 每家 16 个详情线程 | `MERCADO_ORDER_STORE_WORKERS` / `MERCADO_ORDER_STATUS_WORKERS` |
+| 订单同步、每日老订单刷新 | 4 家店铺 × 每家 16 个详情线程 | `MERCADO_ORDER_STORE_WORKERS` / `MERCADO_ORDER_STATUS_WORKERS` |
 | 订单图片、费用回填 | 16 线程 | `MERCADO_API_BACKFILL_WORKERS` |
-| 侵权、禁限售同步 | 各 12 家店铺 × 每家 16 个详情线程 | `MERCADO_INFRACTION_STORE_WORKERS` / `MERCADO_INFRACTION_DETAIL_WORKERS`、`MERCADO_PROHIBITED_STORE_WORKERS` / `MERCADO_PROHIBITED_DETAIL_WORKERS` |
+| 侵权、禁限售同步 | 各 4 家店铺 × 每家 8 个详情线程 | `MERCADO_INFRACTION_STORE_WORKERS` / `MERCADO_INFRACTION_DETAIL_WORKERS`、`MERCADO_PROHIBITED_STORE_WORKERS` / `MERCADO_PROHIBITED_DETAIL_WORKERS` |
 | 商品费用自动更新 | 8 线程 | `MERCADO_PROFIT_REFRESH_WORKERS` |
+
+跨模块同时运行的店铺默认最多 8 家，其中为近期订单预留 2 个位置；所有 Mercado API Client
+共享最多 32 个在途请求、同一凭据最多 8 个请求，重试等待期间释放请求位置。自动链接、
+侵权、禁限售调度每轮最多取 8 家到期店铺，剩余店铺继续保留在原有持久化待同步列表。
+配置及 Web/worker 分离部署见 [容量优化与验证](docs/capacity_optimization.md)。
 
 实际线程数不会超过待处理数量。店铺链接、订单、侵权和禁限售店铺并发可调至 24，
 店铺链接详情可调至 64，订单详情、回填、风险详情、链接回写和商品费用线程可调至 32。
@@ -94,7 +99,7 @@ python3 scripts/install_argos_translation_models.py
 
 同一套工作台可以在每台电脑上灵活指定运行角色：
 
-- `server`：直接连接 `192.168.1.11:3306`，同时提供受令牌保护的 `/api/db/*` 数据库接口；
+- `server`：直接连接本机 `127.0.0.1:3306`，同时提供受令牌保护的 `/api/db/*` 数据库接口；
 - `client`：禁止直连 MySQL，所有数据库读写都通过指定服务端的 HTTP 接口完成。
 
 启动参数的优先级最高，适合临时切换：
@@ -103,7 +108,7 @@ python3 scripts/install_argos_translation_models.py
 # 两端必须使用同一个接口令牌
 $env:BIT_DB_API_TOKEN="replace-with-a-long-random-token"
 
-# 任意能访问 192.168.1.11 的电脑都可作为服务端
+# 在已安装本机 MySQL 的电脑上作为服务端启动
 python -m bit.bit_interface --role server
 
 # 客户端指向任意一台已启动的服务端

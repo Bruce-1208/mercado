@@ -16,8 +16,6 @@ from email.message import EmailMessage
 from email.utils import parseaddr
 from pathlib import Path
 
-from cryptography.fernet import Fernet, InvalidToken
-
 try:
     import certifi
 except ImportError:  # pragma: no cover - certifi is installed with the server dependencies
@@ -49,7 +47,11 @@ def _path(path=None) -> Path:
     return Path(path or configured or DEFAULT_CONFIG_PATH).expanduser().resolve()
 
 
-def _fernet(secret_key) -> Fernet:
+def _fernet(secret_key):
+    # This integration is server-only.  Local Agent workers still import the
+    # shared workbench module, so importing it must not require cryptography.
+    from cryptography.fernet import Fernet
+
     raw = str(secret_key or "").encode("utf-8")
     key = hashlib.sha256(b"zeshun-browser-extension-mail\0" + raw).digest()
     return Fernet(base64.urlsafe_b64encode(key))
@@ -146,6 +148,8 @@ def get_public_settings(user_id, secret_key, path=None) -> dict:
 
 
 def save_settings(user_id, payload, secret_key, path=None) -> dict:
+    from cryptography.fernet import InvalidToken
+
     value = _load(path)
     key = str(int(user_id))
     existing = dict(value["users"].get(key, {}) or {})
@@ -166,6 +170,8 @@ def save_settings(user_id, payload, secret_key, path=None) -> dict:
 
 
 def _private_settings(user_id, secret_key, path=None) -> dict:
+    from cryptography.fernet import InvalidToken
+
     value = _load(path).get("users", {}).get(str(int(user_id)), {})
     if not value or not value.get("password_encrypted"):
         raise ValueError("邮件通知尚未完成配置")
@@ -176,6 +182,11 @@ def _private_settings(user_id, secret_key, path=None) -> dict:
     except (InvalidToken, ValueError, UnicodeDecodeError) as exc:
         raise ValueError("邮件授权码无法解密，请重新保存邮件通知配置") from exc
     return {**value, "smtp_password": password}
+
+
+def get_private_settings(user_id, secret_key, path=None) -> dict:
+    """Return decrypted mail settings for an explicit, authenticated view."""
+    return _private_settings(user_id, secret_key, path)
 
 
 def _smtp_ssl_context() -> ssl.SSLContext:

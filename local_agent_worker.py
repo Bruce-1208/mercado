@@ -39,6 +39,7 @@ def configure_execution_context(job):
     os.environ["BIT_EXECUTION_AGENT_ID"] = agent_id
     os.environ["BIT_EXECUTION_AGENT_NAME"] = agent_name
     os.environ["BIT_EXECUTION_HOSTNAME"] = hostname
+    os.environ["BIT_EXECUTION_JOB_ID"] = str(job.get("job_id") or "").strip()
     return {
         "target": "agent",
         "agent_id": agent_id,
@@ -130,7 +131,11 @@ def main(argv=None):
     job_path = Path(args.job_file)
     job = json.loads(job_path.read_text(encoding="utf-8"))
     payload = dict(job.get("payload") or {})
-    if payload.pop("deepseek_api_key", None) is not None:
+    sensitive_removed = False
+    for key in ("deepseek_api_key", "dashscope_api_key", "runtime_api_key"):
+        if payload.pop(key, None) is not None:
+            sensitive_removed = True
+    if sensitive_removed:
         sanitized_job = dict(job)
         sanitized_job["payload"] = payload
         job_path.write_text(

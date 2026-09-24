@@ -123,6 +123,9 @@ def test_store_replaces_items_only_for_selected_promotion(tmp_path):
     assert [row["item_id"] for row in store.list_items(second)] == ["MLM2"]
     rows = store.list_promotions(token_ids=[1])
     assert sum(int(row["candidate_count"] or 0) for row in rows) == 1
+    assert store.all_applied_item_keys(token_ids=[1], site_id="mlm") == {
+        (1, "MLM", "MLM2")
+    }
 
 
 def test_preview_payload_round_trip(tmp_path):

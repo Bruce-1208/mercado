@@ -201,6 +201,11 @@ def test_business_bundle_is_versioned_and_contains_worker(tmp_path):
     (tmp_path / "bit").mkdir()
     (tmp_path / "bit" / "__init__.py").write_text("", encoding="utf-8")
     (tmp_path / "local_agent_worker.py").write_text("print('ok')\n", encoding="utf-8")
+    extension = tmp_path / "browser_extension" / "zeshun_collector"
+    extension.mkdir(parents=True)
+    (extension / "manifest.json").write_text('{"version":"1.0"}', encoding="utf-8")
+    background = extension / "background.js"
+    background.write_text("// worker\n", encoding="utf-8")
 
     bundle = build_business_bundle(tmp_path)
 
@@ -209,6 +214,8 @@ def test_business_bundle_is_versioned_and_contains_worker(tmp_path):
         manifest = json.loads(archive.read("bundle-manifest.json"))
         assert manifest["version"] == bundle["version"]
         assert "local_agent_worker.py" in manifest["files"]
+        assert "browser_extension/zeshun_collector/manifest.json" in manifest["files"]
+        assert archive.read("browser_extension/zeshun_collector/background.js") == background.read_bytes()
 
 
 def test_download_package_embeds_server_and_enrollment_token(monkeypatch, tmp_path):

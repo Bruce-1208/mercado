@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.zeshun.mercado-workbench</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.12/bin/python3</string>
+        <string>-m</string>
+        <string>bit.bit_interface</string>
+        <string>--role</string>
+        <string>server</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/a11/mercado</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+        <key>BIT_PUBLIC_WORKBENCH_URL</key>
+        <string>https://wuhanzeshun.com</string>
+        <key>BIT_DB_API_BASE_URL</key>
+        <string>https://wuhanzeshun.com</string>
+        <key>BIT_LOCAL_EXECUTOR_ALLOWED_ORIGINS</key>
+        <string>https://wuhanzeshun.com,https://www.wuhanzeshun.com,https://zeshun.cc.cd</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>StandardOutPath</key>
+    <string>/Users/a11/mercado/.data/workbench-server.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/a11/mercado/.data/workbench-server.err.log</string>
+</dict>
+</plist>

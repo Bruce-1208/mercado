@@ -46,6 +46,9 @@
     details ol { margin-bottom:7px; padding-left:20px; }
     details a { color:var(--blue); }
     .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 16px; }
+    .secret-field { display:flex; gap:8px; align-items:stretch; }
+    .secret-field input { min-width:0; }
+    .secret-toggle { flex:0 0 auto; min-width:54px; padding-inline:11px; font-weight:650; }
     .full { grid-column:1/-1; }
     .check { display:flex; align-items:center; gap:9px; margin:3px 0 12px; font-weight:650; }
     .check input { width:auto; }
@@ -88,13 +91,13 @@
     </section>
 
     <section id="tokens">
-      <div class="section-head"><div><h2>模型 Token</h2><p>密码框不会回显已保存内容；留空表示保留原 Token。</p></div><span class="security">凭证加密落盘，接口只返回“已配置”状态。</span></div>
+      <div class="section-head"><div><h2>模型 Token</h2><p>凭证默认隐藏；点击“显示”可查看已保存的明文。留空表示保留原 Token。</p></div><span class="security">凭证加密落盘，只有点击“显示”后才会请求明文。</span></div>
       <div class="grid">
-        <div class="provider"><div class="provider-head"><h3>DeepSeek</h3><span class="badge" data-status="deepseek">未配置</span></div><label for="deepseek_api_key">API Key</label><input id="deepseek_api_key" type="password" autocomplete="new-password" placeholder="sk-…（留空保留）"><details><summary>简易配置教程</summary><ol><li>登录 DeepSeek 开放平台。</li><li>进入 API Keys，创建并复制 Key。</li><li>粘贴到上方并保存。</li></ol><a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">打开 DeepSeek API Keys</a></details></div>
-        <div class="provider"><div class="provider-head"><h3>阿里云百炼 DashScope</h3><span class="badge" data-status="dashscope">未配置</span></div><label for="dashscope_api_key">API Key</label><input id="dashscope_api_key" type="password" autocomplete="new-password" placeholder="sk-…（留空保留）"><details><summary>简易配置教程</summary><ol><li>登录阿里云百炼控制台并选择北京地域。</li><li>在 API Key 管理中创建 Key。</li><li>复制后粘贴到上方。</li></ol><a href="https://bailian.console.aliyun.com/" target="_blank" rel="noopener">打开阿里云百炼</a></details></div>
-        <div class="provider"><div class="provider-head"><h3>OpenAI</h3><span class="badge" data-status="openai">未配置</span></div><label for="openai_api_key">API Key</label><input id="openai_api_key" type="password" autocomplete="new-password" placeholder="sk-…（留空保留）"><details><summary>简易配置教程</summary><ol><li>登录 OpenAI Platform。</li><li>打开 API keys 并创建 Secret key。</li><li>复制后粘贴到上方。</li></ol><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">打开 OpenAI API Keys</a></details></div>
-        <div class="provider"><div class="provider-head"><h3>火山方舟 Seedance</h3><span class="badge" data-status="seedance">未配置</span></div><label for="seedance_api_key">API Key</label><input id="seedance_api_key" type="password" autocomplete="new-password" placeholder="留空保留"><details><summary>简易配置教程</summary><ol><li>在火山方舟开通 Seedance 模型服务。</li><li>进入 API Key 管理创建 Key。</li><li>粘贴到上方并保存。</li></ol><a href="https://www.volcengine.com/docs/82379" target="_blank" rel="noopener">查看火山方舟文档</a></details></div>
-        <div class="provider"><div class="provider-head"><h3>阿里云万相 Wan</h3><span class="badge" data-status="wan">未配置</span></div><label for="wan_api_key">API Key</label><input id="wan_api_key" type="password" autocomplete="new-password" placeholder="留空保留"><label for="wan_workspace_id">Workspace ID</label><input id="wan_workspace_id" type="text" autocomplete="off" placeholder="工作空间 ID"><details><summary>简易配置教程</summary><ol><li>在百炼创建业务空间并开通 Wan 视频模型。</li><li>复制该空间的 API Key 与 Workspace ID。</li><li>分别填写后保存。</li></ol><a href="https://bailian.console.aliyun.com/" target="_blank" rel="noopener">打开阿里云百炼</a></details></div>
+        <div class="provider"><div class="provider-head"><h3>DeepSeek</h3><span class="badge" data-status="deepseek">未配置</span></div><label for="deepseek_api_key">API Key</label><div class="secret-field"><input id="deepseek_api_key" type="password" autocomplete="new-password" placeholder="sk-…（留空保留）"><button class="secret-toggle" type="button" data-secret-input="deepseek_api_key" aria-pressed="false">显示</button></div><details><summary>简易配置教程</summary><ol><li>登录 DeepSeek 开放平台。</li><li>进入 API Keys，创建并复制 Key。</li><li>粘贴到上方并保存。</li></ol><a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">打开 DeepSeek API Keys</a></details></div>
+        <div class="provider"><div class="provider-head"><h3>阿里云百炼 DashScope</h3><span class="badge" data-status="dashscope">未配置</span></div><label for="dashscope_api_key">API Key</label><div class="secret-field"><input id="dashscope_api_key" type="password" autocomplete="new-password" placeholder="sk-…（留空保留）"><button class="secret-toggle" type="button" data-secret-input="dashscope_api_key" aria-pressed="false">显示</button></div><details><summary>简易配置教程</summary><ol><li>登录阿里云百炼控制台并选择北京地域。</li><li>在 API Key 管理中创建 Key。</li><li>复制后粘贴到上方。</li></ol><a href="https://bailian.console.aliyun.com/" target="_blank" rel="noopener">打开阿里云百炼</a></details></div>
+        <div class="provider"><div class="provider-head"><h3>OpenAI</h3><span class="badge" data-status="openai">未配置</span></div><label for="openai_api_key">API Key</label><div class="secret-field"><input id="openai_api_key" type="password" autocomplete="new-password" placeholder="sk-…（留空保留）"><button class="secret-toggle" type="button" data-secret-input="openai_api_key" aria-pressed="false">显示</button></div><details><summary>简易配置教程</summary><ol><li>登录 OpenAI Platform。</li><li>打开 API keys 并创建 Secret key。</li><li>复制后粘贴到上方。</li></ol><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">打开 OpenAI API Keys</a></details></div>
+        <div class="provider"><div class="provider-head"><h3>火山方舟 Seedance</h3><span class="badge" data-status="seedance">未配置</span></div><label for="seedance_api_key">API Key</label><div class="secret-field"><input id="seedance_api_key" type="password" autocomplete="new-password" placeholder="留空保留"><button class="secret-toggle" type="button" data-secret-input="seedance_api_key" aria-pressed="false">显示</button></div><details><summary>简易配置教程</summary><ol><li>在火山方舟开通 Seedance 模型服务。</li><li>进入 API Key 管理创建 Key。</li><li>粘贴到上方并保存。</li></ol><a href="https://www.volcengine.com/docs/82379" target="_blank" rel="noopener">查看火山方舟文档</a></details></div>
+        <div class="provider"><div class="provider-head"><h3>阿里云万相 Wan</h3><span class="badge" data-status="wan">未配置</span></div><label for="wan_api_key">API Key</label><div class="secret-field"><input id="wan_api_key" type="password" autocomplete="new-password" placeholder="留空保留"><button class="secret-toggle" type="button" data-secret-input="wan_api_key" aria-pressed="false">显示</button></div><label for="wan_workspace_id">Workspace ID</label><input id="wan_workspace_id" type="text" autocomplete="off" placeholder="工作空间 ID"><details><summary>简易配置教程</summary><ol><li>在百炼创建业务空间并开通 Wan 视频模型。</li><li>复制该空间的 API Key 与 Workspace ID。</li><li>分别填写后保存。</li></ol><a href="https://bailian.console.aliyun.com/" target="_blank" rel="noopener">打开阿里云百炼</a></details></div>
       </div>
       <div class="actions"><button class="primary" id="save-tokens" type="button">保存模型凭证</button><span class="message" id="token-message"></span></div>
     </section>
@@ -105,7 +108,7 @@
         <label class="check full"><input id="email-enabled" type="checkbox">启用邮件提醒</label>
         <div><label for="sender-email">发件邮箱</label><input id="sender-email" type="email" autocomplete="email" placeholder="例如 name@qq.com"></div>
         <div><label for="receiver-email">收件邮箱</label><input id="receiver-email" type="email" autocomplete="email" placeholder="接收提醒的邮箱"></div>
-        <div><label for="smtp-password">SMTP 授权码</label><input id="smtp-password" type="password" autocomplete="new-password" placeholder="留空保留已有授权码"></div>
+        <div><label for="smtp-password">SMTP 授权码</label><div class="secret-field"><input id="smtp-password" type="password" autocomplete="new-password" placeholder="留空保留已有授权码"><button class="secret-toggle" type="button" data-secret-input="smtp-password" aria-pressed="false">显示</button></div></div>
         <div><label for="smtp-host">SMTP 服务器</label><input id="smtp-host" type="text" placeholder="smtp.qq.com"></div>
         <div><label for="smtp-port">端口</label><input id="smtp-port" type="number" min="1" max="65535" value="465"></div>
         <div><label for="smtp-security">加密</label><select id="smtp-security"><option value="ssl">SSL</option><option value="starttls">STARTTLS</option></select></div>
@@ -118,7 +121,7 @@
       <div class="section-head"><div><h2>Webhook</h2><p>为企业微信机器人、中间服务或未来自动化预留统一事件出口。</p></div><span class="badge" id="webhook-status">未配置</span></div>
       <label class="check"><input id="webhook-enabled" type="checkbox">启用 Webhook 提醒</label>
       <label for="webhook-url">Webhook URL</label><input id="webhook-url" type="url" autocomplete="url" placeholder="https://example.com/zeshun/events">
-      <label for="webhook-secret">签名密钥（可选）</label><input id="webhook-secret" type="password" autocomplete="new-password" placeholder="留空保留已有密钥">
+      <label for="webhook-secret">签名密钥（可选）</label><div class="secret-field"><input id="webhook-secret" type="password" autocomplete="new-password" placeholder="留空保留已有密钥"><button class="secret-toggle" type="button" data-secret-input="webhook-secret" aria-pressed="false">显示</button></div>
       <details><summary>接收与验签教程</summary><ol><li>准备一个接收 POST JSON 的 HTTPS 地址并填入。</li><li>可设置签名密钥；泽顺会发送 <code>X-Zeshun-Signature: sha256=…</code>。</li><li>签名原文为 <code>时间戳.JSON原始请求体</code>，使用 HMAC-SHA256。</li><li>服务返回 2xx 即视为成功。保存后可发送测试事件。</li></ol></details>
       <div class="actions"><button class="primary" id="save-webhook" type="button">保存 Webhook</button><button id="test-webhook" type="button">发送测试事件</button><span class="message" id="webhook-message"></span></div>
     </section>
@@ -133,6 +136,60 @@
     }
     function message(id, text, error=false) { const node=$(id); node.textContent=text; node.classList.toggle("error", error); }
     function badge(node, configured) { node.textContent=configured ? "已配置" : "未配置"; node.classList.toggle("ok", configured); }
+    let privateSettings = null;
+    let privateSettingsPromise = null;
+    async function loadPrivateSettings() {
+      if (privateSettings) return privateSettings;
+      if (!privateSettingsPromise) {
+        privateSettingsPromise = api("/api/account-integrations/private").then(result => {
+          privateSettings = result.data || {};
+          return privateSettings;
+        }).catch(error => {
+          privateSettingsPromise = null;
+          throw error;
+        });
+      }
+      return privateSettingsPromise;
+    }
+    function privateValue(inputId, data) {
+      const tokens = data.tokens || {};
+      if (inputId.endsWith("_api_key")) return String(tokens[inputId] || "");
+      if (inputId === "smtp-password") return String((data.email || {}).smtp_password || "");
+      if (inputId === "webhook-secret") return String((data.webhook || {}).secret || "");
+      return "";
+    }
+    function resetSecretInputs(selector) {
+      document.querySelectorAll(`${selector} .secret-toggle`).forEach(button => {
+        const input = $(button.dataset.secretInput);
+        if (input) { input.value = ""; input.type = "password"; }
+        button.textContent = "显示";
+        button.setAttribute("aria-pressed", "false");
+      });
+    }
+    async function toggleSecret(button) {
+      const input = $(button.dataset.secretInput);
+      if (!input) return;
+      if (input.type === "password") {
+        button.disabled = true;
+        const messageId = input.id === "smtp-password" ? "email-message" : input.id === "webhook-secret" ? "webhook-message" : "token-message";
+        try {
+          const data = await loadPrivateSettings();
+          if (!input.value) input.value = privateValue(input.id, data);
+          input.type = "text";
+          button.textContent = "隐藏";
+          button.setAttribute("aria-pressed", "true");
+        } catch (error) {
+          message(messageId, error.message, true);
+        } finally {
+          button.disabled = false;
+        }
+      } else {
+        input.type = "password";
+        button.textContent = "显示";
+        button.setAttribute("aria-pressed", "false");
+      }
+    }
+    document.querySelectorAll(".secret-toggle").forEach(button => button.addEventListener("click", () => toggleSecret(button)));
     function render(data) {
       const tokens=data.tokens || {};
       ["deepseek","dashscope","openai","seedance","wan"].forEach(name => badge(document.querySelector(`[data-status="${name}"]`), Boolean(tokens[`${name}_configured`])));
@@ -144,10 +201,10 @@
       badge($("webhook-status"), Boolean(webhook.configured)); $("webhook-enabled").checked=Boolean(webhook.enabled); $("webhook-url").value=webhook.url || "";
     }
     async function load() { try { render((await api("/api/account-integrations")).data || {}); } catch(error) { message("token-message", error.message, true); } }
-    $("save-tokens").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const body={wan_workspace_id:$("wan_workspace_id").value.trim()}; ["deepseek","dashscope","openai","seedance","wan"].forEach(name => { const value=$(`${name}_api_key`).value.trim(); if(value) body[`${name}_api_key`]=value; }); const result=await api("/api/account-integrations/tokens",{method:"PUT",body:JSON.stringify(body)}); document.querySelectorAll("#tokens input[type=password]").forEach(node => node.value=""); message("token-message",result.message); await load(); } catch(error) { message("token-message",error.message,true); } finally { button.disabled=false; } });
-    $("save-email").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const result=await api("/api/account-integrations/email",{method:"PUT",body:JSON.stringify({enabled:$("email-enabled").checked,sender_email:$("sender-email").value.trim(),receiver_email:$("receiver-email").value.trim(),smtp_password:$("smtp-password").value,smtp_host:$("smtp-host").value.trim(),smtp_port:Number($("smtp-port").value),smtp_security:$("smtp-security").value})}); $("smtp-password").value=""; badge($("email-status"),result.data.configured); message("email-message",result.message); } catch(error) { message("email-message",error.message,true); } finally { button.disabled=false; } });
+    $("save-tokens").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const body={wan_workspace_id:$("wan_workspace_id").value.trim()}; ["deepseek","dashscope","openai","seedance","wan"].forEach(name => { const value=$(`${name}_api_key`).value.trim(); if(value) body[`${name}_api_key`]=value; }); const result=await api("/api/account-integrations/tokens",{method:"PUT",body:JSON.stringify(body)}); resetSecretInputs("#tokens"); privateSettings=null; privateSettingsPromise=null; message("token-message",result.message); await load(); } catch(error) { message("token-message",error.message,true); } finally { button.disabled=false; } });
+    $("save-email").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const result=await api("/api/account-integrations/email",{method:"PUT",body:JSON.stringify({enabled:$("email-enabled").checked,sender_email:$("sender-email").value.trim(),receiver_email:$("receiver-email").value.trim(),smtp_password:$("smtp-password").value,smtp_host:$("smtp-host").value.trim(),smtp_port:Number($("smtp-port").value),smtp_security:$("smtp-security").value})}); resetSecretInputs("#email"); privateSettings=null; privateSettingsPromise=null; badge($("email-status"),result.data.configured); message("email-message",result.message); } catch(error) { message("email-message",error.message,true); } finally { button.disabled=false; } });
     $("test-email").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const result=await api("/api/account-integrations/email/test",{method:"POST",body:"{}"}); message("email-message",result.message); } catch(error) { message("email-message",error.message,true); } finally { button.disabled=false; } });
-    $("save-webhook").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const result=await api("/api/account-integrations/webhook",{method:"PUT",body:JSON.stringify({enabled:$("webhook-enabled").checked,url:$("webhook-url").value.trim(),secret:$("webhook-secret").value})}); $("webhook-secret").value=""; badge($("webhook-status"),result.data.configured); message("webhook-message",result.message); } catch(error) { message("webhook-message",error.message,true); } finally { button.disabled=false; } });
+    $("save-webhook").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const result=await api("/api/account-integrations/webhook",{method:"PUT",body:JSON.stringify({enabled:$("webhook-enabled").checked,url:$("webhook-url").value.trim(),secret:$("webhook-secret").value})}); resetSecretInputs("#webhook"); privateSettings=null; privateSettingsPromise=null; badge($("webhook-status"),result.data.configured); message("webhook-message",result.message); } catch(error) { message("webhook-message",error.message,true); } finally { button.disabled=false; } });
     $("test-webhook").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const result=await api("/api/account-integrations/webhook/test",{method:"POST",body:"{}"}); message("webhook-message",result.message); } catch(error) { message("webhook-message",error.message,true); } finally { button.disabled=false; } });
     load();
   </script>

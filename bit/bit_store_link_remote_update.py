@@ -39,6 +39,7 @@ STORE_LINK_REMOTE_UPDATE_FIELDS = (
     "package_height_cm",
     "net_proceeds_usd",
 )
+STORE_LINK_REMOTE_UPDATE_STATUSES = frozenset(("active", "paused"))
 PACKAGE_FIELDS = (
     ("weight_g", "PACKAGE_WEIGHT", "g"),
     ("package_length_cm", "PACKAGE_LENGTH", "cm"),
@@ -109,8 +110,13 @@ def _link_ids(values: Iterable[int]) -> list[int]:
     return ids
 
 
-def _normalize_changes(changes: Mapping[str, Any]) -> dict[str, Decimal]:
-    result: dict[str, Decimal] = {}
+def _normalize_changes(changes: Mapping[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    if "status" in changes and changes["status"] not in (None, ""):
+        status = str(changes["status"] or "").strip().lower()
+        if status not in STORE_LINK_REMOTE_UPDATE_STATUSES:
+            raise ValueError("店铺链接状态只能是 active 或 paused")
+        result["status"] = status
     for field in STORE_LINK_REMOTE_UPDATE_FIELDS:
         if field not in changes or changes[field] in (None, ""):
             continue
@@ -158,9 +164,11 @@ def _package_payload(row: Mapping[str, Any], changes: Mapping[str, Decimal]) -> 
 
 def _desired_group_changes(
     row: Mapping[str, Any],
-    changes: Mapping[str, Decimal],
+    changes: Mapping[str, Any],
 ) -> list[tuple[str, dict[str, Any], tuple[str, ...]]]:
     groups: list[tuple[str, dict[str, Any], tuple[str, ...]]] = []
+    if "status" in changes:
+        groups.append(("链接状态", {"status": changes["status"]}, ("status",)))
     if "price" in changes:
         groups.append(("售价", {"price": _api_number(changes["price"])}, ("price",)))
     dimension_fields = tuple(field for field, _attribute, _unit in PACKAGE_FIELDS)
@@ -179,7 +187,7 @@ def _desired_group_changes(
 def _update_one_link(
     row: Mapping[str, Any],
     token: Mapping[str, Any],
-    changes: Mapping[str, Decimal],
+    changes: Mapping[str, Any],
 ) -> dict[str, Any]:
     item_id = str(row.get("item_id") or "").strip().upper()
     client = MercadoLibreClient(str(token.get("access_token") or ""))
@@ -237,6 +245,12 @@ def _update_one_link(
                 if actual is None:
                     errors.append(f"{field}：后台返回值为空，无法确认修改结果")
                     continue
+                if field == "status":
+                    if str(actual).strip().lower() != str(desired).strip().lower():
+                        errors.append(
+                            f"{field}：后台最终值 {actual} 与目标值 {desired} 不一致"
+                        )
+                    continue
                 if abs(Decimal(str(actual)) - desired) > Decimal("0.0001"):
                     errors.append(
                         f"{field}：后台最终值 {actual} 与目标值 {desired} 不一致"
@@ -276,7 +290,7 @@ def _update_one_link(
 
 def run_store_link_remote_update(
     rows: Iterable[Mapping[str, Any]],
-    changes: Mapping[str, Decimal],
+    changes: Mapping[str, Any],
 ) -> dict[str, Any]:
     rows = [dict(row) for row in rows]
     _state_update(
@@ -383,7 +397,7 @@ def run_store_link_remote_update(
     return store_link_remote_update_status()
 
 
-def _run_background(rows: list[dict[str, Any]], changes: dict[str, Decimal]) -> None:
+def _run_background(rows: list[dict[str, Any]], changes: dict[str, Any]) -> None:
     task_lock = InterProcessLock(
         STORE_LINK_SYNC_LOCK_KEY,
         owner="bit_store_link_remote_update",
@@ -431,7 +445,10 @@ def start_store_link_remote_update(
             current_item="",
             started_at=_now_text(),
             finished_at="",
-            changes={key: float(value) for key, value in normalized.items()},
+            changes={
+                key: (float(value) if isinstance(value, Decimal) else value)
+                for key, value in normalized.items()
+            },
             results=[],
             logs=[],
         )

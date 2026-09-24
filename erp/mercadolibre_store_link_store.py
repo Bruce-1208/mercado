@@ -7,6 +7,7 @@ import re
 import threading
 import time
 from copy import deepcopy
+from erp.query_cache import QueryCache
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Iterable, Mapping
@@ -30,6 +31,7 @@ STORE_LINK_RECENT_SALES_CACHE_MAX_ENTRIES = 20000
 _schema_lock = threading.RLock()
 _store_link_schema_ready = False
 _sync_state_schema_ready = False
+_filtered_count_cache = QueryCache(ttl=15, max_entries=512)
 _metadata_cache_lock = threading.RLock()
 _metadata_cache: dict[str, Any] = {"expires_at": 0.0, "data": None}
 _scoped_metadata_cache: dict[tuple[int, ...], dict[str, Any]] = {}
@@ -645,6 +647,125 @@ def _decorate_store_link_markers(rows: list[dict[str, Any]]) -> None:
         row["video_clip_uuid"] = action.get("video_clip_uuid") or ""
 
 
+def _active_ad_marker_keys(
+    *,
+    token_ids: Iterable[int] | None = None,
+    site_id: str = "",
+) -> set[tuple[int, str, str]]:
+    """Load durable and snapshot-backed active Product Ads identities."""
+
+    try:
+        from erp.mercadolibre_store_link_marker_store import marked_item_keys
+
+        keys = marked_item_keys(
+            "advertising_enabled", token_ids=token_ids, site_id=site_id
+        )
+    except Exception:
+        keys = set()
+    allowed_ids = {
+        int(value) for value in token_ids or () if int(value or 0) > 0
+    }
+    normalized_site = str(site_id or "").strip().upper()
+    try:
+        from bit.bit_ad_analysis import _load_snapshot
+
+        snapshot = _load_snapshot()
+        for ad_row in snapshot.get("links") or []:
+            identity = (
+                int(ad_row.get("token_id") or 0),
+                str(ad_row.get("site_id") or "").strip().upper(),
+                str(ad_row.get("item_id") or "").strip().upper(),
+            )
+            campaign_status = str(ad_row.get("campaign_status") or "").strip().lower()
+            group_status = str(
+                ad_row.get("ad_group_status") or ad_row.get("status") or ""
+            ).strip().lower()
+            if (
+                identity[0] > 0
+                and identity[1]
+                and identity[2]
+                and group_status == "active"
+                and (not campaign_status or campaign_status == "active")
+                and (not allowed_ids or identity[0] in allowed_ids)
+                and (not normalized_site or identity[1] == normalized_site)
+            ):
+                keys.add(identity)
+    except Exception:
+        pass
+    return keys
+
+
+def _marker_filter_keys(
+    marker: str,
+    *,
+    token_ids: Iterable[int] | None = None,
+    site_id: str = "",
+) -> set[tuple[int, str, str]]:
+    if marker == "promotion_applied":
+        try:
+            from erp.mercadolibre_promotion_store import PromotionStore
+
+            return PromotionStore().all_applied_item_keys(
+                token_ids=token_ids, site_id=site_id
+            )
+        except Exception:
+            return set()
+    if marker == "advertising_enabled":
+        return _active_ad_marker_keys(token_ids=token_ids, site_id=site_id)
+    if marker == "video_uploaded":
+        try:
+            from erp.mercadolibre_store_link_marker_store import marked_item_keys
+
+            return marked_item_keys("video_uploaded", token_ids=token_ids, site_id=site_id)
+        except Exception:
+            return set()
+    raise ValueError(f"未知店铺链接标志：{marker}")
+
+
+def _append_marker_filter(
+    conditions: list[str],
+    values: list[Any],
+    *,
+    marker: str,
+    enabled: bool,
+    token_ids: Iterable[int] | None = None,
+    site_id: str = "",
+) -> None:
+    """Add a local-marker identity predicate to the MySQL listing query."""
+
+    identities = sorted(_marker_filter_keys(marker, token_ids=token_ids, site_id=site_id))
+    if not identities:
+        conditions.append("1 = 0" if enabled else "1 = 1")
+        return
+    chunks = [identities[index:index + 400] for index in range(0, len(identities), 400)]
+    groups = []
+    for chunk in chunks:
+        groups.append(" OR ".join(
+            "(links.`token_id` = %s AND links.`site_id` = %s AND links.`item_id` = %s)"
+            for _identity in chunk
+        ))
+        for identity in chunk:
+            values.extend(identity)
+    predicate = "(" + ") OR (".join(groups) + ")"
+    conditions.append(predicate if enabled else f"NOT ({predicate})")
+
+
+def _normalize_marker_filter(value: Any, label: str) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        raw = ""
+    else:
+        raw = str(value).strip().lower()
+    if raw in {"", "all", "any"}:
+        return None
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{label}筛选值无效")
+
+
 def _attribute_number(item: Mapping[str, Any], ids: set[str], *, weight: bool = False) -> Decimal | None:
     for attribute in item.get("attributes") or []:
         if not isinstance(attribute, Mapping) or str(attribute.get("id") or "").upper() not in ids:
@@ -956,6 +1077,7 @@ def finalize_store_snapshot(
 def invalidate_store_link_metadata_cache() -> None:
     """Discard low-frequency filters and totals after synchronized data changes."""
 
+    _filtered_count_cache.clear()
     with _metadata_cache_lock:
         _metadata_cache.update({"expires_at": 0.0, "data": None})
         _scoped_metadata_cache.clear()
@@ -1231,7 +1353,7 @@ def _store_link_metadata(
                 "expires_at": time.monotonic() + STORE_LINK_METADATA_CACHE_SECONDS,
                 "data": deepcopy(metadata),
             }
-            if len(_scoped_metadata_cache) > 32:
+            if len(_scoped_metadata_cache) > 256:
                 oldest_key = min(
                     _scoped_metadata_cache,
                     key=lambda key: float(
@@ -1264,6 +1386,9 @@ def list_store_links(
     site_id: str = "",
     group_name: str = "",
     status: str = "",
+    promotion_applied: Any = None,
+    advertising_enabled: Any = None,
+    video_uploaded: Any = None,
     management_category_id: Any = None,
     mercado_category: str = "",
     sales_sort: str = "desc",
@@ -1279,6 +1404,11 @@ def list_store_links(
         1,
         min(int(page_size or STORE_LINK_DEFAULT_PAGE_SIZE), STORE_LINK_MAX_PAGE_SIZE),
     )
+    marker_filters = {
+        "promotion_applied": _normalize_marker_filter(promotion_applied, "活动标志"),
+        "advertising_enabled": _normalize_marker_filter(advertising_enabled, "广告标志"),
+        "video_uploaded": _normalize_marker_filter(video_uploaded, "视频标志"),
+    }
     conditions: list[str] = []
     values: list[Any] = []
     scoped_token_ids = None
@@ -1442,6 +1572,23 @@ def list_store_links(
                             filtered_values.extend([token_value, site_value])
                     else:
                         filtered_conditions.append("1 = 0")
+            marker_scope_token_ids = (
+                selected_token_ids
+                if selected_token_ids
+                else [int(token_id)]
+                if token_id not in (None, "")
+                else scoped_token_ids
+            )
+            for marker, enabled in marker_filters.items():
+                if enabled is not None:
+                    _append_marker_filter(
+                        filtered_conditions,
+                        filtered_values,
+                        marker=marker,
+                        enabled=enabled,
+                        token_ids=marker_scope_token_ids,
+                        site_id=site_id,
+                    )
             where_sql = (
                 " WHERE " + " AND ".join(filtered_conditions)
                 if filtered_conditions else ""
@@ -1456,6 +1603,7 @@ def list_store_links(
                 and not category_filter
                 and not mercado_category
                 and not search
+                and all(value is None for value in marker_filters.values())
             )
             if scoped_only_filter:
                 total = int(summary.get(
@@ -1466,11 +1614,21 @@ def list_store_links(
             elif filtered_conditions == ["links.`is_current` = 1"]:
                 total = int(summary.get("current_count") or 0)
             else:
-                cursor.execute(
-                    f"SELECT COUNT(*) AS `total`{links_from_sql}{where_sql}",
-                    tuple(filtered_values),
-                )
-                total = int((cursor.fetchone() or {}).get("total") or 0)
+                count_sql = f"SELECT COUNT(*) AS `total`{links_from_sql}{where_sql}"
+                def load_count():
+                    cursor.execute(count_sql, tuple(filtered_values))
+                    return int((cursor.fetchone() or {}).get("total") or 0)
+                if connection_factory is not None:
+                    total = load_count()
+                else:
+                    from bit.bit_mysql import config
+                    database_key = tuple(str(config.get(k, "")) for k in
+                                         ("host", "port", "database", "db", "user"))
+                    # Include the actual SQL predicates AND permission scope.
+                    # Cached totals never bypass the live row authorization query.
+                    count_key = (database_key, count_sql, tuple(filtered_values),
+                                 None if scoped_token_ids is None else tuple(scoped_token_ids))
+                    total = _filtered_count_cache.get_or_load(count_key, load_count)
             pages = max(1, (total + page_size - 1) // page_size)
             page = min(page, pages)
             recent_sales_join_sql = ""
@@ -1667,15 +1825,20 @@ def bulk_update_store_links(
     ids.sort()
     if not ids:
         raise ValueError("请至少勾选一条店铺链接")
-    allowed = (
+    numeric_allowed = (
         "price", "weight_g", "package_length_cm", "package_width_cm",
         "package_height_cm", "net_proceeds_usd",
     )
     clean_changes = {
         field: _decimal_change(field, changes[field])
-        for field in allowed
+        for field in numeric_allowed
         if field in changes and changes[field] not in (None, "")
     }
+    if "status" in changes and changes["status"] not in (None, ""):
+        status = str(changes["status"] or "").strip().lower()
+        if status not in {"active", "paused"}:
+            raise ValueError("店铺链接状态只能是 active 或 paused")
+        clean_changes["status"] = status
     if not clean_changes:
         raise ValueError("请至少填写一个需要批量更新的字段")
     assignments = [f"`{field}` = %s" for field in clean_changes]

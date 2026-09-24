@@ -8,6 +8,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 
+from bit.sync_capacity import run_store as run_capacity_store, due_batch
 from bit import bit_mysql, mercado_tokens
 from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
 from erp.mercadolibre_store_link_store import (
@@ -29,10 +30,10 @@ STORE_LINK_WRITE_BATCH_SIZE = max(
     100, min(int(os.getenv("MERCADO_STORE_LINK_WRITE_BATCH_SIZE", "200")), 1000)
 )
 STORE_LINK_STORE_WORKERS = max(
-    1, min(int(os.getenv("MERCADO_STORE_LINK_STORE_WORKERS", "16")), 24)
+    1, min(int(os.getenv("MERCADO_STORE_LINK_STORE_WORKERS", "4")), 24)
 )
 STORE_LINK_DETAIL_WORKERS = max(
-    1, min(int(os.getenv("MERCADO_STORE_LINK_DETAIL_WORKERS", "32")), 64)
+    1, min(int(os.getenv("MERCADO_STORE_LINK_DETAIL_WORKERS", "8")), 64)
 )
 STORE_LINK_AUTO_SYNC_DAYS = max(
     1, int(os.getenv("MERCADO_STORE_LINK_AUTO_SYNC_DAYS", "3"))
@@ -507,7 +508,7 @@ def run_store_link_sync(token_ids=None) -> dict:
         max_workers=worker_count,
         thread_name_prefix="mercado-store-sync",
     ) as executor:
-        futures = [executor.submit(sync_one_store, record) for record in records]
+        futures = [executor.submit(run_capacity_store, "links", record["id"], sync_one_store, record) for record in records]
         for future in as_completed(futures):
             result = future.result()
             results.append(result)
@@ -624,6 +625,7 @@ def start_due_store_link_sync() -> dict:
     )
     if not token_ids:
         return {"started": False, "due_token_ids": [], "state": store_link_sync_status()}
+    token_ids = due_batch(token_ids)
     started, state = start_store_link_sync(token_ids)
     return {"started": bool(started), "due_token_ids": token_ids, "state": state}
 

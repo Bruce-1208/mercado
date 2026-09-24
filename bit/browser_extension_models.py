@@ -10,9 +10,6 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from cryptography.fernet import Fernet, InvalidToken
-
-
 DEFAULT_CONFIG_PATH = (
     Path(__file__).resolve().parent
     / "runtime_locks"
@@ -30,7 +27,12 @@ def _path(path=None) -> Path:
     return Path(path or configured or DEFAULT_CONFIG_PATH).expanduser().resolve()
 
 
-def _fernet(secret_key) -> Fernet:
+def _fernet(secret_key):
+    # Model credential storage is served by the workbench, not executed by a
+    # Local Agent.  Delay the optional dependency so appeal workers can import
+    # the shared interface with their smaller packaged runtime.
+    from cryptography.fernet import Fernet
+
     raw = str(secret_key or "").encode("utf-8")
     key = hashlib.sha256(b"zeshun-browser-extension-models\0" + raw).digest()
     return Fernet(base64.urlsafe_b64encode(key))
@@ -66,6 +68,8 @@ def _write(value: dict, path=None) -> None:
 
 
 def _decrypt(record: dict, provider: str, secret_key) -> str:
+    from cryptography.fernet import InvalidToken
+
     encrypted = str(record.get(f"{provider}_api_key_encrypted") or "")
     if not encrypted:
         return ""

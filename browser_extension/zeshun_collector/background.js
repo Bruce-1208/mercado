@@ -4,7 +4,7 @@ importScripts("zying-page.js");
 importScripts("product-batch.js");
 
 const DEFAULT_SETTINGS = {
-  consoleUrl: "http://127.0.0.1:5000",
+  consoleUrl: "https://wuhanzeshun.com",
   openConsoleAfterCollect: false
 };
 const AUTH_KEY = "browserExtensionAuth";
@@ -14,12 +14,15 @@ const RETRY_ALARM = "zeshun-collector-retry";
 const PURCHASE_TRACKING_RESUME_ALARM = "zeshun-purchase-tracking-resume";
 const NOTIFICATION_DEDUPE_KEY = "notificationDedupe";
 const NOTIFICATION_DEDUPE_MS = 30 * 60 * 1000;
+const AI_WEIGHT_PRICE_PAUSE_KEY = "aiWeightPricePauseNotification";
+const AI_WEIGHT_PRICE_PAUSE_NOTICE_MS = 10 * 60 * 1000;
 const MAX_QUEUE_SIZE = 100;
 const FLOATING_WINDOW_KEY = "zeshunFloatingWindowId";
 const ZYING_HOST = "meli.zying.net";
 const ZYING_LOGIN_URL = `https://${ZYING_HOST}/#/login`;
 let queueFlushPromise = null;
 let purchaseTrackingRunPromise = null;
+let aiWeightPriceRunPromise = null;
 
 async function openFloatingWindow() {
   const stored = await storageGet("local", [FLOATING_WINDOW_KEY]);
@@ -574,6 +577,27 @@ async function extractFromTab(tabId) {
   return response.product;
 }
 
+async function collect1688ListProduct(candidate) {
+  const sourceUrl = String(candidate?.source_url || candidate?.final_url || "").trim();
+  if (!sourceUrl) throw new Error("1688 列表商品缺少详情链接");
+  const tab = await chrome.tabs.create({url: sourceUrl, active: false});
+  let extracted = false;
+  try {
+    await aiWeightPriceWaitTab(tab.id);
+    const product = await extractFromTab(tab.id);
+    extracted = true;
+    return await submitProduct(product);
+  } catch (error) {
+    // Keep failed detail tabs available for login, slider or captcha handling.
+    try { await chrome.tabs.update(tab.id, {active: true}); } catch (_) {}
+    throw error;
+  } finally {
+    if (extracted) {
+      try { await chrome.tabs.remove(tab.id); } catch (_) {}
+    }
+  }
+}
+
 function normalizeZyingToken(value) {
   if (!value) return "";
   let token = value;
@@ -685,10 +709,40 @@ async function stopZyingCollection() {
 }
 
 async function aiWeightPriceStatus() {
-  const data = await apiRequest("/api/browser-extension/ai-weight-price/status", {method: "GET"});
-  const reason = data?.circuit?.reason || (data?.run?.outcome === "blocked" ? data?.run?.message : "");
-  if (reason) void notifyAttention(reason, {source: "AI核重核价"}).catch(() => {});
+  const data = await apiRequest("/api/browser-extension/ai-weight-price/client/status", {method: "GET"});
+  void handleAiWeightPricePauseNotification(data).catch(() => {});
   return data;
+}
+
+async function handleAiWeightPricePauseNotification(data = {}) {
+  const circuit = data?.circuit;
+  const reason = circuit?.reason || (data?.run?.outcome === "blocked" ? data?.run?.message : "");
+  if (!circuit || !reason) {
+    await storageRemove("local", [AI_WEIGHT_PRICE_PAUSE_KEY]);
+    return {sent: false, active: false};
+  }
+  const pausedAt = Number(circuit.at || 0) * 1000 || Date.now();
+  const signature = [data?.run?.run_id || "", circuit.kind || "", circuit.at || "", reason].join("|");
+  const stored = await storageGet("local", [AI_WEIGHT_PRICE_PAUSE_KEY]);
+  let pause = stored[AI_WEIGHT_PRICE_PAUSE_KEY] || {};
+  if (pause.signature !== signature) {
+    pause = {signature, pausedAt, attempted: false, sent: false};
+    await storageSet("local", {[AI_WEIGHT_PRICE_PAUSE_KEY]: pause});
+  }
+  if (pause.attempted || Date.now() - Number(pause.pausedAt || pausedAt) < AI_WEIGHT_PRICE_PAUSE_NOTICE_MS) {
+    return {sent: false, pending: !pause.attempted};
+  }
+  // Persist the one-shot guard before sending. Even if SMTP succeeds but the
+  // local response is lost, the same overnight pause will never send twice.
+  pause = {...pause, attempted: true, attemptedAt: Date.now()};
+  await storageSet("local", {[AI_WEIGHT_PRICE_PAUSE_KEY]: pause});
+  const result = await notifyAttention(reason, {source: "AI核重核价"});
+  pause = {
+    ...pause,
+    sent: Boolean(result?.channels?.email?.sent || result?.sent),
+  };
+  await storageSet("local", {[AI_WEIGHT_PRICE_PAUSE_KEY]: pause});
+  return result;
 }
 
 async function startZyingInfringement(context, params) {
@@ -726,9 +780,167 @@ async function monitorAttentionEvents() {
 }
 
 async function aiWeightPriceAction(action, body = {}) {
-  return apiRequest(`/api/browser-extension/ai-weight-price/${action}`, {
+  return apiRequest(`/api/browser-extension/ai-weight-price/client/${action}`, {
     method: "POST",
     body: JSON.stringify(body)
+  });
+}
+
+async function aiWeightPriceTab(host, url) {
+  const tabs = await chrome.tabs.query({});
+  const existing = tabs.find(tab => {
+    try { return tab.id && new URL(tab.url || "").hostname.endsWith(host); }
+    catch (_) { return false; }
+  });
+  if (existing) {
+    if (url && existing.url !== url) await chrome.tabs.update(existing.id, {url, active: true});
+    else await chrome.tabs.update(existing.id, {active: true});
+    return existing.id;
+  }
+  const created = await chrome.tabs.create({url, active: true});
+  return created.id;
+}
+
+async function aiWeightPriceWaitTab(tabId, timeoutMs = 30000) {
+  const current = await chrome.tabs.get(tabId);
+  if (current.status === "complete") {
+    await new Promise(resolve => setTimeout(resolve, 700));
+    return current;
+  }
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const finish = (error, tab) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      chrome.tabs.onUpdated.removeListener(listener);
+      if (error) reject(error); else resolve(tab);
+    };
+    const listener = (updatedId, info, tab) => {
+      if (updatedId === tabId && info.status === "complete") finish(null, tab);
+    };
+    const timer = setTimeout(() => finish(new Error("浏览器页面加载超时")), timeoutMs);
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+}
+
+async function aiWeightPriceReadZyingTab() {
+  const tabId = await aiWeightPriceTab(ZYING_HOST, "https://meli.zying.net/#/product");
+  await aiWeightPriceWaitTab(tabId);
+  return {tabId, context: await readZyingContext(tabId)};
+}
+
+async function aiWeightPriceImageDataUrl(url) {
+  const source = String(url || "").trim();
+  if (!source) throw new Error("智赢商品缺少主图地址");
+  const response = await fetch(source, {credentials: "include", cache: "no-store"});
+  if (!response.ok) throw new Error(`读取商品主图失败（HTTP ${response.status}）`);
+  const mime = response.headers.get("content-type") || "image/jpeg";
+  const buffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return `data:${mime};base64,${btoa(binary)}`;
+}
+
+async function aiWeightPriceReadProducts(clientConfig, selection, maxItems) {
+  const tabId = await aiWeightPriceTab(ZYING_HOST, "https://meli.zying.net/#/product");
+  await aiWeightPriceWaitTab(tabId);
+  const startPage = Number(selection?.start_page || 1);
+  const endPage = Number(selection?.end_page || startPage);
+  const products = [];
+  for (let page = startPage; page <= endPage && products.length < maxItems; page += 1) {
+    const selected = await sendTabMessage(tabId, {
+      type: "AI_WEIGHT_PRICE_SELECT_PAGE", page,
+      selectors: clientConfig?.selectors || {}
+    });
+    if (!selected?.ok && page !== startPage) throw new Error(selected?.error || `无法切换到智赢第 ${page} 页`);
+    if (selected?.changed) await new Promise(resolve => setTimeout(resolve, 1000));
+    const response = await sendTabMessage(tabId, {
+      type: "AI_WEIGHT_PRICE_EXTRACT_PRODUCTS",
+      selectors: clientConfig?.selectors || {},
+      max_items: maxItems - products.length
+    });
+    if (!response?.ok) throw new Error(response?.error || "插件没有读取到智赢商品列表");
+    products.push(...(response.products || []));
+  }
+  return {tabId, products: products.slice(0, maxItems)};
+}
+
+async function runAIWeightPriceClient(step) {
+  if (!step || step.action === "done") return step;
+  const task = step.task || {};
+  const clientConfig = step.data?.client_config || {};
+  let current = step;
+  try {
+    while (current && current.action !== "done") {
+      const currentTask = current.task || task;
+      const taskId = current.task_id || currentTask.erp_goods_id;
+      if (!taskId) throw new Error("服务器没有返回当前核重核价商品");
+      if (current.action === "search") {
+        const supplierTab = await aiWeightPriceTab("1688.com", "https://www.1688.com/");
+        await aiWeightPriceWaitTab(supplierTab);
+        const dataUrl = await aiWeightPriceImageDataUrl(currentTask.main_image_url);
+        const response = await sendTabMessage(supplierTab, {
+          type: "AI_WEIGHT_PRICE_SEARCH",
+          data_url: dataUrl,
+          selectors: clientConfig.selectors || {},
+          timeout_ms: 15000
+        });
+        if (!response?.ok) throw new Error(response?.error || "1688 以图搜货失败");
+        current = await aiWeightPriceAction("search", {
+          task_id: taskId, candidates: response.candidates || []
+        });
+        continue;
+      }
+      if (current.action === "detail") {
+        const url = current.candidate?.url || current.candidate?.source_url;
+        if (!url) throw new Error("服务器没有返回1688候选商品链接");
+        const supplierTab = await aiWeightPriceTab("1688.com", url);
+        await aiWeightPriceWaitTab(supplierTab);
+        const response = await sendTabMessage(supplierTab, {type: "AI_WEIGHT_PRICE_READ_DETAIL"});
+        if (!response?.ok) throw new Error(response?.error || "读取1688商品详情失败");
+        current = await aiWeightPriceAction("detail", {
+          task_id: taskId, detail: response.detail || {},
+          runtime_api_key: ""
+        });
+        continue;
+      }
+      if (current.action === "writeback") {
+        const erp = await aiWeightPriceTab(ZYING_HOST, current.task?.erp_edit_url || "https://meli.zying.net/#/product");
+        await aiWeightPriceWaitTab(erp);
+        const response = await sendTabMessage(erp, {
+          type: "AI_WEIGHT_PRICE_WRITEBACK",
+          selectors: clientConfig.selectors || {},
+          erp_goods_id: taskId,
+          changes: current.changes || {}
+        });
+        if (!response?.ok) throw new Error(response?.error || "智赢商品回写失败");
+        current = await aiWeightPriceAction("writeback", {
+          task_id: taskId, changes: current.changes || {}, actual: response.after || {}
+        });
+        continue;
+      }
+      throw new Error(`未知核重核价浏览器动作：${current.action}`);
+    }
+    await storageRemove("local", ["aiWeightPriceClientRun"]);
+    return current;
+  } catch (error) {
+    await storageSet("local", {aiWeightPriceClientRun: {
+      action: current?.action || "error", task_id: current?.task_id || task?.erp_goods_id || "",
+      error: error.message || String(error), at: Date.now()
+    }});
+    void notifyAttention(error.message || String(error), {source: "AI核重核价"}).catch(() => {});
+    throw error;
+  }
+}
+
+function launchAIWeightPriceClient(step) {
+  if (!step || step.action === "done" || aiWeightPriceRunPromise) return;
+  aiWeightPriceRunPromise = runAIWeightPriceClient(step).catch(() => null).finally(() => {
+    aiWeightPriceRunPromise = null;
   });
 }
 
@@ -799,6 +1011,10 @@ chrome.action?.onClicked?.addListener(() => {
   openFloatingWindow().catch(() => {});
 });
 
+chrome.commands?.onCommand?.addListener(command => {
+  if (command === "open-zeshun") openFloatingWindow().catch(() => {});
+});
+
 chrome.windows.onRemoved?.addListener(async windowId => {
   const stored = await storageGet("local", [FLOATING_WINDOW_KEY]);
   if (Number(stored[FLOATING_WINDOW_KEY] || 0) === Number(windowId)) {
@@ -806,9 +1022,12 @@ chrome.windows.onRemoved?.addListener(async windowId => {
   }
 });
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const run = async () => {
     switch (message && message.type) {
+      case "OPEN_FLOATING_WINDOW":
+        await openFloatingWindow();
+        return {ok: true};
       case "OPEN_PRODUCT_SEARCH": {
         const tab = await chrome.tabs.create({url: productSearchUrl(message.country, message.keyword), active: true});
         const saved = await storageGet("local", ["productBatchOptions"]);
@@ -826,7 +1045,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       case "STOP_PRODUCT_BATCH": return {ok: true, state: await stopProductBatch()};
       case "LOGIN": return login(String(message.username || "").trim(), String(message.password || ""));
       case "LOGOUT": return logout();
-      case "SUBMIT_PRODUCT": return submitProduct(message.product);
+      case "SUBMIT_PRODUCT": {
+        const senderHost = String(sender?.tab?.url || "").match(/^https?:\/\/([^/]+)/i)?.[1]?.toLowerCase() || "";
+        if (senderHost === "s.1688.com" && message.product?.source_platform === "1688") {
+          return collect1688ListProduct(message.product);
+        }
+        return submitProduct(message.product);
+      }
       case "READ_ZYING_CONTEXT": return {ok: true, ...(await readZyingContext(Number(message.tabId)))};
       case "OPEN_ZYING_LOGIN": return {ok: true, ...(await openZyingLoginPage())};
       case "GET_ZYING_OPTIONS": return {ok: true, ...(await loadZyingOptions(message.context || {}))};
@@ -847,34 +1072,41 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         ok: true,
         ...(await notifyAttention(message.message, {source: message.source || "泽顺插件"}))
       };
-      case "OPEN_AI_WEIGHT_PRICE_LOGIN": return {
-        ok: true,
-        ...(await aiWeightPriceAction("login/open"))
-      };
-      case "CONFIRM_AI_WEIGHT_PRICE_LOGIN": return {
-        ok: true,
-        ...(await aiWeightPriceAction("login/confirm"))
-      };
-      case "OPEN_AI_WEIGHT_PRICE_SUPPLIER": return {
-        ok: true,
-        ...(await aiWeightPriceAction("login/supplier"))
-      };
-      case "CONTINUE_AI_WEIGHT_PRICE": return {
-        ok: true,
-        ...(await aiWeightPriceAction("continue", message.params || {}))
-      };
-      case "REFRESH_AI_WEIGHT_PRICE_CATEGORIES": return {
-        ok: true,
-        ...(await aiWeightPriceAction("categories/refresh"))
-      };
-      case "START_AI_WEIGHT_PRICE": return {
-        ok: true,
-        ...(await aiWeightPriceAction("start", message.params || {}))
-      };
-      case "STOP_AI_WEIGHT_PRICE": return {
-        ok: true,
-        ...(await aiWeightPriceAction("stop"))
-      };
+      case "OPEN_AI_WEIGHT_PRICE_LOGIN": {
+        const result = await aiWeightPriceAction("login/open");
+        const page = await openZyingLoginPage();
+        return {ok: true, ...result, ...page};
+      }
+      case "CONFIRM_AI_WEIGHT_PRICE_LOGIN": {
+        const page = await aiWeightPriceReadZyingTab();
+        return {ok: true, ...(await aiWeightPriceAction("login/confirm", {context: page.context}))};
+      }
+      case "OPEN_AI_WEIGHT_PRICE_SUPPLIER": {
+        const tabId = await aiWeightPriceTab("1688.com", "https://www.1688.com/");
+        return {ok: true, tab_id: tabId};
+      }
+      case "CONTINUE_AI_WEIGHT_PRICE": {
+        const result = await aiWeightPriceAction("continue", message.params || {});
+        launchAIWeightPriceClient(result);
+        return {ok: true, ...result};
+      }
+      case "REFRESH_AI_WEIGHT_PRICE_CATEGORIES": {
+        const page = await aiWeightPriceReadZyingTab();
+        return {ok: true, ...(await aiWeightPriceAction("categories/refresh", {context: page.context}))};
+      }
+      case "START_AI_WEIGHT_PRICE": {
+        const status = await aiWeightPriceStatus();
+        const maxItems = Number(message.params?.max_items || 10);
+        const page = await aiWeightPriceReadProducts(
+          status.client_config || {}, message.params || {}, maxItems
+        );
+        const result = await aiWeightPriceAction("start", {
+          ...(message.params || {}), products: page.products, max_items: maxItems
+        });
+        launchAIWeightPriceClient(result);
+        return {ok: true, ...result};
+      }
+      case "STOP_AI_WEIGHT_PRICE": return {ok: true, ...(await aiWeightPriceAction("stop"))};
       case "GET_STATE": return state();
       case "GET_PURCHASE_TRACKING_REQUEST": return {
         ok: true,

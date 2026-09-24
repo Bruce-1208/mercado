@@ -57,6 +57,60 @@ def test_api_reputation_shop_name_and_database_refresh(console_page, status):
     assert len(requests) == 1
 
 
+def test_reputation_columns_toggle_numeric_sort_and_keep_missing_values_last(console_page):
+    page = console_page
+    page.evaluate("""() => {
+        document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
+        document.getElementById('tab-reputation').classList.add('active');
+        reputationRows = [
+            {'店铺名': '店铺甲', '站点': '墨西哥', '侵权数量': 2, '权利人数量': 1,
+             '声誉颜色': '红色', '总单量': '10', '投诉率': '1.5%', '延误率': '8%',
+             '取消率': '0.5%', '增加或减少': '下滑'},
+            {'店铺名': '店铺乙', '站点': '巴西', '侵权数量': 10, '权利人数量': 0,
+             '声誉颜色': '绿色', '总单量': '1,200', '投诉率': '0.5%', '延误率': '12%',
+             '取消率': '2%', '增加或减少': '增长'},
+            {'店铺名': '店铺丙', '站点': '智利', '侵权数量': -1, '权利人数量': null,
+             '声誉颜色': '黄色', '总单量': '-', '投诉率': '-', '延误率': '-',
+             '取消率': '-', '增加或减少': '持平'},
+        ];
+        reputationSortKey = '';
+        reputationSortDirection = 'asc';
+        renderLatestReputationRows();
+    }""")
+
+    buttons = page.locator(".reputation-sort-button")
+    assert buttons.count() == 8
+    infraction = page.locator('.reputation-sort-button[data-sort-key="infraction_count"]')
+    infraction.click()
+    assert page.locator("#reputation-body tr td:first-child span").all_inner_texts() == [
+        "店铺甲", "店铺乙", "店铺丙",
+    ]
+    assert infraction.locator(".reputation-sort-indicator").inner_text() == "↑"
+    assert infraction.get_attribute("aria-sort") == "ascending"
+
+    infraction.click()
+    assert page.locator("#reputation-body tr td:first-child span").all_inner_texts() == [
+        "店铺乙", "店铺甲", "店铺丙",
+    ]
+    assert infraction.locator(".reputation-sort-indicator").inner_text() == "↓"
+    assert infraction.get_attribute("aria-sort") == "descending"
+
+    page.locator('.reputation-sort-button[data-sort-key="color"]').click()
+    assert page.locator("#reputation-body tr td:first-child span").all_inner_texts() == [
+        "店铺甲", "店铺丙", "店铺乙",
+    ]
+
+    for key in (
+        "rights_holder_count", "order_total", "complaint_rate", "delay_rate",
+        "cancellation_rate", "change_direction",
+    ):
+        button = page.locator(f'.reputation-sort-button[data-sort-key="{key}"]')
+        button.click()
+        assert button.get_attribute("aria-sort") == "ascending"
+        button.click()
+        assert button.get_attribute("aria-sort") == "descending"
+
+
 @pytest.fixture(scope="module")
 def console_browser():
     playwright = pytest.importorskip("playwright.sync_api")
@@ -71,6 +125,28 @@ def console_browser():
         browser = pw.chromium.launch(executable_path=executable, headless=True)
         yield browser
         browser.close()
+
+
+def test_algorithm_switch_is_exclusive_and_submits_selected_mode(console_page):
+    page = console_page
+    page.evaluate("""() => {
+        document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
+        document.getElementById('tab-tasks').classList.add('active');
+    }""")
+    algorithm = page.locator('#daily-task-algorithm-mode')
+    mixed = page.locator('#daily-task-mixed-mode')
+    complaint = page.locator('input[name="daily-task-appeal-type"][value="投诉"]')
+    algorithm.locator("..").click()
+    assert page.evaluate("getDailyTaskPayload().appeal_types") == ["算法模式"]
+    assert not mixed.is_checked()
+    complaint.locator("..").click()
+    assert not algorithm.is_checked()
+    assert page.evaluate("getDailyTaskPayload().appeal_types") == ["投诉"]
+    mixed.locator("..").click()
+    assert not complaint.is_checked()
+    algorithm.locator("..").click()
+    assert not mixed.is_checked()
+    assert page.evaluate("getDailyTaskPayload().appeal_types") == ["算法模式"]
 
 
 @pytest.fixture
@@ -163,7 +239,7 @@ def test_filter_layout_and_popup_fit_viewport(console_page, width):
     page = console_page
     page.set_viewport_size({"width": width, "height": 1000})
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-    heights = page.locator(".order-filters").evaluate("""el =>
+    heights = page.locator("#tab-orders .order-filters").evaluate("""el =>
         [...el.querySelectorAll('input:not([type=checkbox]), select:not([multiple]), .market-multi-trigger')]
         .map(e => e.getBoundingClientRect().height).filter(Boolean)
     """)
@@ -191,3 +267,46 @@ def test_order_density_switch_and_compact_bulk_toolbar(console_page):
     page.evaluate("selectedOrderIds.add('10001'); updateOrderSelectionState()")
     assert bulk_bar.evaluate("el => el.classList.contains('active')")
     assert bulk_bar.locator(".order-bulk-group").first.evaluate("el => getComputedStyle(el).display") == "flex"
+
+
+def test_background_export_queues_polls_and_downloads_without_navigation(console_page):
+    page = console_page
+    calls = []
+    def export_route(route):
+        calls.append((route.request.method, urlsplit(route.request.url).path))
+        path = calls[-1][1]
+        if route.request.method == 'POST':
+            assert route.request.post_data_json['url'].startswith('/api/risk-check/results/export?')
+            route.fulfill(status=202, content_type='application/json', body=json.dumps({
+                'status':'success','data':{'id':'test-export','status':'queued'}}))
+        elif path.endswith('/download'):
+            route.fulfill(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                          headers={'Content-Disposition':"attachment; filename*=UTF-8''report.xlsx"}, body=b'test-xlsx')
+        else:
+            route.fulfill(content_type='application/json', body=json.dumps({
+                'status':'success','data':{'id':'test-export','status':'ready'}}))
+    page.route('**/api/exports', export_route)
+    page.route('**/api/exports/**', export_route)
+    previous_url = page.url
+    with page.expect_download(timeout=15000) as pending:
+        page.evaluate('exportRiskResults()')
+    assert pending.value.suggested_filename == 'report.xlsx'
+    assert page.url == previous_url
+    assert calls == [('POST','/api/exports'),('GET','/api/exports/test-export'),('GET','/api/exports/test-export/download')]
+
+
+def test_background_export_stops_after_permission_revoked(console_page):
+    page = console_page
+    calls = []
+    def export_route(route):
+        calls.append(route.request.method)
+        if route.request.method == 'POST':
+            route.fulfill(status=202, content_type='application/json', body=json.dumps({
+                'status':'success','data':{'id':'revoked','status':'queued'}}))
+        else:
+            route.fulfill(status=403, content_type='application/json', body=json.dumps({'message':'导出权限已失效'}))
+    page.route('**/api/exports', export_route)
+    page.route('**/api/exports/**', export_route)
+    page.evaluate('exportRiskResults()')
+    page.get_by_text('导出失败：导出权限已失效', exact=True).wait_for(timeout=10000)
+    assert calls == ['POST','GET']

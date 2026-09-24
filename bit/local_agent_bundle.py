@@ -20,6 +20,12 @@ SOURCE_DIRECTORIES = (
     "playwright_appeal",
     "ziniao",
 )
+RESOURCE_DIRECTORIES = (
+    # bit_interface imports the extension metadata at module load time.  Keep
+    # the extension beside the Python sources in every downloaded release so
+    # Agent jobs can import the module successfully.
+    "browser_extension/zeshun_collector",
+)
 ROOT_SOURCE_FILES = (
     "DataAnalysis.py",
     "DataAnalysis_db.py",
@@ -29,6 +35,8 @@ ROOT_SOURCE_FILES = (
 _BUNDLE_LOCK = threading.Lock()
 _BUNDLE_CACHE = {}
 _BUNDLE_HISTORY_LIMIT = 5
+_SOURCE_CACHE_LOCK = threading.Lock()
+_SOURCE_CACHE = {}
 
 
 def iter_business_source_files(project_root):
@@ -43,6 +51,15 @@ def iter_business_source_files(project_root):
             for path in directory.rglob("*.py")
             if "__pycache__" not in path.parts
         )
+    for directory_name in RESOURCE_DIRECTORIES:
+        directory = project_root / directory_name
+        if not directory.is_dir():
+            continue
+        paths.extend(
+            path
+            for path in directory.rglob("*")
+            if path.is_file() and "__pycache__" not in path.parts
+        )
     paths.extend(
         path for name in ROOT_SOURCE_FILES if (path := project_root / name).is_file()
     )
@@ -53,6 +70,16 @@ def business_source_version(project_root):
     project_root = Path(project_root).resolve()
     digest = hashlib.sha256()
     files = iter_business_source_files(project_root)
+    # Metadata reads are cheap; hash file contents only after a source change.
+    # ctime catches replacements even when a deployment preserves mtime/size.
+    signature = tuple(
+        (str(path), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+        for path in files for stat in (path.stat(),)
+    )
+    with _SOURCE_CACHE_LOCK:
+        cached = _SOURCE_CACHE.get(str(project_root))
+        if cached and cached[0] == signature:
+            return cached[1], files
     for path in files:
         relative = path.relative_to(project_root).as_posix().encode("utf-8")
         content = path.read_bytes()
@@ -60,7 +87,12 @@ def business_source_version(project_root):
         digest.update(relative)
         digest.update(len(content).to_bytes(8, "big"))
         digest.update(content)
-    return digest.hexdigest()[:24], files
+    version = digest.hexdigest()[:24]
+    with _SOURCE_CACHE_LOCK:
+        _SOURCE_CACHE[str(project_root)] = (signature, version)
+        if len(_SOURCE_CACHE) > 8:
+            del _SOURCE_CACHE[next(iter(_SOURCE_CACHE))]
+    return version, files
 
 
 def build_business_bundle(project_root):

@@ -16,9 +16,6 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
-from cryptography.fernet import Fernet, InvalidToken
-
-
 DEFAULT_CONFIG_PATH = (
     Path(__file__).resolve().parent / "runtime_locks" / "account_webhooks.json"
 )
@@ -30,7 +27,13 @@ def _path(path=None) -> Path:
     return Path(path or configured or DEFAULT_CONFIG_PATH).expanduser().resolve()
 
 
-def _fernet(secret_key) -> Fernet:
+def _fernet(secret_key):
+    # Local Agent workers import ``bit_interface`` to run appeal jobs, but do
+    # not use server-side account integrations and intentionally ship a
+    # smaller dependency set.  Keep cryptography optional until a server route
+    # actually reads or writes an encrypted webhook secret.
+    from cryptography.fernet import Fernet
+
     digest = hashlib.sha256(
         b"zeshun-account-webhook\0" + str(secret_key or "").encode("utf-8")
     ).digest()
@@ -118,6 +121,8 @@ def save_settings(user_id, payload, secret_key, path=None) -> dict:
 
 
 def _private_settings(user_id, secret_key, path=None) -> dict:
+    from cryptography.fernet import InvalidToken
+
     record = dict(_load(path).get("users", {}).get(str(int(user_id)), {}) or {})
     if not record.get("url"):
         raise ValueError("Webhook 尚未完成配置")
@@ -130,6 +135,11 @@ def _private_settings(user_id, secret_key, path=None) -> dict:
         except (InvalidToken, ValueError, UnicodeDecodeError) as exc:
             raise ValueError("Webhook 签名密钥无法解密，请重新保存") from exc
     return {**record, "secret": secret}
+
+
+def get_private_settings(user_id, secret_key, path=None) -> dict:
+    """Return decrypted webhook settings for an explicit, authenticated view."""
+    return _private_settings(user_id, secret_key, path)
 
 
 def _is_public_destination(hostname: str) -> bool:

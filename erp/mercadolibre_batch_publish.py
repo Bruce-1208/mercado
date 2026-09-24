@@ -521,7 +521,7 @@ def _prepared_listing_from_product_row(
             for key in ("name", "label", "sku_name", "title"):
                 variation[key] = variation.get(f"{key}_{localized_suffix}") or variation.get(key)
             generated_variations.append(variation)
-        if generated_variations:
+        if "variations" in prepared:
             source["variations"] = generated_variations
         snapshot["description"] = {"plain_text": description_text}
     source.setdefault("id", str(row.get("source_item_id") or ""))
