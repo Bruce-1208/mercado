@@ -46,6 +46,18 @@ if errorlevel 1 pause
 """
 
 
+def _windows_powershell_launcher(script_name):
+    # The policy must be set before loading the PS1, not inside it.
+    return f'''@echo off
+setlocal
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0{script_name}"
+set "agent_exit_code=%errorlevel%"
+if not "%agent_exit_code%"=="0" echo Agent operation failed. See the error above.
+pause
+exit /b %agent_exit_code%
+'''.replace("\n", "\r\n")
+
+
 def _windows_install_script(project_root):
     return (project_root / "install-agent-forever.ps1").read_text(encoding="utf-8")
 
@@ -237,6 +249,8 @@ def _build_windows_archive(archive, project_root, executable_path):
         )
         _writestr(archive, "requirements-agent.txt", "requests>=2.31,<3\n")
     _writestr(archive, "start-agent.bat", _windows_start_script(has_executable))
+    for action in ("install", "uninstall", "unblock"):
+        _writestr(archive, f"{action}-agent.bat", _windows_powershell_launcher(f"{action}-agent.ps1"))
     _writestr(archive, "unblock-agent.ps1", _windows_unblock_script())
     _writestr(archive, "install-agent.ps1", _windows_install_script(project_root))
     _writestr(archive, "uninstall-agent.ps1", _windows_uninstall_script())
@@ -274,14 +288,14 @@ def _readme(target_platform, has_executable):
     if target_platform == "windows":
         steps = """1. 解压本安装包到固定目录，不要直接在压缩包内运行。
 2. 如果 Windows 提示“应用和浏览器控制已阻止可能不安全的应用”，先右键 ZIP 文件打开“属性”，勾选“解除锁定/Unblock”，应用后重新解压。
-3. 如果已经解压，在当前目录打开 PowerShell，执行 `Unblock-File -Path .\\unblock-agent.ps1`，再双击 start-agent.bat。也可以右键运行 unblock-agent.ps1。
+3. 如果已经解压，双击 unblock-agent.bat 解除安装目录中文件的锁定，再双击 start-agent.bat。
 4. 双击 start-agent.bat 可立即启动；正式 EXE 只显示运行状态窗口，不会常驻 CMD 窗口。未安装守护任务时，关闭窗口并确认会退出 Agent；安装后 Agent 会在退出后自动重新启动。
-5. 右键 install-agent.ps1，选择“使用 PowerShell 运行”，可安装为当前用户登录后持续运行的任务；Agent 退出或崩溃时会自动重新启动。
-6. 如需取消自动启动并停止守护进程，运行 uninstall-agent.ps1。请保持 Windows 用户已登录、电脑未休眠，并保持比特浏览器客户端运行。"""
+5. 双击 install-agent.bat（或在 PowerShell 中执行 .\\install-agent.bat），可安装为当前用户登录后持续运行的任务；Agent 退出或崩溃时会自动重新启动。
+6. 如需取消自动启动并停止守护进程，双击 uninstall-agent.bat。请保持 Windows 用户已登录、电脑未休眠，并保持比特浏览器客户端运行。"""
         remaining_steps = """7. 第一次联网会自动注册，并从泽顺控制台下载经过哈希校验的最新业务代码。
 8. 控制台出现这台电脑的名称后，即可选择它执行本机任务。
 
-如果解除文件锁定后仍然被组织的应用控制策略拦截，说明该电脑禁止未签名程序运行；请使用管理员提供的已签名 MercadoLocalAgent.exe，不能通过启动脚本安全地绕过该策略。"""
+安装、卸载和解除锁定请使用 .bat 入口，它们仅为本次 PowerShell 进程设置执行策略，不会永久修改系统设置；不要直接运行 .ps1 文件。\n\n如果解除文件锁定后仍然被组织的应用控制策略拦截，说明该电脑禁止未签名程序运行；请使用管理员提供的已签名 MercadoLocalAgent.exe，不能通过启动脚本安全地绕过该策略。"""
     else:
         steps = """1. 解压本安装包到固定目录，不要直接在压缩包内运行。
 2. 双击 start-agent.command 可立即启动；运行状态窗口会实时显示本机时间和日志，关闭窗口并确认后会停止当前任务并退出 Agent。如果 macOS 拦截，请在“系统设置 → 隐私与安全性”中允许打开。

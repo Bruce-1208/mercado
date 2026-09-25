@@ -219,6 +219,8 @@ def test_business_bundle_is_versioned_and_contains_worker(tmp_path):
 
 
 def test_download_package_embeds_server_and_enrollment_token(monkeypatch, tmp_path):
+    installer = Path(__file__).resolve().parents[1] / "install-agent-forever.ps1"
+    (tmp_path / installer.name).write_bytes(installer.read_bytes())
     monkeypatch.delenv("BIT_LOCAL_AGENT_EXECUTABLE", raising=False)
     source = Path(__file__).resolve().parents[1] / "local_agent.py"
     (tmp_path / "local_agent.py").write_bytes(source.read_bytes())
@@ -236,9 +238,18 @@ def test_download_package_embeds_server_and_enrollment_token(monkeypatch, tmp_pa
         assert config["poll_seconds"] == 10
         assert "install-agent.ps1" in archive.namelist()
         assert "uninstall-agent.ps1" in archive.namelist()
+        for action in ("install", "uninstall", "unblock"):
+            launcher = archive.read(f"{action}-agent.bat").decode("utf-8")
+            assert f'-ExecutionPolicy Bypass -File "%~dp0{action}-agent.ps1"' in launcher
+            assert 'exit /b %agent_exit_code%' in launcher
+        readme = archive.read("README.txt").decode("utf-8")
+        assert "双击 install-agent.bat" in readme
+        assert "右键 install-agent.ps1" not in readme
 
 
 def test_download_package_uses_configured_windows_executable(monkeypatch, tmp_path):
+    installer = Path(__file__).resolve().parents[1] / "install-agent-forever.ps1"
+    (tmp_path / installer.name).write_bytes(installer.read_bytes())
     executable = tmp_path / "artifacts" / "MercadoLocalAgent.exe"
     executable.parent.mkdir()
     executable.write_bytes(b"windows-agent")

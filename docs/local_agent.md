@@ -78,9 +78,11 @@ python3 -m pip install pyinstaller
 
 1. 登录控制台，点击网页右上角插件旁的“下载 Agent”并选择 Windows，解压下载的 `Zeshun-MercadoLocalAgent.zip` 到固定目录。
 2. 先双击 `start-agent.bat` 验证。正式 EXE 启动后只保留可视化状态窗口；网页控制台出现电脑名且状态为在线即表示成功。
-3. 右键 `install-agent.ps1` 并选择“使用 PowerShell 运行”，安装名为 `ZeshunMercadoLocalAgent` 的当前用户登录启动任务。可视化程序必须等用户登录桌面后才能显示，所以这里采用“登录时”而不是“系统启动时”触发。
-4. 如需取消自启动，运行同目录的 `uninstall-agent.ps1`。
+3. 双击 `install-agent.bat`（或在 PowerShell 中执行 `.\install-agent.bat`），安装名为 `ZeshunMercadoLocalAgent` 的当前用户登录启动任务。可视化程序必须等用户登录桌面后才能显示，所以这里采用“登录时”而不是“系统启动时”触发。
+4. 如需取消自启动，双击同目录的 `uninstall-agent.bat`。
 5. 保持比特浏览器客户端启动；无需启动 `bit_interface` 或完整 client 工作台。
+
+安装和卸载使用 `.bat` 入口，仅为本次 PowerShell 进程设置执行策略，不会永久修改系统设置。不要直接运行 `.ps1` 文件。
 
 ## macOS 客户端安装
 

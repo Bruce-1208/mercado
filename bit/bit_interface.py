@@ -2971,6 +2971,10 @@ app.register_blueprint(create_ai_weight_price_blueprint(
     _authorize_ai_weight_price,
     agent_dispatch=lambda action, data: enqueue_local_agent_ai_weight_price(action, data),
     server_execution=RUNTIME_SETTINGS.is_server,
+    resolve_api_key=lambda: browser_extension_models.get_api_key(
+        int((get_current_workbench_user() or {}).get("id") or 0),
+        "dashscope", app.secret_key,
+    ),
 ))
 
 

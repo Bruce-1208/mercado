@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 from flask import Blueprint, Response, g, jsonify, render_template, request, send_file, session
 
 
-def create_blueprint(service, authorize=None, agent_dispatch=None, server_execution=False):
+def create_blueprint(service, authorize=None, agent_dispatch=None, server_execution=False, resolve_api_key=None):
     bp = Blueprint("ai_weight_price", __name__, template_folder=str(Path(__file__).resolve().parents[2] / "bit" / "templates"))
 
     @bp.before_request
@@ -46,6 +46,7 @@ def create_blueprint(service, authorize=None, agent_dispatch=None, server_execut
             "/api/ai-weight-price/supplier/login/open",
             "/api/ai-weight-price/categories/refresh",
             "/api/ai-weight-price/start",
+            "/api/ai-weight-price/model/check",
             "/api/ai-weight-price/stop",
             "/api/ai-weight-price/terminate",
             "/api/ai-weight-price/continue",
@@ -92,6 +93,11 @@ def create_blueprint(service, authorize=None, agent_dispatch=None, server_execut
             return jsonify(message="当前服务未配置 Agent 执行入口"), 503
         return agent_dispatch(action, body or {})
 
+    def model_credentials():
+        # Resolve only from the authenticated account, never from request JSON.
+        key = str(resolve_api_key() or "").strip() if resolve_api_key else ""
+        return {"runtime_api_key": key} if key else {}
+
     @bp.errorhandler(ValueError)
     def bad_request(exc):
         return jsonify(message=str(exc)), 400
@@ -131,11 +137,14 @@ def create_blueprint(service, authorize=None, agent_dispatch=None, server_execut
 
     @bp.get("/api/ai-weight-price/status")
     def status():
-        return jsonify(**service.status())
+        result = service.status()
+        if model_credentials():
+            result["model_connection"]["configured"] = True
+        return jsonify(**result)
 
     @bp.post("/api/ai-weight-price/model/check")
     def check_model():
-        return jsonify(service.check_model_connection())
+        return jsonify(service.check_model_connection(**model_credentials()))
 
     @bp.get("/api/ai-weight-price/visuals/<filename>")
     def visual_frame(filename):
@@ -243,13 +252,17 @@ def create_blueprint(service, authorize=None, agent_dispatch=None, server_execut
             return dispatch_agent("retry", {**body, "task_id": key})
         run = body.get("run", True)
         pending = service.store.get(key)["status"] == "pending"
+        credentials = model_credentials() if run else {}
         if run:
-            service.require_login(service.config.load())
-            service.preflight(service.config.load(), "process", key)
+            config = service.config.load()
+            if credentials:
+                config["_runtime_api_key"] = credentials["runtime_api_key"]
+            service.require_login(config)
+            service.preflight(config, "process", key)
         if not pending:
             service.retry(key)
         if run:
-            service.start("process", key)
+            service.start("process", key, **credentials)
         return jsonify(message=("已启动此待处理商品" if pending else "已启动此任务重试；不会重复咨询商家")
                        if run else ("任务已是待处理状态" if pending else "已重新排队"))
 
@@ -264,7 +277,8 @@ def create_blueprint(service, authorize=None, agent_dispatch=None, server_execut
             from .config import selection_params
             selection_params(body.get("selection"), service.config.load())
         service.start(mode, body.get("task_id"), body.get("selection"), body.get("max_items", 10),
-                      resume=body.get("resume") is True)
+                      resume=body.get("resume") is True,
+                      **(model_credentials() if mode in {"process", "pipeline"} else {}))
         return jsonify(message="任务已启动")
 
     @bp.post("/api/ai-weight-price/stop")
@@ -292,7 +306,7 @@ def create_blueprint(service, authorize=None, agent_dispatch=None, server_execut
         dispatched = dispatch_agent("continue", request.get_json(silent=True))
         if dispatched is not None:
             return dispatched
-        service.continue_after_human()
+        service.continue_after_human(**model_credentials())
         return jsonify(message="已从暂停的当前商品继续执行")
 
     @bp.post("/api/ai-weight-price/skip-current")

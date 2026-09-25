@@ -151,7 +151,7 @@ Copy-Item .\workbench-client.example.json .\workbench-runtime.json
 
 1. 登录 `https://wuhanzeshun.com/`，点击网页右上角插件旁的“下载 Agent”，按电脑系统选择 Windows 或 macOS；
 2. 在需要运行比特浏览器的电脑上解压下载包；
-3. Windows 双击 `start-agent.bat` 启动，或运行 `install-agent.ps1` 安装登录启动任务；macOS 双击 `start-agent.command` 启动，或运行 `install-agent.command` 安装 LaunchAgent；
+3. Windows 双击 `start-agent.bat` 启动，或双击 `install-agent.bat` 安装登录启动任务；macOS 双击 `start-agent.command` 启动，或运行 `install-agent.command` 安装 LaunchAgent；
 4. 保持比特浏览器客户端运行，回到控制台刷新“执行电脑”并选择该电脑。
 
 Agent 只主动通过 HTTPS 连接公网控制台，不监听本机端口。服务器磁盘上的业务源码变化后会生成新的业务版本；Agent 在下一次心跳时下载 ZIP、校验 SHA-256、原子切换版本并保留上一版，因此普通业务逻辑更新无需重新安装 Agent。Agent 协议或新增 Python 依赖发生变化时，才需要重新构建并下载 Agent。

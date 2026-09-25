@@ -96,3 +96,52 @@ def test_live_connection_check_keeps_secrets_out_of_state_and_response(monkeypat
     assert state["ok"] is not failure
     serialized = json.dumps([response.get_json(), state, service.store.logs()])
     assert "test-token" not in serialized and "private-provider-response" not in serialized
+
+
+def test_server_routes_use_account_key_without_persisting_it(monkeypatch, tmp_path):
+    from flask import session
+
+    monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
+    monkeypatch.setattr(credentials, "windows_user_environment", lambda name: "")
+    model_configs = []
+    service = Service(tmp_path, models_factory=lambda config, log: (
+        model_configs.append(dict(config)) or SimpleNamespace(call=lambda *args: "OK")
+    ))
+    app = Flask(__name__)
+    app.secret_key = "test-secret"
+    app.register_blueprint(create_blueprint(
+        service, authorize=lambda permission: None, server_execution=True,
+        resolve_api_key=lambda: {1: "account-one", 2: "account-two"}.get(
+            session["workbench_user"]["id"], ""
+        ),
+    ))
+    client = app.test_client()
+    base_url = "https://console.example.com"
+    headers = {"X-AWP-Request": "1"}
+    calls = []
+    monkeypatch.setattr(service, "require_login", lambda config: None)
+    monkeypatch.setattr(service, "start", lambda *args, **kwargs: calls.append(kwargs))
+    monkeypatch.setattr(service, "continue_after_human", lambda **kwargs: calls.append(kwargs))
+    for user_id in (1, 2):
+        with client.session_transaction(base_url=base_url) as state:
+            state["workbench_user"] = {"id": user_id, "role_key": "super_admin"}
+        client.get("/api/ai-weight-price/status", base_url=base_url)
+        service.store.add({"erp_goods_id": "item", "title": "test"})
+        for path, body in (
+            ("start", {"mode": "pipeline", "selection": {"start_page": 1, "end_page": 1}}),
+            ("tasks/item/retry", {}),
+            ("continue", {"acknowledged": True}),
+            ("model/check", {}),
+        ):
+            response = client.post("/api/ai-weight-price/" + path,
+                                   json={**body, "runtime_api_key": "untrusted-key"},
+                                   headers=headers, base_url=base_url)
+            assert response.status_code == 200, response.get_json()
+        expected = {1: "account-one", 2: "account-two"}[user_id]
+        assert all(call["runtime_api_key"] == expected for call in calls[-3:])
+        assert model_configs[-1]["_runtime_api_key"] == expected
+        status = client.get("/api/ai-weight-price/status", base_url=base_url).get_json()
+        assert status["model_connection"]["configured"] is True
+        serialized = json.dumps([status, service.config.load(), service.store.logs()])
+        assert expected not in serialized
+        assert "_runtime_api_key" not in service.config.load()

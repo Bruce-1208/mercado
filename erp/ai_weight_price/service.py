@@ -204,10 +204,12 @@ class Service:
                 break
         return category_name or "未读取"
 
-    def check_model_connection(self):
+    def check_model_connection(self, *, runtime_api_key=""):
         with self.idle():
             config = self.config.load()
-            if not api_key(config["api_key_env"]):
+            if str(runtime_api_key or "").strip():
+                config["_runtime_api_key"] = str(runtime_api_key).strip()
+            if not (config.get("_runtime_api_key") or api_key(config["api_key_env"])):
                 raise ValueError(
                     "请在泽顺控制台“集成与凭证设置”中配置 DashScope API Key，或在本机环境变量 "
                     + config["api_key_env"] + " 中设置模型密钥"
@@ -218,7 +220,7 @@ class Service:
                 if answer.strip() != "OK":
                     raise ValueError("模型未返回预期的连接检查结果")
                 result["ok"] = True
-                self.store.log("模型连接检查通过：" + config["model"] + "；服务已读取本机模型密钥（不记录密钥内容）")
+                self.store.log("模型连接检查通过：" + config["model"] + "；服务已读取模型密钥（不记录密钥内容）")
             except Exception as exc:
                 # HTTP/client exceptions may carry request objects; only retain
                 # their type here, never credentials or a provider response.

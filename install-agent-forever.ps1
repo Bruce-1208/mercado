@@ -127,4 +127,4 @@ Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Pr
 Start-ScheduledTask -TaskName $taskName
 Write-Host "泽顺本机 Agent 已设置为登录后持续运行。Agent 退出或崩溃时会自动重启。" -ForegroundColor Green
 Write-Host "请保持 Windows 用户已登录、电脑未休眠，并保持比特浏览器客户端运行。" -ForegroundColor Yellow
-Write-Host "如需卸载自动启动，请运行同目录下的 uninstall-agent.ps1。" -ForegroundColor Gray
+Write-Host "如需卸载自动启动，请运行同目录下的 uninstall-agent.bat。" -ForegroundColor Gray
