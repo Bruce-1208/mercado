@@ -123,7 +123,7 @@ def list_store_analysis(start_date, end_date, *, metric="orders", salesperson=""
     # Category comes from the order payload when present, then the synchronized
     # listing. Historical listings remain useful even after they are delisted.
     sql = f"""
-        WITH lines AS (
+        WITH order_lines AS (
             SELECT o.`order_id`, o.`token_id`, o.`site_id`, o.`date_created`,
                    o.`total_amount`, o.`paid_amount`, o.`currency_id`,
                    COALESCE(NULLIF(o.`amount_currency_id`, ''),
@@ -153,9 +153,9 @@ def list_store_analysis(start_date, end_date, *, metric="orders", salesperson=""
               ON links.`token_id` = o.`token_id` AND links.`item_id` = items.`item_id`
             WHERE {' AND '.join(clauses)}
         ), apportioned AS (
-            SELECT lines.*,
-                   SUM(lines.`line_amount`) OVER (PARTITION BY lines.`order_id`) AS `order_line_amount`
-            FROM lines
+            SELECT order_lines.*,
+                   SUM(order_lines.`line_amount`) OVER (PARTITION BY order_lines.`order_id`) AS `order_line_amount`
+            FROM order_lines
         )
         SELECT apportioned.`order_id`, apportioned.`site_id`, apportioned.`category_id`,
                apportioned.`total_amount`, apportioned.`line_amount`, apportioned.`order_line_amount`,

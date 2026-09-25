@@ -18,6 +18,9 @@
     let currentRecords = [];
     let taskReady = false;
     let busy = false;
+    let busyMode = "";
+    let refreshPending = false;
+    let pollGeneration = 0;
     const selectedOrderNumbers = new Set();
     const $ = (id) => document.getElementById(id);
 
@@ -125,9 +128,10 @@
         if (store) params.set("store", store);
         return params;
     }
-    async function poll(mode) {
-        while (busy && taskId) {
+    async function poll(mode, generation = ++pollGeneration) {
+        while (busy && taskId && generation === pollGeneration) {
             const data = await api(`/api/weight-dimensions-records/${encodeURIComponent(taskId)}`);
+            if (generation !== pollGeneration) return;
             currentRecords = Array.isArray(data.records) ? data.records : [];
             taskReady = data.status === "ready"; renderSelected();
             if (mode === "query") {
@@ -149,18 +153,30 @@
         $("wdr-export").textContent = "导出筛选结果";
         $("wdr-zeshun-execute").disabled = !permission || busy || !hasRows || !selected.some((row) => canAction(row, "zeshun"));
         $("wdr-zying-execute").disabled = !permission || busy || !hasRows || !selected.some((row) => canAction(row, "zying"));
-        $("wdr-upload").disabled = busy; $("wdr-refresh-changed").disabled = busy;
+        $("wdr-upload").disabled = busy;
+        $("wdr-refresh-changed").disabled = refreshPending || (busy && busyMode !== "query");
+        $("wdr-filter-apply").disabled = $("wdr-refresh-changed").disabled;
         $("wdr-selection-summary").textContent = `已选择 ${selected.length} 条`;
     }
     async function refreshChanged() {
-        if (busy) return;
+        if (refreshPending || (busy && busyMode !== "query")) return;
+        const generation = ++pollGeneration;
+        refreshPending = true; busyMode = "query";
         busy = true; taskReady = false; taskId = ""; currentRecords = []; selectedOrderNumbers.clear();
         renderSelected(); updateButtons(); status("正在读取运费变更订单…");
-        try { const data = await api(`/api/weight-dimensions-records/changed?${filterParams().toString()}`); taskId = data.task_id; await poll("query"); }
-        catch (error) { busy = false; status(`读取失败：${errorMessage(error)}`); updateButtons(); }
+        try {
+            const data = await api(`/api/weight-dimensions-records/changed?${filterParams().toString()}`);
+            taskId = data.task_id; refreshPending = false; updateButtons();
+            await poll("query", generation);
+        } catch (error) {
+            if (generation !== pollGeneration) return;
+            refreshPending = false; busy = false; status(`读取失败：${errorMessage(error)}`); updateButtons();
+        }
     }
     async function upload() {
+        if (busy) return;
         const file = $("wdr-file").files[0]; if (!file) { status("请选择订单文件"); return; }
+        busyMode = "upload";
         busy = true; taskId = ""; taskReady = false; currentRecords = []; selectedOrderNumbers.clear();
         renderSelected(); updateButtons(); status("正在读取订单文件…");
         try {
@@ -176,7 +192,7 @@
         if (action === "zying" && !$("wdr-agent-id")?.value) { alert("请先选择在线的本机 Agent"); return; }
         const label = action === "zeshun" ? "泽顺数据和链接" : "智赢产品";
         if (!window.confirm(`确认更新已选 ${rows.length} 条订单的${label}吗？`)) return;
-        busy = true; updateButtons(); status(`正在提交${label}更新…`);
+        busyMode = "execute"; busy = true; updateButtons(); status(`正在提交${label}更新…`);
         try {
             await api(`/api/weight-dimensions-records/${encodeURIComponent(taskId)}/execute`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({action, order_numbers: rows.map((row) => row.order_number), agent_id: $("wdr-agent-id")?.value || ""}) });
             await poll("execute");

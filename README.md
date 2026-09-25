@@ -129,6 +129,12 @@ python -m bit.bit_interface --role client --api-base-url http://database-server.
 .\MercadoWorkbench.exe --role client --api-base-url http://database-server.local:5000
 ```
 
+Windows 本机使用时，可用 `start_local_workbench.cmd` 手动启动本机 MySQL 和工作台。运行
+`install_workbench_autostart.ps1` 可设置当前 Windows 用户登录后自动启动；订单自动同步、店铺链接
+自动刷新和其他服务端后台调度会随工作台一起启动，订单默认每 15 分钟同步，店铺链接默认每 3 天刷新。
+任务计划程序会在工作台意外退出后尝试重启。运行 `uninstall_workbench_autostart.ps1` 可移除登录启动项。
+安装任务只注册下次登录启动，不会重启当前正在运行的工作台。
+
 若要让某台电脑长期固定角色，把对应示例复制为程序旁的 `workbench-runtime.json`：
 
 ```powershell
