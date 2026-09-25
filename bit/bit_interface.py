@@ -20752,6 +20752,38 @@ def start_store_email_sync_scheduler_bootstrap():
     return scheduler_thread
 
 
+def start_weight_dimensions_scheduler_bootstrap():
+    """Refresh all freight-change records daily at 05:00 local time."""
+    if bit_db_api.DB_MODE != "mysql":
+        return None
+    from bit import weight_dimensions_records
+
+    def loop():
+        while True:
+            now = datetime.now()
+            next_run = now.replace(hour=5, minute=0, second=0, microsecond=0)
+            if next_run <= now:
+                next_run += timedelta(days=1)
+            time.sleep(max(1, (next_run - now).total_seconds()))
+            try:
+                token_data = _filter_mercado_tokens_for_user(
+                    bit_db_api.list_mercado_store_tokens() or {}, None
+                )
+                rows = token_data.get("rows") or []
+                allowed = {int(row["id"]) for row in rows if row.get("id") is not None}
+                weight_dimensions_records.start_full_refresh(
+                    "system:weight-dimensions", rows, allowed,
+                )
+                logging.info("重量尺寸变更记录全量刷新已启动：每天 05:00")
+            except Exception:
+                logging.exception("启动重量尺寸变更记录全量刷新失败")
+
+    thread = threading.Thread(target=loop, name="weight-dimensions-daily-refresh", daemon=True)
+    thread.start()
+    logging.info("重量尺寸变更记录自动刷新已启动：每天 05:00，全量范围")
+    return thread
+
+
 def start_appeal_report_scheduler_bootstrap():
     """Send the six-hour appeal summary at 10:00 and 14:00 China time."""
 
@@ -20916,6 +20948,7 @@ def start_interface_background_services():
     start_api_reputation_scheduler_bootstrap()
     start_token_refresh_scheduler_bootstrap()
     start_store_email_sync_scheduler_bootstrap()
+    start_weight_dimensions_scheduler_bootstrap()
     start_appeal_report_scheduler_bootstrap()
     if service_mode() != "worker":
         start_yandex_console_bootstrap()

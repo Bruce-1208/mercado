@@ -28,6 +28,17 @@ STORE_LINK_METADATA_CACHE_SECONDS = 60
 STORE_LINK_RECENT_SALES_CACHE_SECONDS = 30
 STORE_LINK_RECENT_SALES_CACHE_MAX_ENTRIES = 20000
 
+# MySQL's default InnoDB FULLTEXT stopword list. These words are not indexed,
+# but adding a Boolean prefix wildcard (for example ``+com*``) makes MySQL
+# keep the stopword in the query as a required term. Store-link titles in
+# Portuguese, English, and other markets commonly contain these words.
+INNODB_DEFAULT_STOPWORDS = frozenset(
+    """
+    a about an are as at be by com de en for from how i in is it la of on or
+    that the this to was what when where who will with und www
+    """.split()
+)
+
 _schema_lock = threading.RLock()
 _store_link_schema_ready = False
 _sync_state_schema_ready = False
@@ -1489,10 +1500,12 @@ def list_store_links(
         # lookup while allowing MySQL to resolve matches from the FTS index.
         search_terms = re.findall(r"[^\W_]+", search, flags=re.UNICODE)
         boolean_query = " ".join(
-            f"+{term[:84]}*" for term in search_terms if len(term) >= 3
+            f"+{term[:84]}*"
+            for term in dict.fromkeys(search_terms)
+            if len(term) >= 3 and term.casefold() not in INNODB_DEFAULT_STOPWORDS
         )
         if not boolean_query:
-            raise ValueError("搜索内容至少需要一个 3 个字符以上的关键词")
+            raise ValueError("搜索内容至少需要一个可索引的 3 字符关键词")
         conditions.append(
             "MATCH(links.`title`, links.`item_id`, links.`seller_sku`, "
             "links.`store_name`) AGAINST (%s IN BOOLEAN MODE)"

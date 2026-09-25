@@ -6,6 +6,7 @@ No POST is retried: a lost response must not duplicate a business operation.
 """
 import hashlib
 import hmac
+import logging
 import os
 import time
 
@@ -44,6 +45,10 @@ STATEFUL_PATHS = {
     "/api/db/store-links/bulk-update", "/api/db/store-links/bulk-update/status",
     "/api/mercado/notifications", "/api/mercado/today/tasks",
     "/api/db/mercado-action-center",
+}
+RETRYABLE_STATUS_PATHS = {
+    "/api/store-links/sync/status",
+    "/api/db/store-links/sync/status",
 }
 
 
@@ -103,13 +108,39 @@ def install_service_routing(app):
         # send sessions or internal credentials to a public HTTP proxy.
         transport = requests.Session()
         transport.trust_env = False
-        try:
-            upstream = transport.request(request.method,
-                f"http://127.0.0.1:{worker_port()}{path}", data=body, headers=headers,
-                timeout=(2, 120), allow_redirects=False, stream=True)
-        except requests.RequestException:
-            transport.close()
-            return jsonify(status="error", message="后台服务暂时不可用，请稍后检查任务状态；请求未自动重试"), 503
+        retry_status_read = request.method == "GET" and request.path in RETRYABLE_STATUS_PATHS
+        retry_delays = (0.5, 1.0, 2.0)
+        retry_count = 0
+        while True:
+            try:
+                upstream = transport.request(request.method,
+                    f"http://127.0.0.1:{worker_port()}{path}", data=body, headers=headers,
+                    timeout=(2, 120), allow_redirects=False, stream=True)
+                break
+            except requests.RequestException as exc:
+                can_retry = (
+                    retry_status_read
+                    and isinstance(exc, requests.ConnectionError)
+                    and retry_count < len(retry_delays)
+                )
+                if can_retry:
+                    delay = retry_delays[retry_count]
+                    retry_count += 1
+                    logging.warning(
+                        "Worker status endpoint unavailable (%s); retry %s/%s in %.1fs",
+                        request.path, retry_count, len(retry_delays), delay,
+                    )
+                    time.sleep(delay)
+                    continue
+                logging.warning(
+                    "Worker request failed (%s %s): %s",
+                    request.method, request.path, type(exc).__name__,
+                )
+                transport.close()
+                message = "后台服务暂时不可用，请稍后检查任务状态；请求未自动重试"
+                if retry_status_read and retry_count:
+                    message = f"后台服务暂时不可用，请稍后检查任务状态；状态查询已自动重试 {retry_count} 次"
+                return jsonify(status="error", message=message), 503
         excluded = HOP_BY_HOP | {"content-encoding"}
         response_headers = [(k, v) for k, v in upstream.headers.items()
                             if k.lower() not in excluded and k.lower() != "set-cookie"]

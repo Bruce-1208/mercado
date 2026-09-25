@@ -1,3 +1,7 @@
+﻿param(
+    [switch]$KeepAlive
+)
+
 $ErrorActionPreference = 'Stop'
 
 # Start the local Mercado / Zeshun workbench with local MySQL only.
@@ -137,6 +141,8 @@ $env:BIT_RUNTIME_ROLE = 'server'
 $env:BIT_DB_MODE = 'mysql'
 $env:BIT_INTERFACE_DB_MODE = 'direct'
 $env:BIT_DB_DIRECT_DISABLED = '0'
+$env:BIT_BACKGROUND_SERVICES_DISABLED = '0'
+$env:MERCADO_ORDER_SYNC_DISABLED = '0'
 $env:MYSQL_HOST = $DbHost
 $env:MYSQL_PORT = $DbPort
 $env:MYSQL_USER = $DbUser
@@ -200,3 +206,16 @@ Write-Host ''
 Write-Host 'Startup complete.'
 Write-Host 'URL: http://127.0.0.1:5000/login'
 Write-Host "Logs: $LogRoot"
+
+if ($KeepAlive) {
+    Write-Host 'Monitoring the workbench process for Windows Task Scheduler...'
+    $service.WaitForExit()
+    $service.Refresh()
+    $exitCode = [int]$service.ExitCode
+    if ($exitCode -eq 0) {
+        # A normal process exit is still unexpected for the persistent logon task.
+        $exitCode = 1
+    }
+    Write-Warning "Workbench service exited with code $($service.ExitCode). Task Scheduler will restart it."
+    exit $exitCode
+}

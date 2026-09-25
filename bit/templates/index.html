@@ -9139,6 +9139,20 @@
             background: #edf5ff;
             color: #14589d;
         }
+        .topbar-agent-download-menu a[aria-disabled="true"] {
+            opacity: .55;
+            cursor: wait;
+        }
+        .topbar-agent-download-status {
+            margin: 5px 6px 3px;
+            padding: 8px 10px;
+            border-radius: 7px;
+            background: #fff7e5;
+            color: #805b10;
+            font-size: 11px;
+            line-height: 1.5;
+            white-space: normal;
+        }
 
         .service-pill {
             display: inline-flex;
@@ -9798,14 +9812,14 @@
     <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260925-ai-task-errors"></script>
     <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20260921"></script>
     <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260923-batch-delete1"></script>
-    <script defer src="{{ url_for('static', filename='weight-dimensions-records.js') }}?v=20260925-2"></script>
+    <script defer src="{{ url_for('static', filename='weight-dimensions-records.js') }}?v=20260926-1"></script>
     <script defer src="{{ url_for('static', filename='inventory-sku.js') }}?v=20260925-1"></script>
     <style>
-        .ai-video-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .75fr); gap: 18px; align-items: start; }
-        .ai-video-panel { padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+        .ai-video-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(360px, .9fr); gap: 14px; align-items: start; }
+        .ai-video-panel { padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
         .ai-video-panel h3 { margin: 0 0 5px; color: #182231; font-size: 16px; }
-        .ai-video-panel > p { margin: 0 0 16px; color: #6c7888; font-size: 13px; }
-        .ai-video-dropzone { display: grid; place-items: center; min-height: 178px; padding: 24px; border: 1.5px dashed #aab8ca; border-radius: 14px; background: linear-gradient(145deg, #f8fbff, #f5f8fc); text-align: center; cursor: pointer; transition: .18s ease; }
+        .ai-video-panel > p { margin: 0 0 12px; color: #6c7888; font-size: 13px; }
+        .ai-video-dropzone { display: grid; place-items: center; min-height: 136px; padding: 18px; border: 1.5px dashed #aab8ca; border-radius: 14px; background: linear-gradient(145deg, #f8fbff, #f5f8fc); text-align: center; cursor: pointer; transition: .18s ease; }
         .ai-video-dropzone.dragging, .ai-video-dropzone:focus-visible { border-color: #3478f6; background: #eef5ff; box-shadow: 0 0 0 3px rgba(52,120,246,.12); outline: 0; }
         .ai-video-drop-icon { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 10px; border-radius: 13px; background: #e7efff; color: #2d68d8; font-size: 24px; font-weight: 700; }
         .ai-video-dropzone strong { color: #27364a; font-size: 15px; }
@@ -9816,7 +9830,7 @@
         .ai-video-url-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; gap: 8px; margin: 10px 0 12px; }
         .ai-video-url-row input, .ai-video-url-row select { min-width: 0; box-sizing: border-box; }
         .ai-video-url-hint { margin: -4px 0 12px; color: #7a8798; font-size: 12px; }
-        .ai-video-assets { display: grid; grid-template-columns: repeat(auto-fill, minmax(142px, 1fr)); gap: 10px; min-height: 24px; }
+        .ai-video-assets { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; min-height: 24px; }
         .ai-video-asset { position: relative; overflow: hidden; border: 1px solid #dde5ef; border-radius: 12px; background: #f7f9fc; cursor: grab; }
         .ai-video-asset.dragging { opacity: .42; }
         .ai-video-asset-preview { display: grid; place-items: center; width: 100%; aspect-ratio: 9 / 10; overflow: hidden; background: #e8edf4; color: #718096; }
@@ -9826,15 +9840,18 @@
         .ai-video-asset-copy strong { color: #344256; font-size: 12px; }
         .ai-video-asset-copy small { margin-top: 3px; color: #8591a1; font-size: 10px; }
         .ai-video-asset-remove { position: absolute; top: 6px; right: 6px; width: 25px; height: 25px; padding: 0; border: 0; border-radius: 50%; background: rgba(20,29,41,.78); color: #fff; line-height: 25px; }
-        .ai-video-field { display: grid; gap: 6px; margin-top: 14px; }
-        .ai-video-field label { color: #4f5d70; font-size: 12px; font-weight: 650; }
+        .ai-video-field { display: grid; gap: 6px; margin-top: 10px; }
+        .ai-video-field label { color: #4f5d70; font-size: 12px; font-weight: 650; text-align: left; line-height: 1.45; }
         .ai-video-field input, .ai-video-field select, .ai-video-field textarea { width: 100%; box-sizing: border-box; }
+        .ai-video-field > small { display: block; color: #7a8798; font-size: 11px; line-height: 1.5; text-align: left; }
+        .ai-video-field .ai-video-checkbox-label { display: flex; align-items: flex-start; gap: 8px; }
+        .ai-video-field .ai-video-checkbox-label input[type="checkbox"] { flex: 0 0 16px; width: 16px; height: 16px; margin: 1px 0 0; accent-color: #3478f6; }
         .ai-video-link-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
         .ai-video-target { display: none; gap: 4px; margin-top: 8px; padding: 10px 12px; border: 1px solid #cfe0ff; border-radius: 10px; background: #f2f7ff; }
         .ai-video-target.active { display: grid; }
         .ai-video-target strong { color: #265bb9; font-size: 12px; }
         .ai-video-target span { color: #5d6c80; font-size: 11px; }
-        .ai-video-cost { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0; }
+        .ai-video-cost { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
         .ai-video-cost div { padding: 10px; border-radius: 10px; background: #f5f7fa; text-align: center; }
         .ai-video-cost strong, .ai-video-cost span { display: block; }
         .ai-video-cost strong { color: #243248; font-size: 13px; }
@@ -9845,12 +9862,19 @@
         .ai-video-message { min-height: 20px; margin: 10px 0 0; color: #536278; font-size: 12px; }
         .ai-video-message.error { color: #c53b3b; }
         .ai-video-message.success { color: #128257; }
-        .ai-video-library { margin-top: 18px; padding: 20px; }
+        .ai-video-library { margin-top: 14px; padding: 16px; }
         .ai-video-library-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
         .ai-video-library-head h3 { margin: 0; }
+        .ai-video-library-tools { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+        .ai-video-bulk-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+        .ai-video-bulk-actions[hidden] { display: none; }
+        .ai-video-bulk-actions .hint { color: #718095; font-size: 12px; white-space: nowrap; }
         .ai-video-jobs { display: grid; grid-template-columns: repeat(auto-fill, minmax(245px, 1fr)); gap: 14px; }
-        .ai-video-job { overflow: hidden; border: 1px solid #e0e6ee; border-radius: 14px; background: #fff; cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+        .ai-video-job { position: relative; overflow: hidden; border: 1px solid #e0e6ee; border-radius: 14px; background: #fff; cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
         .ai-video-job:hover, .ai-video-job:focus-visible { border-color: #9dbcf4; box-shadow: 0 8px 24px rgba(44,91,185,.12); transform: translateY(-1px); outline: 0; }
+        .ai-video-job.selected { border-color: #3478f6; box-shadow: 0 0 0 2px rgba(52,120,246,.16); }
+        .ai-video-job-select { position: absolute; z-index: 2; top: 8px; left: 8px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid rgba(255,255,255,.72); border-radius: 8px; background: rgba(255,255,255,.94); color: #344256; font-size: 11px; font-weight: 700; cursor: pointer; }
+        .ai-video-job-select input { margin: 0; accent-color: #3478f6; }
         .ai-video-job-media { display: grid; place-items: center; aspect-ratio: 9 / 13; max-height: 340px; background: radial-gradient(circle at 50% 30%, #29384d, #111821); color: #d8e0eb; }
         .ai-video-job-media video { width: 100%; height: 100%; object-fit: contain; background: #0d1118; }
         .ai-video-job-progress { display: grid; place-items: center; gap: 10px; padding: 24px; text-align: center; }
@@ -9892,12 +9916,12 @@
         .ai-video-publish-log { display: inline-block; margin-top: 5px; font-size: 11px; color: #6f7d90; }
         .ai-video-publish-log.failed { color: #c53b3b; }
         .ai-video-publish-log.accepted { color: #128257; }
-        @media (max-width: 920px) { .ai-video-layout { grid-template-columns: 1fr; } }
+        @media (max-width: 980px) { .ai-video-layout { grid-template-columns: 1fr; } }
         @media (max-width: 560px) {
             .ai-video-cost { grid-template-columns: 1fr; }
             .ai-video-toolbar .hint { width: 100%; margin-left: 0; }
             .ai-video-library-head { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
-            .ai-video-library-head > span { justify-self: start; max-width: 100%; white-space: normal; }
+            .ai-video-library-tools { align-items: flex-start; justify-content: flex-start; flex-direction: column-reverse; max-width: 100%; }
             .ai-video-dialog-grid { grid-template-columns: 1fr; }
             .ai-video-picker-item { grid-template-columns: 62px minmax(0, 1fr); }
             .ai-video-picker-cover { width: 62px; height: 62px; }
@@ -9934,6 +9958,7 @@
                 <div class="topbar-agent-download-menu" id="topbar-agent-download-menu" role="menu">
                     <a role="menuitem" href="/api/local-agents/download?platform=windows" download>下载 Windows Agent</a>
                     <a role="menuitem" href="/api/local-agents/download?platform=macos" download>下载 macOS Agent</a>
+                    <p class="topbar-agent-download-status" id="topbar-agent-download-status" role="status" aria-live="polite" hidden></p>
                 </div>
             </details>
             <span class="topbar-divider"></span>
@@ -12474,7 +12499,7 @@
                             <textarea id="ai-video-prompt" rows="3" maxlength="1200" placeholder="例如：重点展示折叠方式和收纳体积；不要改变商品颜色。"></textarea>
                         </div>
                         <div class="ai-video-field">
-                            <label><input id="ai-video-local-transcode" type="checkbox" onchange="updateAiVideoMode()"> 仅转换视频格式，不调用 AI</label>
+                            <label class="ai-video-checkbox-label"><input id="ai-video-local-transcode" type="checkbox" onchange="updateAiVideoMode()"> <span>仅转换视频格式，不调用 AI</span></label>
                             <small>适合内容已完成、只需转成兼容 MP4 的视频；支持单个 10–60 秒视频，非 9:16 画面也可由 FFmpeg 自动处理。</small>
                         </div>
                         <div class="ai-video-field">
@@ -12514,7 +12539,10 @@
                 <section class="panel ai-video-library">
                     <div class="ai-video-library-head">
                         <div><h3>生成任务与成品库</h3><p class="market-metric-note">AI 通常需要 1–5 分钟，本地格式转换通常更快；成品完成后自动保存。</p></div>
-                        <span class="market-status-tag" id="ai-video-provider-state">检查服务中</span>
+                        <div class="ai-video-library-tools">
+                            <div class="ai-video-bulk-actions" id="ai-video-bulk-actions" hidden></div>
+                            <span class="market-status-tag" id="ai-video-provider-state">检查服务中</span>
+                        </div>
                     </div>
                     <div class="ai-video-jobs" id="ai-video-jobs">
                         <div class="empty-state">还没有生成任务</div>
@@ -24658,6 +24686,8 @@
         let aiVideoJobs = [];
         let aiVideoJobsLoaded = false;
         let aiVideoJobsLoading = false;
+        let aiVideoBulkDeleting = false;
+        const aiVideoSelectedFailedJobIds = new Set();
         let aiVideoProviderConfigured = false;
         let aiVideoPublicBaseConfigured = false;
         let aiVideoSettings = {};
@@ -25293,15 +25323,41 @@
             }
         }
 
+        function renderAiVideoBulkActions() {
+            const toolbar = document.getElementById("ai-video-bulk-actions");
+            if (!toolbar) return;
+            const failedJobs = aiVideoJobs.filter(job => job.status === "failed");
+            const failedIds = new Set(failedJobs.map(job => String(job.id)));
+            aiVideoSelectedFailedJobIds.forEach(jobId => {
+                if (!failedIds.has(jobId)) aiVideoSelectedFailedJobIds.delete(jobId);
+            });
+            toolbar.hidden = failedJobs.length === 0;
+            if (!failedJobs.length) {
+                toolbar.innerHTML = "";
+                return;
+            }
+            const selectedCount = aiVideoSelectedFailedJobIds.size;
+            toolbar.innerHTML = `<span class="hint">${selectedCount} / ${failedJobs.length} 个失败任务已选</span>
+                <button class="secondary" type="button" onclick="selectAllFailedAiVideoJobs()" ${aiVideoBulkDeleting ? "disabled" : ""}>全选失败任务</button>
+                <button class="secondary" type="button" onclick="clearAiVideoJobSelection()" ${aiVideoBulkDeleting || !selectedCount ? "disabled" : ""}>取消选择</button>
+                <button class="danger" type="button" onclick="deleteSelectedFailedAiVideoJobs()" ${aiVideoBulkDeleting || !selectedCount ? "disabled" : ""}>删除选中 (${selectedCount})</button>`;
+        }
+
         function renderAiVideoJobs() {
             const container = document.getElementById("ai-video-jobs");
             if (!container) return;
+            renderAiVideoBulkActions();
             if (!aiVideoJobs.length) {
+                aiVideoSelectedFailedJobIds.clear();
+                renderAiVideoBulkActions();
                 container.innerHTML = '<div class="empty-state">还没有生成任务。把素材拖到上方即可开始。</div>';
                 return;
             }
             container.innerHTML = aiVideoJobs.map(job => {
                 const status = String(job.status || "");
+                const jobId = String(job.id || "");
+                const isFailedSelected = status === "failed" && aiVideoSelectedFailedJobIds.has(jobId);
+                const selectControl = status === "failed" ? `<label class="ai-video-job-select" onclick="event.stopPropagation()" title="选择失败任务以批量删除"><input type="checkbox" aria-label="选择失败任务" onchange="toggleAiVideoFailedJobSelection('${escapeHtml(jobId)}', this.checked)" ${isFailedSelected ? "checked" : ""} ${aiVideoBulkDeleting ? "disabled" : ""}><span>选择删除</span></label>` : "";
                 const target = job.target || {};
                 const title = job.name || target.title || target.item_id || `任务 ${String(job.id || "").slice(0, 8)}`;
                 let media = `<div class="ai-video-job-progress">${status === "failed" ? "⚠" : '<span class="ai-video-spinner"></span>'}<strong>${escapeHtml(aiVideoJobState(status))}</strong><small>${escapeHtml(job.message || "")}</small></div>`;
@@ -25314,7 +25370,8 @@
                     <button class="primary" type="button" onclick="publishAiVideoJob('${escapeHtml(job.id)}', ${linkId}, this)" ${linkId ? "" : "disabled title=\"该任务未关联店铺链接\""}>上传到关联链接</button>` : "");
                 const latestPublish = Array.isArray(job.publish_attempts) ? job.publish_attempts.at(-1) : null;
                 const publishLog = latestPublish ? `<span class="ai-video-publish-log ${escapeHtml(latestPublish.status || "")}">最近上传：${escapeHtml(latestPublish.message || latestPublish.status || "未知结果")}${latestPublish.clip_uuid ? ` · ${escapeHtml(latestPublish.clip_uuid)}` : ""}</span>` : "";
-                return `<article class="ai-video-job" role="button" tabindex="0" title="点击查看历史素材和文案，并修改后重试" onclick="openAiVideoJobEditor('${escapeHtml(job.id)}', event)" onkeydown="if(event.key === 'Enter' || event.key === ' '){event.preventDefault();openAiVideoJobEditor('${escapeHtml(job.id)}', event)}">
+                return `<article class="ai-video-job ${isFailedSelected ? "selected" : ""}" data-job-id="${escapeHtml(jobId)}" role="group" tabindex="0" title="点击查看历史素材和文案，并修改后重试" onclick="openAiVideoJobEditor('${escapeHtml(job.id)}', event)" onkeydown="if(event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')){event.preventDefault();openAiVideoJobEditor('${escapeHtml(job.id)}', event)}">
+                    ${selectControl}
                     <div class="ai-video-job-media">${media}</div>
                     <div class="ai-video-job-copy">
                         <div class="ai-video-job-title"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong><span class="ai-video-job-state ${escapeHtml(status)}">${escapeHtml(aiVideoJobState(status))}</span></div>
@@ -25323,6 +25380,78 @@
                     </div>
                 </article>`;
             }).join("");
+        }
+
+        function refreshAiVideoFailedJobSelection() {
+            renderAiVideoBulkActions();
+            document.querySelectorAll(".ai-video-job[data-job-id]").forEach(card => {
+                const selected = aiVideoSelectedFailedJobIds.has(card.dataset.jobId);
+                card.classList.toggle("selected", selected);
+                const checkbox = card.querySelector(".ai-video-job-select input");
+                if (checkbox) checkbox.checked = selected;
+            });
+        }
+
+        function toggleAiVideoFailedJobSelection(jobId, selected) {
+            if (aiVideoBulkDeleting) return;
+            const job = aiVideoJobs.find(item => String(item.id) === String(jobId));
+            if (!job || job.status !== "failed") return;
+            if (selected) aiVideoSelectedFailedJobIds.add(String(jobId));
+            else aiVideoSelectedFailedJobIds.delete(String(jobId));
+            refreshAiVideoFailedJobSelection();
+        }
+
+        function selectAllFailedAiVideoJobs() {
+            if (aiVideoBulkDeleting) return;
+            aiVideoJobs.filter(job => job.status === "failed").forEach(job => {
+                aiVideoSelectedFailedJobIds.add(String(job.id));
+            });
+            refreshAiVideoFailedJobSelection();
+        }
+
+        function clearAiVideoJobSelection() {
+            if (aiVideoBulkDeleting) return;
+            aiVideoSelectedFailedJobIds.clear();
+            refreshAiVideoFailedJobSelection();
+        }
+
+        async function deleteSelectedFailedAiVideoJobs() {
+            if (aiVideoBulkDeleting) return;
+            const selectedJobs = aiVideoJobs.filter(job =>
+                job.status === "failed" && aiVideoSelectedFailedJobIds.has(String(job.id))
+            );
+            if (!selectedJobs.length) return;
+            if (!window.confirm(`确认删除选中的 ${selectedJobs.length} 个失败视频任务？任务素材会一并移除，已提交到美客多的视频不受影响。`)) return;
+
+            aiVideoBulkDeleting = true;
+            renderAiVideoJobs();
+            try {
+                const results = await Promise.allSettled(selectedJobs.map(async job => {
+                    const response = await fetch(`/api/ai-videos/jobs/${encodeURIComponent(job.id)}`, {method: "DELETE"});
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok || payload.status !== "success") {
+                        throw new Error(payload.message || "删除失败");
+                    }
+                    return String(job.id);
+                }));
+                const deletedIds = new Set(results.filter(result => result.status === "fulfilled").map(result => result.value));
+                results.forEach((result, index) => {
+                    if (result.status === "fulfilled") aiVideoSelectedFailedJobIds.delete(result.value);
+                    else console.warn("AI 视频失败任务删除失败：", selectedJobs[index]?.id, result.reason);
+                });
+                aiVideoJobs = aiVideoJobs.filter(job => !deletedIds.has(String(job.id)));
+                renderAiVideoJobs();
+                const failedCount = results.length - deletedIds.size;
+                aiVideoSetMessage(
+                    failedCount ? `已删除 ${deletedIds.size} 个失败任务，${failedCount} 个删除失败；失败项仍保留，可重试删除。` : `已删除 ${deletedIds.size} 个失败视频任务。`,
+                    failedCount ? "error" : "success"
+                );
+            } catch (error) {
+                aiVideoSetMessage(error.message || String(error), "error");
+            } finally {
+                aiVideoBulkDeleting = false;
+                renderAiVideoJobs();
+            }
         }
 
         async function loadAiVideoJobs(force = false) {
@@ -26258,8 +26387,10 @@
                     await loadStoreLinks(1);
                 }
             } catch (error) {
-                storeLinkSyncState.textContent = `同步状态读取失败：${error.message || error}`;
-                if (storeLinkSyncRunning) {
+                const storeLinksTabActive = document.getElementById("tab-store-links")?.classList.contains("active");
+                const shouldRetryStatus = storeLinkSyncRunning || storeLinksTabActive;
+                storeLinkSyncState.textContent = `同步状态读取失败：${error.message || error}${shouldRetryStatus ? "；3 秒后自动重试" : ""}`;
+                if (shouldRetryStatus) {
                     storeLinkSyncPollTimer = window.setTimeout(loadStoreLinkSyncStatus, 3000);
                 }
             }
@@ -31887,6 +32018,32 @@
         }
 
         const sidebarToggle = document.getElementById("sidebar-toggle");
+        const agentDownloadMenu = document.getElementById("topbar-agent-download-menu");
+        const agentDownloadStatus = document.getElementById("topbar-agent-download-status");
+        const agentDownloadLinks = agentDownloadMenu
+            ? Array.from(agentDownloadMenu.querySelectorAll('a[href*="/api/local-agents/download"]'))
+            : [];
+        let agentDownloadLocked = false;
+        agentDownloadMenu?.addEventListener("click", event => {
+            const link = event.target.closest?.('a[href*="/api/local-agents/download"]');
+            if (!link) return;
+            if (agentDownloadLocked) {
+                event.preventDefault();
+                agentDownloadStatus.textContent = "正在准备 Agent 安装包，请稍候，不要重复点击。";
+                return;
+            }
+
+            agentDownloadLocked = true;
+            agentDownloadLinks.forEach(item => item.setAttribute("aria-disabled", "true"));
+            const platform = new URL(link.href, window.location.href).searchParams.get("platform");
+            agentDownloadStatus.textContent = `正在准备 ${platform === "macos" ? "macOS" : "Windows"} Agent 安装包，文件较大，请稍候，不要重复点击。`;
+            agentDownloadStatus.hidden = false;
+            window.setTimeout(() => {
+                agentDownloadLocked = false;
+                agentDownloadLinks.forEach(item => item.removeAttribute("aria-disabled"));
+                agentDownloadStatus.textContent = "如果下载尚未开始，可以重新点击。";
+            }, 15000);
+        });
         if (window.localStorage.getItem("zeshun-sidebar-collapsed") === "1") {
             document.body.classList.add("sidebar-collapsed");
         }

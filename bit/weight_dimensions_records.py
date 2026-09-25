@@ -473,6 +473,16 @@ def _run_read(task_id: str, file_bytes: bytes, filename: str, store_rows, allowe
 
     progress_lock = threading.Lock()
     progress = sum(row.get("query_status") == "查询失败" for row in records)
+    pending_save = []
+
+    def save_completed(force=False):
+        nonlocal pending_save
+        with progress_lock:
+            if not force and len(pending_save) < 100:
+                return
+            batch, pending_save = pending_save, []
+        if batch:
+            bit_db_api.save_weight_dimensions_records(batch)
 
     def query_and_count(record):
         nonlocal progress
@@ -480,6 +490,8 @@ def _run_read(task_id: str, file_bytes: bytes, filename: str, store_rows, allowe
             read_one(record)
         with progress_lock:
             progress += 1
+            if record.get("query_status") == "已读取":
+                pending_save.append(record)
             with _lock:
                 task = _tasks.get(task_id)
                 if task:
@@ -665,6 +677,7 @@ def _run_changed_read(task_id: str, owner: str, filters, store_rows, allowed_tok
                 if task:
                     task["processed"] = progress
                     task["message"] = f"已补全运费变更订单 {progress}/{len(records)} 条"
+        save_completed()
 
     query_records = [row for row in records if row.get("query_status") != "查询失败"]
     if query_records:
@@ -677,19 +690,9 @@ def _run_changed_read(task_id: str, owner: str, filters, store_rows, allowed_tok
             for future in as_completed(futures):
                 future.result()
 
+    save_completed(force=True)
+
     successful = [row for row in records if row.get("query_status") == "已读取"]
-    try:
-        for start in range(0, len(successful), 100):
-            bit_db_api.save_weight_dimensions_records(successful[start:start + 100])
-    except Exception as exc:
-        with _lock:
-            task = _tasks.get(task_id)
-            if task:
-                task.update(
-                    status="failed", finished_at=datetime.now().isoformat(timespec="seconds"),
-                    message=f"运费变更订单已读取，但保存记录失败：{str(exc)[:250]}",
-                )
-        return
 
     records.sort(
         key=lambda row: str(row.get("freight_changed_at") or row.get("time") or ""),
@@ -708,7 +711,19 @@ def _run_changed_read(task_id: str, owner: str, filters, store_rows, allowed_tok
 
 def start_changed_refresh(owner: str, filters, store_rows, allowed_token_ids=None):
     task_id = uuid.uuid4().hex
+    filters = dict(filters or {})
+    authorized_ids = sorted(allowed_token_ids) if allowed_token_ids is not None else None
     with _lock:
+        # Repeated refreshes should follow the running read, not start another
+        # full database scan and thousands of duplicate marketplace requests.
+        for task in _tasks.values():
+            if (task.get("owner") == owner
+                    and task.get("source") == "freight_changes"
+                    and task.get("status") in {"preparing", "querying"}
+                    and task.get("filters") == filters
+                    and task.get("authorized_ids") == authorized_ids):
+                return {"task_id": task["task_id"], "status": task["status"],
+                        "total": task.get("total", 0)}
         for old_id in list(_tasks):
             if _tasks[old_id].get("owner") == owner and _tasks[old_id].get("source") == "freight_changes":
                 if _tasks[old_id].get("status") in {"ready", "failed"}:
@@ -719,7 +734,7 @@ def start_changed_refresh(owner: str, filters, store_rows, allowed_token_ids=Non
             "total": 0, "processed": 0, "records": [], "execute_status": "idle",
             "execute_message": "", "execute_processed": 0, "execute_total": 0,
             "created_at": datetime.now().isoformat(timespec="seconds"),
-            "filters": dict(filters or {}), "agent_job_id": "",
+            "filters": filters, "authorized_ids": authorized_ids, "agent_job_id": "",
         }
         _latest_task_by_owner[owner] = task_id
     thread = threading.Thread(
@@ -729,6 +744,17 @@ def start_changed_refresh(owner: str, filters, store_rows, allowed_token_ids=Non
     )
     thread.start()
     return {"task_id": task_id, "status": "preparing", "total": 0}
+
+
+def start_full_refresh(owner: str, store_rows, allowed_token_ids=None):
+    """Refresh every freight-change record, without relying on an upload file."""
+    return start_changed_refresh(
+        owner,
+        {"date_from": "2000-01-01 00:00", "date_to": "2099-12-31 23:59",
+         "store_ids": sorted(allowed_token_ids or [])},
+        store_rows,
+        allowed_token_ids,
+    )
 
 
 def _get_owned_task(task_id: str, owner: str):
