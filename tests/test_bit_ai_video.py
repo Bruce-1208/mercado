@@ -513,3 +513,48 @@ def test_video_provider_settings_use_account_bound_credentials(monkeypatch, tmp_
     private = video.get_job(created["id"])
     assert private["credential_owner_id"] == 7
     assert "credential_owner_id" not in created
+
+
+def test_account_wan_key_never_uses_server_workspace(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        video, "_account_credential_resolver",
+        lambda _user_id: {"wan_api_key": "account-wan", "wan_workspace_id": ""},
+    )
+
+    config = video._provider_config(video.WAN_PROVIDER, 7)
+    assert config["api_key"] == "account-wan"
+    assert config["workspace_id"] == ""
+    assert video.provider_settings(7)["wan_configured"] is False
+
+
+def test_wan_workspace_endpoint_error_is_actionable(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    response = Mock(status_code=401, ok=False)
+    response.json.return_value = {"message": "Workspace endpoint is invalid."}
+    monkeypatch.setattr(video.requests, "post", Mock(return_value=response))
+
+    with pytest.raises(video._ProviderRejectedError, match="集成与凭证设置"):
+        video._submit_provider({"assets": [], "duration": 10}, video.WAN_PROVIDER)
+
+
+def test_wan_invalid_workspace_endpoint_retries_shared_beijing_route(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    rejected = Mock(status_code=400, ok=False)
+    rejected.json.return_value = {
+        "code": "BadRequest.IllegalEndpoint",
+        "message": "Workspace endpoint is invalid.",
+    }
+    accepted = Mock(status_code=200, ok=True)
+    accepted.json.return_value = {"output": {"task_id": "wan-task-1"}}
+    post = Mock(side_effect=[rejected, accepted])
+    monkeypatch.setattr(video.requests, "post", post)
+    get = Mock(return_value=Mock(status_code=200, ok=True, json=lambda: {"output": {"task_status": "PENDING"}}))
+    monkeypatch.setattr(video.requests, "get", get)
+    job = {"assets": [], "duration": 10}
+
+    assert video._submit_provider(job, video.WAN_PROVIDER) == "wan-task-1"
+    assert post.call_count == 2
+    assert post.call_args_list[1].args[0].startswith("https://dashscope.aliyuncs.com/api/v1/")
+    video._query_provider("wan-task-1", video.WAN_PROVIDER, job)
+    assert get.call_args.args[0] == "https://dashscope.aliyuncs.com/api/v1/tasks/wan-task-1"

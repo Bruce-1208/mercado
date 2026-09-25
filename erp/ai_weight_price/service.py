@@ -16,7 +16,7 @@ from .browser import Browser, CircuitOpen, Stopped, NoExactMatch, WritebackMisma
 from .config import Config, selection_key, selection_params
 from .credentials import api_key
 from .edge import debugger_identity, open_edge
-from .models import Models, number, validate_weight
+from .models import Models, erp_value_equal, number, parse_dimensions_evidence, validate_weight
 from .pricing import exchange_rate, protect_net_income, usd_cost
 from .store import CHINA, RemoteStore, Store, COMPLETED
 from .supplier_adapter import SupplierAdaptationError
@@ -118,6 +118,15 @@ class Service:
                 yield
             finally:
                 lock.release()
+
+    @contextmanager
+    def weight_dimensions_browser(self, log):
+        """Reuse the configured, signed-in visible Edge session for the package RPA."""
+        with self.idle():
+            config = self.config.load()
+            with self.browser_factory(config, threading.Event(), log) as browser:
+                browser.confirm_login()
+                yield browser
 
     def status(self):
         lock = self.lock()
@@ -585,6 +594,10 @@ class Service:
         outcome, message = "completed", "运行完成"
         try:
             self.store.recover()
+            if mode == "probe":
+                # A connection check must also work before the operator has
+                # opened the dedicated debugging profile for the first time.
+                open_edge(config["cdp_url"], self.store.root)
             with self.browser_factory(config, self.stop_event, self.store.log) as browser:
                 if mode == "probe":
                     message = "Edge连接检查通过；未采集、发消息或回写"
@@ -1051,6 +1064,14 @@ class Service:
 
     def finish(self, task, browser, config):
         key = task["erp_goods_id"]
+        dimensions = parse_dimensions_evidence(task.get("supplier_page_text", ""))
+        dimensions_notice = ("1688未读取到完整包装尺寸，保留智赢原尺寸" if not dimensions else
+                             f"1688包装尺寸 {dimensions} cm 单边超过60 cm，保留智赢原尺寸；重量仍可保存"
+                             if any(number(side) > 60 for side in dimensions.split("x")) else "")
+        task = self.store.update(key, supplier_dimensions_cm=dimensions,
+                                 dimensions_notice=dimensions_notice)
+        self.store.log(dimensions_notice or f"1688包装尺寸已读取：{dimensions} cm", key,
+                       "WARNING" if dimensions_notice else "INFO")
         try:
             if task["status"] == "exception":
                 raise ValueError("异常任务禁止回写")
@@ -1090,6 +1111,8 @@ class Service:
                                              decision_status="success", decision_reason=pricing["net_income_adjustment"])
                     self.store.log(pricing["net_income_adjustment"] + "；重量仍按新核验结果回填", key)
                 intent = {"pricing": pricing, "weight_g": task["weight_g"], "at": time.time()}
+                if dimensions and not dimensions_notice:
+                    intent["dimensions_cm"] = dimensions
                 if not pricing.get("net_income_retained_original"):
                     intent["net_income_usd"] = task["net_income_usd"]
                 history = self.store.get(key).get("write_history", [])
@@ -1102,6 +1125,9 @@ class Service:
             actual = browser.write(task, before_save)
             if not actual or number(actual.get("net_income_usd")) != number(task["net_income_usd"]) or number(actual.get("weight_g")) != number(task["weight_g"]):
                 raise ValueError("ERP未返回一致的保存后回读数据")
+            if dimensions and not dimensions_notice and not erp_value_equal(
+                    "dimensions_cm", actual.get("dimensions_cm"), dimensions):
+                raise WritebackMismatch(actual)
             saved_at = time.time()
             history = self.store.get(key).get("write_history", [])
             history[-1].update(after=actual, saved_at=saved_at, verified=True)

@@ -1,8 +1,7 @@
 """Fast Mercado Libre collector backed by Playwright and DOM extraction.
 
-Normal collection keeps one listing page and reads ZYing's already-batched
-React data directly, so product detail tabs are not created.  The older detail
-reader remains available only for explicit compatibility/repair callers.
+Collection reads ZYing's batched listing data, then supplements product details
+through a reusable concurrent page pool.
 """
 
 from __future__ import annotations
@@ -1729,16 +1728,33 @@ async def _wait_for_listing_plugin_items(
         for item_id in item_ids
         if str(item_id or "").strip()
     }
-    if not wanted:
+    if not wanted or reader.session is None:
         return {}
-    deadline = asyncio.get_running_loop().time() + max(1.0, float(timeout))
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + max(1.0, float(timeout))
+    try:
+        idle_timeout = max(1.0, float(os.environ.get(
+            "MERCADO_PLAYWRIGHT_LISTING_PLUGIN_IDLE_SECONDS", "10"
+        )))
+    except ValueError:
+        idle_timeout = 10.0
+    last_progress = loop.time()
     collected: dict[str, dict[str, Any]] = {}
     ready: set[str] = set()
-    while asyncio.get_running_loop().time() < deadline:
+    while loop.time() < deadline:
         _check_stop(stop_event)
-        current = await reader.read_listing_items() if reader.session is not None else {}
+        if reader.session is None:
+            break
+        try:
+            current = await asyncio.wait_for(
+                reader.read_listing_items(), timeout=max(0.001, deadline - loop.time())
+            )
+        except asyncio.TimeoutError:
+            break
         for item_id, payload in current.items():
             if item_id in wanted:
+                if collected.get(item_id) != payload:
+                    last_progress = loop.time()
                 collected[item_id] = dict(payload)
                 # ZYing inserts all IDs before its batched API returns. Even
                 # a weight-only interim record must wait for the response so
@@ -1752,7 +1768,11 @@ async def _wait_for_listing_plugin_items(
                     ready.discard(item_id)
         if wanted.issubset(ready):
             return collected
-        await asyncio.sleep(0.25)
+        # Keep the full startup budget. Once responses arrive, don't let one
+        # permanently missing card hold the whole page; details retry its data.
+        if ready and loop.time() - last_progress >= idle_timeout:
+            break
+        await asyncio.sleep(min(0.25, max(0.0, deadline - loop.time())))
     return collected
 
 
@@ -2367,6 +2387,9 @@ async def _collect_detail(
                 raise
             loaded_target_url = fallback_url
             await _goto(page, fallback_url)
+        blocked = _blocked_page_message(str(page.url), "")
+        if blocked:
+            raise RuntimeError(blocked)
         detail_ready = await _wait_for_product_detail(page, timeout=10000)
         if (
             not detail_ready

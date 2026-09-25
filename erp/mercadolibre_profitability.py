@@ -311,6 +311,10 @@ def estimate_rate_card_shipping(
         "shipping_fee_local": round(amount_usd, 4),
         "shipping_currency_id": "USD",
         "shipping_fee_usd": round(amount_usd, 2),
+        "exchange_rate_to_usd": _positive(
+            (matched or {}).get("exchange_rate_to_usd")
+        ),
+        "shipping_rate_refreshed_at": (matched or {}).get("refreshed_at"),
         "billable_weight_g": actual_weight_g,
         "shipping_api_billable_weight_g": actual_weight_g,
         "shipping_weight_rule": (
@@ -321,6 +325,69 @@ def estimate_rate_card_shipping(
         "profitability_source": (
             "mercadolibre_global_selling_cainiao_rate_card_immediate_database_cache"
         ),
+    }
+
+
+def estimate_collection_profitability_from_rate_card(
+    row: Mapping[str, Any],
+    *,
+    rate_rows: list[Mapping[str, Any]] | tuple[Mapping[str, Any], ...] | None = None,
+    shipping_rate_store: Any = None,
+) -> dict[str, Any]:
+    """Calculate collection freight and proceeds from the current official card.
+
+    Collection uses a fixed 15% commission. The official Cainiao card supplies
+    both freight and the daily local-currency-to-USD rate, so a matching card
+    is enough to persist the complete estimate at scrape time.
+    """
+
+    shipping = estimate_rate_card_shipping(
+        row, rate_rows=rate_rows, shipping_rate_store=shipping_rate_store
+    )
+    if not shipping:
+        return {}
+
+    price = _positive(row.get("price"))
+    if price is None:
+        return shipping
+    try:
+        site_id = _site_id(row)
+    except MercadoProfitabilityError:
+        return shipping
+    local_currency = SUPPORTED_SITE_CURRENCIES.get(site_id)
+    currency_id = str(row.get("currency_id") or "").strip().upper()
+    exchange_rate = _positive(shipping.get("exchange_rate_to_usd"))
+    if not local_currency or exchange_rate is None:
+        return shipping
+
+    if currency_id == "USD":
+        sale_price_usd = round(price, 2)
+    elif currency_id == local_currency:
+        sale_price_usd = round(price * exchange_rate, 2)
+    else:
+        return shipping
+
+    commission_local = round(price * FIXED_COLLECTION_COMMISSION_RATE, 2)
+    commission_usd = round(
+        sale_price_usd * FIXED_COLLECTION_COMMISSION_RATE + 1e-9, 2
+    )
+    return {
+        **shipping,
+        "listing_type_id": DEFAULT_LISTING_TYPE_ID,
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": sale_price_usd,
+        "exchange_rate_to_usd": exchange_rate,
+        "exchange_rate_updated_at": shipping.get("shipping_rate_refreshed_at"),
+        "commission_rate": FIXED_COLLECTION_COMMISSION_RATE * 100,
+        "commission_amount_local": commission_local,
+        "commission_currency_id": currency_id,
+        "commission_amount_usd": commission_usd,
+        "net_proceeds_usd": calculate_net_proceeds_usd(
+            sale_price_usd, commission_usd, shipping.get("shipping_fee_usd")
+        ),
+        "profitability_updated_at": _now_text(),
+        "profitability_source": FIXED_COLLECTION_PROFITABILITY_SOURCE,
+        "profitability_error": "",
     }
 
 
@@ -1051,6 +1118,7 @@ __all__ = [
     "calculate_billable_weight_g",
     "calculate_net_proceeds_usd",
     "enrich_profitability",
+    "estimate_collection_profitability_from_rate_card",
     "estimate_rate_card_shipping",
     "refresh_supported_exchange_rates",
     "shipping_dimensions_parameter",

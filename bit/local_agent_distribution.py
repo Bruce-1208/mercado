@@ -46,46 +46,30 @@ if errorlevel 1 pause
 """
 
 
-def _windows_install_script(has_executable):
-    executable_setup = (
-        '$executable = Join-Path $agentDir "MercadoLocalAgent.exe"'
-        if has_executable
-        else '''$python = (& py.exe -3 -c "import sys; print(sys.executable)").Trim()
-$executable = Join-Path (Split-Path -Parent $python) "pythonw.exe"
-if (-not (Test-Path -LiteralPath $executable)) {
-    throw "未找到 pythonw.exe：$executable"
-}'''
-    )
-    argument_setup = (
-        '$arguments = "--config ```"$agentDir\\local-agent.json```""'
-        if has_executable
-        else '$arguments = "```"$agentDir\\local_agent.py```" --config ```"$agentDir\\local-agent.json```""'
-    ).replace("```", "`")
-    return f"""$ErrorActionPreference = "Stop"
-$agentDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-{executable_setup}
-{"" if has_executable else "& py.exe -3 -m pip install -r (Join-Path $agentDir 'requirements-agent.txt')"}
-{argument_setup}
-$currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-$action = New-ScheduledTaskAction -Execute $executable -Argument $arguments -WorkingDirectory $agentDir
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
-$principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
-$settings = New-ScheduledTaskSettingsSet -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 3650)
-Register-ScheduledTask -TaskName "ZeshunMercadoLocalAgent" -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description "泽顺本机比特浏览器自动化 Agent" -Force | Out-Null
-Start-ScheduledTask -TaskName "ZeshunMercadoLocalAgent"
-Write-Host "泽顺本机 Agent 已安装并启动。" -ForegroundColor Green
-"""
+def _windows_install_script(project_root):
+    return (project_root / "install-agent-forever.ps1").read_text(encoding="utf-8")
 
 
 def _windows_uninstall_script():
     return '''$ErrorActionPreference = "Stop"
 $taskName = "ZeshunMercadoLocalAgent"
+$dataDir = Join-Path $env:LOCALAPPDATA "Zeshun\\MercadoLocalAgent"
+$null = New-Item -ItemType Directory -Path $dataDir -Force
+$stopPath = Join-Path $dataDir "agent-supervisor.stop"
+$null = New-Item -ItemType File -Path $stopPath -Force
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($null -ne $task) {
-    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    for ($i = 0; $i -lt 15; $i++) {
+        $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        if ($null -eq $task -or $task.State -ne "Running") { break }
+        Start-Sleep -Seconds 1
+    }
+    if ($null -ne $task -and $task.State -eq "Running") {
+        Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    }
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
 }
-Write-Host "泽顺本机 Agent 登录启动任务已移除。" -ForegroundColor Green
+Write-Host "泽顺本机 Agent 自动启动已移除。请保持 stop 标记文件，以免守护进程再次启动。" -ForegroundColor Green
 '''
 
 
@@ -254,7 +238,7 @@ def _build_windows_archive(archive, project_root, executable_path):
         _writestr(archive, "requirements-agent.txt", "requests>=2.31,<3\n")
     _writestr(archive, "start-agent.bat", _windows_start_script(has_executable))
     _writestr(archive, "unblock-agent.ps1", _windows_unblock_script())
-    _writestr(archive, "install-agent.ps1", _windows_install_script(has_executable))
+    _writestr(archive, "install-agent.ps1", _windows_install_script(project_root))
     _writestr(archive, "uninstall-agent.ps1", _windows_uninstall_script())
 
 
@@ -291,9 +275,9 @@ def _readme(target_platform, has_executable):
         steps = """1. 解压本安装包到固定目录，不要直接在压缩包内运行。
 2. 如果 Windows 提示“应用和浏览器控制已阻止可能不安全的应用”，先右键 ZIP 文件打开“属性”，勾选“解除锁定/Unblock”，应用后重新解压。
 3. 如果已经解压，在当前目录打开 PowerShell，执行 `Unblock-File -Path .\\unblock-agent.ps1`，再双击 start-agent.bat。也可以右键运行 unblock-agent.ps1。
-4. 双击 start-agent.bat 可立即启动；正式 EXE 只显示运行状态窗口，不会常驻 CMD 窗口；关闭窗口并确认后会停止当前任务并退出 Agent。
-5. 右键 install-agent.ps1，选择“使用 PowerShell 运行”，可安装为当前用户登录后自动启动任务。
-6. 如需取消登录启动，运行 uninstall-agent.ps1。"""
+4. 双击 start-agent.bat 可立即启动；正式 EXE 只显示运行状态窗口，不会常驻 CMD 窗口。未安装守护任务时，关闭窗口并确认会退出 Agent；安装后 Agent 会在退出后自动重新启动。
+5. 右键 install-agent.ps1，选择“使用 PowerShell 运行”，可安装为当前用户登录后持续运行的任务；Agent 退出或崩溃时会自动重新启动。
+6. 如需取消自动启动并停止守护进程，运行 uninstall-agent.ps1。请保持 Windows 用户已登录、电脑未休眠，并保持比特浏览器客户端运行。"""
         remaining_steps = """7. 第一次联网会自动注册，并从泽顺控制台下载经过哈希校验的最新业务代码。
 8. 控制台出现这台电脑的名称后，即可选择它执行本机任务。
 

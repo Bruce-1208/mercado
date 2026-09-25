@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 from datetime import date, timedelta
 from typing import Any, Literal
 
@@ -148,6 +149,7 @@ class OrderListRequest(BaseModel):
     date_to: date | None = None
     page_token: str = Field(default="", max_length=1000)
     limit: int = Field(default=50, ge=1, le=50)
+    force_sync: bool = False
 
     @field_validator("statuses")
     @classmethod
@@ -344,6 +346,87 @@ class ReturnListRequest(BaseModel):
         if self.date_from and self.date_to and self.date_from > self.date_to:
             raise ValueError("退货开始日期不能晚于结束日期")
         return self
+
+
+class ReturnItemDecisionInput(BaseModel):
+    return_item_id: int = Field(gt=0)
+    decision_type: Literal[
+        "FAST_REFUND_MONEY", "REFUND_MONEY", "REFUND_MONEY_INCLUDING_SHIPMENT",
+        "REPAIR", "REPLACE", "SEND_TO_EXAMINATION", "DECLINE_REFUND",
+        "PARTIAL_MONEY_REFUND", "OTHER_DECISION",
+    ]
+    reason_type: Literal[
+        "ISSUE_WITH_THE_PRODUCT_WAS_NOT_CONFIRMED", "MECHANICAL_DAMAGE",
+        "WARRANTY_PERIOD_HAS_EXPIRED", "CONFIGURATION_OR_PACKAGING_COMPROMISED",
+        "PRODUCT_APPEARANCE_COMPROMISED", "WARRANTY_TERMS_VIOLATED", "DEVICE_ACTIVATED",
+    ] | None = None
+    comment: str = Field(default="", max_length=1000)
+    compensation_value: float | None = Field(default=None, gt=0, le=100_000_000, allow_inf_nan=False)
+    currency_id: str = Field(default="RUR", min_length=3, max_length=3)
+
+    @field_validator("currency_id")
+    @classmethod
+    def normalize_compensation_currency(cls, value: str) -> str:
+        value = value.strip().upper()
+        if not value.isalpha():
+            raise ValueError("补偿币种必须是三位字母代码")
+        return value
+
+    @field_validator("comment")
+    @classmethod
+    def normalize_decision_comment(cls, value: str) -> str:
+        return value.strip()
+
+    @model_validator(mode="after")
+    def validate_decision_fields(self) -> "ReturnItemDecisionInput":
+        if self.decision_type == "DECLINE_REFUND" and self.reason_type is None:
+            raise ValueError("拒绝退款必须选择平台允许的原因")
+        if self.decision_type == "PARTIAL_MONEY_REFUND" and self.compensation_value is None:
+            raise ValueError("部分退款必须填写补偿金额")
+        if self.decision_type != "PARTIAL_MONEY_REFUND" and self.compensation_value is not None:
+            raise ValueError("只有部分退款需要填写补偿金额")
+        return self
+
+
+class ReturnDecisionRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    order_id: int = Field(gt=0)
+    return_id: int = Field(gt=0)
+    decisions: list[ReturnItemDecisionInput] = Field(min_length=1, max_length=50)
+
+    @model_validator(mode="after")
+    def unique_return_items(self) -> "ReturnDecisionRequest":
+        item_ids = [item.return_item_id for item in self.decisions]
+        if len(set(item_ids)) != len(item_ids):
+            raise ValueError("退货商品不能重复提交决定")
+        return self
+
+
+class SettlementReportRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    date_from: date
+    date_to: date
+
+    @model_validator(mode="after")
+    def validate_settlement_period(self) -> "SettlementReportRequest":
+        if self.date_from > self.date_to:
+            raise ValueError("对账开始日期不能晚于结束日期")
+        month_index = self.date_from.year * 12 + self.date_from.month - 1 + 3
+        year, month_zero_based = divmod(month_index, 12)
+        month = month_zero_based + 1
+        latest_end = date(year, month, min(self.date_from.day, calendar.monthrange(year, month)[1]))
+        if self.date_to > latest_end:
+            raise ValueError("支付报表周期不能超过三个月")
+        return self
+
+
+class TodoListRequest(BaseModel):
+    store_ids: list[int] = Field(default_factory=list, max_length=100)
+
+    @field_validator("store_ids")
+    @classmethod
+    def normalize_todo_store_ids(cls, values: list[int]) -> list[int]:
+        return list(dict.fromkeys(int(value) for value in values if int(value) > 0))
 
 
 class ChatListRequest(BaseModel):

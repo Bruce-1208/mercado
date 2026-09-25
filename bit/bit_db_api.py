@@ -341,6 +341,8 @@ def list_official_infraction_dashboard(**filters):
     request_kwargs = {
         "params": {key: value for key, value in filters.items() if value is not None}
     }
+    if filters.get("token_ids") is not None and not request_kwargs["params"].get("token_ids"):
+        request_kwargs["params"]["token_ids"] = [""]
     if request_timeout is not None:
         request_kwargs["timeout"] = request_timeout
     return _request(
@@ -584,6 +586,50 @@ def insert_zying_product_info(product_list):
     return (data or {}).get("count", 0)
 
 
+def save_weight_dimensions_records(rows):
+    if DB_MODE == "mysql":
+        return _local_call("save_weight_dimensions_records", rows)
+    return _request("POST", "/api/db/weight-dimensions-records", json={"rows": rows or []})
+
+
+def get_weight_dimensions_record_order_numbers(order_numbers):
+    values = [str(value or "").strip() for value in order_numbers or () if str(value or "").strip()]
+    if not values:
+        return []
+    if DB_MODE == "mysql":
+        return _local_call("get_weight_dimensions_record_order_numbers", values)
+    data = _request(
+        "POST", "/api/db/weight-dimensions-records/existing",
+        json={"order_numbers": values},
+    )
+    return (data or {}).get("order_numbers", [])
+
+
+def list_weight_dimensions_records():
+    if DB_MODE == "mysql":
+        return _local_call("list_weight_dimensions_records")
+    return _request("GET", "/api/db/weight-dimensions-records")
+
+
+def list_weight_dimensions_changed_orders(filters=None):
+    filters = dict(filters or {})
+    if DB_MODE == "mysql":
+        return _local_call("list_weight_dimensions_changed_orders", filters)
+    return _request(
+        "GET", "/api/db/weight-dimensions-changes", params=filters,
+        timeout=120,
+    )
+
+
+def append_weight_dimensions_record_log(order_number, log_entry, record_updates=None):
+    if DB_MODE == "mysql":
+        return _local_call("append_weight_dimensions_record_log", order_number, log_entry, record_updates)
+    return _request(
+        "POST", "/api/db/weight-dimensions-records/log",
+        json={"order_number": order_number, "log": log_entry or {}, "record_updates": record_updates or {}},
+    )
+
+
 def upsert_zying_products_to_products(product_list):
     if DB_MODE == "mysql":
         from erp.mercadolibre_collection_store import (
@@ -781,6 +827,7 @@ def get_high_after_sale_alerts(
     date_to="",
     limit=100,
     salesperson="",
+    salespeople=None,
 ):
     if DB_MODE == "mysql":
         return _local_call(
@@ -792,6 +839,7 @@ def get_high_after_sale_alerts(
             date_to,
             limit,
             salesperson,
+            salespeople,
         )
     return _request(
         "GET",
@@ -804,6 +852,7 @@ def get_high_after_sale_alerts(
             "date_to": date_to,
             "limit": limit,
             "salesperson": str(salesperson or "").strip(),
+            "salespeople": salespeople,
         },
     )
 
@@ -816,6 +865,7 @@ def get_high_profit_products(
     date_to="",
     limit=100,
     salesperson="",
+    salespeople=None,
 ):
     if DB_MODE == "mysql":
         return _local_call(
@@ -827,6 +877,7 @@ def get_high_profit_products(
             date_to,
             limit,
             salesperson,
+            salespeople,
         )
     return _request(
         "GET",
@@ -839,6 +890,7 @@ def get_high_profit_products(
             "date_to": date_to,
             "limit": limit,
             "salesperson": str(salesperson or "").strip(),
+            "salespeople": salespeople,
         },
     )
 
@@ -896,6 +948,22 @@ def list_orders(
         if "404" not in message or path not in message:
             raise
         return _local_call("list_orders", **local_params)
+
+
+def list_store_analysis(start_date, end_date, *, metric="orders", salesperson="", group_name="", token_id=None, allowed_token_ids=None):
+    params = {"start_date": start_date, "end_date": end_date, "metric": metric,
+              "salesperson": salesperson, "group_name": group_name}
+    if token_id is not None:
+        params["token_id"] = token_id
+    if allowed_token_ids is not None:
+        params["scope_limited"] = "1"
+        params["allowed_token_id"] = sorted(allowed_token_ids)
+    if DB_MODE == "mysql":
+        from bit.store_analysis import list_store_analysis as local_list
+        return local_list(start_date, end_date, metric=metric, salesperson=salesperson,
+                          group_name=group_name, token_id=token_id,
+                          allowed_token_ids=allowed_token_ids)
+    return _request("GET", "/api/db/store-analysis", params=params)
 
 
 def get_order_weight_quote(order_ids):
@@ -961,6 +1029,70 @@ def list_inventory_stock(**filters):
     if DB_MODE == "mysql":
         return _local_inventory_call("list_inventory_stock", **filters)
     return _request("GET", "/api/db/inventory/stocks", params=filters)
+
+
+def list_inventory_skus(**filters):
+    if DB_MODE == "mysql":
+        return _local_inventory_call("list_inventory_skus", **filters)
+    return _request("GET", "/api/db/inventory/skus", params=filters)
+
+
+def create_inventory_sku(record):
+    if DB_MODE == "mysql":
+        return _local_inventory_call("create_inventory_sku", record or {})
+    return _request("POST", "/api/db/inventory/skus", json=record or {})
+
+
+def update_inventory_sku(sku_id, record):
+    if DB_MODE == "mysql":
+        return _local_inventory_call("update_inventory_sku", int(sku_id), record or {})
+    return _request("PATCH", f"/api/db/inventory/skus/{int(sku_id)}", json=record or {})
+
+
+def list_inventory_sku_mappings(**filters):
+    if DB_MODE == "mysql":
+        return _local_inventory_call("list_inventory_sku_mappings", **filters)
+    if filters.get("token_ids") == []:
+        filters = {**filters, "token_ids": [0]}
+    return _request("GET", "/api/db/inventory/sku-mappings", params=filters)
+
+
+def create_inventory_sku_mapping(record):
+    if DB_MODE == "mysql":
+        return _local_inventory_call("create_inventory_sku_mapping", record or {})
+    return _request("POST", "/api/db/inventory/sku-mappings", json=record or {})
+
+
+def update_inventory_sku_mapping(mapping_id, record):
+    if DB_MODE == "mysql":
+        return _local_inventory_call(
+            "update_inventory_sku_mapping", int(mapping_id), record or {}
+        )
+    return _request(
+        "PATCH", f"/api/db/inventory/sku-mappings/{int(mapping_id)}", json=record or {}
+    )
+
+
+def delete_inventory_sku_mapping(mapping_id):
+    if DB_MODE == "mysql":
+        return _local_inventory_call("delete_inventory_sku_mapping", int(mapping_id))
+    return _request("DELETE", f"/api/db/inventory/sku-mappings/{int(mapping_id)}")
+
+
+def list_inventory_sku_store_sites(**filters):
+    if DB_MODE == "mysql":
+        return _local_inventory_call("list_inventory_sku_store_sites", **filters)
+    if filters.get("token_ids") == []:
+        filters = {**filters, "token_ids": [0]}
+    return _request("GET", "/api/db/inventory/sku-store-sites", params=filters)
+
+
+def list_inventory_reconciliation(**filters):
+    if DB_MODE == "mysql":
+        return _local_inventory_call("list_inventory_reconciliation", **filters)
+    if filters.get("token_ids") == []:
+        filters = {**filters, "token_ids": [0]}
+    return _request("GET", "/api/db/inventory/reconciliation", params=filters)
 
 
 def list_inventory_shelves(include_inactive=True):
@@ -1055,6 +1187,7 @@ def list_mercado_store_links(
     video_uploaded=None,
     management_category_id=None,
     mercado_category="",
+    include_categories=True,
     sales_sort="desc",
     sort_by="sold_quantity",
     sort_order="",
@@ -1072,6 +1205,7 @@ def list_mercado_store_links(
         "video_uploaded": video_uploaded,
         "management_category_id": management_category_id,
         "mercado_category": str(mercado_category or "").strip(),
+        "include_categories": "1" if include_categories else "0",
         "sales_sort": "asc" if str(sales_sort or "").strip().lower() == "asc" else "desc",
         "sort_by": str(sort_by or "sold_quantity").strip().lower(),
         "sort_order": (
@@ -1108,6 +1242,7 @@ def list_mercado_store_links(
             video_uploaded=params["video_uploaded"],
             management_category_id=params["management_category_id"],
             mercado_category=params["mercado_category"],
+            include_categories=bool(include_categories),
             sales_sort=params["sales_sort"],
             sort_by=params["sort_by"],
             sort_order=params["sort_order"],
@@ -1115,6 +1250,8 @@ def list_mercado_store_links(
             page=params["page"],
             page_size=params["page_size"],
         )
+    if params.get("token_ids") is not None and not params["token_ids"]:
+        params["token_ids"] = [""]
     return _request("GET", "/api/db/store-links", params=params)
 
 
@@ -1187,7 +1324,7 @@ def list_mercado_prohibited_listings(
     }
     if token_id not in (None, ""):
         params["token_id"] = int(token_id)
-    if token_ids:
+    if token_ids is not None:
         params["token_ids"] = [
             int(value) for value in token_ids if int(value or 0) > 0
         ]
@@ -1195,6 +1332,8 @@ def list_mercado_prohibited_listings(
         from erp.mercadolibre_prohibited_store import list_prohibited_listings
 
         return list_prohibited_listings(**params)
+    if token_ids is not None and not params.get("token_ids"):
+        params["token_ids"] = [""]
     return _request("GET", "/api/db/prohibited-listings", params=params)
 
 
@@ -1722,7 +1861,7 @@ def delete_mercado_account_group(group_id):
 
 
 def exchange_mercado_store_token(
-    display_name, callback_or_code, application_id=None, organization_key="default"
+    display_name, callback_or_code, application_id=None, organization_key="wuhan-zeshun"
 ):
     if DB_MODE == "mysql":
         from bit import bit_mysql
@@ -2130,6 +2269,8 @@ def list_mercado_product_items(
         return _collection_store_call(
             "list_product_items", **params
         )
+    if token_ids is not None and not params.get("token_ids"):
+        params["token_ids"] = [""]
     path = "/api/db/mercado-products"
     try:
         return _request(
@@ -2173,6 +2314,27 @@ def update_ai_original_product(product_item_id, changes):
         if not _collection_route_missing(exc, path):
             raise
         return _collection_store_call("update_ai_original_product", row_id, payload)
+
+
+def update_ai_original_product_items(product_item_ids, changes):
+    item_ids = [int(value) for value in product_item_ids or []]
+    payload = dict(changes or {})
+    if DB_MODE == "mysql":
+        return _collection_store_call(
+            "update_ai_original_product_items", item_ids, payload
+        )
+    path = "/api/db/ai-original-products/bulk-dimensions"
+    try:
+        return _request(
+            "PATCH", path, timeout=120,
+            json={"product_item_ids": item_ids, "changes": payload},
+        )
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call(
+            "update_ai_original_product_items", item_ids, payload
+        )
 
 
 def update_ai_original_listing(product_item_id, listing):
@@ -2583,6 +2745,8 @@ def list_mercado_product_publish_records(
         ]
     if DB_MODE == "mysql":
         return _collection_store_call("list_product_publish_records", **params)
+    if token_ids is not None and not params.get("token_ids"):
+        params["token_ids"] = [""]
     path = "/api/db/mercado-publish-records"
     try:
         return _request("GET", path, params=params)
@@ -2682,6 +2846,160 @@ def list_workbench_users():
     if DB_MODE == "mysql":
         return _local_interface_call("list_workbench_users_local")
     return _request("GET", "/api/db/workbench/users", timeout=15)
+
+
+def _mercado_action_center_local(operation, payload=None):
+    from bit import bit_mysql
+
+    data = dict(payload or {})
+    if operation == "receive_notification":
+        return bit_mysql.receive_mercado_notification(data)
+    if operation == "claim_event":
+        return bit_mysql.claim_next_mercado_notification_event()
+    if operation == "finish_event":
+        return bit_mysql.finish_mercado_notification_event(
+            data.get("event_id"), error=data.get("error") or ""
+        )
+    if operation == "enrich_event_task":
+        return bit_mysql.enrich_mercado_notification_task(
+            data.get("event_id"), title=data.get("title") or "",
+            details=data.get("details") or "", priority=data.get("priority") or "",
+            due_at=data.get("due_at"),
+        )
+    if operation == "resolve_event_task":
+        return bit_mysql.resolve_mercado_notification_task(
+            data.get("event_id"), data.get("reason") or ""
+        )
+    if operation == "list_tasks":
+        return bit_mysql.list_mercado_operator_tasks(
+            token_ids=data.get("token_ids"),
+            organization_key=data.get("organization_key") or "",
+            include_closed=bool(data.get("include_closed")),
+            limit=data.get("limit", 300),
+        )
+    if operation == "get_task":
+        return bit_mysql.get_mercado_operator_task(data.get("task_id"))
+    if operation == "update_task":
+        return bit_mysql.update_mercado_operator_task(
+            data.get("task_id"), actor=data.get("actor"),
+            owner=data.get("owner"), status=data.get("status"),
+            due_at=data.get("due_at"), note=data.get("note") or "",
+        )
+    if operation == "list_events":
+        return bit_mysql.list_mercado_notification_events(
+            token_ids=data.get("token_ids"),
+            organization_key=data.get("organization_key") or "",
+            limit=data.get("limit", 100),
+        )
+    if operation == "get_event":
+        return bit_mysql.get_mercado_notification_event(data.get("event_id"))
+    if operation == "replay_event":
+        return bit_mysql.replay_mercado_notification_event(data.get("event_id"))
+    if operation == "list_orders":
+        return bit_mysql.list_mercado_action_center_orders(
+            token_ids=data.get("token_ids"), limit=data.get("limit", 500)
+        )
+    if operation == "upsert_task":
+        return bit_mysql.upsert_mercado_operator_task(data.get("task") or {})
+    if operation == "initialize":
+        return bit_mysql.initialize_mercado_action_center_tables()
+    raise ValueError("美客多运营待办数据库操作无效")
+
+
+def _mercado_action_center_call(operation, payload=None, *, timeout=20):
+    if DB_MODE == "mysql":
+        return _mercado_action_center_local(operation, payload)
+    return _request(
+        "POST", "/api/db/mercado-action-center",
+        timeout=timeout,
+        json={"operation": operation, "payload": dict(payload or {})},
+    )
+
+
+def receive_mercado_notification(event):
+    return _mercado_action_center_call("receive_notification", event, timeout=15)
+
+
+def claim_mercado_notification_event():
+    return _mercado_action_center_call("claim_event", timeout=15)
+
+
+def finish_mercado_notification_event(event_id, *, error=""):
+    return _mercado_action_center_call("finish_event", {"event_id": event_id, "error": error})
+
+
+def enrich_mercado_notification_task(event_id, *, title="", details="", priority="", due_at=None):
+    return _mercado_action_center_call("enrich_event_task", {
+        "event_id": event_id, "title": title, "details": details,
+        "priority": priority, "due_at": due_at,
+    })
+
+
+def resolve_mercado_notification_task(event_id, reason):
+    return _mercado_action_center_call("resolve_event_task", {
+        "event_id": int(event_id), "reason": str(reason or ""),
+    })
+
+
+def list_mercado_operator_tasks(*, token_ids=None, organization_key="", include_closed=False, limit=300):
+    return _mercado_action_center_call("list_tasks", {
+        "token_ids": None if token_ids is None else list(token_ids),
+        "organization_key": organization_key,
+        "include_closed": include_closed,
+        "limit": limit,
+    })
+
+
+def get_mercado_operator_task(task_id):
+    return _mercado_action_center_call("get_task", {"task_id": int(task_id)})
+
+
+def update_mercado_operator_task(task_id, *, actor, owner=None, status=None, due_at=None, note=""):
+    return _mercado_action_center_call("update_task", {
+        "task_id": int(task_id), "actor": actor, "owner": owner,
+        "status": status, "due_at": due_at, "note": note,
+    })
+
+
+def list_mercado_notification_events(*, token_ids=None, organization_key="", limit=100):
+    return _mercado_action_center_call("list_events", {
+        "token_ids": None if token_ids is None else list(token_ids),
+        "organization_key": organization_key, "limit": limit,
+    })
+
+
+def get_mercado_notification_event(event_id):
+    return _mercado_action_center_call("get_event", {"event_id": int(event_id)})
+
+
+def replay_mercado_notification_event(event_id):
+    return _mercado_action_center_call("replay_event", {"event_id": int(event_id)})
+
+
+def list_mercado_action_center_orders(*, token_ids=None, limit=500):
+    return _mercado_action_center_call("list_orders", {
+        "token_ids": list(token_ids or ()), "limit": limit,
+    })
+
+
+def upsert_mercado_operator_task(task):
+    return _mercado_action_center_call("upsert_task", {"task": dict(task or {})})
+
+
+def initialize_mercado_action_center_tables():
+    return _mercado_action_center_call("initialize", timeout=30)
+
+
+def list_workbench_organizations():
+    if DB_MODE == "mysql":
+        return _local_interface_call("list_workbench_organizations_local")
+    return _request("GET", "/api/db/workbench/organizations", timeout=15)
+
+
+def create_workbench_organization(data):
+    if DB_MODE == "mysql":
+        return _local_interface_call("create_workbench_organization_local", data)
+    return _request("POST", "/api/db/workbench/organizations", json=data, timeout=15)
 
 
 def create_workbench_user(data):

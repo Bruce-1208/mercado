@@ -1,7 +1,9 @@
 waitress>=3.0,<4
+Flask>=3.0,<4
 argostranslate==1.11.0
 DBUtils>=3.1,<4
 PyMySQL>=1.1,<2
+openpyxl>=3.1,<4
 Pillow>=10,<12
 rembg[cpu]==2.0.67
 imageio-ffmpeg>=0.6,<1

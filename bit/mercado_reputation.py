@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Mapping
@@ -13,6 +14,17 @@ API_BASE_URL = "https://api.mercadolibre.com"
 REPUTATION_PATH = "/global/users/seller_reputation"
 ORDERS_SEARCH_PATH = "/marketplace/orders/search"
 RIGHTS_HOLDER_CASES_PATH = "/moderations/pppi/cases"
+LISTING_SAMPLE_SIZE = 10
+LISTING_SAMPLE_SEARCH_MAX_OFFSET = 1000
+LISTING_SAMPLE_STATUSES = (
+    "active",
+    "paused",
+    "pending",
+    "not_yet_active",
+    "programmed",
+    "closed",
+    "deleted",
+)
 OFFICIAL_INFRACTION_DAYS = 100
 SEVEN_DAY_RATE_DISCLAIMER = (
     "七天变化率按单站点由官方订单 API 自算；数值可能因取消单、退款、时区和"
@@ -385,6 +397,170 @@ def _merge_site_status(local_status: Mapping[str, Any], global_status: Mapping[s
     return selected
 
 
+def _sample_site_listing_status(
+    access_token: str,
+    seller_id: str,
+    *,
+    http: requests.Session | None,
+    timeout: int,
+    sample_size: int = LISTING_SAMPLE_SIZE,
+) -> dict[str, Any]:
+    """Randomly inspect listings for a site's active/inactive status signal."""
+
+    seller = str(seller_id or "").strip()
+    size = min(20, max(1, int(sample_size)))
+    if not seller:
+        raise MercadoReputationError("缺少站点 seller_id，无法抽样刊登")
+
+    search_path = f"/marketplace/users/{seller}/items/search"
+    search_params = {
+        "status": ",".join(LISTING_SAMPLE_STATUSES),
+        "limit": size,
+        "offset": 0,
+        "orders": random.choice((
+            "start_time_asc",
+            "start_time_desc",
+            "stop_time_asc",
+            "stop_time_desc",
+        )),
+    }
+    payload = _fetch_json(
+        access_token,
+        search_path,
+        params=search_params,
+        http=http,
+        timeout=timeout,
+        label="站点刊登抽样接口",
+    )
+    if not isinstance(payload, Mapping):
+        raise MercadoReputationError("站点刊登抽样接口返回格式错误")
+    first_page_ids = payload.get("results") or []
+    if not isinstance(first_page_ids, list):
+        raise MercadoReputationError("站点刊登抽样接口的 results 不是列表")
+    paging = _mapping(payload.get("paging"))
+    try:
+        total = max(0, int(paging.get("total") or len(first_page_ids)))
+    except (TypeError, ValueError):
+        total = len(first_page_ids)
+
+    # The regular search endpoint supports offsets through 1000. Pick a random
+    # page within that range, then randomly choose IDs from the returned page.
+    max_random_offset = min(
+        max(0, total - size),
+        max(0, LISTING_SAMPLE_SEARCH_MAX_OFFSET - size),
+    )
+    if max_random_offset:
+        offset = random.randint(0, max_random_offset)
+        if offset:
+            search_params["offset"] = offset
+            payload = _fetch_json(
+                access_token,
+                search_path,
+                params=search_params,
+                http=http,
+                timeout=timeout,
+                label="站点刊登抽样接口",
+            )
+            if not isinstance(payload, Mapping):
+                raise MercadoReputationError("站点刊登抽样接口返回格式错误")
+            page_ids = payload.get("results") or []
+            if not isinstance(page_ids, list):
+                raise MercadoReputationError("站点刊登抽样接口的 results 不是列表")
+        else:
+            page_ids = first_page_ids
+    else:
+        page_ids = first_page_ids
+
+    candidate_ids = list(dict.fromkeys(
+        str(item_id).strip() for item_id in page_ids if str(item_id or "").strip()
+    ))
+    if len(candidate_ids) > size:
+        sampled_ids = random.sample(candidate_ids, size)
+    else:
+        sampled_ids = candidate_ids
+
+    sample = {
+        "listing_sample_source": "official_listing_api",
+        "listing_sample_requested_count": len(sampled_ids),
+        "listing_sample_count": 0,
+        "listing_sample_active_count": 0,
+        "listing_sample_inactive_count": 0,
+        "listing_sample_status": None,
+    }
+    if not sampled_ids:
+        return sample
+
+    details = _fetch_json(
+        access_token,
+        "/items/bulk",
+        params={"ids": ",".join(sampled_ids)},
+        http=http,
+        timeout=timeout,
+        label="站点刊登状态接口",
+    )
+    if isinstance(details, Mapping):
+        detail_rows = details.get("items") or details.get("results") or []
+    else:
+        detail_rows = details
+    if not isinstance(detail_rows, list):
+        raise MercadoReputationError("站点刊登状态接口返回格式错误")
+
+    sampled_statuses: dict[str, str] = {}
+    for entry in detail_rows:
+        if not isinstance(entry, Mapping):
+            continue
+        try:
+            response_code = int(entry.get("status_code", entry.get("code", 200)))
+        except (TypeError, ValueError):
+            continue
+        if not 200 <= response_code < 300:
+            continue
+        body = _mapping(entry.get("body")) or entry
+        item_id = str(body.get("id") or entry.get("id") or "").strip()
+        status = str(body.get("status") or "").strip().casefold()
+        if item_id in sampled_ids and status:
+            sampled_statuses[item_id] = status
+
+    active_count = sum(status == "active" for status in sampled_statuses.values())
+    inactive_count = sum(status != "active" for status in sampled_statuses.values())
+    sample.update({
+        "listing_sample_count": len(sampled_statuses),
+        "listing_sample_active_count": active_count,
+        "listing_sample_inactive_count": inactive_count,
+    })
+    if active_count:
+        sample["listing_sample_status"] = "active"
+    elif len(sampled_statuses) == len(sampled_ids):
+        sample["listing_sample_status"] = "inactive"
+    return sample
+
+
+def _apply_listing_sample_status(
+    row: dict[str, Any], sample: Mapping[str, Any]
+) -> None:
+    """Apply a conclusive listing sample while retaining official status for traceability."""
+
+    row.update(dict(sample))
+    sample_status = sample.get("listing_sample_status")
+    if sample_status not in ("active", "inactive"):
+        return
+
+    row.setdefault("site_status_official_display", row.get("site_status_display"))
+    row.setdefault("site_status_official_account_status", row.get("account_status"))
+    if sample_status == "active":
+        row.update({
+            "account_status": "normal",
+            "site_status_display": "正常",
+            "site_status_source": "official_listing_api",
+        })
+    elif sample_status == "inactive":
+        row.update({
+            "account_status": "restricted",
+            "site_status_display": "封禁（抽样刊登均未激活）",
+            "site_status_source": "official_listing_api",
+        })
+
+
 def _infraction_total(
     access_token: str,
     seller_id: str,
@@ -490,8 +666,9 @@ def enrich_reputation_with_official_data(
     now: datetime | None = None,
     http: requests.Session | None = None,
     timeout: int = 30,
+    include_listing_sample: bool = False,
 ) -> list[dict[str, Any]]:
-    """补齐站点状态、订单变化率及近 100 天官方违规统计。"""
+    """补齐站点状态、订单变化率及近 100 天官方违规统计；可选补充刊登抽样判定。"""
 
     current_time = now or datetime.now(timezone.utc)
     if current_time.tzinfo is None:
@@ -563,6 +740,20 @@ def enrich_reputation_with_official_data(
                     "site_status_source": "official_users_api",
                 })
             errors.append(f"站点状态：{exc}")
+
+        if include_listing_sample:
+            try:
+                listing_sample = _sample_site_listing_status(
+                    access_token,
+                    seller_id,
+                    http=http,
+                    timeout=timeout,
+                )
+                _apply_listing_sample_status(row, listing_sample)
+            except MercadoReputationError as exc:
+                if exc.status_code == 401:
+                    raise
+                errors.append(f"站点刊登抽样：{exc}")
 
         try:
             previous_orders = _order_total(
@@ -671,6 +862,7 @@ def fetch_store_reputation(
                     global_user_id=current_token.get("meli_user_id"),
                     http=http,
                     timeout=timeout,
+                    include_listing_sample=True,
                 )
             return loaded
 

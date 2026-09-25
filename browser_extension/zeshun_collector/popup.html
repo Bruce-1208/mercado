@@ -13,7 +13,7 @@
       <h1>泽顺插件</h1>
       <p>商品采集工作台</p>
     </div>
-    <span class="version">v1.8.19 · 1688已上传图片弹层搜索修复</span>
+    <span class="version">v1.8.23 · Yandex采集</span>
   </header>
   <main>
     <div class="account-card">
@@ -22,9 +22,11 @@
     </div>
     <nav class="mode-tabs" aria-label="插件功能">
       <button id="product-mode" class="mode-tab active" type="button">美客多采集</button>
+      <button id="yandex-mode" class="mode-tab" type="button">Yandex采集</button>
       <button id="zying-mode" class="mode-tab" type="button">智赢产品采集</button>
       <button id="zying-infringement-mode" class="mode-tab" type="button">智赢查侵权</button>
       <button id="weight-price-mode" class="mode-tab" type="button">核重核价</button>
+      <button id="weight-dimensions-mode" class="mode-tab" type="button">重量尺寸</button>
       <button id="purchase-mode" class="mode-tab" type="button">订单物流</button>
     </nav>
     <div id="product-panel" class="mode-panel">
@@ -74,6 +76,21 @@
         <span>离线待传 <strong id="queue-count">0</strong> 件</span>
         <button id="retry" class="link-button" type="button">立即重试</button>
       </div>
+    </div>
+    <div id="yandex-panel" class="mode-panel" hidden>
+      <section class="page-card yandex-card">
+        <div class="page-card-heading"><span>Yandex 国外商品采集</span><span class="platform-badge yandex">Из-за рубежа</span></div>
+        <label class="zying-field">搜索关键词<input id="yandex-keyword" type="text" maxlength="200" placeholder="例如：行车记录仪"></label>
+        <label class="zying-field">采集数量<input id="yandex-count" type="number" min="1" max="500" step="1" value="200"></label>
+        <p class="product-batch-help">使用现有 Yandex 采集器搜索带“国外发货”标记的商品。任务由泽顺控制台执行，关闭插件后仍可回来查看进度。</p>
+        <div class="zying-actions">
+          <button id="yandex-start" class="primary" type="button">启动采集</button>
+          <button id="yandex-open-results" class="secondary" type="button" disabled>打开采集结果</button>
+        </div>
+        <div id="yandex-status" class="zying-task-status" role="status" aria-live="polite">等待启动</div>
+        <div id="yandex-summary" class="zying-summary">已找到 0 · 已检查 0</div>
+        <div class="product-progress"><span id="yandex-progress"></span></div>
+      </section>
     </div>
     <div id="zying-panel" class="mode-panel" hidden>
       <section class="page-card zying-card">
@@ -171,6 +188,23 @@
         <pre id="weight-price-log" class="zying-log">任务启动后可在泽顺控制台查看完整逐件日志。</pre>
       </section>
     </div>
+    <div id="weight-dimensions-panel" class="mode-panel" hidden>
+      <section class="page-card weight-dimensions-card">
+        <div class="page-card-heading">
+          <span>重量尺寸变更记录</span>
+          <span class="platform-badge zying">智赢</span>
+        </div>
+        <p class="product-batch-help">先在控制台上传订单文件并完成运单查询，再从这里启动。查询成功的产品会按产品 ID 逐个进入智赢页面，更新重量、尺寸、产品级别“重点”并保存；同一产品 ID 采用订单时间最新的一笔数据。执行日志会保存在记录表中。</p>
+        <div id="weight-dimensions-status" class="zying-task-status" role="status" aria-live="polite">正在读取最近的订单查询任务…</div>
+        <div id="weight-dimensions-summary" class="zying-summary">查询成功 0 条 · 智赢产品 0 个</div>
+        <div class="zying-actions weight-dimensions-actions">
+          <button id="weight-dimensions-open-console" class="secondary" type="button">打开订单记录表</button>
+          <button id="weight-dimensions-refresh" class="secondary" type="button">刷新状态</button>
+        </div>
+        <button id="weight-dimensions-start" class="primary inline-action" type="button" disabled>更新查询成功产品</button>
+        <pre id="weight-dimensions-log" class="zying-log">完成查询后，这里会显示每个产品的处理日志。</pre>
+      </section>
+    </div>
     <div id="purchase-panel" class="mode-panel" hidden>
       <section class="page-card purchase-card">
         <div class="page-card-heading">
@@ -189,7 +223,7 @@
       </section>
     </div>
     <div id="result" class="result" hidden></div>
-    <div class="support-line"><span>支持</span><b>Mercado Libre</b><i>·</i><b>1688</b><i>·</i><b>智赢</b><i>·</i><b>AI核重核价</b></div>
+    <div class="support-line"><span>支持</span><b>Mercado Libre</b><i>·</i><b>Yandex</b><i>·</i><b>1688</b><i>·</i><b>智赢</b><i>·</i><b>AI核重核价</b></div>
   </main>
   <footer>
     <button id="open-console" class="secondary" type="button">打开泽顺控制台</button>

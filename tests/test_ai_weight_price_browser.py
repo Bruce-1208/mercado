@@ -563,9 +563,9 @@ def test_current_1688_detail_reads_only_official_sku_prices_and_weights(page):
     assert offer['merchant_id'] == 'shop123'
     assert offer['skus'] == [
         {'id': '11', 'label': '黄色 / 小号', 'price': '1.25', 'raw_price': '¥1.25',
-         'raw_surcharge': '', 'raw_weight': '40g', 'raw_text': '黄色 / 小号；页面单价 ¥1.25；包装重量 40g'},
+         'raw_surcharge': '', 'raw_weight': '40g', 'raw_dimensions': '黄色 / 小号', 'raw_text': '黄色 / 小号；页面单价 ¥1.25；包装重量 40g'},
         {'id': '22', 'label': '黑色 / 大号', 'price': '2.50', 'raw_price': '¥2.50',
-         'raw_surcharge': '', 'raw_weight': '55g', 'raw_text': '黑色 / 大号；页面单价 ¥2.50；包装重量 55g'},
+         'raw_surcharge': '', 'raw_weight': '55g', 'raw_dimensions': '黑色 / 大号', 'raw_text': '黑色 / 大号；页面单价 ¥2.50；包装重量 55g'},
     ]
 
 
@@ -986,6 +986,44 @@ def test_empty_or_default_card_id_uses_detail_fallback(page, selector):
     record = product_detail_fixture(page)
     adapter = Browser(validate({"selectors": {"erp_id": selector}}), threading.Event(), lambda *args: None)
     assert adapter.erp_goods_id(page, page.locator(".product-item").first, record) == "101"
+
+
+def test_detail_id_accepts_exact_title_in_visible_input(page):
+    record = product_detail_fixture(page)
+    page.evaluate('''() => {
+      document.querySelector('textarea').remove();
+      document.querySelector('.curd-detail-wrap').insertAdjacentHTML('beforeend',
+        '<input type="text" value="blue cup">');
+    }''')
+    adapter = Browser(validate({}), threading.Event(), lambda *args: None)
+    assert adapter.erp_goods_id(page, page.locator('.product-item').first, record) == '101'
+
+
+def test_erp_dimension_write_is_verified_after_reload(page, monkeypatch):
+    html = '''<meta charset="utf-8"><div class="curd-detail-wrap"><div class="crud-detail-header"><div class="h1">产品编号：101</div></div>
+      <div class="ant-form-item"><div class="ant-form-item-label">包装尺寸</div><input id="dimensions" value="12x12x12"></div>
+      <input id="netproceed" value="9"><input id="weight" value="430">
+      <label><input type="radio" name="stat" checked>待审核</label><button id="save">保存</button>
+      <p id="saved" hidden>保存成功</p></div><script>
+      const old=JSON.parse(localStorage.getItem('dimension-save')||'null');
+      if(old){document.querySelector('#dimensions').value=old.dimensions;document.querySelector('#weight').value=old.weight;}
+      document.querySelector('#save').onclick=()=>{localStorage.setItem('dimension-save',JSON.stringify({dimensions:document.querySelector('#dimensions').value,weight:document.querySelector('#weight').value}));document.querySelector('#saved').hidden=false;};
+    </script>'''
+    page.route('https://meli.zying.net/**', lambda route: route.fulfill(body=html, content_type='text/html'))
+    page.goto('https://meli.zying.net/#/product/101')
+    adapter = Browser(validate({}), threading.Event(), lambda *args: None)
+    monkeypatch.setattr(adapter, 'page', lambda *args: page)
+    before = []
+
+    actual = adapter.write_patch({'erp_goods_id': '101', 'erp_edit_url': page.url},
+                                 {'dimensions_cm': '30x20x10', 'weight_g': '450'}, before.append)
+
+    assert before[0]['dimensions_cm'] == '12x12x12'
+    assert actual['dimensions_cm'] == '30x20x10'
+    assert actual['weight_g'] == '450'
+    with pytest.raises(ValueError, match='单边不能超过60'):
+        adapter.write_patch({'erp_goods_id': '101', 'erp_edit_url': page.url},
+                            {'dimensions_cm': '61x20x10'}, lambda _old: None)
 
 
 @pytest.mark.parametrize("scenario", ["stale", "wrong_product", "non_erp_id", "ambiguous"])

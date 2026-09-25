@@ -1,5 +1,16 @@
 # mercado
 
+## Python dependencies
+
+项目根目录的 `requirements.txt` 汇总工作台、ERP、Yandex、PDF、浏览器采集、数据分析与维护脚本使用的 Python 包；完整开发环境可一次安装：
+
+```powershell
+python -m pip install -r requirements.txt
+python -m playwright install chromium
+```
+
+只部署某个服务时，继续使用对应子目录的 requirements 文件。运行时还需按部署场景准备 MySQL 和 FFmpeg/FFprobe；首次本地白底抠图会下载模型权重。
+
 ## AI核重核价
 
 商用上线前的客户隔离、内部接口权限、Agent 回退以及备份恢复操作见
@@ -7,7 +18,7 @@
 
 泽顺控制台「商品管理 → AI核重核价」已接入服务器 MySQL 任务管理、参数设置、异常处理、日志与 CSV 导出。
 独立启动入口同样使用当前服务器 MySQL：`python -m erp.ai_weight_price`，访问 `http://127.0.0.1:5018/ai-weight-price`。
-集成控制台的任务启动已迁移到泽顺插件「核重核价」页：在插件中打开专用 Edge、确认智赢与 1688 登录，选择分类（可留空）、起止页和商品数后启动。控制台继续显示执行进度、结果、日志与异常处理；独立运行页面仍保留原启动控件。首次使用仍需配置当前页面 DOM 字段与模型密钥；默认关闭真实 ERP 回写。
+集成控制台可从泽顺插件启动，也可选择在线本机 Agent 执行。Agent 在所选电脑使用 Playwright 和可见 Edge，复用同一套智赢登录、分类、逐件核验、重试、人工回写与进度记录流程；控制台继续展示进度、结果、日志与异常处理。独立运行页面仍保留本机启动控件。首次使用仍需配置当前页面 DOM 字段与模型密钥；默认关闭真实 ERP 回写。
 部署、页面适配、校验语义及模型/硬件选型见 [AI核重核价说明](docs/ai_weight_price.md)。
 
 AI 自动申诉的执行状态、故障恢复和配置说明见 [申诉稳定性说明](docs/ai_appeal_reliability.md)。
@@ -138,7 +149,7 @@ Copy-Item .\workbench-client.example.json .\workbench-runtime.json
 
 首次使用只需：
 
-1. 登录 `https://wuhanzeshun.com/`，打开“自动化 AI 申诉”，按电脑系统点击“下载 Windows Agent”或“下载 macOS Agent”；
+1. 登录 `https://wuhanzeshun.com/`，点击网页右上角插件旁的“下载 Agent”，按电脑系统选择 Windows 或 macOS；
 2. 在需要运行比特浏览器的电脑上解压下载包；
 3. Windows 双击 `start-agent.bat` 启动，或运行 `install-agent.ps1` 安装登录启动任务；macOS 双击 `start-agent.command` 启动，或运行 `install-agent.command` 安装 LaunchAgent；
 4. 保持比特浏览器客户端运行，回到控制台刷新“执行电脑”并选择该电脑。

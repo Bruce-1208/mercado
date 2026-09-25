@@ -2015,8 +2015,16 @@ def send_ai_chat_message(driver, message):
     before_send = read_snapshot(driver)
     _check_appeal_control(driver)
     try:
-        if not click_send_button(driver, mode=mode):
-            input_box.send_keys(Keys.ENTER)
+        if click_send_button(driver, mode=mode):
+            return {
+                "acknowledged": True,
+                "reply_baseline": ChatMessages(before_send),
+                "message_id": "",
+                "conversation_id": before_send.get("conversation_id", ""),
+                "chat_snapshot": before_send,
+                "send_method": "button_click",
+            }
+        input_box.send_keys(Keys.ENTER)
         deadline = time.monotonic() + AI_SEND_CONFIRM_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
             _check_appeal_control(driver)
@@ -2037,7 +2045,7 @@ def send_ai_chat_message(driver, message):
             except Exception:
                 pass
             _appeal_pause(driver, 0.5)
-        raise AppealExecutionError("已执行发送，但未确认消息气泡和输入框状态", "sent_unknown", sent=True)
+        raise AppealExecutionError("已按回车发送，但未确认消息气泡和输入框状态", "sent_unknown", sent=True)
     except AppealExecutionError as exc:
         # Stop/deadline after the click must still preserve possible submission.
         exc.sent = True
@@ -2332,9 +2340,9 @@ def send_infraction_message_with_retry(
     driver, huashu, infraction_ids, name, site, group_index, total_groups,
     appeal_kind="侵权",
 ):
-    """话术回显即视为申诉成功；客服回复只作为附加记录。
+    """发送按钮点击确认即视为话术发送成功；客服回复只作为附加记录。
 
-    只重试发送前失败。发送成功后仍等待并记录回复，但回复超时、
+    只重试发送前失败。点击发送成功后仍等待并记录回复，但回复超时、
     站点追问或后续读取失败不再把已发送的申诉改判为失败。
     """
     identifier_key, event_name = {
@@ -3192,17 +3200,26 @@ def _collect_full_chat_history(log_records, final_agent_messages=None):
     return result
 
 
-def _collect_appeal_record_fields(log_records, final_agent_messages=None):
+def _collect_successful_appeal_messages(log_records):
     appeal_messages = []
+
+    for record in log_records or []:
+        event = str(record.get("event") or "")
+        sent_event = (
+            event.startswith("send_") and not event.endswith("_error")
+        ) or event == "auto_reply_site_option_menu"
+        message = record.get("message")
+        if sent_event and message:
+            appeal_messages.append(str(message))
+
+    return appeal_messages
+
+
+def _collect_appeal_record_fields(log_records, final_agent_messages=None):
     identifiers = []
     ai_replies = []
 
     for record in log_records or []:
-        message = record.get("message")
-        if message:
-            appeal_messages.append(message)
-            identifiers.extend(_extract_identifiers_from_text(message))
-
         response = record.get("response")
         if response:
             ai_replies.append(response)
@@ -3228,8 +3245,11 @@ def _collect_appeal_record_fields(log_records, final_agent_messages=None):
 
     # Whole-window snapshots contain previous groups; only explicit response events are authoritative.
     ai_replies.extend(final_agent_messages or [])
+    appeal_messages = _collect_successful_appeal_messages(log_records)
+    for message in appeal_messages:
+        identifiers.extend(_extract_identifiers_from_text(message))
     return {
-        "appeal_content": "\n".join(_unique_text_list(appeal_messages)),
+        "appeal_content": "\n\n".join(appeal_messages),
         "identifiers": _unique_text_list(identifiers),
         "ai_replies": _unique_text_list(ai_replies),
         "chat_history": _collect_full_chat_history(log_records, final_agent_messages),
@@ -3285,6 +3305,7 @@ def save_ai_appeal_record(
     final_agent_messages=None,
     error="",
     execution=None,
+    appeal_copy_mode="普通模式",
 ):
     fields = _collect_appeal_record_fields(log_records, final_agent_messages)
     if str(error or "").strip() == "未登录":
@@ -3306,6 +3327,7 @@ def save_ai_appeal_record(
         "event_id": uuid.uuid4().hex,
         "appeal_time": appeal_time,
         "appeal_type": appeal_type,
+        "appeal_copy_mode": appeal_copy_mode or "未记录",
         "shop_name": shop_name,
         "site": site,
         "status": summary["status"],
@@ -3325,9 +3347,9 @@ def save_ai_appeal_record(
     write_local_record({"event": "appeal_record", "event_id": record["event_id"], "record": record})
     try:
         insert_ai_appeal_record(record)
-        print(f"{get_now_time()} {shop_name} {site} AI申诉记录已入库<br>")
+        print(f"{get_now_time()} {shop_name} {site} 自动化申诉记录已入库<br>")
     except Exception as e:
-        print(f"{get_now_time()} {shop_name} {site} AI申诉记录入库失败：{e}<br>")
+        print(f"{get_now_time()} {shop_name} {site} 自动化申诉记录入库失败：{e}<br>")
     return record
 
 
@@ -3392,6 +3414,7 @@ def save_ai_appeal_group_record(
     group_records,
     error="",
     appeal_kind="侵权",
+    appeal_copy_mode="普通模式",
 ):
     """每组侵权/取消率申诉结束后写入原始结果，不调用 DeepSeek 总结。"""
     identifiers = _extract_identifiers_from_text(infraction_ids)
@@ -3409,10 +3432,13 @@ def save_ai_appeal_group_record(
         "event_id": uuid.uuid4().hex,
         "appeal_time": appeal_time,
         "appeal_type": appeal_type,
+        "appeal_copy_mode": appeal_copy_mode or "未记录",
         "shop_name": shop_name,
         "site": site,
         "status": summary["status"],
-        "appeal_content": appeal_content,
+        "appeal_content": "\n\n".join(
+            _collect_successful_appeal_messages(group_records)
+        ),
         "identifiers": identifiers,
         "success_ids": summary["success_ids"],
         "failed_ids": summary["failed_ids"],
@@ -3432,9 +3458,9 @@ def save_ai_appeal_group_record(
     write_local_record({"event": "appeal_record", "event_id": record["event_id"], "record": record})
     try:
         insert_ai_appeal_record(record)
-        print(f"{get_now_time()} {shop_name} {site} 第{group_index}/{total_groups}组AI申诉记录已入库<br>")
+        print(f"{get_now_time()} {shop_name} {site} 第{group_index}/{total_groups}组自动化申诉记录已入库<br>")
     except Exception as e:
-        print(f"{get_now_time()} {shop_name} {site} 第{group_index}/{total_groups}组AI申诉记录入库失败：{e}<br>")
+        print(f"{get_now_time()} {shop_name} {site} 第{group_index}/{total_groups}组自动化申诉记录入库失败：{e}<br>")
     return record
 
 
@@ -3442,7 +3468,7 @@ def save_ai_appeal_group_record(
 def shensu(
     name, site, form, message, validate_open=False, infraction_ids=None,
     prohibited_ids=None, stop_event=None, window_id=None,
-    ai_script_mode=False, deepseek_api_key="",
+    ai_script_mode=False, deepseek_api_key="", appeal_copy_mode="普通模式",
 ):
     """返回执行状态；收到回复不等于平台已批准申诉。"""
     print(f"{name} {site} 开始进行{form}申诉，自定义话术为{message}<br>")
@@ -3455,6 +3481,11 @@ def shensu(
     skip_close_tab = False
     outcome = execution_result("no_data")
     started = time.monotonic()
+    appeal_copy_mode = (
+        "AI话术模式"
+        if ai_script_mode and form in {"侵权", "禁限售"}
+        else "普通模式"
+    )
     try:
         nickname = random.choice(["Bruce", "Jack", "Lucy", "James"])
         selected_phrase = (
@@ -3500,18 +3531,23 @@ def shensu(
                 handle_infraction(window_id, driver, name, site_name, message, nickname,
                                   infraction_ids=infraction_ids,
                                   ai_script_mode=ai_script_mode,
-                                  deepseek_api_key=deepseek_api_key)
+                                  deepseek_api_key=deepseek_api_key,
+                                  appeal_copy_mode=appeal_copy_mode)
             elif form == "禁限售":
                 handle_prohibited(window_id, driver, name, site_name, message, nickname,
                                   prohibited_ids=prohibited_ids,
                                   ai_script_mode=ai_script_mode,
-                                  deepseek_api_key=deepseek_api_key)
+                                  deepseek_api_key=deepseek_api_key,
+                                  appeal_copy_mode=appeal_copy_mode)
             elif form == "延误":
-                handle_delay(window_id, driver, name, site_name, message, nickname)
+                handle_delay(window_id, driver, name, site_name, message, nickname,
+                             appeal_copy_mode=appeal_copy_mode)
             elif form == "取消率":
-                handle_cancellation(window_id, driver, name, site_name, message, nickname)
+                handle_cancellation(window_id, driver, name, site_name, message, nickname,
+                                    appeal_copy_mode=appeal_copy_mode)
             elif form == "投诉":
-                handle_complaint(window_id, driver, name, site_name, message, nickname)
+                handle_complaint(window_id, driver, name, site_name, message, nickname,
+                                 appeal_copy_mode=appeal_copy_mode)
             else:
                 raise ValueError(f"不支持的申诉类型：{form}")
     except Exception as exc:
@@ -3568,7 +3604,8 @@ def shensu(
             outcome["retryable"] = bool(appeal_error and not outcome["sent"]
                                         and failure_status in {"failed", "rate_limited"})
             save_ai_appeal_record(appeal_time, form, name, site_name, records,
-                                 error=appeal_error, execution=outcome)
+                                 error=appeal_error, execution=outcome,
+                                 appeal_copy_mode=appeal_copy_mode)
             print(f"{get_now_time()} {name} {site} {outcome['message']}：{outcome['metrics']}<br>")
         except Exception as exc:
             print(f"{get_now_time()} 保存申诉执行结果失败：{exc}<br>")
@@ -3610,6 +3647,7 @@ def handle_infraction(
     infraction_ids=None,
     ai_script_mode=False,
     deepseek_api_key="",
+    appeal_copy_mode="普通模式",
 ):
     """处理侵权申诉：普通模式每组 10 个，AI 话术模式每组最多 3 个。"""
     group = MAX_PRODUCTS_PER_APPEAL if ai_script_mode else 10
@@ -3691,6 +3729,7 @@ def handle_infraction(
                 huashu,
                 group_records,
                 error=group_error,
+                appeal_copy_mode=appeal_copy_mode,
             )
         print(f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组侵权申诉处理完成<br>")
         if index < len(groups):
@@ -3707,6 +3746,7 @@ def handle_prohibited(
     prohibited_ids=None,
     ai_script_mode=False,
     deepseek_api_key="",
+    appeal_copy_mode="普通模式",
 ):
     """处理禁限售申诉：普通模式每组 10 个，AI 话术模式每组最多 3 个。"""
     group_size = MAX_PRODUCTS_PER_APPEAL if ai_script_mode else 10
@@ -3802,6 +3842,7 @@ def handle_prohibited(
                 group_records,
                 error=group_error,
                 appeal_kind="禁限售",
+                appeal_copy_mode=appeal_copy_mode,
             )
         print(
             f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
@@ -3812,7 +3853,10 @@ def handle_prohibited(
 
 
 
-def handle_delay(window_id, driver, name, site, message, nickname):
+def handle_delay(
+    window_id, driver, name, site, message, nickname,
+    appeal_copy_mode="普通模式",
+):
     """延误与其他申诉共用发送确认、站点问答和结果记录。"""
     orders = get_delay_orders_download_list(window_id, name, site)
     if not orders:
@@ -3843,12 +3887,16 @@ def handle_delay(window_id, driver, name, site, message, nickname):
             save_ai_appeal_group_record(
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"), name, site,
                 index, len(groups), ids, text, records, error=error, appeal_kind="延误",
+                appeal_copy_mode=appeal_copy_mode,
             )
         if index < len(groups):
             _appeal_pause(driver, 20)
 
 
-def handle_cancellation(window_id, driver, name, site, message, nickname):
+def handle_cancellation(
+    window_id, driver, name, site, message, nickname,
+    appeal_copy_mode="普通模式",
+):
     """处理取消率申诉：从声誉 Metrics 读取全部取消订单，按侵权规则分组处理。"""
     group_size = 10
     cancellation_orders = get_cancellation_orders(driver, name, site)
@@ -3935,6 +3983,7 @@ def handle_cancellation(window_id, driver, name, site, message, nickname):
                 group_records,
                 error=group_error,
                 appeal_kind="取消率",
+                appeal_copy_mode=appeal_copy_mode,
             )
         print(
             f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
@@ -3944,7 +3993,10 @@ def handle_cancellation(window_id, driver, name, site, message, nickname):
             _appeal_pause(driver, 20)
 
 
-def handle_complaint(window_id, driver, name, site, message, nickname):
+def handle_complaint(
+    window_id, driver, name, site, message, nickname,
+    appeal_copy_mode="普通模式",
+):
     """处理投诉申诉：读取全部销售单号，每两个一组提交给 AI 客服。"""
     group_size = COMPLAINT_GROUP_SIZE
     complaint_orders = get_complaint_orders(driver, name, site)
@@ -4029,6 +4081,7 @@ def handle_complaint(window_id, driver, name, site, message, nickname):
                 group_records,
                 error=group_error,
                 appeal_kind="投诉",
+                appeal_copy_mode=appeal_copy_mode,
             )
         print(
             f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"

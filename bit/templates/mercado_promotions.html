@@ -18,8 +18,9 @@
         dialog{border:0;border-radius:14px;padding:0;width:min(860px,calc(100vw - 32px));box-shadow:0 28px 80px rgba(15,23,42,.28)}dialog::backdrop{background:rgba(15,23,42,.48)}.modal-head{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}.modal-head h3{margin:0}.modal-body{padding:18px 20px;max-height:65vh;overflow:auto}.modal-foot{padding:14px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:9px}.close{border:0;background:transparent;font-size:22px;cursor:pointer;color:#64748b}.preview-summary{display:flex;gap:12px;margin-bottom:14px}.preview-summary span{padding:8px 11px;border-radius:8px;background:#f1f5f9}.preview-row{display:grid;grid-template-columns:1.1fr .8fr 1.5fr;gap:12px;padding:11px 0;border-top:1px solid #edf1f5}.blocked{color:var(--bad)}
         .hidden{display:none!important}body.embedded{background:#fff}body.embedded main{max-width:none;padding:18px;min-height:100vh}body.embedded .hero{justify-content:flex-end;margin-bottom:16px}body.embedded .hero>div{display:none}@media(max-width:900px){main{padding:16px 12px}.topbar{padding:0 12px}.filters{grid-template-columns:1fr 1fr}.filters .field:first-child{grid-column:1/-1}.stats{grid-template-columns:1fr 1fr}.hero{flex-direction:column}.user{display:none}}@media(max-width:560px){.filters{grid-template-columns:1fr}.filters .field:first-child{grid-column:auto}.stats{grid-template-columns:1fr}.brand small{display:none}}
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20260925-1">
 </head>
-<body class="{% if embedded %}embedded{% endif %}">
+<body class="zs-standalone{% if embedded %} embedded{% endif %}">
 {% if not embedded %}<header class="topbar"><div class="brand"><div class="mark">M</div><div><h1>活动管理</h1><small>Mercado Libre 店群促销工作台</small></div></div><div class="top-actions"><span class="user">{{ current_user.display_name or current_user.username }}</span><a class="back" href="/">返回综合服务台</a></div></header>{% endif %}
 <main>
     <section class="hero"><div><h2>店群活动中心</h2><p>统一发现可报名活动、筛选候选商品、批量核价并提交，所有操作留有执行记录。</p></div><button class="primary" id="syncBtn" onclick="syncSelected()">同步所选店铺</button></section>
@@ -53,6 +54,10 @@
 <script>
 const state={stores:[],selectedStores:new Set(),campaigns:[],currentCampaign:null,items:[],selectedItems:new Set(),preview:null};
 const $=id=>document.getElementById(id);const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const isPlatformAdmin={{ 'true' if current_user.get('is_platform_admin') else 'false' }};
+const selectedEnterpriseKey=isPlatformAdmin?new URLSearchParams(window.location.search).get('organization_key')||'':'';
+const nativePromotionFetch=window.fetch.bind(window);
+window.fetch=function(input,init){if(!selectedEnterpriseKey)return nativePromotionFetch(input,init);const source=input instanceof Request?input.url:String(input);let target;try{target=new URL(source,window.location.href)}catch(_){return nativePromotionFetch(input,init)}if(target.origin!==window.location.origin||!target.pathname.startsWith('/api/'))return nativePromotionFetch(input,init);target.searchParams.set('organization_key',selectedEnterpriseKey);return input instanceof Request?nativePromotionFetch(new Request(target.toString(),new Request(input,init))):nativePromotionFetch(target.toString(),init)};
 function feedback(message,type='info'){const el=$('feedback');el.className=`feedback show ${type}`;el.innerHTML=esc(message);setTimeout(()=>el.classList.remove('show'),7000)}
 async function api(url,options={}){const response=await fetch(url,{headers:{'Content-Type':'application/json'},...options});const body=await response.json().catch(()=>({}));if(!response.ok||body.status!=='success')throw new Error(body.message||`请求失败 (${response.status})`);return body.data}
 function fmtDate(v){if(!v)return '未提供';const d=new Date(v);return Number.isNaN(d.valueOf())?v:d.toLocaleString('zh-CN',{hour12:false})}

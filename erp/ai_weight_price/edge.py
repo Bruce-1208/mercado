@@ -55,10 +55,17 @@ def open_edge(cdp_url, root):
         return current
     profile = Path(root) / "edge-profile"
     profile.mkdir(parents=True, exist_ok=True)
+    launch_options = {}
+    if os.name == "nt":
+        # Agent workers run in a kill-on-close Job Object. Keep this interactive,
+        # persistent browser outside that worker tree so the login tab survives
+        # after the short login/open task has completed.
+        launch_options["creationflags"] = subprocess.CREATE_BREAKAWAY_FROM_JOB
     subprocess.Popen([edge_executable(), "--remote-debugging-address=127.0.0.1",
                       f"--remote-debugging-port={parsed.port}", f"--user-data-dir={profile.resolve()}",
                       "--no-first-run", "--new-window", LOGIN_URL],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     **launch_options)
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
         identity = debugger_identity(cdp_url)

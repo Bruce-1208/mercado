@@ -877,6 +877,7 @@ def list_infraction_dashboard(
     scope: str = "",
     search: str = "",
     detail_token_id: int | str = 0,
+    token_ids: list[int] | tuple[int, ...] | None = None,
     page: int = 1,
     page_size: int = 100,
     rows_only: bool | str = False,
@@ -911,6 +912,9 @@ def list_infraction_dashboard(
     detail_token_id = int(detail_token_id or 0)
     if detail_token_id < 0:
         detail_token_id = 0
+    scoped_token_ids = None
+    if token_ids is not None:
+        scoped_token_ids = sorted({int(value) for value in token_ids if int(value) > 0})
 
     ownership_group = "COALESCE(NULLIF(settings.`group_name`, ''), NULLIF(items.`group_name`, ''), '未分组')"
     ownership_person = "COALESCE(NULLIF(settings.`salesperson`, ''), NULLIF(items.`salesperson`, ''), '未分配')"
@@ -946,6 +950,14 @@ def list_infraction_dashboard(
     if detail_token_id:
         conditions.append("items.`token_id` = %s")
         values.append(detail_token_id)
+    if scoped_token_ids is not None:
+        if scoped_token_ids:
+            conditions.append(
+                f"items.`token_id` IN ({','.join(['%s'] * len(scoped_token_ids))})"
+            )
+            values.extend(scoped_token_ids)
+        else:
+            conditions.append("1 = 0")
     where_sql = " WHERE " + " AND ".join(conditions) if conditions else ""
     settings_join = """
         LEFT JOIN `mercado_store_site_settings` AS settings

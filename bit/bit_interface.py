@@ -424,7 +424,7 @@ INTERNAL_LOOPBACK_DENIED_PREFIXES = (
 
 WORKBENCH_PERMISSION_GROUPS = (
     ("appeal", "自动化 AI 申诉", (("appeal.view", "查看"), ("appeal.execute", "执行/终止"))),
-    ("tasks", "任务模块", (("tasks.view", "查看"), ("tasks.execute", "启动任务"))),
+    ("tasks", "任务模块", (("tasks.view", "查看"), ("tasks.execute", "启动/处理任务"))),
     ("order_print", "订单管理与面单", (("order_print.view", "查看"), ("order_print.execute", "打印面单"))),
     ("order_analysis", "订单分析", (("order_analysis.view", "查看"), ("order_analysis.execute", "导入订单"))),
     ("ad_analysis", "广告分析", (("ad_analysis.view", "查看"), ("ad_analysis.execute", "启动/暂停广告"))),
@@ -439,7 +439,7 @@ WORKBENCH_PERMISSION_GROUPS = (
     ("infractions", "违规商品总览", (("infractions.view", "查看/导出"), ("infractions.execute", "采集"))),
     ("reputation", "声誉数据", (("reputation.view", "查看/导出"), ("reputation.execute", "采集/更新"))),
     ("customer_service", "客户消息", (("customer_service.view", "查看"), ("customer_service.manage", "回复/删除"))),
-    ("ai_appeals", "AI 申诉记录", (("ai_appeals.view", "查看"),)),
+    ("ai_appeals", "自动化申诉记录", (("ai_appeals.view", "查看"),)),
     ("access", "人员与权限", (("access.view", "查看"), ("access.manage", "管理账号、角色和店铺配置"))),
 )
 WORKBENCH_PERMISSION_KEYS = tuple(
@@ -453,6 +453,16 @@ WORKBENCH_DEFAULT_ROLES = (
         "role_name": "超级管理员",
         "description": "拥有控制台全部权限",
         "permissions": ("*",),
+        "own_store_only": False,
+        "is_system": True,
+    },
+    {
+        "role_key": "enterprise_admin",
+        "role_name": "企业管理员",
+        "description": "可查看和操作本企业业务数据",
+        "permissions": tuple(
+            key for key in WORKBENCH_PERMISSION_KEYS if not key.startswith("access.")
+        ),
         "own_store_only": False,
         "is_system": True,
     },
@@ -495,6 +505,12 @@ WORKBENCH_DEFAULT_ROLES = (
         "is_system": True,
     },
 )
+
+# These are user-supplied task concurrency controls.  They are deliberately
+# kept separate from the broader business permissions: changing a task's
+# process/thread count affects host capacity and is reserved for the platform
+# super administrator.
+TASK_WORKER_INPUT_KEYS = frozenset({"workers", "max_workers", "worker_count"})
 
 try:
     YANDEX_CONSOLE_PORT = int(os.environ.get("WORKBENCH_YANDEX_PORT", "8011"))
@@ -753,11 +769,18 @@ if USE_DB_API:
     db_get_high_after_sale_alerts = bit_db_api.get_high_after_sale_alerts
     db_get_high_profit_products = bit_db_api.get_high_profit_products
     db_list_orders = bit_db_api.list_orders
+    db_list_store_analysis = bit_db_api.list_store_analysis
     db_insert_task_record = bit_db_api.insert_task_record
     db_insert_zying_product_info = bit_db_api.insert_zying_product_info
+    db_save_weight_dimensions_records = bit_db_api.save_weight_dimensions_records
+    db_get_weight_dimensions_record_order_numbers = bit_db_api.get_weight_dimensions_record_order_numbers
+    db_list_weight_dimensions_records = bit_db_api.list_weight_dimensions_records
+    db_list_weight_dimensions_changed_orders = bit_db_api.list_weight_dimensions_changed_orders
+    db_append_weight_dimensions_record_log = bit_db_api.append_weight_dimensions_record_log
     db_upsert_zying_products_to_products = bit_db_api.upsert_zying_products_to_products
     db_upsert_ai_original_product = bit_db_api.upsert_ai_original_product
     db_update_ai_original_product = bit_db_api.update_ai_original_product
+    db_update_ai_original_product_items = bit_db_api.update_ai_original_product_items
     db_update_ai_original_listing = bit_db_api.update_ai_original_listing
     db_translate_ai_original_listing = bit_db_api.translate_ai_original_listing
     db_sync_zying_product_developers = bit_db_api.sync_zying_product_developers
@@ -835,6 +858,11 @@ else:
         list_orders,
         insert_task_record,
         insert_zying_product_info,
+        save_weight_dimensions_records,
+        get_weight_dimensions_record_order_numbers,
+        list_weight_dimensions_records,
+        list_weight_dimensions_changed_orders,
+        append_weight_dimensions_record_log,
         sync_zying_product_developers,
         get_existing_zying_product_ids,
         get_zying_risk_candidates,
@@ -878,8 +906,14 @@ else:
     db_get_high_after_sale_alerts = get_high_after_sale_alerts
     db_get_high_profit_products = get_high_profit_products
     db_list_orders = list_orders
+    from bit.store_analysis import list_store_analysis as db_list_store_analysis
     db_insert_task_record = insert_task_record
     db_insert_zying_product_info = insert_zying_product_info
+    db_save_weight_dimensions_records = save_weight_dimensions_records
+    db_get_weight_dimensions_record_order_numbers = get_weight_dimensions_record_order_numbers
+    db_list_weight_dimensions_records = list_weight_dimensions_records
+    db_list_weight_dimensions_changed_orders = list_weight_dimensions_changed_orders
+    db_append_weight_dimensions_record_log = append_weight_dimensions_record_log
     db_get_existing_zying_product_ids = get_existing_zying_product_ids
     db_get_zying_risk_candidates = get_zying_risk_candidates
     db_update_zying_product_risks = update_zying_product_risks
@@ -926,6 +960,7 @@ else:
         upsert_zying_products_to_products as db_upsert_zying_products_to_products,
         upsert_ai_original_product as db_upsert_ai_original_product,
         update_ai_original_product as db_update_ai_original_product,
+        update_ai_original_product_items as db_update_ai_original_product_items,
         update_ai_original_listing as db_update_ai_original_listing,
         translate_ai_original_listing as db_translate_ai_original_listing,
         sync_zying_product_developers as db_sync_zying_product_list_developers,
@@ -1046,6 +1081,13 @@ def _validate_organization_key(value):
     return key
 
 
+def _default_workbench_organization_key():
+    key = _validate_organization_key(
+        os.environ.get("WORKBENCH_DEFAULT_ORGANIZATION_KEY", "wuhan-zeshun")
+    )
+    return "wuhan-zeshun" if key == "default" else key
+
+
 _WORKBENCH_USER_REQUIRED_COLUMNS = {
     "id",
     "username",
@@ -1112,7 +1154,7 @@ def _workbench_default_roles_are_current(cursor):
         SELECT `role_key`, `role_name`, `description`, `permissions_json`,
                `own_store_only`, `is_system`
         FROM `workbench_roles`
-        WHERE `role_key` IN ('super_admin', 'operator', 'viewer', 'warehouse', 'member')
+        WHERE `role_key` IN ('super_admin', 'enterprise_admin', 'operator', 'viewer', 'warehouse', 'member')
         """
     )
     current_roles = {
@@ -1179,6 +1221,29 @@ def ensure_workbench_user_table():
                 role_columns = set(_WORKBENCH_ROLE_REQUIRED_COLUMNS)
             else:
                 table_names, role_columns, user_columns = schema_state
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS `workbench_organizations` (
+                    `organization_key` VARCHAR(64) NOT NULL,
+                    `organization_name` VARCHAR(100) NOT NULL,
+                    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+                    `created_at` DATETIME NOT NULL,
+                    `updated_at` DATETIME NOT NULL,
+                    PRIMARY KEY (`organization_key`),
+                    UNIQUE KEY `uniq_workbench_organization_name` (`organization_name`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """
+            )
+            cursor.execute(
+                """
+                INSERT INTO `workbench_organizations`
+                    (`organization_key`, `organization_name`, `is_active`, `created_at`, `updated_at`)
+                VALUES ('wuhan-zeshun', '武汉泽顺', 1, %s, %s)
+                ON DUPLICATE KEY UPDATE `is_active` = 1, `updated_at` = VALUES(`updated_at`)
+                """,
+                (now, now),
+            )
             roles_exist = "workbench_roles" in table_names
             users_exist = "workbench_users" in table_names
             user_schema_ready = (
@@ -1189,12 +1254,21 @@ def ensure_workbench_user_table():
                 roles_exist
                 and _WORKBENCH_ROLE_REQUIRED_COLUMNS.issubset(role_columns)
             )
+            if users_exist and "organization_key" in user_columns:
+                cursor.execute(
+                    """
+                    UPDATE `workbench_users`
+                    SET `organization_key` = 'wuhan-zeshun'
+                    WHERE `organization_key` = 'default'
+                    """
+                )
             if (
                 role_schema_ready
                 and user_schema_ready
                 and _workbench_default_roles_are_current(cursor)
                 and _workbench_users_are_current(cursor)
             ):
+                connection.commit()
                 return False
 
             if not roles_exist:
@@ -1219,7 +1293,6 @@ def ensure_workbench_user_table():
                     "ALTER TABLE `workbench_roles` ADD COLUMN `own_store_only` "
                     "TINYINT(1) NOT NULL DEFAULT 0 AFTER `permissions_json`"
                 )
-            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             for role in WORKBENCH_DEFAULT_ROLES:
                 cursor.execute(
                     """
@@ -1255,7 +1328,7 @@ def ensure_workbench_user_table():
                         `display_name` VARCHAR(64) NULL,
                         `email` VARCHAR(128) NULL,
                         `department` VARCHAR(64) NULL,
-                        `organization_key` VARCHAR(64) NOT NULL DEFAULT 'default',
+                        `organization_key` VARCHAR(64) NOT NULL DEFAULT 'wuhan-zeshun',
                         `role_key` VARCHAR(64) NOT NULL DEFAULT 'viewer',
                         `is_active` TINYINT(1) NOT NULL DEFAULT 1,
                         `created_at` DATETIME NOT NULL,
@@ -1276,9 +1349,7 @@ def ensure_workbench_user_table():
                         f"ALTER TABLE `workbench_users` ADD COLUMN `{column_name}` "
                         f"{column_definition}"
                     )
-            default_organization = _validate_organization_key(
-                os.environ.get("WORKBENCH_DEFAULT_ORGANIZATION_KEY", "default")
-            )
+            default_organization = _default_workbench_organization_key()
             cursor.execute(
                 """
                 UPDATE `workbench_users`
@@ -1286,6 +1357,26 @@ def ensure_workbench_user_table():
                 WHERE `organization_key` IS NULL OR `organization_key` = ''
                 """,
                 (default_organization,),
+            )
+            cursor.execute(
+                """
+                INSERT INTO `workbench_organizations`
+                    (`organization_key`, `organization_name`, `is_active`, `created_at`, `updated_at`)
+                SELECT DISTINCT u.`organization_key`, u.`organization_key`, 1, %s, %s
+                FROM `workbench_users` AS u
+                LEFT JOIN `workbench_organizations` AS o
+                    ON o.`organization_key` = u.`organization_key`
+                WHERE o.`organization_key` IS NULL
+                ON DUPLICATE KEY UPDATE `is_active` = 1
+                """,
+                (now, now),
+            )
+            cursor.execute(
+                """
+                UPDATE `workbench_users`
+                SET `organization_key` = 'wuhan-zeshun'
+                WHERE `organization_key` = 'default'
+                """
             )
             cursor.execute(
                 """
@@ -1308,11 +1399,11 @@ def ensure_workbench_user_table():
                 cursor.execute(
                     """
                     INSERT INTO `workbench_users`
-                        (`username`, `password_hash`, `display_name`, `role_key`,
+                        (`username`, `password_hash`, `display_name`, `organization_key`, `role_key`,
                          `is_active`, `created_at`, `updated_at`)
-                    VALUES (%s, %s, %s, 'super_admin', 1, %s, %s)
+                    VALUES (%s, %s, %s, %s, 'super_admin', 1, %s, %s)
                     """,
-                    (username, make_password_hash(password), "管理员", now, now),
+                    (username, make_password_hash(password), "管理员", default_organization, now, now),
                 )
                 logging.warning("workbench_users 为空，已创建默认账号 %s", username)
         connection.commit()
@@ -1369,7 +1460,7 @@ def build_workbench_session_user(user):
         "email": user.get("email") or "",
         "department": user.get("department") or "",
         "organization_key": _validate_organization_key(
-            user.get("organization_key") or "default"
+            user.get("organization_key") or "wuhan-zeshun"
         ),
         "role_key": role_key,
         "role_name": user.get("role_name") or role_key,
@@ -1415,7 +1506,7 @@ def list_workbench_roles_local():
                 GROUP BY r.`role_key`, r.`role_name`, r.`description`,
                          r.`permissions_json`, r.`own_store_only`, r.`is_system`, r.`created_at`,
                          r.`updated_at`
-                ORDER BY FIELD(r.`role_key`, 'super_admin', 'operator', 'viewer', 'warehouse', 'member'),
+                ORDER BY FIELD(r.`role_key`, 'super_admin', 'enterprise_admin', 'operator', 'viewer', 'warehouse', 'member'),
                          r.`role_name`
                 """
             )
@@ -1569,6 +1660,57 @@ def list_workbench_users_local():
         connection.close()
 
 
+def list_workbench_organizations_local():
+    connection = pymysql.connect(**mysql_config)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT `organization_key`, `organization_name`, `is_active`
+                FROM `workbench_organizations`
+                WHERE `is_active` = 1
+                ORDER BY CASE WHEN `organization_key` = 'wuhan-zeshun' THEN 0 ELSE 1 END,
+                         `organization_name`, `organization_key`
+                """
+            )
+            return [
+                {**dict(row), "is_active": bool(row.get("is_active"))}
+                for row in (cursor.fetchall() or [])
+            ]
+    finally:
+        connection.close()
+
+
+def create_workbench_organization_local(data):
+    data = data or {}
+    organization_key = _validate_organization_key(data.get("organization_key"))
+    organization_name = str(data.get("organization_name") or "").strip()[:100]
+    if not organization_name:
+        raise ValueError("企业名称不能为空")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**mysql_config)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO `workbench_organizations`
+                    (`organization_key`, `organization_name`, `is_active`, `created_at`, `updated_at`)
+                VALUES (%s, %s, 1, %s, %s)
+                """,
+                (organization_key, organization_name, now, now),
+            )
+        connection.commit()
+    except pymysql.err.IntegrityError as exc:
+        connection.rollback()
+        raise ValueError("企业标识或名称已存在") from exc
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return organization_key
+
+
 def _require_workbench_role(cursor, role_key):
     cursor.execute(
         "SELECT `role_key` FROM `workbench_roles` WHERE `role_key` = %s",
@@ -1586,11 +1728,9 @@ def create_workbench_user_local(data):
     email = str(data.get("email") or "").strip()[:128]
     department = str(data.get("department") or "").strip()[:64]
     organization_key = _validate_organization_key(
-        data.get("organization_key") or os.environ.get(
-            "WORKBENCH_DEFAULT_ORGANIZATION_KEY", "default"
-        )
+        data.get("organization_key") or _default_workbench_organization_key()
     )
-    role_key = str(data.get("role_key") or "viewer").strip()
+    role_key = str(data.get("role_key") or "member").strip()
     is_active = 1 if data.get("is_active", True) else 0
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     connection = pymysql.connect(**mysql_config)
@@ -1636,9 +1776,7 @@ def update_workbench_user_local(user_id, data):
     email = str(data.get("email") or "").strip()[:128]
     department = str(data.get("department") or "").strip()[:64]
     organization_key = _validate_organization_key(
-        data.get("organization_key") or os.environ.get(
-            "WORKBENCH_DEFAULT_ORGANIZATION_KEY", "default"
-        )
+        data.get("organization_key") or _default_workbench_organization_key()
     )
     role_key = str(data.get("role_key") or "viewer").strip()
     is_active = 1 if data.get("is_active", True) else 0
@@ -1746,7 +1884,7 @@ def get_current_workbench_user():
     # 客户并重新带上隔离字段，不能因为缺少版本字段而绕过客户边界。
     if session_user.get("access_version") != 1:
         legacy_user = dict(session_user)
-        legacy_user.setdefault("organization_key", "default")
+        legacy_user.setdefault("organization_key", "wuhan-zeshun")
         legacy_user.setdefault("own_store_only", False)
         legacy_user.setdefault(
             "is_platform_admin", legacy_user.get("role_key") == "super_admin"
@@ -1784,6 +1922,31 @@ def workbench_user_has_permission(user, permission):
     return "*" in permissions or permission in permissions
 
 
+def workbench_user_can_change_task_workers(user=None):
+    """Return whether *user* may choose a task process/thread count.
+
+    Sessions created before access control was introduced are intentionally
+    treated like the existing legacy compatibility path.  All current
+    access-controlled sessions must identify the exact ``super_admin`` role;
+    permissions alone are not sufficient for this capacity-sensitive setting.
+    """
+
+    user = user if user is not None else get_current_workbench_user()
+    if not user:
+        return False
+    if user.get("access_version") != 1:
+        return True
+    # A few single-machine compatibility clients still carry the upgraded
+    # access version but no role fields at all.  Preserve their existing
+    # wildcard-permission behavior; every real access-controlled account has
+    # an explicit role_key and is subject to the super_admin check below.
+    if not user.get("role_key") and "*" in _normalize_workbench_permissions(
+        user.get("permissions")
+    ):
+        return True
+    return str(user.get("role_key") or "").strip() == "super_admin"
+
+
 def workbench_user_own_store_only(user=None):
     user = user if user is not None else get_current_workbench_user()
     return bool(user and user.get("own_store_only"))
@@ -1792,6 +1955,20 @@ def workbench_user_own_store_only(user=None):
 def workbench_user_salesperson(user=None):
     user = user if user is not None else (get_current_workbench_user() or {})
     return str(user.get("display_name") or user.get("username") or "").strip()
+
+
+def workbench_selected_organization(user=None):
+    """Return the platform administrator's current enterprise filter, if any."""
+    user = user if user is not None else get_current_workbench_user()
+    if not user or not user.get("is_platform_admin") or not has_request_context():
+        return ""
+    value = request.args.get("organization_key", "").strip()
+    if not value:
+        return ""
+    try:
+        return _validate_organization_key(value)
+    except ValueError:
+        return ""
 
 
 def _scoped_salesperson(requested="", user=None):
@@ -1812,17 +1989,30 @@ def _token_belongs_to_salesperson(token, salesperson):
 def _filter_mercado_tokens_for_user(data, user=None):
     user = user if user is not None else get_current_workbench_user()
     result = dict(data or {})
-    if not user or user.get("is_platform_admin") or user.get("access_version") != 1:
+    if not user or user.get("access_version") != 1:
         return result
-    organization_key = _validate_organization_key(
-        user.get("organization_key") or "default"
+    selected_organization = workbench_selected_organization(user)
+    organization_key = (
+        selected_organization
+        or _validate_organization_key(user.get("organization_key") or "wuhan-zeshun")
     )
+    if user.get("is_platform_admin") and not selected_organization:
+        return result
     salesperson = workbench_user_salesperson(user)
     rows = [
         dict(row) for row in result.get("rows") or ()
-        if _validate_organization_key(row.get("organization_key") or "default")
-        == organization_key
+        if (
+            _validate_organization_key(row.get("organization_key") or "wuhan-zeshun")
+            == organization_key
+            or (
+                organization_key == "wuhan-zeshun"
+                and _validate_organization_key(row.get("organization_key") or "wuhan-zeshun")
+                == "default"
+            )
+        )
         and (
+            user.get("is_platform_admin")
+            or
             not workbench_user_own_store_only(user)
             or _token_belongs_to_salesperson(row, salesperson)
         )
@@ -1834,11 +2024,9 @@ def _filter_mercado_tokens_for_user(data, user=None):
 
 def _authorized_token_ids_for_user(user=None):
     user = user if user is not None else get_current_workbench_user()
-    if (
-        not user
-        or user.get("is_platform_admin")
-        or user.get("access_version") != 1
-    ):
+    if not user or user.get("access_version") != 1:
+        return None
+    if user.get("is_platform_admin") and not workbench_selected_organization(user):
         return None
     data = _filter_mercado_tokens_for_user(
         bit_db_api.list_mercado_store_tokens() or {}, user
@@ -1861,7 +2049,10 @@ def _scoped_token_ids(token_ids, user=None):
 def _filter_store_rows_for_user(data, user=None, store_keys=("店铺名", "store_name")):
     user = user if user is not None else get_current_workbench_user()
     result = dict(data or {})
-    if not workbench_user_own_store_only(user):
+    has_org_filter = bool(workbench_selected_organization(user))
+    if not user or user.get("access_version") != 1:
+        return result
+    if user.get("is_platform_admin") and not has_org_filter:
         return result
     token_data = _filter_mercado_tokens_for_user(
         bit_db_api.list_mercado_store_tokens() or {}, user
@@ -1872,12 +2063,22 @@ def _filter_store_rows_for_user(data, user=None, store_keys=("店铺名", "store
         for value in (token.get("display_name"), token.get("nickname"))
         if str(value or "").strip()
     }
+    salesperson_aliases = {
+        str(setting.get("salesperson") or "").strip().casefold()
+        for token in token_data.get("rows") or ()
+        for setting in token.get("site_settings") or ()
+        if str(setting.get("salesperson") or "").strip()
+    }
+    if workbench_user_own_store_only(user):
+        salesperson_aliases = {workbench_user_salesperson(user).casefold()}
 
     def belongs(row):
         return any(
             str((row or {}).get(key) or "").strip().casefold() in aliases
             for key in store_keys
-        )
+        ) or str(
+            (row or {}).get("业务员") or (row or {}).get("salesperson") or ""
+        ).strip().casefold() in salesperson_aliases
 
     for key in ("rows", "summary"):
         if isinstance(result.get(key), list):
@@ -1885,6 +2086,18 @@ def _filter_store_rows_for_user(data, user=None, store_keys=("店铺名", "store
     if "rows" in result:
         result["total"] = len(result.get("rows") or [])
     return result
+
+
+def _scoped_query_token_ids(args, user=None, parameter="token_ids"):
+    allowed = _authorized_token_ids_for_user(user)
+    requested_values = args.getlist(parameter)
+    requested = {
+        int(value) for value in requested_values
+        if str(value or "").isdigit() and int(value) > 0
+    }
+    if allowed is None:
+        return sorted(requested) if parameter in args else None
+    return sorted(allowed.intersection(requested)) if parameter in args else sorted(allowed)
 
 
 def login_required(view_func):
@@ -2422,9 +2635,13 @@ _daily_agent_internal_api_allowed = _agent_internal_api_allowed
 
 def _required_workbench_permissions(path, method):
     method = str(method or "GET").upper()
+    if path.startswith("/api/mercado/today/"):
+        return ("tasks.execute",) if method in {"POST", "PATCH", "PUT", "DELETE"} else ("tasks.view",)
     if path == "/api/orders":
         return ("order_print.view",)
-    if path.startswith("/api/weight-dimensions-records/"):
+    if path == "/api/store-analysis":
+        return ("order_analysis.view",)
+    if path == "/api/weight-dimensions-records" or path.startswith("/api/weight-dimensions-records/"):
         return (
             ("order_analysis.execute",)
             if path.endswith("/execute") and method == "POST"
@@ -2458,7 +2675,10 @@ def _required_workbench_permissions(path, method):
     if path.startswith("/api/run_shensu"):
         return ("appeal.execute",)
     if path == "/api/execution-agents":
-        return ("appeal.view", "tasks.view", "tasks.execute", "ai_weight_price.view")
+        return (
+            "appeal.view", "tasks.view", "tasks.execute", "ai_weight_price.view",
+            "order_analysis.view",
+        )
     if path == "/api/local-agents/download":
         return ("appeal.execute", "tasks.execute", "ai_weight_price.execute")
     if path == "/api/collections/options":
@@ -2518,7 +2738,11 @@ def _required_workbench_permissions(path, method):
             else ("promotions.execute",)
         )
     if path.startswith("/api/inventory/"):
-        if path.startswith("/api/inventory/shelves") and method != "GET":
+        if (
+            path.startswith("/api/inventory/shelves")
+            or path.startswith("/api/inventory/skus")
+            or path.startswith("/api/inventory/sku-mappings")
+        ) and method != "GET":
             return ("inventory.manage",)
         if path == "/api/inventory/movements" and method == "POST":
             return ("inventory.execute",)
@@ -2594,17 +2818,44 @@ def enforce_workbench_permissions():
 
 
 @app.before_request
+def enforce_task_worker_change_permission():
+    """Protect all user-facing task concurrency parameters server-side."""
+
+    path = request.path
+    if (
+        not path.startswith("/api/")
+        or path.startswith("/api/db/")
+        or path == "/api/login"
+        or request.method in {"GET", "HEAD", "OPTIONS"}
+    ):
+        return None
+    user = get_current_workbench_user()
+    if not user or workbench_user_can_change_task_workers(user):
+        return None
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return None
+    changed_keys = sorted(TASK_WORKER_INPUT_KEYS.intersection(data))
+    if not changed_keys:
+        return None
+    return jsonify({
+        "status": "error",
+        "message": "只有超级管理员可以修改任务并发进程数",
+        "required_role": "super_admin",
+        "fields": changed_keys,
+    }), 403
+
+
+@app.before_request
 def enforce_own_store_scope():
     """Reject attempts to address another member's store by identifier."""
     path = request.path
     if not path.startswith("/api/") or path.startswith("/api/db/") or path == "/api/login":
         return None
     user = get_current_workbench_user()
-    if (
-        not user
-        or user.get("is_platform_admin")
-        or user.get("access_version") != 1
-    ):
+    if not user or user.get("access_version") != 1:
+        return None
+    if user.get("is_platform_admin") and not workbench_selected_organization(user):
         return None
 
     token_ids = []
@@ -2617,7 +2868,7 @@ def enforce_own_store_scope():
     )
     data = request.get_json(silent=True) if request.method != "GET" else None
     if isinstance(data, dict):
-        if data.get("sync_all") is True:
+        if workbench_user_own_store_only(user) and data.get("sync_all") is True:
             return jsonify({
                 "status": "error",
                 "message": "当前角色只能操作本人店铺，不能执行全部店铺操作",
@@ -2628,7 +2879,11 @@ def enforce_own_store_scope():
         if data.get("token_id") not in (None, ""):
             token_ids.append(data.get("token_id"))
         requested_salesperson = str(data.get("salesperson") or "").strip()
-        if requested_salesperson and requested_salesperson.casefold() != workbench_user_salesperson(user).casefold():
+        if (
+            workbench_user_own_store_only(user)
+            and requested_salesperson
+            and requested_salesperson.casefold() != workbench_user_salesperson(user).casefold()
+        ):
             return jsonify({
                 "status": "error",
                 "message": "当前角色不能操作其他成员的店铺数据",
@@ -2715,6 +2970,7 @@ app.register_blueprint(create_ai_weight_price_blueprint(
     ai_weight_price_service,
     _authorize_ai_weight_price,
     agent_dispatch=lambda action, data: enqueue_local_agent_ai_weight_price(action, data),
+    server_execution=RUNTIME_SETTINGS.is_server,
 ))
 
 
@@ -2754,6 +3010,36 @@ def api_db_ai_weight_price_store():
         return jsonify({"status": "error", "message": f"AI核重核价数据库操作失败：{exc}"}), 500
 
 
+MERCADO_ACTION_CENTER_DB_OPERATIONS = frozenset({
+    "receive_notification", "claim_event", "finish_event", "enrich_event_task", "resolve_event_task",
+    "list_tasks", "get_task", "update_task", "list_events", "get_event",
+    "replay_event", "list_orders", "upsert_task", "initialize",
+})
+
+
+@app.route("/api/db/mercado-action-center", methods=["POST"])
+@internal_api_required
+def api_db_mercado_action_center():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"status": "error", "message": "美客多运营待办数据库操作格式无效"}), 400
+    operation = str(data.get("operation") or "").strip()
+    payload = data.get("payload") or {}
+    if operation not in MERCADO_ACTION_CENTER_DB_OPERATIONS or not isinstance(payload, dict):
+        return jsonify({"status": "error", "message": "美客多运营待办数据库操作无效"}), 400
+    try:
+        result = bit_db_api._mercado_action_center_local(operation, payload)
+        return jsonify({"status": "success", "data": result})
+    except (KeyError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("美客多运营待办数据库操作失败：%s", operation)
+        return jsonify({"status": "error", "message": f"美客多运营待办数据库操作失败：{exc}"}), 500
+
+
 from bit.mercado_promotion_routes import create_promotions_blueprint
 
 app.register_blueprint(
@@ -2761,6 +3047,18 @@ app.register_blueprint(
         login_required=login_required,
         current_user=get_current_workbench_user,
         authorized_token_ids=_authorized_token_ids_for_user,
+        has_permission=workbench_user_has_permission,
+    )
+)
+
+from bit.mercado_action_center import create_action_center_blueprint, ensure_notification_worker
+
+app.register_blueprint(
+    create_action_center_blueprint(
+        login_required=login_required,
+        current_user=get_current_workbench_user,
+        authorized_token_ids=_authorized_token_ids_for_user,
+        storage=bit_db_api,
         has_permission=workbench_user_has_permission,
     )
 )
@@ -4386,7 +4684,13 @@ def _parse_collection_request(data, authorization_flag="visit_stats_enabled"):
         min_value=1,
         max_value=10,
     )
-    configured_options = _authorized_task_shop_options(authorization_flag)
+    token_data = bit_db_api.list_mercado_store_tokens() or {}
+    if has_request_context():
+        token_data = _filter_mercado_tokens_for_user(token_data)
+    configured_options = _authorized_task_shop_options(
+        authorization_flag,
+        token_data=token_data,
+    )
     configured = {shop["shop_name"]: shop for shop in configured_options}
     unknown_shops = [shop for shop in shops if shop not in configured]
     if unknown_shops:
@@ -5364,6 +5668,39 @@ def build_daily_task_params(data):
     # 此时沿用任务标题一直采用的店铺组优先语义，避免无意中取空交集。
     if group_names:
         salespeople = []
+    if has_request_context():
+        current_user = get_current_workbench_user() or {}
+        authorized_token_ids = _authorized_token_ids_for_user(current_user)
+        if authorized_token_ids is not None:
+            visible_tokens = _filter_mercado_tokens_for_user(
+                bit_db_api.list_mercado_store_tokens() or {}, current_user
+            ).get("rows") or []
+            allowed_salespeople = {
+                str(setting.get("salesperson") or "").strip()
+                for token in visible_tokens
+                for setting in token.get("site_settings") or ()
+                if str(setting.get("salesperson") or "").strip()
+            }
+            allowed_groups = {
+                str(setting.get("group_name") or "").strip()
+                for token in visible_tokens
+                for setting in token.get("site_settings") or ()
+                if str(setting.get("group_name") or "").strip()
+            }
+            if workbench_user_own_store_only(current_user):
+                allowed_salespeople = {workbench_user_salesperson(current_user)}
+            if group_names:
+                if not set(group_names).issubset(allowed_groups):
+                    raise ValueError("所选店铺组不属于当前企业")
+            else:
+                if salespeople and not set(salespeople).issubset(allowed_salespeople):
+                    raise ValueError("所选业务员不属于当前企业")
+                if not salespeople:
+                    salespeople = sorted(allowed_salespeople, key=str.casefold)
+                    if not salespeople:
+                        group_names = sorted(allowed_groups, key=str.casefold)
+            if not salespeople and not group_names:
+                raise ValueError("当前企业没有已配置业务员或店铺组的店铺")
     legacy_min_rate = _parse_rate_param(data)
     return {
         "execution_target": _request_execution_target(data),
@@ -5846,10 +6183,12 @@ def shensu_logic(
                                         message,
                                         ai_script_mode=True,
                                         deepseek_api_key=deepseek_api_key,
+                                        appeal_copy_mode=appeal_copy_mode,
                                     )
                                 else:
                                     task_result["value"] = bit_appeal_ai.shensu(
-                                        name, run_site, run_form, message
+                                        name, run_site, run_form, message,
+                                        appeal_copy_mode=appeal_copy_mode,
                                     )
                         else:
                             task_result["value"] = shensu(
@@ -5947,6 +6286,8 @@ def api_run_shensu():
         if requested_execution_target == "agent"
         else "server"
     )
+    if execution_target == "server" and (get_current_workbench_user() or {}).get("role_key") != "super_admin":
+        return jsonify({"status": "error", "message": "仅超级管理员可以在服务器执行申诉任务，请选择本机 Agent"}), 403
     try:
         sites = resolve_appeal_sites(
             data.get("sites", data.get("site", []))
@@ -6058,10 +6399,10 @@ def api_run_shensu():
             shensu_kwargs = {
                 "loop_count": loop_count,
                 "stop_event": stop_event,
+                "appeal_copy_mode": appeal_copy_mode,
             }
             if appeal_copy_mode == bit_daily_task.APPEAL_COPY_MODE_AI:
                 shensu_kwargs["deepseek_api_key"] = deepseek_api_key
-                shensu_kwargs["appeal_copy_mode"] = appeal_copy_mode
             yield from shensu_logic(
                 name, sites, forms, message, mode, **shensu_kwargs
             )
@@ -6440,6 +6781,7 @@ def api_official_infraction_dashboard():
             "category": request.args.get("category", ""),
             "search": request.args.get("search", ""),
             "detail_token_id": request.args.get("detail_token_id", 0),
+            "token_ids": _scoped_query_token_ids(request.args),
             "page": request.args.get("page", 1),
             "page_size": request.args.get("page_size", 100),
         }
@@ -6471,6 +6813,7 @@ def api_official_ip_rights_dashboard():
             "scope": "pppi",
             "search": request.args.get("search", ""),
             "detail_token_id": request.args.get("detail_token_id", 0),
+            "token_ids": _scoped_query_token_ids(request.args),
             "page": request.args.get("page", 1),
             "page_size": request.args.get("page_size", 100),
         }
@@ -6543,6 +6886,9 @@ def _official_infraction_export_response(
     filename_prefix,
     detection_label,
 ):
+    allowed_token_ids = _authorized_token_ids_for_user()
+    if allowed_token_ids is not None:
+        filters = {**filters, "token_ids": sorted(allowed_token_ids)}
     rows = _official_infraction_export_rows(filters)
 
     workbook = Workbook()
@@ -6646,6 +6992,7 @@ def api_export_official_infractions():
             "category": request.args.get("category", ""),
             "search": request.args.get("search", ""),
             "detail_token_id": request.args.get("detail_token_id", 0),
+            "token_ids": None,
         }
         return _official_infraction_export_response(
             filters,
@@ -6675,6 +7022,7 @@ def api_export_official_ip_rights():
             "scope": "pppi",
             "search": request.args.get("search", ""),
             "detail_token_id": request.args.get("detail_token_id", 0),
+            "token_ids": None,
         }
         return _official_infraction_export_response(
             filters,
@@ -6697,6 +7045,11 @@ def api_start_official_infraction_sync():
     if not isinstance(token_ids, list):
         return jsonify({"status": "error", "message": "token_ids 必须是数组"}), 400
     try:
+        authorized_token_ids = _authorized_token_ids_for_user()
+        if authorized_token_ids is not None:
+            token_ids = _scoped_token_ids(token_ids)
+            if not token_ids:
+                raise ValueError("当前企业没有可同步的店铺")
         start_operation = (
             bit_db_api.start_official_infraction_sync
             if USE_DB_API
@@ -6770,13 +7123,10 @@ def api_latest_reputation():
     try:
         data = db_get_latest_reputation_info()
         _attach_reputation_token_ids(data)
-        if workbench_user_own_store_only():
-            owner = workbench_user_salesperson().casefold()
-            data["rows"] = [
-                row for row in data.get("rows") or []
-                if str(row.get("业务员") or "").strip().casefold() == owner
-            ]
-            data["total"] = len(data["rows"])
+        data = _filter_store_rows_for_user(
+            data,
+            store_keys=("店铺名", "store_name", "店铺", "店铺名称"),
+        )
         _attach_latest_reputation_infraction_counts(data)
         return jsonify({
             "status": "success",
@@ -6871,12 +7221,10 @@ def api_export_latest_reputation():
     try:
         data = db_get_latest_reputation_info()
         _attach_reputation_token_ids(data)
-        if workbench_user_own_store_only():
-            owner = workbench_user_salesperson().casefold()
-            data["rows"] = [
-                row for row in data.get("rows") or []
-                if str(row.get("业务员") or "").strip().casefold() == owner
-            ]
+        data = _filter_store_rows_for_user(
+            data,
+            store_keys=("店铺名", "store_name", "店铺", "店铺名称"),
+        )
         _attach_latest_reputation_infraction_counts(data)
         rows = data.get("rows") or []
         wb = Workbook()
@@ -7051,7 +7399,10 @@ def api_latest_funds():
         salesperson = _scoped_salesperson(request.args.get("salesperson"))
         response = jsonify({
             "status": "success",
-            "data": db_get_latest_pago_info(salesperson),
+            "data": _filter_store_rows_for_user(
+                db_get_latest_pago_info(salesperson),
+                store_keys=("店铺名", "store_name", "店铺", "店铺名称"),
+            ),
         })
         response.headers["Cache-Control"] = "no-store"
         return response
@@ -7107,6 +7458,21 @@ def api_collect_funds():
         if str(config.get("window_id") or "").strip()
         and str(config.get("shop_name") or "").strip()
     ]
+    authorized_token_ids = _authorized_token_ids_for_user()
+    if authorized_token_ids is not None:
+        token_rows = _filter_mercado_tokens_for_user(
+            bit_db_api.list_mercado_store_tokens() or {}
+        ).get("rows") or []
+        allowed_shop_names = {
+            str(value or "").strip().casefold()
+            for token in token_rows
+            for value in (token.get("display_name"), token.get("nickname"))
+            if str(value or "").strip()
+        }
+        valid_configs = [
+            config for config in valid_configs
+            if str(config.get("shop_name") or "").strip().casefold() in allowed_shop_names
+        ]
     if salesperson:
         valid_configs = [
             config
@@ -7319,16 +7685,121 @@ def api_weight_dimensions_records_upload():
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
-        logging.exception("重量尺寸变高记录上传失败")
+        logging.exception("重量尺寸变更记录上传失败")
         return jsonify({"status": "error", "message": f"上传失败：{exc}"}), 500
+
+
+@app.route("/api/weight-dimensions-records", methods=["GET"])
+@login_required
+def api_weight_dimensions_records_list():
+    try:
+        user = get_current_workbench_user()
+        allowed = _authorized_token_ids_for_user(user)
+        rows = bit_db_api.list_weight_dimensions_records()
+        if allowed is not None:
+            rows = [row for row in rows if int(row.get("store_token_id") or 0) in allowed]
+        return jsonify({"status": "success", "data": [
+            weight_dimensions_records._public_record(row) for row in rows
+        ]})
+    except Exception as exc:
+        logging.exception("读取永久重量尺寸记录失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/api/weight-dimensions-records/changed", methods=["GET"])
+@login_required
+def api_weight_dimensions_records_changed():
+    try:
+        user = get_current_workbench_user()
+        token_data = _filter_mercado_tokens_for_user(
+            bit_db_api.list_mercado_store_tokens() or {}, user
+        )
+        token_rows = token_data.get("rows") or []
+        allowed_ids = {int(row["id"]) for row in token_rows if row.get("id") is not None}
+        requested_store_ids = []
+        for value in request.args.getlist("store_id") + request.args.getlist("store_ids"):
+            if str(value or "").strip().isdigit() and int(value) > 0:
+                requested_store_ids.append(int(value))
+        requested_store_ids = list(dict.fromkeys(requested_store_ids))
+        if allowed_ids is not None:
+            requested_store_ids = [value for value in requested_store_ids if value in allowed_ids]
+        filters = {
+            "date_from": str(request.args.get("date_from") or "").strip(),
+            "date_to": str(request.args.get("date_to") or "").strip(),
+            "salespeople": list(dict.fromkeys(
+                str(value or "").strip()
+                for value in request.args.getlist("salesperson")
+                if str(value or "").strip()
+            )),
+            "source": str(request.args.get("source") or "").strip(),
+            "category": str(request.args.get("category") or "").strip(),
+            "region": str(request.args.get("region") or "").strip(),
+            "freight_min": str(request.args.get("freight_min") or "").strip(),
+            "freight_max": str(request.args.get("freight_max") or "").strip(),
+            "store": str(request.args.get("store") or "").strip(),
+            "store_ids": requested_store_ids or sorted(allowed_ids),
+        }
+        if not allowed_ids:
+            filters["store_ids"] = []
+        data = weight_dimensions_records.start_changed_refresh(
+            _weight_dimensions_task_owner(user), filters, token_rows, allowed_ids,
+        )
+        return jsonify({"status": "success", "data": data}), 202
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("读取重量尺寸运费变更订单失败")
+        return jsonify({"status": "error", "message": f"读取运费变更订单失败：{exc}"}), 500
+
+
+@app.route("/api/weight-dimensions-records/latest", methods=["GET"])
+@login_required
+def api_weight_dimensions_records_latest():
+    user = get_current_workbench_user()
+    def agent_job_provider(job_id):
+        return get_local_agent_store().get_job(job_id)
+
+    data = weight_dimensions_records.latest_task_status(
+        _weight_dimensions_task_owner(user), agent_job_provider=agent_job_provider,
+    )
+    response = jsonify({"status": "success", "data": data})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/api/weight-dimensions-records/export", methods=["GET"])
+@login_required
+def api_weight_dimensions_records_export_all():
+    try:
+        user = get_current_workbench_user()
+        allowed = _authorized_token_ids_for_user(user)
+        rows = bit_db_api.list_weight_dimensions_records()
+        if allowed is not None:
+            rows = [row for row in rows if int(row.get("store_token_id") or 0) in allowed]
+        content = weight_dimensions_records.export_records_xlsx(
+            [weight_dimensions_records._public_record(row) for row in rows]
+        )
+        return send_file(
+            BytesIO(content),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name="重量尺寸变更记录.xlsx",
+        )
+    except Exception as exc:
+        logging.exception("导出永久重量尺寸记录失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
 
 
 @app.route("/api/weight-dimensions-records/<task_id>", methods=["GET"])
 @login_required
 def api_weight_dimensions_records_status(task_id):
     try:
+        def agent_job_provider(job_id):
+            return get_local_agent_store().get_job(job_id)
+
         data = weight_dimensions_records.task_status(
-            task_id, _weight_dimensions_task_owner(get_current_workbench_user())
+            task_id, _weight_dimensions_task_owner(get_current_workbench_user()),
+            agent_job_provider=agent_job_provider,
         )
         response = jsonify({"status": "success", "data": data})
         response.headers["Cache-Control"] = "no-store"
@@ -7341,8 +7812,31 @@ def api_weight_dimensions_records_status(task_id):
 @login_required
 def api_weight_dimensions_records_execute(task_id):
     try:
+        data = request.get_json(silent=True) or {}
+        action = str(data.get("action") or "zeshun").strip().lower()
+        selected_order_numbers = data.get("order_numbers") or []
+        if not isinstance(selected_order_numbers, list):
+            return jsonify({"status": "error", "message": "order_numbers 必须是数组"}), 400
+        agent_id = str(data.get("agent_id") or "").strip()
+
+        def dispatch_zying(rows):
+            if not agent_id:
+                raise ValueError("请先选择在线的本机 Agent")
+            response = enqueue_local_agent_ai_weight_price(
+                "weight-dimensions-update",
+                {"agent_id": agent_id, "records": rows},
+            )
+            payload = response.get_json(silent=True) if hasattr(response, "get_json") else response
+            if not isinstance(payload, dict) or payload.get("status") != "success":
+                raise ValueError(str((payload or {}).get("message") or "智赢 Agent 任务提交失败"))
+            return str(((payload.get("data") or {}).get("task_id") or "")).strip()
+
         data = weight_dimensions_records.start_execute(
-            task_id, _weight_dimensions_task_owner(get_current_workbench_user())
+            task_id, _weight_dimensions_task_owner(get_current_workbench_user()),
+            action=action,
+            selected_order_numbers=selected_order_numbers,
+            erp_browser_factory=ai_weight_price_service.weight_dimensions_browser,
+            agent_dispatch=dispatch_zying if action == "zying" else None,
         )
         return jsonify({"status": "success", "data": data}), 202
     except KeyError as exc:
@@ -7362,12 +7856,85 @@ def api_weight_dimensions_records_export(task_id):
             BytesIO(content),
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             as_attachment=True,
-            download_name=f"重量尺寸变高记录-{task_id[:8]}.xlsx",
+            download_name=f"重量尺寸变更记录-{task_id[:8]}.xlsx",
         )
     except KeyError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 404
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route("/api/browser-extension/weight-dimensions-records/status", methods=["GET"])
+@browser_extension_login_required
+@browser_extension_permission_required("order_analysis.view")
+def api_browser_extension_weight_dimensions_status():
+    user = getattr(g, "browser_extension_user", None) or {}
+    data = weight_dimensions_records.latest_task_status(_weight_dimensions_task_owner(user))
+    if data is None:
+        data = {
+            "status": "idle", "message": "请先在泽顺控制台上传订单文件并完成查询",
+            "records": [], "execute_status": "idle",
+        }
+    response = jsonify({"status": "success", "data": data})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/api/browser-extension/weight-dimensions-records/execute", methods=["POST"])
+@browser_extension_login_required
+@browser_extension_permission_required("order_analysis.execute")
+def api_browser_extension_weight_dimensions_execute():
+    user = getattr(g, "browser_extension_user", None) or {}
+    try:
+        data = weight_dimensions_records.start_latest_execute(
+            _weight_dimensions_task_owner(user),
+            erp_browser_factory=ai_weight_price_service.weight_dimensions_browser,
+        )
+        return jsonify({"status": "success", "data": data}), 202
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("泽顺插件启动重量尺寸更新失败")
+        return jsonify({"status": "error", "message": f"启动重量尺寸更新失败：{exc}"}), 500
+
+
+def _scoped_salesperson_query_params(values, user=None):
+    requested = []
+    for parameter in ("salespeople", "salesperson"):
+        for value in values.getlist(parameter):
+            name = str(value or "").strip()
+            if name and name.casefold() not in {"all", "*", "全部业务员", "所有业务员"} and name not in requested:
+                requested.append(name)
+
+    allowed_token_ids = _authorized_token_ids_for_user(user)
+    if allowed_token_ids is None:
+        if not requested:
+            return {}
+        scoped = requested
+    else:
+        token_data = _filter_mercado_tokens_for_user(
+            bit_db_api.list_mercado_store_tokens() or {}, user
+        )
+        allowed_salespeople = {
+            str(setting.get("salesperson") or "").strip()
+            for token in token_data.get("rows") or ()
+            for setting in token.get("site_settings") or ()
+            if str(setting.get("salesperson") or "").strip()
+        }
+        if workbench_user_own_store_only(user):
+            allowed_salespeople = {workbench_user_salesperson(user)}
+        invalid = set(requested) - allowed_salespeople
+        if invalid:
+            raise ValueError("所选业务员不属于当前企业")
+        scoped = requested or sorted(allowed_salespeople, key=str.casefold)
+
+    if not scoped:
+        # Empty SQL lists would otherwise mean no filter; use a value that cannot
+        # match a configured salesperson so scoped users receive no rows.
+        return {"salesperson": "__workbench_no_authorized_salesperson__"}
+    if len(scoped) == 1:
+        return {"salesperson": scoped[0]}
+    return {"salespeople": scoped}
 
 
 def _high_after_sale_query_params(values):
@@ -7382,9 +7949,7 @@ def _high_after_sale_query_params(values):
         "date_from": str(values.get("date_from") or "").strip(),
         "date_to": str(values.get("date_to") or "").strip(),
         "limit": max(1, min(limit, 500)),
-        **({"salesperson": _scoped_salesperson(values.get("salesperson"))}
-           if has_request_context() and _scoped_salesperson(values.get("salesperson"))
-           else {}),
+        **(_scoped_salesperson_query_params(values) if has_request_context() else {}),
     }
 
 
@@ -7415,9 +7980,7 @@ def _high_profit_query_params(values):
         "date_from": str(values.get("date_from") or "").strip(),
         "date_to": str(values.get("date_to") or "").strip(),
         "limit": max(1, min(limit, 500)),
-        **({"salesperson": _scoped_salesperson(values.get("salesperson"))}
-           if has_request_context() and _scoped_salesperson(values.get("salesperson"))
-           else {}),
+        **(_scoped_salesperson_query_params(values) if has_request_context() else {}),
     }
 
 
@@ -7481,7 +8044,27 @@ def _order_list_query_params(args):
 @login_required
 def api_orders():
     try:
-        data = db_list_orders(**_order_list_query_params(request.args))
+        params = _order_list_query_params(request.args)
+        allowed_store_ids = _authorized_token_ids_for_user()
+        if allowed_store_ids is not None:
+            requested_store_ids = params.get("store_ids") or []
+            scoped_store_ids = (
+                [value for value in requested_store_ids if value in allowed_store_ids]
+                if requested_store_ids
+                else sorted(allowed_store_ids)
+            )
+            if requested_store_ids and not scoped_store_ids or not scoped_store_ids:
+                data = {
+                    "rows": [], "total": 0,
+                    "page": int(params.get("page") or 1),
+                    "page_size": int(params.get("page_size") or 200),
+                    "pages": 0,
+                }
+                response = jsonify({"status": "success", "data": data})
+                response.headers["Cache-Control"] = "no-store"
+                return response
+            params["store_ids"] = scoped_store_ids
+        data = db_list_orders(**params)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
@@ -7574,7 +8157,9 @@ def api_order_split():
 @login_required
 def api_order_sync_options():
     try:
-        data = bit_db_api.list_mercado_store_tokens() or {}
+        data = _filter_mercado_tokens_for_user(
+            bit_db_api.list_mercado_store_tokens() or {}
+        )
         return jsonify({"status": "success", "data": data})
     except Exception as exc:
         logging.exception("读取订单同步店铺失败")
@@ -7860,6 +8445,147 @@ def api_inventory_stocks():
         return jsonify({"status": "error", "message": f"库存列表加载失败：{exc}"}), 502
 
 
+def _inventory_authorized_token_scope():
+    allowed = _authorized_token_ids_for_user()
+    return sorted(allowed) if allowed is not None else None
+
+
+def _inventory_check_token_scope(token_id):
+    allowed = _inventory_authorized_token_scope()
+    try:
+        normalized_id = int(token_id or 0)
+    except (TypeError, ValueError):
+        normalized_id = 0
+    if allowed is not None and normalized_id not in allowed:
+        return jsonify({"status": "error", "message": "当前账号不能操作该店铺的 SKU 映射"}), 403
+    return None
+
+
+def _inventory_find_scoped_mapping(mapping_id):
+    allowed = _inventory_authorized_token_scope()
+    if allowed is None:
+        return None
+    data = bit_db_api.list_inventory_sku_mappings(token_ids=allowed)
+    return next(
+        (row for row in data.get("rows") or [] if int(row.get("id") or 0) == int(mapping_id)),
+        False,
+    )
+
+
+@app.route('/api/inventory/skus', methods=['GET', 'POST'])
+@login_required
+def api_inventory_skus():
+    try:
+        if request.method == "GET":
+            include_inactive = str(request.args.get("include_inactive") or "1").lower() not in (
+                "0", "false", "no", "off",
+            )
+            result = bit_db_api.list_inventory_skus(include_inactive=include_inactive)
+        else:
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict):
+                return jsonify({"status": "error", "message": "SKU 内容必须是对象"}), 422
+            result = bit_db_api.create_inventory_sku(payload)
+        return jsonify({"status": "success", "data": result})
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("内部 SKU 加载或保存失败")
+        return jsonify({"status": "error", "message": f"内部 SKU 操作失败：{exc}"}), 502
+
+
+@app.route('/api/inventory/skus/<int:sku_id>', methods=['PATCH'])
+@login_required
+def api_update_inventory_sku(sku_id):
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"status": "error", "message": "SKU 内容必须是对象"}), 422
+    try:
+        result = bit_db_api.update_inventory_sku(sku_id, payload)
+        return jsonify({"status": "success", "data": result})
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("更新内部 SKU 失败")
+        return jsonify({"status": "error", "message": f"更新内部 SKU 失败：{exc}"}), 502
+
+
+@app.route('/api/inventory/sku-mappings', methods=['GET', 'POST'])
+@login_required
+def api_inventory_sku_mappings():
+    try:
+        if request.method == "GET":
+            token_ids = _inventory_authorized_token_scope()
+            mappings = bit_db_api.list_inventory_sku_mappings(token_ids=token_ids)
+            stores = bit_db_api.list_inventory_sku_store_sites(token_ids=token_ids)
+            return jsonify({"status": "success", "data": {**mappings, "store_sites": stores.get("rows", [])}})
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"status": "error", "message": "映射内容必须是对象"}), 422
+        denied = _inventory_check_token_scope(payload.get("token_id"))
+        if denied:
+            return denied
+        result = bit_db_api.create_inventory_sku_mapping(payload)
+        return jsonify({"status": "success", "data": result}), 201
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("SKU 映射加载或保存失败")
+        return jsonify({"status": "error", "message": f"SKU 映射操作失败：{exc}"}), 502
+
+
+@app.route('/api/inventory/sku-mappings/<int:mapping_id>', methods=['PATCH', 'DELETE'])
+@login_required
+def api_update_inventory_sku_mapping(mapping_id):
+    try:
+        scoped_mapping = _inventory_find_scoped_mapping(mapping_id)
+        if scoped_mapping is False:
+            return jsonify({"status": "error", "message": "当前账号不能操作该店铺的 SKU 映射"}), 403
+        if request.method == "DELETE":
+            result = bit_db_api.delete_inventory_sku_mapping(mapping_id)
+        else:
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict):
+                return jsonify({"status": "error", "message": "映射内容必须是对象"}), 422
+            if scoped_mapping:
+                payload.setdefault("token_id", scoped_mapping.get("token_id"))
+            denied = _inventory_check_token_scope(payload.get("token_id"))
+            if denied:
+                return denied
+            result = bit_db_api.update_inventory_sku_mapping(mapping_id, payload)
+        return jsonify({"status": "success", "data": result})
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("更新 SKU 映射失败")
+        return jsonify({"status": "error", "message": f"更新 SKU 映射失败：{exc}"}), 502
+
+
+@app.route('/api/inventory/reconciliation', methods=['GET'])
+@login_required
+def api_inventory_reconciliation():
+    try:
+        result = bit_db_api.list_inventory_reconciliation(
+            token_ids=_inventory_authorized_token_scope()
+        )
+        response = jsonify({"status": "success", "data": result})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("平台库存差异检查失败")
+        return jsonify({"status": "error", "message": f"平台库存差异检查失败：{exc}"}), 502
+
+
 @app.route('/api/inventory/shelves', methods=['GET', 'POST'])
 @login_required
 def api_inventory_shelves():
@@ -7969,7 +8695,10 @@ def api_start_order_sync():
     if not isinstance(token_ids, list):
         return jsonify({"status": "error", "message": "token_ids 必须是数组"}), 422
     try:
+        authorized_token_ids = _authorized_token_ids_for_user()
         token_ids = _scoped_token_ids(token_ids)
+        if authorized_token_ids is not None and not token_ids:
+            raise ValueError("当前企业没有可同步的店铺")
         result = bit_db_api.start_order_sync(
             start_date=str(data.get("start_date") or "").strip(),
             end_date=str(data.get("end_date") or "").strip(),
@@ -8033,6 +8762,7 @@ def api_store_links():
             mercado_category=str(
                 request.args.get("mercado_category") or ""
             ).strip(),
+            include_categories=str(request.args.get("include_categories") or "1") != "0",
             sales_sort=str(request.args.get("sales_sort") or "desc").strip(),
             sort_by=str(request.args.get("sort_by") or "sold_quantity").strip(),
             sort_order=str(request.args.get("sort_order") or "").strip(),
@@ -8049,6 +8779,54 @@ def api_store_links():
     response = jsonify({"status": "success", "data": data})
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@app.route('/api/store-analysis', methods=['GET'])
+@login_required
+def api_store_analysis():
+    try:
+        start_date = str(request.args.get("start_date") or "").strip()
+        end_date = str(request.args.get("end_date") or "").strip()
+        metric = str(request.args.get("metric") or "orders").strip()
+        salesperson = str(request.args.get("salesperson") or "").strip()
+        group_name = str(request.args.get("group_name") or "").strip()
+        token_text = str(request.args.get("token_id") or "").strip()
+        token_id = int(token_text) if token_text else None
+        if workbench_user_own_store_only():
+            salesperson = workbench_user_salesperson()
+        data = db_list_store_analysis(
+            start_date, end_date, metric=metric, salesperson=salesperson,
+            group_name=group_name, token_id=token_id,
+            allowed_token_ids=_authorized_token_ids_for_user(),
+        )
+    except (ValueError, TypeError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except PermissionError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except Exception:
+        logging.exception("店铺分析加载失败")
+        return jsonify({"status": "error", "message": "店铺分析加载失败"}), 502
+    response = jsonify({"status": "success", "data": data})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/store-links/category-paths', methods=['POST'])
+@login_required
+def api_store_link_category_paths():
+    from erp.mercadolibre_category_tree import category_paths_for_ids
+
+    category_ids = (request.get_json(silent=True) or {}).get("category_ids")
+    if not isinstance(category_ids, list) or len(category_ids) > 20000:
+        return jsonify({"status": "error", "message": "分类列表无效"}), 400
+    try:
+        paths = category_paths_for_ids(category_ids)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("美客多分类路径加载失败")
+        return jsonify({"status": "error", "message": f"分类路径加载失败：{exc}"}), 502
+    return jsonify({"status": "success", "data": paths})
 
 
 def _store_link_video_response(link_id, *, internal=False):
@@ -8657,7 +9435,10 @@ def api_start_store_link_sync():
     if not isinstance(token_ids, list):
         return jsonify({"status": "error", "message": "token_ids 必须是数组"}), 422
     try:
+        authorized_token_ids = _authorized_token_ids_for_user()
         token_ids = _scoped_token_ids(token_ids)
+        if authorized_token_ids is not None and not token_ids:
+            raise ValueError("当前企业没有可同步的店铺")
         result = bit_db_api.start_store_link_sync(token_ids)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -8689,14 +9470,11 @@ def api_store_link_sync_status():
 @login_required
 def api_prohibited_listings():
     try:
-        token_ids = [
-            int(value) for value in request.args.getlist("token_id")
-            if str(value or "").isdigit() and int(value) > 0
-        ]
+        token_ids = _scoped_query_token_ids(request.args, parameter="token_id")
         data = bit_db_api.list_mercado_prohibited_listings(
             search=str(request.args.get("search") or "").strip(),
-            token_id=token_ids[0] if len(token_ids) == 1 else None,
-            token_ids=token_ids if len(token_ids) > 1 else None,
+            token_id=token_ids[0] if token_ids is not None and len(token_ids) == 1 else None,
+            token_ids=token_ids if token_ids is not None and len(token_ids) != 1 else None,
             site_id=str(request.args.get("site_id") or "").strip(),
             salesperson=_scoped_salesperson(request.args.get("salesperson")),
             group_name=str(request.args.get("group_name") or "").strip(),
@@ -8834,14 +9612,11 @@ def api_export_prohibited_listings():
     """Export all prohibited-listings rows matching the current filters."""
 
     try:
-        token_ids = [
-            int(value) for value in request.args.getlist("token_id")
-            if str(value or "").isdigit() and int(value) > 0
-        ]
+        token_ids = _scoped_query_token_ids(request.args, parameter="token_id")
         filters = {
             "search": str(request.args.get("search") or "").strip(),
-            "token_id": token_ids[0] if len(token_ids) == 1 else None,
-            "token_ids": token_ids if len(token_ids) > 1 else None,
+            "token_id": token_ids[0] if token_ids is not None and len(token_ids) == 1 else None,
+            "token_ids": token_ids if token_ids is not None and len(token_ids) != 1 else None,
             "site_id": str(request.args.get("site_id") or "").strip(),
             "salesperson": _scoped_salesperson(request.args.get("salesperson")),
             "group_name": str(request.args.get("group_name") or "").strip(),
@@ -8866,8 +9641,14 @@ def api_start_prohibited_listing_sync():
     if not isinstance(token_ids, list):
         return jsonify({"status": "error", "message": "token_ids 必须是数组"}), 422
     try:
+        authorized_token_ids = _authorized_token_ids_for_user()
         salesperson = _scoped_salesperson(data.get("salesperson"))
-        if not sync_all and not token_ids and salesperson:
+        if sync_all:
+            if authorized_token_ids is not None:
+                if not authorized_token_ids:
+                    raise ValueError("当前企业没有可同步的店铺")
+                token_ids = sorted(authorized_token_ids)
+        elif not token_ids and salesperson:
             token_rows = (bit_db_api.list_mercado_store_tokens() or {}).get("rows") or []
             token_ids = [
                 int(row["id"])
@@ -8879,6 +9660,10 @@ def api_start_prohibited_listing_sync():
             ]
             if not token_ids:
                 raise ValueError(f"业务员“{salesperson}”暂无已授权店铺")
+        if not sync_all:
+            token_ids = _scoped_token_ids(token_ids)
+            if authorized_token_ids is not None and not token_ids:
+                raise ValueError("当前企业没有可同步的店铺")
         result = bit_db_api.start_prohibited_listing_sync(token_ids)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -8911,6 +9696,15 @@ def api_prohibited_listing_sync_status():
 def api_start_daily_task():
     data = request.get_json(silent=True) or {}
     if (
+        TASK_WORKER_INPUT_KEYS.intersection(data)
+        and not workbench_user_can_change_task_workers()
+    ):
+        return jsonify({
+            "status": "error",
+            "message": "只有超级管理员可以修改任务并发进程数",
+            "required_role": "super_admin",
+        }), 403
+    if (
         str(data.get("appeal_copy_mode") or "").strip()
         == bit_daily_task.APPEAL_COPY_MODE_AI
         and not str(data.get("deepseek_api_key") or "").strip()
@@ -8923,6 +9717,8 @@ def api_start_daily_task():
         params = build_daily_task_params(data)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
+    if params["execution_target"] == "server" and (get_current_workbench_user() or {}).get("role_key") != "super_admin":
+        return jsonify({"status": "error", "message": "仅超级管理员可以在服务器执行申诉任务，请选择本机 Agent"}), 403
 
     if data.get("execution_target") == "agent":
         if params["execution_target"] != "agent":
@@ -9219,17 +10015,31 @@ def api_stop_daily_task():
 def api_daily_task_options():
     salespeople = []
     groups = []
+    current_user = get_current_workbench_user() or {}
+    selected_organization = workbench_selected_organization(current_user)
+    organization_key = selected_organization or str(
+        current_user.get("organization_key") or "wuhan-zeshun"
+    )
+    restrict_to_organization = bool(
+        current_user.get("access_version") == 1
+        and (not current_user.get("is_platform_admin") or selected_organization)
+    )
     try:
         users = _workbench_backend("list_workbench_users") or []
         salespeople.extend(
             str(user.get("display_name") or user.get("username") or "").strip()
             for user in users
             if user.get("is_active") is not False
+            and (
+                not restrict_to_organization
+                or str(user.get("organization_key") or "wuhan-zeshun") == organization_key
+            )
         )
     except Exception:
         logging.exception("读取任务模块业务员列表失败，回退到店铺授权配置")
     try:
         token_data = bit_db_api.list_mercado_store_tokens() or {}
+        token_data = _filter_mercado_tokens_for_user(token_data)
         for token in token_data.get("rows") or ():
             for setting in token.get("site_settings") or ():
                 salespeople.append(str(setting.get("salesperson") or "").strip())
@@ -9703,9 +10513,17 @@ def api_execution_agents():
     )
     login_status_error = ""
     try:
+        anomaly_data = filter_shop_status_anomalies(
+            db_get_window_anomalies(active_only=True, limit=1000)
+        )
+        anomaly_data = enrich_window_anomaly_salespersons(anomaly_data)
+        anomaly_data = _filter_store_rows_for_user(
+            anomaly_data,
+            store_keys=("window_name", "shop_name", "店铺名", "store_name"),
+        )
         agents, unassigned_logout_shops = enrich_agents_with_logout_status(
             agents,
-            db_get_window_anomalies(active_only=True, limit=1000),
+            anomaly_data,
         )
     except Exception as exc:
         logging.warning("读取各 Agent 店铺退出登录情况失败：%s", exc)
@@ -10094,8 +10912,28 @@ def enqueue_local_agent_ai_weight_price(action, data):
     allowed_actions = {
         "login/open", "login/confirm", "login/supplier", "categories/refresh",
         "start", "continue", "stop", "terminate", "skip-current", "retry",
-        "manual-execute", "probe",
+        "manual-execute", "probe", "weight-dimensions-update",
     }
+
+
+def _inventory_token_ids_param(args):
+    values = args.getlist("token_ids") if hasattr(args, "getlist") else []
+    if not values:
+        return None
+    normalized = []
+    for value in values:
+        for part in str(value or "").split(","):
+            part = part.strip()
+            if part:
+                try:
+                    token_id = int(part)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("店铺编号无效") from exc
+                if token_id < 0:
+                    raise ValueError("店铺编号无效")
+                normalized.append(token_id)
+    normalized = list(dict.fromkeys(normalized))
+    return [] if normalized == [0] else normalized
     if action not in allowed_actions:
         return jsonify({"status": "error", "message": "AI核重核价 Agent 操作无效"}), 400
 
@@ -11393,8 +12231,8 @@ def _run_mercado_collection_task(
 
     def on_item(row):
         nonlocal last_task_status_write
-        # Persist collection results immediately. Fixed-table freight is
-        # already available here; category commission continues concurrently.
+        # Persist collection results immediately. When the current official
+        # rate card matches, freight and fixed-commission net are ready here.
         row = {
             **row,
             "profitability_updated_at": None,
@@ -11405,10 +12243,12 @@ def _run_mercado_collection_task(
             "_replace_profitability_snapshot": True,
         }
         if immediate_shipping_rate_rows:
-            from erp.mercadolibre_profitability import estimate_rate_card_shipping
+            from erp.mercadolibre_profitability import (
+                estimate_collection_profitability_from_rate_card,
+            )
 
             row.update(
-                estimate_rate_card_shipping(
+                estimate_collection_profitability_from_rate_card(
                     row,
                     rate_rows=immediate_shipping_rate_rows,
                 )
@@ -11420,6 +12260,9 @@ def _run_mercado_collection_task(
             has_actual_weight
             and row.get("shipping_fee_usd") is not None
             and "actual_weight_only" in str(row.get("shipping_weight_rule") or "")
+        )
+        fixed_profitability_matched = bool(
+            fixed_shipping_matched and row.get("net_proceeds_usd") is not None
         )
         buffer_collection_row(row)
         with counters_lock:
@@ -11441,7 +12284,9 @@ def _run_mercado_collection_task(
                 counters["completed" if effective_status == "ok" else "failed"] += 1
             item_statuses[item_id] = effective_status
             shipping_message = (
-                "固定运费已按实际重量匹配"
+                "当前运费与净收益已按官方表即时计算"
+                if fixed_profitability_matched
+                else "官方运费已匹配，净收益待汇率补算"
                 if fixed_shipping_matched
                 else "缺少实际重量，暂不计算运费"
                 if not has_actual_weight
@@ -11452,7 +12297,7 @@ def _run_mercado_collection_task(
             message = (
                 f"已完成 {counters['processed']}/{counters['candidate']}，"
                 f"实重可用 {counters['completed']}，待补充 {counters['failed']}；"
-                f"{shipping_message}，分类佣金正在并行计算"
+                f"{shipping_message}"
             )
             _mercado_collection_state_update(
                 processed_count=counters["processed"],
@@ -12323,6 +13168,7 @@ def _run_mercado_product_publish(
 def _run_mercado_product_publish_targets(
     product_rows, targets, quantity, worker_count, batch_id, created_by,
     moved_to_collection_count=0, skipped_other_account_count=0,
+    net_proceeds_ratio=100,
 ):
     from erp.mercadolibre_batch_publish import publish_product_batch
 
@@ -12363,6 +13209,9 @@ def _run_mercado_product_publish_targets(
         site_name = str(target.get("site_name") or site_id)
         store_name = str(target.get("store_name") or token_id)
         discount_rate = float(target.get("discount_rate") or 0)
+        target_net_proceeds_ratio = float(
+            target.get("net_proceeds_ratio", net_proceeds_ratio) or 100
+        )
         current_rows = [dict(row) for row in (target.get("product_rows") or rows)]
         current_quantity = int(target.get("quantity") or quantity)
         try:
@@ -12434,6 +13283,7 @@ def _run_mercado_product_publish_targets(
                     quantity=current_quantity,
                     workers=int(worker_count),
                     discount_rate=discount_rate,
+                    net_proceeds_ratio=target_net_proceeds_ratio,
                     update_state=db_update_mercado_product_publish_state,
                     on_progress=on_progress,
                     batch_id=target_batch_id,
@@ -12500,6 +13350,7 @@ def _run_mercado_product_publish_targets(
                 "site_id": site_id,
                 "site_name": site_name,
                 "discount_rate": discount_rate,
+                "net_proceeds_ratio": target_net_proceeds_ratio,
             })
         _mercado_publish_state_update(
             processed_count=processed,
@@ -12624,6 +13475,15 @@ def api_publish_mercado_products():
         site_name = marketplace_site_name(site_id)
         raw_quantity = data.get("quantity")
         raw_worker_count = data.get("worker_count")
+        raw_net_proceeds_ratio = data.get("net_proceeds_ratio")
+        try:
+            net_proceeds_ratio = Decimal(
+                "100" if raw_net_proceeds_ratio in (None, "") else str(raw_net_proceeds_ratio)
+            )
+        except (TypeError, ValueError, ArithmeticError) as exc:
+            raise ValueError("AI 原创净收益比例必须是数字") from exc
+        if not net_proceeds_ratio.is_finite() or net_proceeds_ratio <= 0 or net_proceeds_ratio > 10000:
+            raise ValueError("AI 原创净收益比例必须大于 0 且不超过 10000%")
         quantity = int(500 if raw_quantity in (None, "") else raw_quantity)
         worker_count = int(16 if raw_worker_count in (None, "") else raw_worker_count)
         if quantity < 1 or quantity > 9999:
@@ -12694,6 +13554,7 @@ def api_publish_mercado_products():
                     "completed_target_count": 0,
                     "skipped_target_count": 0,
                     "quantity": quantity,
+                    "net_proceeds_ratio": float(net_proceeds_ratio),
                     "worker_count": 0,
                     "requested_count": 0,
                     "processed_count": 0,
@@ -12715,7 +13576,11 @@ def api_publish_mercado_products():
                 state = dict(_mercado_publish_state)
             return jsonify({"status": "success", "data": state})
         validate_publishable_products(rows)
-        token_rows = list((bit_db_api.list_mercado_store_tokens() or {}).get("rows") or [])
+        token_rows = list(
+            _filter_mercado_tokens_for_user(
+                bit_db_api.list_mercado_store_tokens() or {}
+            ).get("rows") or []
+        )
         token_by_id = {
             int(row.get("id") or 0): row
             for row in token_rows
@@ -12868,7 +13733,11 @@ def api_publish_mercado_products():
                     if group_publish_mode == "polling"
                     else ""
                 )
-                + "各组合按对应站点折扣计算净收益"
+                + (
+                    f"AI 原创净收益按 {float(net_proceeds_ratio):g}% × 店铺站点比例计算；"
+                    if any(str(row.get("source_type") or "").strip().lower() == "ai_original" for row in rows)
+                    else "各组合按对应站点折扣计算净收益；"
+                )
                 + (
                     f"；已忽略并移回采集列表 {moved_to_collection_count} 件不可上架商品"
                     if moved_to_collection_count else ""
@@ -12891,6 +13760,7 @@ def api_publish_mercado_products():
             "completed_target_count": 0,
             "skipped_target_count": skipped_target_count,
             "quantity": quantity,
+            "net_proceeds_ratio": float(net_proceeds_ratio),
             "worker_count": min(worker_count, largest_target_batch),
             "discount_rate": discount_rate,
             "requested_count": requested_count,
@@ -12921,6 +13791,7 @@ def api_publish_mercado_products():
                 created_by,
                 moved_to_collection_count,
                 skipped_other_account_count,
+                float(net_proceeds_ratio),
             ),
             name=f"mercado-publish-{batch_id}",
             daemon=True,
@@ -13081,12 +13952,16 @@ def api_retry_mercado_product_publish_records():
             raise ValueError("部分记录对应的产品已从产品列表删除，无法重新上架")
         validate_publishable_products(products)
 
-        token_rows = list((bit_db_api.list_mercado_store_tokens() or {}).get("rows") or [])
+        token_rows = list(
+            _filter_mercado_tokens_for_user(
+                bit_db_api.list_mercado_store_tokens() or {}
+            ).get("rows") or []
+        )
         token_by_id = {
             int(row.get("id") or 0): dict(row)
             for row in token_rows if int(row.get("id") or 0) > 0
         }
-        grouped_targets: dict[tuple[int, str, int], dict] = {}
+        grouped_targets: dict[tuple[int, str, int, float], dict] = {}
         for record in retry_records:
             token_id = int(record.get("token_id") or 0)
             token = token_by_id.get(token_id)
@@ -13101,7 +13976,25 @@ def api_retry_mercado_product_publish_records():
             quantity = int(record.get("quantity") or 1)
             if quantity < 1 or quantity > 9999:
                 raise ValueError("历史记录中的上架库存无效")
-            group_key = (token_id, site_id, quantity)
+            product = product_by_id[int(record.get("product_item_id") or 0)]
+            net_proceeds_ratio = 100.0
+            if str(product.get("source_type") or "").strip().lower() == "ai_original":
+                saved_result = record.get("result_json") or {}
+                if not isinstance(saved_result, dict):
+                    try:
+                        saved_result = json.loads(str(saved_result))
+                    except (TypeError, ValueError):
+                        saved_result = {}
+                calculation = saved_result.get("net_proceeds_calculation") if isinstance(saved_result, dict) else {}
+                raw_ratio = calculation.get("ai_original_ratio_percent") if isinstance(calculation, dict) else None
+                try:
+                    parsed_ratio = Decimal("100" if raw_ratio in (None, "") else str(raw_ratio))
+                except (TypeError, ValueError, ArithmeticError) as exc:
+                    raise ValueError("历史记录中的 AI 原创净收益比例无效") from exc
+                if not parsed_ratio.is_finite() or parsed_ratio <= 0 or parsed_ratio > 10000:
+                    raise ValueError("历史记录中的 AI 原创净收益比例无效")
+                net_proceeds_ratio = float(parsed_ratio)
+            group_key = (token_id, site_id, quantity, net_proceeds_ratio)
             target = grouped_targets.setdefault(group_key, {
                 "token_id": token_id,
                 "store_name": str(
@@ -13112,9 +14005,9 @@ def api_retry_mercado_product_publish_records():
                 "site_name": marketplace_site_name(site_id),
                 "discount_rate": float(site_discount_rate(token, site_id)),
                 "quantity": quantity,
+                "net_proceeds_ratio": net_proceeds_ratio,
                 "product_rows": [],
             })
-            product = product_by_id[int(record.get("product_item_id") or 0)]
             target["product_rows"].append(product)
 
         targets = list(grouped_targets.values())
@@ -13166,6 +14059,11 @@ def api_retry_mercado_product_publish_records():
             "completed_target_count": 0,
             "skipped_target_count": 0,
             "quantity": quantities[0] if len(quantities) == 1 else 0,
+            "net_proceeds_ratio": (
+                targets[0]["net_proceeds_ratio"]
+                if len({target["net_proceeds_ratio"] for target in targets}) == 1
+                else None
+            ),
             "worker_count": min(worker_count, requested_count),
             "discount_rate": None,
             "requested_count": requested_count,
@@ -13687,6 +14585,10 @@ def api_db_official_infraction_dashboard():
             scope=request.args.get("scope", ""),
             search=request.args.get("search", ""),
             detail_token_id=request.args.get("detail_token_id", 0),
+            token_ids=(
+                [int(value) for value in request.args.getlist("token_ids") if str(value).isdigit()]
+                if "token_ids" in request.args else None
+            ),
             page=request.args.get("page", 1),
             page_size=request.args.get("page_size", 100),
             rows_only=request.args.get("rows_only", ""),
@@ -14092,7 +14994,7 @@ def api_db_exchange_mercado_token():
             data.get("display_name", ""),
             data.get("code", ""),
             data.get("application_id"),
-            _validate_organization_key(data.get("organization_key") or "default"),
+            _validate_organization_key(data.get("organization_key") or "wuhan-zeshun"),
         ]
         if data.get("application_id") in (None, ""):
             args[2] = None
@@ -14259,6 +15161,81 @@ def api_db_insert_zying_products():
     rows = data.get("rows") or []
     count = db_insert_zying_product_info(rows)
     return jsonify({"status": "success", "data": {"count": count}})
+
+
+@app.route('/api/db/weight-dimensions-records', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_weight_dimensions_records():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    if request.method == 'GET':
+        return jsonify({"status": "success", "data": db_list_weight_dimensions_records()})
+    data = request.get_json(silent=True) or {}
+    rows = data.get("rows") or []
+    if not isinstance(rows, list):
+        return jsonify({"status": "error", "message": "rows 必须是数组"}), 400
+    return jsonify({"status": "success", "data": db_save_weight_dimensions_records(rows)})
+
+
+@app.route('/api/db/weight-dimensions-changes', methods=['GET'])
+@internal_api_required
+def api_db_weight_dimensions_changes():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    filters = {
+        "date_from": str(request.args.get("date_from") or "").strip(),
+        "date_to": str(request.args.get("date_to") or "").strip(),
+        "salespeople": request.args.getlist("salespeople") or request.args.getlist("salesperson"),
+        "source": str(request.args.get("source") or "").strip(),
+        "category": str(request.args.get("category") or "").strip(),
+        "region": str(request.args.get("region") or "").strip(),
+        "freight_min": str(request.args.get("freight_min") or "").strip(),
+        "freight_max": str(request.args.get("freight_max") or "").strip(),
+        "store": str(request.args.get("store") or "").strip(),
+        "store_ids": request.args.getlist("store_ids") or request.args.getlist("store_id"),
+        "limit": str(request.args.get("limit") or "50000").strip(),
+    }
+    try:
+        return jsonify({
+            "status": "success",
+            "data": db_list_weight_dimensions_changed_orders(filters),
+        })
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/weight-dimensions-records/existing', methods=['POST'])
+@internal_api_required
+def api_db_existing_weight_dimensions_record_order_numbers():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    order_numbers = data.get("order_numbers") or []
+    if not isinstance(order_numbers, list):
+        return jsonify({"status": "error", "message": "order_numbers 必须是数组"}), 400
+    return jsonify({
+        "status": "success",
+        "data": {"order_numbers": db_get_weight_dimensions_record_order_numbers(order_numbers)},
+    })
+
+
+@app.route('/api/db/weight-dimensions-records/log', methods=['POST'])
+@internal_api_required
+def api_db_weight_dimensions_record_log():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    try:
+        result = db_append_weight_dimensions_record_log(
+            data.get("order_number"), data.get("log") or {}, data.get("record_updates") or {}
+        )
+        return jsonify({"status": "success", "data": result})
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
 
 
 @app.route('/api/db/zying-products/existing', methods=['POST'])
@@ -14449,6 +15426,125 @@ def api_db_inventory_stocks():
     return jsonify({"status": "success", "data": result})
 
 
+@app.route('/api/db/inventory/skus', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_inventory_skus():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "GET":
+            include_inactive = str(request.args.get("include_inactive") or "1").lower() not in (
+                "0", "false", "no", "off",
+            )
+            result = bit_inventory.list_inventory_skus(include_inactive=include_inactive)
+        else:
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict):
+                return jsonify({"status": "error", "message": "record must be an object"}), 422
+            result = bit_inventory.create_inventory_sku(payload)
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/inventory/skus/<int:sku_id>', methods=['PATCH'])
+@internal_api_required
+def api_db_update_inventory_sku(sku_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"status": "error", "message": "record must be an object"}), 422
+    try:
+        result = bit_inventory.update_inventory_sku(sku_id, payload)
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/inventory/sku-mappings', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_inventory_sku_mappings():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "GET":
+            token_ids = _inventory_token_ids_param(request.args)
+            mappings = bit_inventory.list_inventory_sku_mappings(token_ids=token_ids)
+            stores = bit_inventory.list_inventory_sku_store_sites(token_ids=token_ids)
+            return jsonify({
+                "status": "success",
+                "data": {**mappings, "store_sites": stores.get("rows", [])},
+            })
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"status": "error", "message": "record must be an object"}), 422
+        result = bit_inventory.create_inventory_sku_mapping(payload)
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result}), 201
+
+
+@app.route('/api/db/inventory/sku-store-sites', methods=['GET'])
+@internal_api_required
+def api_db_inventory_sku_store_sites():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        result = bit_inventory.list_inventory_sku_store_sites(
+            token_ids=_inventory_token_ids_param(request.args)
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/inventory/sku-mappings/<int:mapping_id>', methods=['PATCH', 'DELETE'])
+@internal_api_required
+def api_db_update_inventory_sku_mapping(mapping_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "DELETE":
+            result = bit_inventory.delete_inventory_sku_mapping(mapping_id)
+        else:
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict):
+                return jsonify({"status": "error", "message": "record must be an object"}), 422
+            result = bit_inventory.update_inventory_sku_mapping(mapping_id, payload)
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/inventory/reconciliation', methods=['GET'])
+@internal_api_required
+def api_db_inventory_reconciliation():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        result = bit_inventory.list_inventory_reconciliation(
+            token_ids=_inventory_token_ids_param(request.args)
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result})
+
+
 @app.route('/api/db/ai-original-products', methods=['POST'])
 @internal_api_required
 def api_db_upsert_ai_original_product():
@@ -14480,6 +15576,29 @@ def api_db_update_ai_original_product(product_item_id):
         return jsonify({"status": "error", "message": str(exc)}), 400
     except KeyError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 404
+
+
+@app.route('/api/db/ai-original-products/bulk-dimensions', methods=['PATCH'])
+@internal_api_required
+def api_db_update_ai_original_product_items():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"status": "error", "message": "批量修改内容必须是对象"}), 422
+    try:
+        result = db_update_ai_original_product_items(
+            data.get("product_item_ids") or [], data.get("changes") or {}
+        )
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except Exception as exc:
+        logging.exception("批量修改 AI 原创产品尺寸失败")
+        return jsonify({"status": "error", "message": f"批量修改 AI 原创产品尺寸失败：{exc}"}), 500
 
 
 @app.route('/api/db/ai-original-products/<int:product_item_id>/listing', methods=['PATCH'])
@@ -14665,6 +15784,32 @@ def api_db_list_orders():
     return jsonify({"status": "success", "data": data})
 
 
+@app.route('/api/db/store-analysis', methods=['GET'])
+@internal_api_required
+def api_db_store_analysis():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        allowed_values = request.args.getlist("allowed_token_id")
+        allowed_token_ids = (
+            {int(value) for value in allowed_values}
+            if request.args.get("scope_limited") == "1" else None
+        )
+        data = db_list_store_analysis(
+            str(request.args.get("start_date") or ""),
+            str(request.args.get("end_date") or ""),
+            metric=str(request.args.get("metric") or "orders"),
+            salesperson=str(request.args.get("salesperson") or ""),
+            group_name=str(request.args.get("group_name") or ""),
+            token_id=request.args.get("token_id") or None,
+            allowed_token_ids=allowed_token_ids,
+        )
+    except (ValueError, TypeError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": data})
+
+
 @app.route('/api/db/orders/weight-quote', methods=['POST'])
 @internal_api_required
 def api_db_order_weight_quote():
@@ -14793,6 +15938,7 @@ def api_db_store_links():
             mercado_category=str(
                 request.args.get("mercado_category") or ""
             ).strip(),
+            include_categories=str(request.args.get("include_categories") or "1") != "0",
             sales_sort=str(request.args.get("sales_sort") or "desc").strip(),
             sort_by=str(request.args.get("sort_by") or "sold_quantity").strip(),
             sort_order=str(request.args.get("sort_order") or "").strip(),
@@ -14931,7 +16077,7 @@ def api_db_prohibited_listings():
         token_ids = [
             int(value) for value in request.args.getlist("token_ids")
             if str(value or "").isdigit() and int(value) > 0
-        ]
+        ] if "token_ids" in request.args else None
         token_text = str(request.args.get("token_id") or "").strip()
         data = list_prohibited_listings(
             search=str(request.args.get("search") or "").strip(),
@@ -15438,6 +16584,10 @@ def api_ai_appeal_records():
     try:
         limit = request.args.get("limit", 100)
         data = enrich_ai_appeal_records(db_get_ai_appeal_records(limit))
+        data = _filter_store_rows_for_user(
+            data,
+            store_keys=("shop_name", "store_name", "店铺名"),
+        )
         return jsonify({"status": "success", "data": data})
     except Exception as e:
         logging.error("AI appeal records query failed: %s", e)
@@ -15469,7 +16619,7 @@ def enrich_ai_appeal_records(appeal_data):
     try:
         tokens = (bit_db_api.list_mercado_store_tokens() or {}).get("rows") or []
     except Exception as exc:
-        logging.warning("读取 AI 申诉记录的店铺归属信息失败：%s", exc)
+        logging.warning("读取自动化申诉记录的店铺归属信息失败：%s", exc)
         tokens = []
 
     for raw_token in tokens:
@@ -15515,6 +16665,9 @@ def enrich_ai_appeal_records(appeal_data):
         "salespeople": sorted({row["salesperson"] for row in rows if row["salesperson"]}),
         "group_names": sorted({row["group_name"] for row in rows if row["group_name"]}),
         "executors": sorted({row["executor_label"] for row in rows if row["executor_label"]}),
+        "appeal_copy_modes": sorted({
+            str(row.get("appeal_copy_mode") or "未记录") for row in rows
+        }),
     }
     return data
 
@@ -15529,13 +16682,10 @@ def api_window_anomalies():
             db_get_window_anomalies(active_only, limit)
         )
         anomaly_data = enrich_window_anomaly_salespersons(anomaly_data)
-        if workbench_user_own_store_only():
-            owner = workbench_user_salesperson().casefold()
-            anomaly_data["rows"] = [
-                row for row in anomaly_data.get("rows") or []
-                if str(row.get("salesperson") or "").strip().casefold() == owner
-            ]
-            anomaly_data["total"] = len(anomaly_data["rows"])
+        anomaly_data = _filter_store_rows_for_user(
+            anomaly_data,
+            store_keys=("window_name", "shop_name", "店铺名", "store_name"),
+        )
         response = jsonify({
             "status": "success",
             "data": anomaly_data,
@@ -15887,6 +17037,25 @@ def api_db_workbench_roles():
         return jsonify({"status": "error", "message": str(exc)}), 500
 
 
+@app.route('/api/db/workbench/organizations', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_workbench_organizations():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "GET":
+            data = list_workbench_organizations_local()
+        else:
+            data = create_workbench_organization_local(request.get_json(silent=True) or {})
+        return jsonify({"status": "success", "data": data})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("工作台企业数据库接口失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
 @app.route('/api/db/workbench/roles/<role_key>', methods=['PUT', 'DELETE'])
 @internal_api_required
 def api_db_workbench_role_detail(role_key):
@@ -15972,6 +17141,56 @@ def api_access_catalog():
     )
 
 
+@app.route('/api/access/organizations', methods=['GET', 'POST'])
+@login_required
+def api_access_organizations():
+    user = get_current_workbench_user() or {}
+    if not user.get("is_platform_admin"):
+        return jsonify({"status": "error", "message": "仅超级管理员可以管理企业"}), 403
+    try:
+        if request.method == "POST":
+            organization_key = _workbench_backend(
+                "create_workbench_organization", request.get_json(silent=True) or {}
+            )
+            organizations = _workbench_backend("list_workbench_organizations") or []
+            data = next(
+                (row for row in organizations if row.get("organization_key") == organization_key),
+                {"organization_key": organization_key, "organization_name": organization_key},
+            )
+        else:
+            organizations = _workbench_backend("list_workbench_organizations") or []
+            by_key = {
+                str(row.get("organization_key") or ""): dict(row)
+                for row in organizations
+            }
+            for row in (_workbench_backend("list_workbench_users") or []):
+                key = str(row.get("organization_key") or "wuhan-zeshun")
+                by_key.setdefault(key, {
+                    "organization_key": key,
+                    "organization_name": "武汉泽顺" if key == "wuhan-zeshun" else key,
+                    "is_active": True,
+                })
+            for row in (bit_db_api.list_mercado_store_tokens() or {}).get("rows") or []:
+                key = str(row.get("organization_key") or "wuhan-zeshun")
+                if key == "default":
+                    key = "wuhan-zeshun"
+                by_key.setdefault(key, {
+                    "organization_key": key,
+                    "organization_name": "武汉泽顺" if key == "wuhan-zeshun" else key,
+                    "is_active": True,
+                })
+            data = sorted(
+                by_key.values(),
+                key=lambda row: (row.get("organization_key") != "wuhan-zeshun", row.get("organization_name") or ""),
+            )
+        return jsonify({"status": "success", "data": data})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("读取工作台企业失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
 @app.route('/api/access/roles', methods=['GET', 'POST'])
 @login_required
 def api_access_roles():
@@ -16016,11 +17235,29 @@ def api_access_role_detail(role_key):
 def api_access_users():
     try:
         if request.method == "GET":
-            data = _workbench_backend("list_workbench_users")
+            data = _workbench_backend("list_workbench_users") or []
+            current_user = get_current_workbench_user() or {}
+            selected_organization = workbench_selected_organization(current_user)
+            organization_key = (
+                selected_organization
+                or current_user.get("organization_key")
+                or "wuhan-zeshun"
+            )
+            if not current_user.get("is_platform_admin") or selected_organization:
+                data = [
+                    row for row in data
+                    if str(row.get("organization_key") or "wuhan-zeshun") == organization_key
+                ]
         else:
+            current_user = get_current_workbench_user() or {}
+            payload = request.get_json(silent=True) or {}
+            if not current_user.get("is_platform_admin"):
+                payload["organization_key"] = current_user.get("organization_key") or "wuhan-zeshun"
+                if payload.get("role_key") in {"super_admin", "enterprise_admin"}:
+                    return jsonify({"status": "error", "message": "不能授予企业管理员或超级管理员角色"}), 403
             data = _workbench_backend(
                 "create_workbench_user",
-                request.get_json(silent=True) or {},
+                payload,
             )
         return jsonify({"status": "success", "data": data})
     except ValueError as exc:
@@ -16038,6 +17275,22 @@ def api_access_user_detail(user_id):
     if int(current_user.get("id") or 0) == user_id and not data.get("is_active", True):
         return jsonify({"status": "error", "message": "不能停用当前登录账号"}), 400
     try:
+        target = next(
+            (
+                row for row in (_workbench_backend("list_workbench_users") or [])
+                if int(row.get("id") or 0) == user_id
+            ),
+            None,
+        )
+        if not target:
+            return jsonify({"status": "error", "message": "账号不存在"}), 404
+        if not current_user.get("is_platform_admin"):
+            current_organization = str(current_user.get("organization_key") or "wuhan-zeshun")
+            if str(target.get("organization_key") or "wuhan-zeshun") != current_organization:
+                return jsonify({"status": "error", "message": "不能管理其他企业的账号"}), 403
+            data["organization_key"] = current_organization
+            if data.get("role_key") in {"super_admin", "enterprise_admin"}:
+                return jsonify({"status": "error", "message": "不能授予企业管理员或超级管理员角色"}), 403
         _workbench_backend("update_workbench_user", user_id, data)
         # 当前账号资料或角色变化后立即刷新本会话。
         if int(current_user.get("id") or 0) == user_id:
@@ -16057,6 +17310,21 @@ def api_access_user_detail(user_id):
 @login_required
 def api_access_user_password(user_id):
     try:
+        current_user = get_current_workbench_user() or {}
+        if not current_user.get("is_platform_admin"):
+            target = next(
+                (
+                    row for row in (_workbench_backend("list_workbench_users") or [])
+                    if int(row.get("id") or 0) == user_id
+                ),
+                None,
+            )
+            if (
+                not target
+                or str(target.get("organization_key") or "wuhan-zeshun")
+                != str(current_user.get("organization_key") or "wuhan-zeshun")
+            ):
+                return jsonify({"status": "error", "message": "不能管理其他企业的账号"}), 403
         data = request.get_json(silent=True) or {}
         _workbench_backend(
             "reset_workbench_user_password",
@@ -16156,6 +17424,22 @@ def api_mercado_account_groups():
     try:
         if request.method == "GET":
             result = bit_db_api.list_mercado_account_groups()
+            scoped_token_ids = _authorized_token_ids_for_user()
+            if scoped_token_ids is not None:
+                rows = []
+                for group in result.get("rows") or []:
+                    scoped_group = dict(group)
+                    accounts = [
+                        dict(account)
+                        for account in group.get("accounts") or []
+                        if int(account.get("id") or 0) in scoped_token_ids
+                    ]
+                    if not accounts:
+                        continue
+                    scoped_group["accounts"] = accounts
+                    scoped_group["account_count"] = len(accounts)
+                    rows.append(scoped_group)
+                result = {**result, "rows": rows, "total": len(rows)}
             message = ""
         else:
             data = request.get_json(silent=True) or {}
@@ -16216,12 +17500,15 @@ def api_exchange_mercado_token():
     try:
         current_user = get_current_workbench_user() or {}
         organization_key = _validate_organization_key(
-            current_user.get("organization_key") or "default"
+            current_user.get("organization_key") or "wuhan-zeshun"
         )
         args = [data.get("display_name", ""), data.get("code", "")]
         if data.get("application_id") not in (None, ""):
             args.append(data.get("application_id"))
-        if organization_key != "default":
+        selected_organization = workbench_selected_organization(current_user)
+        if selected_organization:
+            organization_key = selected_organization
+        if organization_key != "wuhan-zeshun":
             args.append(organization_key)
         result = bit_db_api.exchange_mercado_store_token(*args)
         response_data = dict(result or {})
@@ -16333,6 +17620,62 @@ def _api_reputation_snapshot():
             "%Y-%m-%d %H:%M:%S"
         ),
     })
+    return data
+
+
+def _api_reputation_snapshot_for_user():
+    data = _api_reputation_snapshot()
+    authorized_token_ids = _authorized_token_ids_for_user()
+    if authorized_token_ids is None:
+        return data
+
+    token_rows = _filter_mercado_tokens_for_user(
+        bit_db_api.list_mercado_store_tokens() or {}
+    ).get("rows") or []
+    allowed_names = {
+        str(value or "").strip().casefold()
+        for token in token_rows
+        for value in (token.get("display_name"), token.get("nickname"))
+        if str(value or "").strip()
+    }
+    data = _filter_store_rows_for_user(
+        data,
+        store_keys=("store_name", "shop_name", "店铺名"),
+    )
+    data["failures"] = [
+        row for row in data.get("failures") or []
+        if str(row.get("store_name") or row.get("shop_name") or "").strip().casefold()
+        in allowed_names
+    ]
+    data["total_sites"] = len(data.get("rows") or [])
+    data["total_stores"] = len({
+        str(row.get("store_name") or row.get("shop_name") or "").strip().casefold()
+        for row in data.get("rows") or []
+        if str(row.get("store_name") or row.get("shop_name") or "").strip()
+    })
+    data["failed_stores"] = len({
+        str(row.get("store_name") or row.get("shop_name") or "").strip().casefold()
+        for row in data.get("failures") or []
+        if str(row.get("store_name") or row.get("shop_name") or "").strip()
+    })
+    data["completed_stores"] = min(
+        int(data.get("completed_stores") or 0),
+        int(data.get("total_stores") or 0),
+    )
+    data["success_stores"] = max(
+        0,
+        int(data.get("completed_stores") or 0) - int(data.get("failed_stores") or 0),
+    )
+    data["current_store"] = (
+        data.get("current_store")
+        if str(data.get("current_store") or "").strip().casefold() in allowed_names
+        else ""
+    )
+    data["logs"] = []
+    data["message"] = (
+        "企业范围内声誉更新正在进行"
+        if data.get("running") else "企业范围内声誉更新已结束"
+    )
     return data
 
 
@@ -16641,7 +17984,8 @@ def api_refresh_all_mercado_reputation():
         ):
             return jsonify({"status": "error", "message": "请至少选择一家店铺"}), 400
         selected_shops = list(dict.fromkeys(shop.strip() for shop in selected_shops))
-    if workbench_user_own_store_only():
+    authorized_token_ids = _authorized_token_ids_for_user()
+    if authorized_token_ids is not None:
         token_rows = _filter_mercado_tokens_for_user(
             bit_db_api.list_mercado_store_tokens() or {}
         ).get("rows") or []
@@ -16661,17 +18005,17 @@ def api_refresh_all_mercado_reputation():
         if not selected_shops:
             return jsonify({
                 "status": "error",
-                "message": "当前账号暂无本人名下店铺",
+                "message": "当前企业暂无可更新的店铺",
             }), 400
     if not _start_api_reputation_refresh(selected_shops=selected_shops):
         return jsonify({
             "status": "running",
-            "data": _api_reputation_snapshot(),
+            "data": _api_reputation_snapshot_for_user(),
             "message": "API 声誉全量更新任务正在运行",
         }), 409
     return jsonify({
         "status": "success",
-        "data": _api_reputation_snapshot(),
+        "data": _api_reputation_snapshot_for_user(),
         "message": "API 声誉所选店铺更新已启动" if selected_shops else "API 声誉全量更新已启动",
     })
 
@@ -16680,7 +18024,7 @@ def api_refresh_all_mercado_reputation():
 @login_required
 def api_mercado_reputation_status():
     _hydrate_api_reputation_from_database()
-    response = jsonify({"status": "success", "data": _api_reputation_snapshot()})
+    response = jsonify({"status": "success", "data": _api_reputation_snapshot_for_user()})
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -17285,6 +18629,36 @@ def api_update_mercado_token(token_id):
         return _mercado_token_error_response(exc)
 
 
+@app.route("/api/browser-extension/yandex/search", methods=["POST"])
+@browser_extension_login_required
+def api_browser_extension_yandex_search():
+    """Start the existing Yandex scraper for an authenticated plugin user."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"status": "error", "message": "采集参数必须是 JSON 对象"}), 400
+    keyword = str(data.get("keyword") or "").strip()
+    count = data.get("count")
+    if not keyword or len(keyword) > 200:
+        return jsonify({"status": "error", "message": "关键词须为 1–200 个字符"}), 400
+    if isinstance(count, bool) or not isinstance(count, int) or not 1 <= count <= 500:
+        return jsonify({"status": "error", "message": "采集数量须为 1–500 的整数"}), 400
+    running, message = ensure_yandex_console()
+    if not running:
+        return jsonify({"status": "error", "message": message}), 503
+    return _proxy_yandex_console_request("api/search")
+
+
+@app.route("/api/browser-extension/yandex/search/<int:run_id>", methods=["GET"])
+@browser_extension_login_required
+def api_browser_extension_yandex_search_status(run_id):
+    if run_id <= 0:
+        return jsonify({"status": "error", "message": "采集任务编号无效"}), 400
+    running, message = ensure_yandex_console()
+    if not running:
+        return jsonify({"status": "error", "message": message}), 503
+    return _proxy_yandex_console_request(f"api/search/{run_id}/status")
+
+
 @app.route("/api/yandex-console/status", methods=["GET"])
 @login_required
 def api_yandex_console_status():
@@ -17350,9 +18724,11 @@ def proxy_yandex_console(proxy_path):
 @app.route("/")
 @login_required
 def index():
+    user = get_current_workbench_user() or {}
     return render_template(
         'index.html',
-        current_user=session.get("workbench_user") or {},
+        current_user=user,
+        can_change_task_workers=workbench_user_can_change_task_workers(user),
         mercado_authorization=mercado_tokens.authorization_info(),
         runtime_role=RUNTIME_SETTINGS.role,
     )
@@ -18420,6 +19796,42 @@ _ai_original_task_state = {
 }
 
 
+def _resolve_ai_original_text_api_key(base_url):
+    url = str(base_url or "").strip().lower()
+    provider = (
+        "dashscope" if "aliyuncs.com" in url
+        else "openai" if "openai.com" in url
+        else "deepseek"
+    )
+    api_key = str(_account_api_key(provider) or "").strip()
+    if api_key:
+        return provider, api_key
+
+    # The model adapter also supports project-local environment/key files.
+    # Load those non-interactively here so a headless worker never reports a
+    # successful start and then fails when it reaches the first model call.
+    from AI_Agent import deepseek as deepseek_client
+
+    deepseek_client._load_local_env()
+    env_names = {
+        "deepseek": "DEEPSEEK_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "dashscope": "DASHSCOPE_API_KEY",
+    }
+    api_key = str(os.environ.get(env_names[provider]) or "").strip()
+    if not api_key:
+        api_key = str(os.environ.get("DEEPSEEK_API_KEY") or "").strip()
+    if not api_key and provider == "deepseek":
+        for key_path in (
+            Path(__file__).resolve().parents[1] / "deepseek_key.txt",
+            Path(__file__).resolve().parents[1] / "AI_Agent" / "deepseek_key.txt",
+        ):
+            api_key = deepseek_client._read_key_file(key_path)
+            if api_key:
+                break
+    return provider, api_key
+
+
 def _ai_original_task_snapshot():
     with _ai_original_task_lock:
         return {
@@ -18439,12 +19851,9 @@ def _run_ai_original_task(
     image_base_url="",
     category_token_id=None,
 ):
-    from erp.ai_original_products import prepare_ai_original_product
-    from erp.mercadolibre_batch_publish import DatabaseMercadoLibreClient
-
-    rows = [dict(row) for row in product_rows or []]
     results = []
     completed = failed = 0
+    rows = []
 
     def process(row):
         product_id = int(row.get("id") or 0)
@@ -18499,6 +19908,7 @@ def _run_ai_original_task(
                 "title_pt": saved.get("title_pt") or prepared["ai_original"]["title_pt"],
             }
         except Exception as exc:
+            logging.exception("AI 原创产品处理失败：product_id=%s source_item_id=%s", product_id, row.get("source_item_id"))
             ai_state.update(status="failed", error=str(exc)[:2000])
             snapshot["ai_original"] = ai_state
             try:
@@ -18516,6 +19926,10 @@ def _run_ai_original_task(
             }
 
     try:
+        from erp.ai_original_products import prepare_ai_original_product
+        from erp.mercadolibre_batch_publish import DatabaseMercadoLibreClient
+
+        rows = [dict(row) for row in product_rows or []]
         with ThreadPoolExecutor(max_workers=max(1, min(int(workers or 3), 6))) as pool:
             futures = {pool.submit(process, row): row for row in rows}
             for future in as_completed(futures):
@@ -18613,6 +20027,30 @@ def api_update_ai_original_product(product_item_id):
         return jsonify({"status": "error", "message": str(exc)}), 400
     except KeyError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 404
+
+
+@app.route("/api/ai-original-products/bulk-dimensions", methods=["PATCH"])
+@login_required
+def api_update_ai_original_product_items():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"status": "error", "message": "批量修改内容必须是对象"}), 422
+    if not isinstance(data.get("product_item_ids"), list):
+        return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
+    if not isinstance(data.get("changes"), dict):
+        return jsonify({"status": "error", "message": "changes 必须是对象"}), 422
+    try:
+        result = db_update_ai_original_product_items(
+            data["product_item_ids"], data["changes"]
+        )
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except Exception as exc:
+        logging.exception("批量修改 AI 原创产品尺寸失败")
+        return jsonify({"status": "error", "message": f"批量修改 AI 原创产品尺寸失败：{exc}"}), 500
 
 
 def _ai_original_category_client(requested_token_id=""):
@@ -18779,19 +20217,27 @@ def api_process_ai_original_products():
         image_api_key = str(data.get("image_api_key") or "").strip()
         image_model = str(data.get("image_model") or "").strip()[:128]
         image_base_url = str(data.get("image_base_url") or "").strip()[:2000]
+        if not image_model:
+            from importlib.util import find_spec
+
+            if find_spec("rembg") is None:
+                raise ValueError("当前服务缺少本地白底图依赖 rembg；请在服务使用的 Python 环境中安装 bit/requirements-server.txt 后重试")
         _, category_token_id = _ai_original_category_client(data.get("token_id"))
         workers = max(1, min(int(data.get("workers") or 3), 6))
         if not api_key:
-            provider = (
-                "dashscope" if "aliyuncs.com" in base_url
-                else "openai" if "openai.com" in base_url
-                else "deepseek"
-            )
-            api_key = _account_api_key(provider)
+            provider, api_key = _resolve_ai_original_text_api_key(base_url)
+            if not api_key:
+                raise ValueError(
+                    f"未找到 {provider} API Key。请先在“集成与凭证设置”中配置，"
+                    "或在项目环境变量中提供对应密钥，再启动 AI 原创任务。"
+                )
         if image_model and not image_api_key:
             image_api_key = _account_api_key("openai")
     except (TypeError, ValueError) as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("准备启动 AI 原创任务失败")
+        return jsonify({"status": "error", "message": f"启动 AI 原创任务失败：{exc}"}), 500
     with _ai_original_task_lock:
         if _ai_original_task_state.get("running"):
             return jsonify({"status": "error", "message": "已有 AI 原创任务正在运行"}), 409
@@ -18802,12 +20248,20 @@ def api_process_ai_original_products():
             "completed_count": 0, "failed_count": 0,
             "current_product_id": 0, "results": [],
         })
-    threading.Thread(
-        target=_run_ai_original_task,
-        args=(rows, api_key, model, base_url, workers, image_api_key, image_model, image_base_url, category_token_id),
-        name="ai-original-products",
-        daemon=True,
-    ).start()
+    try:
+        threading.Thread(
+            target=_run_ai_original_task,
+            args=(rows, api_key, model, base_url, workers, image_api_key, image_model, image_base_url, category_token_id),
+            name="ai-original-products",
+            daemon=True,
+        ).start()
+    except Exception as exc:
+        logging.exception("启动 AI 原创任务线程失败")
+        with _ai_original_task_lock:
+            _ai_original_task_state.update(
+                running=False, status="error", message=f"启动 AI 原创任务失败：{exc}"
+            )
+        return jsonify({"status": "error", "message": f"启动 AI 原创任务失败：{exc}"}), 500
     return jsonify({"status": "success", "data": _ai_original_task_snapshot()}), 202
 
 
@@ -19442,6 +20896,8 @@ def start_interface_background_services():
     # Local browser recovery is also needed in client mode and after a worker
     # was killed. It does not access the database or central schedulers.
     start_browser_cleanup()
+    if RUNTIME_SETTINGS.is_server and service_mode() != "web":
+        bit_db_api.initialize_mercado_action_center_tables()
     # 客户端只承载本机界面与浏览器自动化。所有会读取数据库、刷新 Token
     # 或维护中心数据的后台线程统一由服务端进程运行。
     if interface_background_services_disabled():
@@ -19452,6 +20908,7 @@ def start_interface_background_services():
         logging.info("%s：不启动数据库维护与中心调度线程", reason)
         return
 
+    ensure_notification_worker(enabled=True)
     start_interrupted_collection_recovery()
     start_store_link_scheduler_bootstrap()
     start_prohibited_listing_scheduler_bootstrap()

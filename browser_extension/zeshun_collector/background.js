@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS = {
 };
 const AUTH_KEY = "browserExtensionAuth";
 const QUEUE_KEY = "pendingProducts";
+const YANDEX_SEARCH_RUN_KEY = "yandexSearchRunId";
 const PURCHASE_TRACKING_SESSION_KEY = "purchaseTrackingSession";
 const RETRY_ALARM = "zeshun-collector-retry";
 const PURCHASE_TRACKING_RESUME_ALARM = "zeshun-purchase-tracking-resume";
@@ -352,6 +353,47 @@ async function apiRequest(path, options = {}, {requireAuth = true} = {}) {
     });
   }
   return payload.data === undefined ? payload : payload.data;
+}
+
+async function startYandexSearch(keyword, count) {
+  const normalizedKeyword = String(keyword || "").trim();
+  const requestedCount = Number(count);
+  if (!normalizedKeyword || normalizedKeyword.length > 200) throw new Error("关键词须为 1–200 个字符");
+  if (!Number.isInteger(requestedCount) || requestedCount < 1 || requestedCount > 500) {
+    throw new Error("采集数量须为 1–500 的整数");
+  }
+  const result = await apiRequest("/api/browser-extension/yandex/search", {
+    method: "POST", body: JSON.stringify({keyword: normalizedKeyword, count: requestedCount})
+  });
+  const runId = Number(result.run_id);
+  if (!Number.isSafeInteger(runId) || runId <= 0) throw new Error("Yandex 控制台没有返回采集任务编号");
+  await storageSet("local", {[YANDEX_SEARCH_RUN_KEY]: runId});
+  return {ok: true, run_id: runId, status: result.status || "queued"};
+}
+
+async function getYandexSearchStatus() {
+  const stored = await storageGet("local", [YANDEX_SEARCH_RUN_KEY]);
+  const runId = Number(stored[YANDEX_SEARCH_RUN_KEY] || 0);
+  if (!Number.isSafeInteger(runId) || runId <= 0) return {ok: true, run: null};
+  try {
+    const result = await apiRequest(`/api/browser-extension/yandex/search/${runId}`, {method: "GET"});
+    return {ok: true, run: result.run || null};
+  } catch (error) {
+    if (error.status !== 404) throw error;
+    await storageRemove("local", [YANDEX_SEARCH_RUN_KEY]);
+    return {ok: true, run: null, message: "历史采集任务已不存在，可以重新启动"};
+  }
+}
+
+async function openYandexSearchResults() {
+  const stored = await storageGet("local", [YANDEX_SEARCH_RUN_KEY]);
+  const runId = Number(stored[YANDEX_SEARCH_RUN_KEY] || 0);
+  if (!Number.isSafeInteger(runId) || runId <= 0) throw new Error("还没有可查看的 Yandex 采集任务");
+  const config = await settings();
+  const url = new URL(`${normalizeConsoleUrl(config.consoleUrl)}/yandex-console/`);
+  url.searchParams.set("run_id", String(runId));
+  await chrome.tabs.create({url: url.href, active: true});
+  return {ok: true, run_id: runId};
 }
 
 function attentionEventType(message, source = "") {
@@ -738,6 +780,16 @@ async function aiWeightPriceStatus() {
   return data;
 }
 
+async function weightDimensionsRecordsStatus() {
+  return apiRequest("/api/browser-extension/weight-dimensions-records/status", {method: "GET"});
+}
+
+async function startWeightDimensionsRecordsUpdate() {
+  return apiRequest("/api/browser-extension/weight-dimensions-records/execute", {
+    method: "POST", body: "{}"
+  });
+}
+
 async function handleAiWeightPricePauseNotification(data = {}) {
   const circuit = data?.circuit;
   const reason = circuit?.reason || (data?.run?.outcome === "blocked" ? data?.run?.message : "");
@@ -890,7 +942,7 @@ async function aiWeightPriceSendContentMessage(tabId, message, files, timeoutMs 
   }
 }
 
-const AI_WEIGHT_PRICE_CONTENT_VERSION = "1.8.19";
+const AI_WEIGHT_PRICE_CONTENT_VERSION = "1.8.22";
 
 async function aiWeightPriceFrameIds(tabId) {
   const ids = [0];
@@ -1419,6 +1471,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "GET_PRODUCT_BATCH_STATUS": return {ok: true, state: await getProductBatchStatus()};
       case "START_PRODUCT_BATCH": return {ok: true, state: await startProductBatch(message)};
       case "STOP_PRODUCT_BATCH": return {ok: true, state: await stopProductBatch()};
+      case "START_YANDEX_SEARCH": return startYandexSearch(message.keyword, message.count);
+      case "GET_YANDEX_SEARCH_STATUS": return getYandexSearchStatus();
+      case "OPEN_YANDEX_SEARCH_RESULTS": return openYandexSearchResults();
       case "LOGIN": return login(String(message.username || "").trim(), String(message.password || ""));
       case "LOGOUT": return logout();
       case "READ_1688_PAGE_DATA": {
@@ -1456,6 +1511,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "GET_ZYING_INFRINGEMENT_STATUS": return {ok: true, ...(await zyingInfringementStatus())};
       case "STOP_ZYING_INFRINGEMENT": return {ok: true, ...(await stopZyingInfringement())};
       case "GET_AI_WEIGHT_PRICE_STATUS": return {ok: true, ...(await aiWeightPriceStatus())};
+      case "GET_WEIGHT_DIMENSIONS_STATUS": return {ok: true, ...(await weightDimensionsRecordsStatus())};
+      case "START_WEIGHT_DIMENSIONS_UPDATE": return {
+        ok: true, ...(await startWeightDimensionsRecordsUpdate())
+      };
       case "REPORT_ATTENTION": return {
         ok: true,
         ...(await notifyAttention(message.message, {source: message.source || "泽顺插件"}))
@@ -1538,7 +1597,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       case "OPEN_CONSOLE": {
         const config = await settings();
-        await chrome.tabs.create({url: normalizeConsoleUrl(config.consoleUrl), active: true});
+        const url = new URL(normalizeConsoleUrl(config.consoleUrl));
+        if (/^[a-z0-9-]{1,80}$/i.test(String(message.tab || ""))) url.searchParams.set("tab", message.tab);
+        await chrome.tabs.create({url: url.href, active: true});
         return {ok: true};
       }
       default: return {ok: false, error: "未知操作"};

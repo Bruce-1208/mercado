@@ -929,6 +929,96 @@ def test_listing_plugin_waits_for_api_response_before_leaving_page(monkeypatch):
     assert "weight_g" not in result["MLM9000000002"]
 
 
+def test_listing_plugin_without_session_returns_immediately():
+    async def run():
+        reader = type("Reader", (), {"session": None})()
+        return await asyncio.wait_for(
+            playwright_collector._wait_for_listing_plugin_items(
+                reader, ["MLM1"], timeout=60, stop_event=None
+            ), timeout=0.2,
+        )
+
+    assert asyncio.run(run()) == {}
+
+
+def test_listing_plugin_stalled_card_does_not_hold_completed_cards(monkeypatch):
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_LISTING_PLUGIN_IDLE_SECONDS", "1")
+
+    class Reader:
+        session = object()
+
+        async def read_listing_items(self):
+            return {
+                "MLM1": {"api_loaded": True, "weight_g": 350},
+                "MLM2": {"api_loaded": False},
+            }
+
+    async def run():
+        return await asyncio.wait_for(
+            playwright_collector._wait_for_listing_plugin_items(
+                Reader(), ["MLM1", "MLM2"], timeout=60, stop_event=None
+            ), timeout=3,
+        )
+
+    result = asyncio.run(run())
+    assert result["MLM1"]["weight_g"] == 350
+    assert result["MLM2"]["api_loaded"] is False
+
+
+def test_listing_plugin_timeout_bounds_a_stuck_cdp_read():
+    class Reader:
+        session = object()
+
+        async def read_listing_items(self):
+            await asyncio.sleep(60)
+
+    async def run():
+        return await asyncio.wait_for(
+            playwright_collector._wait_for_listing_plugin_items(
+                Reader(), ["MLM1"], timeout=1, stop_event=None
+            ), timeout=3,
+        )
+
+    assert asyncio.run(run()) == {}
+
+
+def test_listing_plugin_keeps_startup_budget_for_late_response(monkeypatch):
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_LISTING_PLUGIN_IDLE_SECONDS", "1")
+
+    class Reader:
+        session = object()
+        calls = 0
+
+        async def read_listing_items(self):
+            self.calls += 1
+            if self.calls < 6:
+                return {"MLM1": {"api_loaded": False, "weight_g": 350}}
+            return {"MLM1": {"api_loaded": True, "weight_g": 350, "size_cm": [20, 10, 5]}}
+
+    result = asyncio.run(playwright_collector._wait_for_listing_plugin_items(
+        Reader(), ["MLM1"], timeout=3, stop_event=None
+    ))
+    assert result["MLM1"]["size_cm"] == [20, 10, 5]
+
+
+def test_detail_verification_redirect_skips_product_title_wait(monkeypatch):
+    page = type("Page", (), {"url": "https://www.mercadolibre.com.mx/gz/account-verification"})()
+
+    async def goto(*args, **kwargs):
+        pass
+
+    async def unexpected_wait(*args, **kwargs):
+        pytest.fail("Verification pages must not wait ten seconds for a product title")
+
+    monkeypatch.setattr(playwright_collector, "_goto", goto)
+    monkeypatch.setattr(playwright_collector, "_wait_for_product_detail", unexpected_wait)
+    with pytest.raises(RuntimeError, match="买家验证"):
+        asyncio.run(playwright_collector._collect_detail(
+            object(), {"source_url": "https://example.test/MLM1"},
+            plugin_timeout=4, stop_event=None, page=page, react_reader=object(),
+        ))
+
+
 def test_listing_plugin_reader_reads_zying_frontend_cache():
     class Session:
         async def send(self, method, params):

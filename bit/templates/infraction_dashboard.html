@@ -507,8 +507,9 @@
             .back-link { padding: 7px 9px; }
         }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20260925-1">
 </head>
-<body{% if embedded or ip_rights_mode %} class="{% if embedded %}embedded{% endif %}{% if embedded and ip_rights_mode %} {% endif %}{% if ip_rights_mode %}ip-rights{% endif %}"{% endif %}>
+<body class="zs-standalone{% if embedded %} embedded{% endif %}{% if ip_rights_mode %} ip-rights{% endif %}">
     <header class="topbar">
         <div class="topbar-inner">
             <div class="brand">
@@ -675,6 +676,28 @@
 
     <script src="{{ url_for('static', filename='background-exports.js') }}"></script>
     <script>
+        const isPlatformAdmin = {{ 'true' if current_user.get('is_platform_admin') else 'false' }};
+        const selectedEnterpriseKey = isPlatformAdmin
+            ? (new URLSearchParams(window.location.search).get("organization_key") || "")
+            : "";
+        const nativeDashboardFetch = window.fetch.bind(window);
+        window.fetch = function(input, init) {
+            if (!selectedEnterpriseKey) return nativeDashboardFetch(input, init);
+            const source = input instanceof Request ? input.url : String(input);
+            let target;
+            try {
+                target = new URL(source, window.location.href);
+            } catch (_) {
+                return nativeDashboardFetch(input, init);
+            }
+            if (target.origin !== window.location.origin || !target.pathname.startsWith("/api/")) {
+                return nativeDashboardFetch(input, init);
+            }
+            target.searchParams.set("organization_key", selectedEnterpriseKey);
+            return input instanceof Request
+                ? nativeDashboardFetch(new Request(target.toString(), new Request(input, init)))
+                : nativeDashboardFetch(target.toString(), init);
+        };
         const ipRightsMode = {{ 'true' if ip_rights_mode else 'false' }};
         const state = {
             page: 1,

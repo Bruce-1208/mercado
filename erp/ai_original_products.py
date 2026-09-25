@@ -15,6 +15,7 @@ import re
 import base64
 import threading
 import unicodedata
+from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from io import BytesIO
 from functools import partial
 from pathlib import Path
@@ -164,6 +165,52 @@ def _normalize_1688_variations(value: Any) -> list[dict[str, Any]]:
                              if isinstance(entry, Mapping)]
         rows.append(item)
     return rows
+
+
+def suggested_ai_original_net_proceeds(variations: Any) -> tuple[float | None, int | None]:
+    """Suggest USD net proceeds from the highest captured 1688 SKU price.
+
+    The business rule is ``ceil(max_sku_price_cny / 6.7)``. Prices are read
+    from each SKU's price fields only; the product-level 1688 price is often a
+    starting price for the cheapest SKU and must not stand in for the highest
+    variant value.
+    """
+    if not isinstance(variations, list):
+        return None, None
+
+    prices: list[Decimal] = []
+    price_keys = (
+        "price", "price_text", "current_price", "currentPrice", "price_num",
+        "priceNum", "discount_price", "discountPrice", "sale_price",
+    )
+    pattern = re.compile(r"(?<![\w])(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
+    for variation in variations[:200]:
+        if not isinstance(variation, Mapping):
+            continue
+        for key in price_keys:
+            raw = variation.get(key)
+            if raw in (None, ""):
+                continue
+            text = str(raw).strip()
+            found = False
+            for match in pattern.findall(text):
+                try:
+                    price = Decimal(match.replace(",", ""))
+                except (InvalidOperation, TypeError, ValueError):
+                    continue
+                if price.is_finite() and price > 0:
+                    prices.append(price)
+                    found = True
+            # Prefer a numeric field over its display-string duplicate.
+            if key in {"price", "current_price", "currentPrice", "price_num", "priceNum", "discount_price", "discountPrice", "sale_price"} and found:
+                break
+    if not prices:
+        return None, None
+    highest = max(prices)
+    suggested_net = int(
+        (highest / Decimal("6.7")).to_integral_value(rounding=ROUND_CEILING)
+    )
+    return float(highest), suggested_net
 
 
 def normalize_1688_product(product: Mapping[str, Any]) -> dict[str, Any]:
@@ -997,4 +1044,5 @@ __all__ = [
     "generate_marketplace_copy",
     "normalize_1688_product",
     "prepare_ai_original_product",
+    "suggested_ai_original_net_proceeds",
 ]

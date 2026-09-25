@@ -1,0 +1,159 @@
+/* Shared visual language for the service desk and its standalone workspaces. */
+:root {
+    --zs-brand: #2563eb;
+    --zs-brand-hover: #1d4ed8;
+    --zs-brand-tint: #eff6ff;
+    --zs-canvas: #f3f5f9;
+    --zs-card: #fff;
+    --zs-card-soft: #f8fafc;
+    --zs-heading: #172033;
+    --zs-copy: #344054;
+    --zs-secondary: #64748b;
+    --zs-stroke: #dce3ec;
+    --zs-shadow: 0 2px 10px rgba(15, 23, 42, .045);
+    --zs-corner: 12px;
+    --zs-control-corner: 8px;
+}
+
+body.zs-console,
+body.zs-standalone {
+    background: var(--zs-canvas);
+    color: var(--zs-heading);
+    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+
+/* Main desk: retain each module's layout while aligning its surfaces and hierarchy. */
+body.zs-console {
+    --bg: var(--zs-canvas);
+    --panel: var(--zs-card);
+    --text: var(--zs-heading);
+    --muted: var(--zs-secondary);
+    --border: var(--zs-stroke);
+    --primary: var(--zs-brand);
+    --primary-dark: var(--zs-brand-hover);
+    --zs-accent: var(--zs-brand);
+    --zs-accent-hover: var(--zs-brand-hover);
+    --zs-accent-soft: var(--zs-brand-tint);
+    --zs-line: var(--zs-stroke);
+    --zs-surface: var(--zs-card-soft);
+}
+body.zs-console :is(.panel, .ai-video-panel, .ai-video-job, .collector-install-card, .collector-capability-card, .ai-original-editor-section, .inventory-metrics article) {
+    border-color: var(--zs-stroke);
+    border-radius: var(--zs-corner);
+    background-color: var(--zs-card);
+    box-shadow: var(--zs-shadow);
+}
+body.zs-console :is(.tab-heading h2, .ai-video-panel h3, .ai-original-editor-head h3, .inventory-shelf-head strong) {
+    color: var(--zs-heading);
+    font-weight: 650;
+}
+body.zs-console :is(.ai-video-panel > p, .ai-original-editor-head p, .inventory-message, .collector-capability-card p) {
+    color: var(--zs-secondary);
+}
+body.zs-console :is(.ai-original-editor-dialog, .ai-video-dialog, .inventory-dialog) {
+    border: 1px solid var(--zs-stroke);
+    border-radius: 14px;
+}
+body.zs-console :is(.ai-original-editor-body, .ai-video-dialog-body) { background: var(--zs-card-soft); }
+body.zs-console :is(.ai-original-editor-section-head b, .inventory-dialog-section-head b, .collector-install-steps b) {
+    background: var(--zs-brand);
+    color: #fff;
+}
+body.zs-console :is(.ai-video-dropzone, .wdr-dropzone) {
+    border-color: #a8bbd2;
+    border-radius: 10px;
+    background: var(--zs-card-soft);
+}
+body.zs-console :is(.ai-video-dropzone.dragging, .wdr-dropzone.wdr-drag-active) {
+    border-color: var(--zs-brand);
+    background: var(--zs-brand-tint);
+}
+body.zs-console :is(.inventory-switch input:checked + i, .inventory-capacity-track i) { background: var(--zs-brand); }
+body.zs-console :is(.inventory-match-result:hover, .inventory-selected-product) {
+    border-color: #bfdbfe;
+    background: var(--zs-brand-tint);
+}
+body.zs-console :is(.inventory-match-result em, .inventory-selected-product span) { color: var(--zs-brand-hover); }
+body.zs-console :is(.p1688-summary-card, .ai-original-metric, .inventory-metrics article) { border-color: var(--zs-stroke); }
+body.zs-console .products-1688-page {
+    --p1688-ink: var(--zs-heading);
+    --p1688-muted: var(--zs-secondary);
+    --p1688-line: var(--zs-stroke);
+    --p1688-blue: var(--zs-brand);
+}
+body.zs-console :is(.products-1688-heading .ai-original-eyebrow, .ai-original-eyebrow) { color: var(--zs-brand); }
+body.zs-console :is(.collector-plugin-brand, .collector-capability-icon, .ai-video-drop-icon) {
+    background: var(--zs-brand-tint);
+    color: var(--zs-brand-hover);
+    box-shadow: none;
+}
+body.zs-console :is(.collector-plugin-panel, .collector-plugin-hero) { background: var(--zs-card); }
+
+/* Standalone pages use the same tokens for navigation, forms, tables and cards. */
+body.zs-standalone {
+    --ink: var(--zs-heading);
+    --muted: var(--zs-secondary);
+    --line: var(--zs-stroke);
+    --blue: var(--zs-brand);
+    --blue2: var(--zs-brand-hover);
+    --indigo: var(--zs-brand);
+    --indigo-soft: var(--zs-brand-tint);
+    --canvas: var(--zs-canvas);
+    --surface-soft: var(--zs-card-soft);
+    --bg: var(--zs-canvas);
+}
+body.zs-standalone :is(.topbar, .bar) {
+    background: #fff;
+    color: var(--zs-heading);
+    border-bottom: 1px solid var(--zs-stroke);
+    box-shadow: none;
+}
+body.zs-standalone :is(.brand-meta, .brand small, .bar .brand small, .topbar-actions) { color: var(--zs-secondary); }
+body.zs-standalone :is(.brand-mark, .mark) {
+    background: var(--zs-brand-tint);
+    color: var(--zs-brand-hover);
+    box-shadow: none;
+    border-color: #bfdbfe;
+}
+body.zs-standalone :is(.back-link, .back, .bar a) {
+    color: var(--zs-copy);
+    border: 1px solid var(--zs-stroke);
+    background: #fff;
+    border-radius: var(--zs-control-corner);
+}
+body.zs-standalone :is(.panel, .stat, .metric, .group-card, .provider) {
+    border-color: var(--zs-stroke);
+    border-radius: var(--zs-corner);
+    background-color: var(--zs-card);
+    box-shadow: var(--zs-shadow);
+}
+body.zs-standalone :is(.filter-panel, .filters, .provider, .table-wrap) { border-color: var(--zs-stroke); }
+body.zs-standalone :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea, .store-trigger) {
+    border-color: var(--zs-stroke);
+    border-radius: var(--zs-control-corner);
+    background-color: #fff;
+    color: var(--zs-heading);
+}
+body.zs-standalone :is(input, select, textarea, .store-trigger):focus-visible {
+    outline: none;
+    border-color: var(--zs-brand);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .13);
+}
+body.zs-standalone :is(button.primary, .primary) { background: var(--zs-brand); color: #fff; border-color: var(--zs-brand); }
+body.zs-standalone :is(button.primary, .primary):hover:not(:disabled) { background: var(--zs-brand-hover); }
+body.zs-standalone :is(th, thead th) { background: var(--zs-card-soft); color: #526176; border-color: var(--zs-stroke); }
+body.zs-standalone :is(td, tbody td) { border-color: #edf1f5; }
+body.zs-standalone :is(.tabs .active, .tab.active) { color: var(--zs-brand); border-color: var(--zs-brand); }
+body.zs-standalone :is(a:not(.back):not(.back-link), .link-btn) { color: var(--zs-brand-hover); }
+body.zs-standalone :is(dialog, .ai-original-editor-dialog) { border: 1px solid var(--zs-stroke); border-radius: 14px; }
+body.zs-standalone :is(button, a):focus-visible { outline: 2px solid var(--zs-brand); outline-offset: 3px; }
+body.zs-standalone :is(input[type="checkbox"], input[type="radio"]) { accent-color: var(--zs-brand); }
+
+/* Credential settings has a hero of its own; keep it quiet and readable. */
+body.zs-standalone .hero { color: var(--zs-heading); background: #fff; border: 1px solid var(--zs-stroke); box-shadow: var(--zs-shadow); }
+body.zs-standalone .hero p, body.zs-standalone .account { color: var(--zs-secondary); }
+body.zs-standalone .account b { color: var(--zs-heading); }
+
+@media (prefers-reduced-motion: reduce) {
+    body.zs-console *, body.zs-standalone * { scroll-behavior: auto !important; }
+}

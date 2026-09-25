@@ -15,6 +15,7 @@ from yandex.app.database import database
 from yandex.app.order_finance import enrich_order_finances
 from yandex.app.schemas import ProductRecord
 from yandex.app.scraper import CaptchaRequired, ScraperError, scraper
+from yandex.app.settlement import parse_payment_report_archive
 from yandex.app.secret_store import secret_fingerprint
 from yandex.app.yandex_api import StockTarget, StoreContext, YandexApiError, YandexSellerClient
 
@@ -199,6 +200,7 @@ class TaskService:
         *,
         mode: str,
         now: datetime | None = None,
+        force: bool = False,
     ) -> dict[str, Any]:
         lock = self._order_sync_locks.setdefault(int(store_id), asyncio.Lock())
         async with lock:
@@ -219,7 +221,9 @@ class TaskService:
                     old_elapsed is None
                     or old_elapsed >= settings.order_status_sync_seconds
                 )
-                if database.count_cached_orders(store_id) == 0:
+                if force:
+                    mode = "full"
+                elif database.count_cached_orders(store_id) == 0:
                     mode = "full"
                 elif mode == "full":
                     mode = (
@@ -401,6 +405,7 @@ class TaskService:
         date_to: str | None = None,
         page_token: str = "",
         limit: int = 50,
+        force_sync: bool = False,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         token, store, stored = await self.resolve_store(store_id)
         _require_scope(
@@ -412,7 +417,9 @@ class TaskService:
         old_elapsed = self._elapsed_seconds(sync_state.get("old_orders_synced_at"), current)
         new_due = new_elapsed is None or new_elapsed >= settings.order_new_sync_seconds
         old_due = old_elapsed is None or old_elapsed >= settings.order_status_sync_seconds
-        if database.count_cached_orders(store_id) == 0 or (new_due and old_due):
+        if force_sync:
+            await self.sync_store_orders(store_id, mode="full", now=current, force=True)
+        elif database.count_cached_orders(store_id) == 0 or (new_due and old_due):
             await self.sync_store_orders(store_id, mode="full", now=current)
         elif new_due:
             await self.sync_store_orders(store_id, mode="insert", now=current)
@@ -445,6 +452,108 @@ class TaskService:
             "sync": database.get_order_sync_state(store_id),
         }
         return orders, stored
+
+    async def get_todos(self, store_ids: list[int] | None = None) -> dict[str, Any]:
+        stores = await asyncio.to_thread(authorization_store.list_stores)
+        requested = set(int(value) for value in (store_ids or []))
+        if requested:
+            stores = [item for item in stores if int(item["id"]) in requested]
+        semaphore = asyncio.Semaphore(4)
+
+        async def collect(stored: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
+            store_id = int(stored["id"])
+            alias = str(stored.get("alias") or stored.get("store_name") or store_id)
+            items: list[dict[str, Any]] = []
+            warnings: list[str] = []
+            async with semaphore:
+                try:
+                    await self.get_orders(store_id, statuses=["PENDING", "PROCESSING"], limit=1)
+                    for order in database.list_cached_order_todos(store_id):
+                        substatus = str(order.get("substatus") or "").upper()
+                        status_value = str(order.get("status") or "").upper()
+                        label = "已备货，待交付承运方" if substatus == "READY_TO_SHIP" else "待处理订单"
+                        items.append({
+                            "kind": "order", "title": label,
+                            "description": f"订单 #{order.get('orderId') or order.get('id') or '—'} · {status_value} / {substatus or '—'}",
+                            "record_id": str(order.get("orderId") or order.get("id") or ""),
+                            "store_id": store_id, "store_alias": alias, "view": "orders",
+                            "created_at": str(order.get("creationDate") or ""), "priority": 1 if substatus == "READY_TO_SHIP" else 2,
+                        })
+                except Exception as exc:
+                    warnings.append(f"{alias}：订单待办读取失败：{str(exc)[:180]}")
+
+                try:
+                    token, store, _ = await self.resolve_store(store_id)
+                    _require_scope(store, {"inventory-and-order-processing"}, "退货待办", read_only=True)
+                    returns = await YandexSellerClient(token).get_returns(
+                        store.campaign_id, statuses=["WAITING_FOR_DECISION", "PREMODERATION_DECISION_WAITING"], limit=100
+                    )
+                    for ret in returns.get("returns") or []:
+                        items.append({
+                            "kind": "return", "title": "待处理退货决定",
+                            "description": f"退货 #{ret.get('id')} · 订单 #{ret.get('orderId')} · {ret.get('returnType') or 'RETURN'}",
+                            "record_id": str(ret.get("id") or ""), "store_id": store_id,
+                            "store_alias": alias, "view": "returns",
+                            "created_at": str(ret.get("creationDate") or ""), "priority": 1,
+                        })
+                except Exception as exc:
+                    warnings.append(f"{alias}：退货待办读取失败：{str(exc)[:180]}")
+
+                client: YandexSellerClient | None = None
+                try:
+                    token, store, _ = await self.resolve_store(store_id)
+                    _require_scope(store, {"communication"}, "客户沟通待办", read_only=True)
+                    client = YandexSellerClient(token)
+                except Exception as exc:
+                    warnings.append(f"{alias}：客户沟通待办读取失败：{str(exc)[:180]}")
+
+                if client is not None:
+                    try:
+                        chats = await client.get_chats(store.business_id, statuses=["NEW", "WAITING_FOR_PARTNER"], limit=20)
+                        for chat in chats.get("chats") or []:
+                            context = chat.get("context") or {}
+                            items.append({
+                                "kind": "chat", "title": "待回复客户消息",
+                                "description": f"会话 #{chat.get('chatId')} · {context.get('type') or '客户咨询'}",
+                                "record_id": str(chat.get("chatId") or ""), "store_id": store_id,
+                                "store_alias": alias, "view": "chats",
+                                "created_at": str(chat.get("updatedAt") or chat.get("createdAt") or ""), "priority": 1,
+                            })
+                    except Exception as exc:
+                        warnings.append(f"{alias}：消息待办读取失败：{str(exc)[:180]}")
+
+                    try:
+                        feedbacks = await client.get_feedbacks(store.business_id, reaction_status="NEED_REACTION", limit=50)
+                        for feedback in feedbacks.get("feedbacks") or []:
+                            items.append({
+                                "kind": "feedback", "title": "待回复商品评价",
+                                "description": f"评价 #{feedback.get('id') or feedback.get('feedbackId')} · {feedback.get('author') or '买家'}",
+                                "record_id": str(feedback.get("id") or feedback.get("feedbackId") or ""),
+                                "store_id": store_id, "store_alias": alias, "view": "feedback",
+                                "created_at": str(feedback.get("createdAt") or ""), "priority": 2,
+                            })
+                    except Exception as exc:
+                        warnings.append(f"{alias}：评价待办读取失败：{str(exc)[:180]}")
+
+                    try:
+                        questions = await client.get_questions(store.business_id, need_answer=True, limit=50)
+                        for question in questions.get("questions") or []:
+                            items.append({
+                                "kind": "question", "title": "待回答商品问题",
+                                "description": f"问题 #{question.get('id') or question.get('questionId')} · {question.get('text') or '买家提问'}",
+                                "record_id": str(question.get("id") or question.get("questionId") or ""),
+                                "store_id": store_id, "store_alias": alias, "view": "feedback",
+                                "created_at": str(question.get("createdAt") or ""), "priority": 2,
+                            })
+                    except Exception as exc:
+                        warnings.append(f"{alias}：商品问答待办读取失败：{str(exc)[:180]}")
+            return items, warnings
+
+        collected = await asyncio.gather(*(collect(item) for item in stores))
+        items = [item for group, _ in collected for item in group]
+        warnings = [warning for _, group in collected for warning in group]
+        items.sort(key=lambda item: (item["priority"], item["created_at"] or ""))
+        return {"items": items[:1000], "warnings": warnings, "store_count": len(stores)}
 
     async def update_order(
         self, store_id: int, order_id: int, action: str
@@ -682,6 +791,137 @@ class TaskService:
             store, {"inventory-and-order-processing"}, "退货", read_only=True
         )
         result = await YandexSellerClient(token).get_returns(store.campaign_id, **filters)
+        return result, stored
+
+    async def get_return_decisions(
+        self, store_id: int, order_id: int, return_id: int
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"inventory-and-order-processing"}, "退货决定", read_only=True)
+        client = YandexSellerClient(token)
+        return_record = await client.get_return(store.campaign_id, order_id, return_id)
+        if int(return_record.get("orderId") or 0) != int(order_id):
+            raise YandexApiError("退货记录与订单编号不匹配")
+        refund_status = str(return_record.get("refundStatus") or "").upper()
+        if str(return_record.get("returnType") or "").upper() != "RETURN" or refund_status not in {
+            "WAITING_FOR_DECISION", "PREMODERATION_DECISION_WAITING"
+        }:
+            raise YandexApiError("这条退货当前不需要提交退款决定")
+        available = await client.get_return_available_decisions(
+            store.business_id, store.campaign_id, return_id
+        )
+        items = []
+        for item in return_record.get("items") or []:
+            item_decisions = item.get("decisions") or []
+            item_id = item.get("returnItemId") or item.get("id")
+            if not item_id:
+                item_id = next((value.get("returnItemId") for value in item_decisions if value.get("returnItemId")), None)
+            if item_id:
+                items.append({
+                    "return_item_id": int(item_id),
+                    "shop_sku": str(item.get("shopSku") or ""),
+                    "count": item.get("count"),
+                    "market_sku": item.get("marketSku"),
+                })
+        if not items:
+            raise YandexApiError("平台没有返回可提交决定的退货商品编号，请在卖家后台核对该退货")
+        return {"return": return_record, "items": items, "available_decisions": available}, stored
+
+    async def submit_return_decisions(
+        self,
+        store_id: int,
+        order_id: int,
+        return_id: int,
+        decisions: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"inventory-and-order-processing"}, "提交退货决定")
+        client = YandexSellerClient(token)
+        record = await client.get_return(store.campaign_id, order_id, return_id)
+        if int(record.get("orderId") or 0) != int(order_id):
+            raise YandexApiError("退货记录与订单编号不匹配")
+        if str(record.get("returnType") or "").upper() != "RETURN" or str(record.get("refundStatus") or "").upper() not in {
+            "WAITING_FOR_DECISION", "PREMODERATION_DECISION_WAITING"
+        }:
+            raise YandexApiError("该退货状态已变化，不能继续提交决定，请先刷新")
+        available = await client.get_return_available_decisions(
+            store.business_id, store.campaign_id, return_id
+        )
+        allowed = {str(item.get("decisionType")): item for item in available}
+        item_ids: set[int] = set()
+        for item in record.get("items") or []:
+            item_id = item.get("returnItemId") or item.get("id")
+            if not item_id:
+                item_id = next((value.get("returnItemId") for value in item.get("decisions") or [] if value.get("returnItemId")), None)
+            if item_id:
+                item_ids.add(int(item_id))
+        payload_items: list[dict[str, Any]] = []
+        for item in decisions:
+            item_id = int(item["return_item_id"])
+            decision_type = str(item["decision_type"])
+            choice = allowed.get(decision_type)
+            if item_id not in item_ids or choice is None:
+                raise YandexApiError("退货商品或决定已不在平台当前允许范围内，请刷新后重试")
+            payload_item: dict[str, Any] = {
+                "returnItemId": item_id,
+                "decisionType": decision_type,
+            }
+            reason = item.get("reason_type")
+            reasons = choice.get("decisionReasonTypes") or []
+            if decision_type == "DECLINE_REFUND":
+                if not reason or reason not in reasons:
+                    raise YandexApiError("拒绝原因不在 Yandex 当前允许范围内")
+                payload_item["decisionReasonType"] = reason
+            if item.get("comment"):
+                payload_item["comment"] = str(item["comment"]).strip()[:1000]
+            if decision_type == "PARTIAL_MONEY_REFUND":
+                bounds = choice.get("partialCompensationBounds") or {}
+                compensation = {
+                    "value": float(item["compensation_value"]),
+                    "currencyId": str(item.get("currency_id") or "RUR").upper(),
+                }
+                minimum = bounds.get("minAmount") or {}
+                maximum = bounds.get("maxAmount") or {}
+                if minimum.get("currencyId") and compensation["currencyId"] != minimum["currencyId"]:
+                    raise YandexApiError("补偿金额币种必须与平台允许的币种一致")
+                if minimum.get("value") is not None and compensation["value"] < float(minimum["value"]):
+                    raise YandexApiError("补偿金额低于平台允许的最小值")
+                if maximum.get("value") is not None and compensation["value"] > float(maximum["value"]):
+                    raise YandexApiError("补偿金额高于平台允许的最大值")
+                payload_item["compensation"] = compensation
+            payload_items.append(payload_item)
+        result = await client.submit_return_decisions(
+            store.campaign_id, order_id, return_id, payload_items
+        )
+        return result, stored
+
+    async def create_settlement_report(
+        self, store_id: int, date_from: str, date_to: str
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"finance-and-accounting"}, "結算对账", read_only=True)
+        result = await YandexSellerClient(token).generate_payment_report(
+            store.business_id, store.campaign_id, date_from, date_to
+        )
+        report_id = str(result.get("reportId") or "").strip()
+        if not report_id:
+            raise YandexApiError("Yandex 没有返回结算报表编号", details=result)
+        return {"report_id": report_id, "estimated_generation_time": result.get("estimatedGenerationTime")}, stored
+
+    async def get_settlement_report(
+        self, store_id: int, report_id: str
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"finance-and-accounting"}, "结算对账", read_only=True)
+        client = YandexSellerClient(token)
+        info = await client.get_report_info(report_id)
+        result: dict[str, Any] = {"report": info}
+        if str(info.get("status") or "").upper() == "DONE" and info.get("file"):
+            archive = await client.download_report_archive(str(info["file"]))
+            result["reconciliation"] = parse_payment_report_archive(
+                archive, database.cached_order_ids(store_id)
+            )
+            result["cache_note"] = "本地订单只缓存最近 30 天；未匹配订单可能是较早订单或报表中的非订单流水。"
         return result, stored
 
     async def get_chats(

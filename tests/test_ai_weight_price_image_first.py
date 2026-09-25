@@ -81,6 +81,31 @@ def make_service(tmp_path, monkeypatch):
     return service, browser, config
 
 
+@pytest.mark.parametrize("claim, expected, notice", [
+    ("30x20x10cm", "30x20x10", False),
+    ("60x20x10cm", "60x20x10", False),
+    ("61x20x10cm", "12x12x12", True),
+    ("尺寸未提供", "12x12x12", True),
+])
+def test_dimensions_only_write_when_complete_and_within_limit(tmp_path, monkeypatch, claim, expected, notice):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    service.store.add({'erp_goods_id': '1', 'title': '测试商品',
+                       'main_image_url': 'https://img.example/1.jpg'})
+    browser.records['1'] = {'weight_g': '430', 'net_income_usd': '9.5',
+                            'review_status': '待审核', 'dimensions_cm': '12x12x12'}
+    browser.read_offer = lambda _task, candidate: {**candidate, 'skus': [
+        {'id': 'one', 'label': claim, 'price': '22', 'raw_weight': '450g'}]}
+
+    service.process(service.store.get('1'), browser, ImageModel(), config)
+
+    task = service.store.get('1')
+    assert task['status'] == 'success'
+    assert task['erp_before']['dimensions_cm'] == '12x12x12'
+    assert task['erp_after']['dimensions_cm'] == expected
+    assert task['erp_after']['weight_g'] == '450'
+    assert bool(task['dimensions_notice']) is notice
+
+
 def test_non_pending_product_is_skipped_before_1688_or_ai(tmp_path, monkeypatch):
     service, browser, config = make_service(tmp_path, monkeypatch)
     service.store.add({'erp_goods_id': '1', 'title': '已审核商品',

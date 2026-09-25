@@ -65,6 +65,7 @@ class OperationsBrowserTests(unittest.TestCase):
             "/api/zeshun-stores": {"stores": []},
             "/api/exchange-rate": {"exchange_rate": {"rate": 0.08, "effective_date": "2026-09-06"}},
             "/api/orders": {"orders": [], "paging": {}},
+            "/api/todos": {"items": [{"kind": "return", "title": "待处理退货决定", "description": "退货 #31 · 订单 #101", "record_id": "31", "store_id": 1, "store_alias": "运营测试店", "view": "returns", "priority": 1}], "warnings": [], "store_count": 1},
             "/api/listings": {
                 "offers": [{
                     "offerId": "SKU-1", "status": "PUBLISHED", "available": True,
@@ -88,6 +89,10 @@ class OperationsBrowserTests(unittest.TestCase):
             "/api/returns": {
                 "returns": [{"id": 31, "orderId": 101, "returnType": "RETURN", "refundStatus": "PREMODERATION_DECISION_WAITING", "shipmentStatus": "READY_FOR_PICKUP", "creationDate": "2026-09-05T09:00:00Z", "updateDate": "2026-09-06T09:00:00Z", "amount": {"value": 199, "currencyId": "CNY"}, "items": [{"shopSku": "SKU-1", "count": 1}]}],
                 "paging": {},
+            },
+            "/api/returns/decisions": {
+                "items": [{"return_item_id": 501, "shop_sku": "SKU-1", "count": 1}],
+                "available_decisions": [{"decisionType": "REFUND_MONEY"}, {"decisionType": "DECLINE_REFUND", "decisionReasonTypes": ["MECHANICAL_DAMAGE"]}],
             },
             "/api/chats": {
                 "chats": [{"chatId": 91, "context": {"type": "RETURN", "returnId": 31, "orderId": 101, "customer": {"name": "售后买家"}}, "type": "CHAT", "status": "WAITING_FOR_PARTNER", "createdAt": "2026-09-05T09:00:00Z", "updatedAt": "2026-09-06T10:00:00Z"}],
@@ -120,6 +125,8 @@ class OperationsBrowserTests(unittest.TestCase):
             "/api/listings/dimensions": {"ok": True, "dimensionsScope": "business"},
             "/api/listings/visibility": {"ok": True, "paused": True, "visibilityScope": "campaign"},
             "/api/listings/delete": {"ok": True, "deleted": ["SKU-1"], "notDeletedOfferIds": []},
+            "/api/returns/decisions": {"ok": True},
+            "/api/settlements": {"report_id": "rpt-1"},
         }
 
         def route_request(route):
@@ -130,10 +137,17 @@ class OperationsBrowserTests(unittest.TestCase):
                 return route.abort()
             if parsed.path == "/":
                 return route.fulfill(content_type="text/html", body=self.html)
+            if parsed.path == "/api/settlements/rpt-1":
+                payload = {
+                    "report": {"status": "DONE"},
+                    "cache_note": "仅匹配本地缓存订单",
+                    "reconciliation": {"files": [{"name": "netting_report_payments.json", "row_count": 1, "transaction_sum": 25}], "stats": {"line_count": 1, "transaction_sum": 25, "order_count": 1, "cached_order_count": 1, "uncached_order_count": 0, "bank_order_count": 1, "bank_orders": [{"bank_order_id": "9", "date": "2026-09-01", "sum": 25}], "orders": [{"order_id": "101", "line_count": 1, "transaction_sum": 25, "sources": ["netting_report_payments.json"], "cached": True}]}}
+                }
+                return route.fulfill(content_type="application/json", body=json.dumps(payload))
             if parsed.path in self.assets:
                 content_type, body = self.assets[parsed.path]
                 return route.fulfill(content_type=content_type, body=body)
-            if parsed.path in write_responses:
+            if parsed.path in write_responses and request.method != "GET":
                 self.writes.append((parsed.path, json.loads(request.post_data or "{}")))
                 return route.fulfill(content_type="application/json", body=json.dumps(write_responses[parsed.path]))
             if parsed.path in static_responses:
@@ -217,6 +231,34 @@ class OperationsBrowserTests(unittest.TestCase):
             {payload["store_id"] for path, payload in self.reads if path == "/api/listings"},
             {1, 2},
         )
+
+    def test_todos_return_decisions_forced_order_sync_and_settlement_report(self):
+        self.open_console()
+
+        self.page.locator('[data-view-target="todo"]').click()
+        expect(self.page.locator("#todoList")).to_contain_text("待处理退货决定")
+        self.page.locator("[data-todo-open]").click()
+        expect(self.page.locator("#returnList")).to_contain_text("退货 #31")
+
+        self.page.locator('[data-view-target="returns"]').click()
+        self.page.locator("[data-return-decide]").click()
+        expect(self.page.locator("#returnDecisionDialog")).to_be_visible()
+        self.page.locator("#returnDecisionSubmit").click()
+        expect(self.page.locator("#returnDecisionDialog")).to_be_hidden()
+
+        self.page.locator('[data-view-target="orders"]').click()
+        self.page.locator("#orderForceSyncButton").click()
+        expect(self.page.locator("#orderForceSyncButton")).to_be_enabled()
+
+        self.page.locator('[data-view-target="settlement"]').click()
+        self.page.locator("#settlementForm button[type=submit]").click()
+        expect(self.page.locator("#settlementOrders")).to_contain_text("101")
+        expect(self.page.locator("#settlementMatchedOrders")).to_have_text("1 / 1")
+
+        writes = dict(self.writes)
+        self.assertEqual(writes["/api/returns/decisions"]["decisions"][0], {"return_item_id": 501, "decision_type": "REFUND_MONEY"})
+        self.assertTrue(any(path == "/api/orders" and payload.get("force_sync") for path, payload in self.reads))
+        self.assertEqual(writes["/api/settlements"], {"store_id": 1, "date_from": self.page.locator("#settlementFrom").input_value(), "date_to": self.page.locator("#settlementTo").input_value()})
 
 
 if __name__ == "__main__":

@@ -598,6 +598,38 @@ def test_readonly_role_cannot_edit(service):
     assert client.put("/api/ai-weight-price/config",json={},headers={"X-AWP-Request":"1"}).status_code==403
 
 
+def test_server_browser_execution_requires_super_admin(service, monkeypatch):
+    app = Flask(__name__)
+    app.config.update(TESTING=True, SECRET_KEY="server-execution-test")
+    dispatched = []
+    app.register_blueprint(create_blueprint(
+        service, lambda _permission: None,
+        agent_dispatch=lambda action, data: dispatched.append(action) or jsonify(message="queued"),
+        server_execution=True,
+    ))
+    client = app.test_client()
+    headers = {"X-AWP-Request": "1"}
+    with client.session_transaction() as session_data:
+        session_data["workbench_user"] = {"id": 9, "role_key": "member"}
+    page = client.get("/ai-weight-price")
+    assert '<option value="local">' not in page.text
+    assert client.post("/api/ai-weight-price/start", json={"mode": "probe"}, headers=headers).status_code == 403
+    response = client.post("/api/ai-weight-price/start", json={"mode": "probe", "execution_target": "agent"}, headers=headers)
+    assert response.status_code == 200 and dispatched == ["start"]
+    with client.session_transaction() as session_data:
+        session_data["workbench_user"] = {"id": 1, "role_key": "super_admin"}
+    assert '<option value="local">' in client.get("/ai-weight-price").text
+    started = []
+    monkeypatch.setattr(service, "start", lambda *args, **kwargs: started.append(args))
+    with client.session_transaction(base_url="https://console.example.com") as session_data:
+        session_data["workbench_user"] = {"id": 1, "role_key": "super_admin"}
+    response = client.post(
+        "/api/ai-weight-price/start", json={"mode": "probe", "execution_target": "local"},
+        headers=headers, base_url="https://console.example.com",
+    )
+    assert response.status_code == 200 and started[0][0] == "probe"
+
+
 def test_console_account_sees_own_products_and_admin_sees_all(service):
     seller_a = {"id": 31, "username": "seller-a", "display_name": "业务员甲"}
     seller_b = {"id": 32, "username": "seller-b", "display_name": "业务员乙"}
@@ -896,6 +928,33 @@ def test_open_edge_launches_visible_installed_app_with_exact_login_url(tmp_path,
     assert command[-1]=="https://meli.zying.net/#/login"
     assert "--remote-debugging-address=127.0.0.1" in command
     assert not any("headless" in arg for arg in command)
+
+
+def test_connection_probe_opens_edge_before_connecting(service, monkeypatch):
+    from erp.ai_weight_price import service as module
+    calls = []
+
+    class ProbeBrowser:
+        def __init__(self, config, stop, log):
+            calls.append("browser created")
+
+        def __enter__(self):
+            calls.append("browser connected")
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+    class ProbeLock:
+        def release(self):
+            calls.append("lock released")
+
+    monkeypatch.setattr(module, "open_edge", lambda url, root: calls.append("edge opened"))
+    service.browser_factory = ProbeBrowser
+    service.run(service.config.load(), "probe", None, ProbeLock())
+
+    assert calls[:3] == ["edge opened", "browser created", "browser connected"]
+    assert service.status()["run"]["outcome"] == "completed"
 
 
 def test_run_scope_filters_processing_and_keeps_duplicate_task_history(service,monkeypatch):

@@ -36,10 +36,13 @@ from yandex.app.schemas import (
     QuestionListRequest,
     QuestionReplyRequest,
     ReturnListRequest,
+    ReturnDecisionRequest,
     SearchRequest,
+    SettlementReportRequest,
     StoreCreateRequest,
     StoreUpdateRequest,
     TokenRequest,
+    TodoListRequest,
     ZeshunStoreAuthorizeRequest,
     ZeshunStoreCreateRequest,
     ZeshunStoreUpdateRequest,
@@ -319,6 +322,14 @@ async def get_search(run_id: int) -> dict:
     return {"run": run, "products": products}
 
 
+@app.get("/api/search/{run_id}/status")
+async def get_search_status(run_id: int) -> dict:
+    run = database.get_search_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="搜索任务不存在")
+    return {"run": run}
+
+
 @app.post("/api/orders")
 async def list_orders(payload: OrderListRequest) -> dict:
     try:
@@ -329,6 +340,7 @@ async def list_orders(payload: OrderListRequest) -> dict:
             date_to=payload.date_to.isoformat() if payload.date_to else None,
             page_token=payload.page_token,
             limit=payload.limit,
+            force_sync=payload.force_sync,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -468,6 +480,27 @@ async def list_chats(payload: ChatListRequest) -> dict:
     return {"store": store, **result}
 
 
+@app.get("/api/returns/decisions")
+async def get_return_decisions(store_id: int, order_id: int, return_id: int) -> dict:
+    result, store = await _store_operation(
+        task_service.get_return_decisions(store_id, order_id, return_id)
+    )
+    return {"store": store, **result}
+
+
+@app.post("/api/returns/decisions")
+async def submit_return_decisions(payload: ReturnDecisionRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.submit_return_decisions(
+            payload.store_id,
+            payload.order_id,
+            payload.return_id,
+            [item.model_dump() for item in payload.decisions],
+        )
+    )
+    return {"ok": True, "store": store, "result": result}
+
+
 @app.post("/api/chats/history")
 async def get_chat_history(payload: ChatHistoryRequest) -> dict:
     result, store = await _store_operation(
@@ -488,6 +521,31 @@ async def reply_to_chat(payload: ChatReplyRequest) -> dict:
         task_service.send_chat_message(payload.store_id, payload.chat_id, payload.text)
     )
     return {"ok": True, "store": store, "result": result}
+
+
+@app.post("/api/todos")
+async def list_todos(payload: TodoListRequest) -> dict:
+    return await task_service.get_todos(payload.store_ids)
+
+
+@app.post("/api/settlements")
+async def create_settlement_report(payload: SettlementReportRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.create_settlement_report(
+            payload.store_id, payload.date_from.isoformat(), payload.date_to.isoformat()
+        )
+    )
+    return {"store": store, **result}
+
+
+@app.get("/api/settlements/{report_id}")
+async def get_settlement_report(report_id: str, store_id: int) -> dict:
+    if not report_id or len(report_id) > 255:
+        raise HTTPException(status_code=422, detail="报表编号无效")
+    result, store = await _store_operation(
+        task_service.get_settlement_report(store_id, report_id)
+    )
+    return {"store": store, **result}
 
 
 @app.post("/api/chats/create")

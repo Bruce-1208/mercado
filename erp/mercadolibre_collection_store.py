@@ -206,6 +206,13 @@ def _mirror_zying_snapshot_fields(row: Mapping[str, Any]) -> dict[str, Any]:
         result["title_pt"] = str(result["ai_original"].get("title_pt") or "")
         result["description_es"] = str(result["ai_original"].get("description_es") or "")
         result["description_pt"] = str(result["ai_original"].get("description_pt") or "")
+        from erp.ai_original_products import suggested_ai_original_net_proceeds
+
+        max_variant_price, suggested_net = suggested_ai_original_net_proceeds(
+            result["original_1688"].get("variations")
+        )
+        result["source_variation_max_price_cny"] = max_variant_price
+        result["suggested_net_proceeds_usd"] = suggested_net
         return result
     if source_type != "zying":
         return result
@@ -877,9 +884,8 @@ def upsert_collection_items(
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
-            # USD display price is cheap reference-data work. Resolve it from
-            # the one stored rate per currency while the batch is being saved,
-            # instead of leaving it behind slower category/commission API work.
+            # Resolve the USD display price for rows without a complete
+            # rate-card snapshot from the one stored rate per currency.
             fixed_exchange_rates: dict[str, Mapping[str, Any]] = {}
             try:
                 cursor.execute(
@@ -902,6 +908,15 @@ def upsert_collection_items(
                 fixed_exchange_rates = {}
 
             for row in records:
+                # A rate-card estimate already carries a coherent sale price,
+                # commission, freight and net value from the same daily FX
+                # snapshot. Do not replace only its sale-price FX here.
+                if (
+                    row.get("net_proceeds_usd") is not None
+                    and row.get("commission_amount_usd") is not None
+                    and row.get("shipping_fee_usd") is not None
+                ):
+                    continue
                 currency_id = str(row.get("currency_id") or "").strip().upper()
                 rate_row: Mapping[str, Any]
                 if currency_id == "USD":
@@ -938,8 +953,8 @@ def upsert_collection_items(
                 "'plugin_volumetric_fallback'))"
             )
             for row in records:
-                # 美客多跟卖采集使用统一的固定 15% 佣金口径；运费仍由当前
-                # 重量对应的固定运费表补算，避免采集列表混入分类佣金报价。
+                # 美客多跟卖采集使用固定 15% 佣金；官方表命中时采集阶段已
+                # 按当前实重运费和同一汇率快照算出净收益。
                 row["profitability_source"] = "fixed_commission_15_pct"
                 replace_profitability = bool(
                     row.pop("_replace_profitability_snapshot", False)
@@ -2660,6 +2675,82 @@ def update_ai_original_product(
             row = cursor.fetchone()
         connection.commit()
         return _mirror_zying_snapshot_fields(_json_safe_row(row))
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def update_ai_original_product_items(
+    product_item_ids: Iterable[int],
+    changes: Mapping[str, Any],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Fill dimensions only on selected AI-original products missing all three."""
+
+    ids = _normalize_row_ids(product_item_ids, empty_message="请至少勾选一个 AI 原创产品")
+    allowed = {
+        "package_length_cm", "package_width_cm", "package_height_cm",
+    }
+    unsupported = set(changes or {}).difference(allowed)
+    if unsupported:
+        raise ValueError("AI 原创产品批量修改只支持包装长、宽、高")
+    normalized = _normalize_product_content_changes(changes)
+    assignments, values, profitability_stale = _product_content_update_plan(normalized)
+    placeholders = ", ".join(["%s"] * len(ids))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT `id`, `package_length_cm`, `package_width_cm`, `package_height_cm` FROM `{PRODUCT_TABLE}` "
+                f"WHERE `source_type` = 'ai_original' AND `id` IN ({placeholders}) "
+                "FOR UPDATE",
+                tuple(ids),
+            )
+            selected_rows = cursor.fetchall()
+            found_ids = {int(row["id"]) for row in selected_rows}
+            if found_ids != set(ids):
+                raise KeyError("部分 AI 原创产品不存在或已移除")
+
+            missing_ids = [int(row["id"]) for row in selected_rows if all(
+                not row.get(field) or float(row[field]) <= 0 for field in allowed
+            )]
+            changed = 0
+            if missing_ids:
+                missing_placeholders = ", ".join(["%s"] * len(missing_ids))
+                cursor.execute(
+                    f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} "
+                    f"WHERE `source_type` = 'ai_original' AND `id` IN ({missing_placeholders})",
+                    tuple(values + missing_ids),
+                )
+                changed = int(cursor.rowcount or 0)
+
+            dimension_fields = [field for field in normalized if field in allowed]
+            collection_assignments = [
+                f"c.`{field}` = p.`{field}`" for field in dimension_fields
+            ]
+            if dimension_fields and missing_ids:
+                collection_assignments.append(
+                    "c.`volumetric_weight_kg` = p.`volumetric_weight_kg`"
+                )
+                cursor.execute(
+                    f"UPDATE `{COLLECTION_TABLE}` AS c "
+                    f"INNER JOIN `{PRODUCT_TABLE}` AS p "
+                    "ON c.`source_item_id` = p.`source_item_id` "
+                    f"SET {', '.join(collection_assignments)} "
+                    f"WHERE p.`source_type` = 'ai_original' AND p.`id` IN ({missing_placeholders})",
+                    tuple(missing_ids),
+                )
+        connection.commit()
+        return {
+            "requested": len(ids),
+            "changed": changed,
+            "updated_fields": list(normalized),
+            "profitability_refresh_pending": profitability_stale,
+        }
     except BaseException:
         connection.rollback()
         raise

@@ -67,6 +67,52 @@ def test_start_and_busy_controls(popup):
     assert "测试启动失败" in popup.locator("#result").inner_text()
 
 
+def test_yandex_collection_starts_and_reopens_results(popup):
+    popup.evaluate("""() => {
+      window.yandexMockRun = null;
+      const original = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = (message, callback) => {
+        if (message.type === 'GET_YANDEX_SEARCH_STATUS') {
+          messages.push(message);
+          callback({ok:true, run:window.yandexMockRun});
+          return;
+        }
+        if (message.type === 'START_YANDEX_SEARCH') {
+          messages.push(message);
+          window.yandexMockRun = {id:42, keyword:message.keyword, requested_count:message.count,
+            found_count:2, scanned_count:5, status:'running', message:'正在抓取国外商品'};
+          callback({ok:true, run_id:42, status:'queued'});
+          return;
+        }
+        if (message.type === 'OPEN_YANDEX_SEARCH_RESULTS') {
+          messages.push(message);
+          callback({ok:true, run_id:42});
+          return;
+        }
+        original(message, callback);
+      };
+    }""")
+    popup.locator("#yandex-mode").click()
+    popup.locator("#yandex-keyword").fill("行车记录仪")
+    popup.locator("#yandex-count").fill("7")
+    popup.locator("#yandex-start").click()
+    popup.wait_for_function("messages.some(message => message.type === 'START_YANDEX_SEARCH')")
+    assert popup.evaluate("messages.find(message => message.type === 'START_YANDEX_SEARCH')") == {
+        "type": "START_YANDEX_SEARCH", "keyword": "行车记录仪", "count": 7,
+    }
+    popup.wait_for_function("document.querySelector('#yandex-summary').textContent.includes('已找到 2 / 7')")
+    assert popup.locator("#yandex-start").is_disabled()
+    popup.evaluate("""() => {
+      window.yandexMockRun = {...window.yandexMockRun, status:'completed',
+        found_count:6, scanned_count:18, message:'采集完成'};
+      loadYandexStatus();
+    }""")
+    popup.wait_for_function("document.querySelector('#yandex-summary').textContent.includes('已找到 6 / 7')")
+    assert popup.locator("#yandex-start").is_enabled()
+    popup.locator("#yandex-open-results").click()
+    popup.wait_for_function("messages.some(message => message.type === 'OPEN_YANDEX_SEARCH_RESULTS')")
+
+
 def test_resume_requires_acknowledgement_and_keeps_range(popup):
     popup.evaluate("testState.circuit={reason:'请完成1688登录',at:1}; renderWeightPriceStatus(structuredClone(testState))")
     assert popup.locator("#weight-price-start").is_disabled()
@@ -268,6 +314,48 @@ def test_auth_state_does_not_wait_for_purchase_network(browser):
     }""")
     page.add_script_tag(path=str(EXTENSION / "background.js"))
     assert page.evaluate("state().then(result => result.authenticated)") is True
+    page.close()
+
+
+def test_yandex_background_uses_bridge_and_opens_the_matching_run(browser):
+    page = browser.new_page()
+    page.evaluate("""() => {
+      const event = {addListener: () => {}};
+      const storage = {get: (_, cb) => cb({}), set: (_, cb) => cb && cb(), remove: (_, cb) => cb && cb()};
+      window.createdTabs = [];
+      window.chrome = {
+        storage: {sync: storage, session: storage, local: storage},
+        runtime: {onInstalled: event, onStartup: event, onMessage: event},
+        alarms: {onAlarm: event}, contextMenus: {onClicked: event},
+        tabs: {create: async options => { createdTabs.push(options); return options; }}
+      };
+      window.importScripts = () => {};
+    }""")
+    page.add_script_tag(path=str(EXTENSION / "background.js"))
+    result = page.evaluate("""async () => {
+      let saved = {};
+      const requests = [];
+      storageGet = async () => saved;
+      storageSet = async (_, data) => { saved = {...saved, ...data}; };
+      settings = async () => ({consoleUrl: 'https://console.example.test/'});
+      apiRequest = async (path, options) => {
+        requests.push({path, method: options.method, body: options.body || null});
+        return path.endsWith('/status') || path.endsWith('/42')
+          ? {run: {id: 42, status: 'completed', found_count: 6}}
+          : {run_id: 42, status: 'queued'};
+      };
+      const started = await startYandexSearch(' 行车记录仪 ', 7);
+      const progress = await getYandexSearchStatus();
+      await openYandexSearchResults();
+      return {started, progress, requests, createdTabs};
+    }""")
+    assert result["started"]["run_id"] == 42
+    assert result["progress"]["run"]["found_count"] == 6
+    assert result["requests"] == [
+        {"path": "/api/browser-extension/yandex/search", "method": "POST", "body": '{"keyword":"行车记录仪","count":7}'},
+        {"path": "/api/browser-extension/yandex/search/42", "method": "GET", "body": None},
+    ]
+    assert result["createdTabs"] == [{"url": "https://console.example.test/yandex-console/?run_id=42", "active": True}]
     page.close()
 
 
@@ -1353,7 +1441,7 @@ def test_background_image_search_does_not_reload_new_result_tab_while_injecting_
         runtime:{onInstalled:event,onStartup:event,onMessage:event},alarms:{onAlarm:event},
         contextMenus:{onClicked:event},
         scripting:{executeScript:async args=>{
-          if(args.func) return [{result:args.target.tabId===7?'1.8.19':''}];
+              if(args.func) return [{result:args.target.tabId===7?'1.8.22':''}];
           injections.push(args);
         }},
         tabs:{query:async()=>window.tabs,reload:async tabId=>reloads.push(tabId)}};
@@ -1502,6 +1590,48 @@ def test_1688_lazy_image_search_opener_uses_live_homepage_label(browser):
     assert result["response"]["ok"] is True
     assert result["response"]["ready"] is True
     assert result["opens"] == result["searches"] == 1
+    page.close()
+
+
+@pytest.mark.parametrize("configured", [True, False])
+@pytest.mark.parametrize("delayed", [True, False])
+def test_1688_opens_widget_before_using_preexisting_hidden_input(browser, configured, delayed):
+    page = browser.new_page()
+    page.route("https://www.1688.com/**", lambda route: route.fulfill(body="""
+      <meta charset="utf-8">
+      <button id="opener">以图搜款</button>
+      <div id="panel" style="display:none"><input type="file" accept="image/*" hidden></div>
+      <div class="search-result" id="results"></div>
+      <script>
+        window.opens=0; window.uploads=0;
+        document.querySelector('#opener').onclick=()=>{
+          opens++;
+          setTimeout(() => {
+          panel.style.display='block';
+          // Opening mounts the live control; the initial input is a placeholder.
+          panel.innerHTML='<input type="file" accept="image/*" hidden><button id="submit">搜索图片</button>';
+          panel.querySelector('input').onchange=()=>{uploads++};
+          submit.onclick=()=>{
+            if(!uploads) return;
+            results.innerHTML='<a href="https://detail.1688.com/offer/990002.html"><img alt="当前结果"></a>';
+          };
+          }, window.delayMount ? 500 : 0);
+        };
+      </script>
+    """, content_type="text/html"))
+    page.add_init_script("window.chrome={runtime:{onMessage:{addListener:fn=>window.listener=fn},sendMessage:async()=>({ok:true})}}")
+    page.goto("https://www.1688.com/")
+    page.evaluate("value => window.delayMount = value", delayed)
+    page.add_script_tag(path=str(EXTENSION / "content-1688.js"))
+    result = page.evaluate("""async configured => {
+      const response=await new Promise(resolve=>listener({type:'AI_WEIGHT_PRICE_SEARCH',
+        selectors:configured?{image_search_open:'#opener'}:{},
+        data_url:'data:image/png;base64,dGVzdA==',timeout_ms:3000},null,resolve));
+      return {response,opens,uploads};
+    }""", configured)
+    assert result["response"]["ok"] is True, result
+    assert result["response"]["ready"] is True
+    assert result["opens"] == result["uploads"] == 1
     page.close()
 
 
@@ -1767,7 +1897,7 @@ def test_1688_isolated_content_world_uses_main_world_bridge(supplier_page):
         return result["result"].get("value")
     assert evaluate("Object.keys(document.querySelector('#skuSelection')).some(k=>k.startsWith('__reactFiber$'))") is False
     evaluate("window.chrome={runtime:{onMessage:{addListener:fn=>window.readSupplier=fn},sendMessage:async()=>({ok:true,data:" + json.dumps(data) + "})}}")
-    evaluate((EXTENSION / "content-1688.js").read_text())
+    evaluate((EXTENSION / "content-1688.js").read_text(encoding="utf-8"))
     result = evaluate("new Promise(resolve=>readSupplier({type:'EXTRACT_PRODUCT'},null,resolve))")
     assert result["ok"] is True
     assert len(result["product"]["variations"]) == 2

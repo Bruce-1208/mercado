@@ -1579,6 +1579,9 @@ def _appeal_one_shop_locked(
                     appeal_kwargs["deepseek_api_key"] = str(
                         deepseek_api_key or ""
                     ).strip()
+                appeal_kwargs["appeal_copy_mode"] = normalize_appeal_copy_mode(
+                    appeal_copy_mode
+                )
                 result = bit_appeal_ai.shensu(
                     name,
                     site_code,

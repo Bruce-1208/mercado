@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Yandex 运营工作台</title>
-  <link rel="stylesheet" href="{{ base_path | default('') }}/static/styles.css?v=20260909-2">
+  <link rel="stylesheet" href="{{ base_path | default('') }}/static/styles.css?v=20260925-1">
 </head>
 <body class="{% if embedded %}embedded{% endif %}">
   <div class="app-shell">
@@ -12,11 +12,13 @@
       <div class="brand"><span class="brand-mark">Y</span><div><strong>Yandex</strong><small>运营工作台</small></div></div>
       <nav class="main-nav" aria-label="Yandex 模块导航">
         <button class="nav-item active" type="button" data-view-target="orders"><span class="nav-icon">订</span><span>订单中心</span></button>
+        <button class="nav-item" type="button" data-view-target="todo"><span class="nav-icon">办</span><span>运营待办</span></button>
         <button class="nav-item" type="button" data-view-target="listings"><span class="nav-icon">链</span><span>链接管理</span></button>
         <button class="nav-item" type="button" data-view-target="inventory"><span class="nav-icon">库</span><span>商品库存</span></button>
         <button class="nav-item" type="button" data-view-target="returns"><span class="nav-icon">退</span><span>退货管理</span></button>
         <button class="nav-item" type="button" data-view-target="chats"><span class="nav-icon">消</span><span>客户消息</span></button>
         <button class="nav-item" type="button" data-view-target="feedback"><span class="nav-icon">客</span><span>客户声音</span></button>
+        <button class="nav-item" type="button" data-view-target="settlement"><span class="nav-icon">账</span><span>结算对账</span></button>
         <button class="nav-item" type="button" data-view-target="products"><span class="nav-icon">品</span><span>搜品上架</span></button>
         <button class="nav-item" type="button" data-view-target="stores"><span class="nav-icon">店</span><span>店铺管理</span></button>
       </nav>
@@ -58,7 +60,7 @@
             </fieldset>
             <div class="field"><label for="orderFrom">下单日期从</label><input id="orderFrom" type="date"></div>
             <div class="field"><label for="orderTo">到</label><input id="orderTo" type="date"></div>
-            <button id="orderRefreshButton" class="button primary" type="submit">刷新订单</button>
+            <div class="order-filter-actions"><button id="orderRefreshButton" class="button primary" type="submit">刷新订单</button><button id="orderForceSyncButton" class="button secondary" type="button">立即同步平台</button></div>
           </form>
           <div id="ordersLoading" class="orders-state hidden"><span class="spinner"></span><strong>正在读取 Yandex 订单…</strong></div>
           <div id="ordersNoStore" class="orders-state hidden"><span class="state-icon">店</span><strong>先连接一家 Yandex 店铺</strong><p>订单会按当前店铺展示，token 需要具备订单查看权限。</p><button class="button secondary" type="button" data-view-link="stores">去店铺管理</button></div>
@@ -117,6 +119,16 @@
         </section>
       </section>
 
+      <section id="todoView" class="app-view" data-view="todo">
+        <div class="metric-grid ops-metrics"><article class="metric-card accent"><span>待处理事项</span><strong id="todoCount">—</strong><small>当前店铺范围</small></article><article class="metric-card"><span>高优先级</span><strong id="todoUrgentCount">—</strong><small>备货、售后决定和待回复</small></article><article class="metric-card"><span>读取店铺</span><strong id="todoStoreCount">—</strong><small>按当前店铺范围更新</small></article></div>
+        <section class="panel ops-panel"><div class="panel-heading"><div><p class="eyebrow">OPERATIONS INBOX</p><h2>运营待办</h2></div><button id="todoRefreshButton" class="button primary" type="button">刷新待办</button></div><p class="settlement-note">待办包括待处理订单、退货决定、待回复消息、评价和商品问题。部分项目需要对应 token 权限。</p><div id="todoWarnings" class="ops-state hidden"></div><div id="todoState" class="ops-state">选择店铺后刷新待办。</div><div id="todoList" class="ops-card-list hidden"></div></section>
+      </section>
+
+      <section id="settlementView" class="app-view" data-view="settlement">
+        <div class="metric-grid ops-metrics"><article class="metric-card accent"><span>主表流水</span><strong id="settlementLineCount">—</strong><small>Yandex 支付主表明细</small></article><article class="metric-card"><span>主表金额合计</span><strong id="settlementTransactionTotal">—</strong><small>分表金额分别列出，不重复相加</small></article><article class="metric-card"><span>关联本地订单</span><strong id="settlementMatchedOrders">—</strong><small>本地最近 30 天订单缓存</small></article></div>
+        <section class="panel ops-panel"><div class="panel-heading"><div><p class="eyebrow">PAYMENT RECONCILIATION</p><h2>结算报表与订单核对</h2></div><p>生成 Yandex 官方支付报表，分类展示各数据表，并用支付主表关联本地订单缓存。</p></div><form id="settlementForm" class="ops-filters"><div class="field"><label for="settlementFrom">开始日期</label><input id="settlementFrom" type="date" required></div><div class="field"><label for="settlementTo">结束日期</label><input id="settlementTo" type="date" required></div><button id="settlementGenerateButton" class="button primary" type="submit">生成并对账</button></form><div id="settlementState" class="ops-state">请先选择一家店铺。报表周期不能超过三个月，生成需要财务报表权限。</div><div id="settlementWarnings" class="ops-state hidden"></div><div id="settlementContent" class="hidden"><p id="settlementCacheNote" class="settlement-note"></p><p class="settlement-note">Yandex 按支付和计提发生期间筛选；跨月款项可能出现在相邻期间。主表金额为汇总口径，各分表金额用于逐项核对，请勿直接与主表金额相加。</p><div id="settlementFiles" class="settlement-file-grid"></div><h3 class="settlement-subtitle">支付指令</h3><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>指令编号</th><th>日期</th><th>金额</th></tr></thead><tbody id="settlementBankOrders"></tbody></table></div><h3 class="settlement-subtitle">订单流水核对（最多显示 1000 单）</h3><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>订单号</th><th>流水笔数</th><th>流水合计</th><th>本地缓存</th><th>报表数据表</th></tr></thead><tbody id="settlementOrders"></tbody></table></div></div></section>
+      </section>
+
       <section id="feedbackView" class="app-view" data-view="feedback">
         <div class="segmented-tabs" role="tablist"><button class="active" type="button" data-feedback-tab="reviews">商品评价</button><button type="button" data-feedback-tab="questions">商品问答</button></div>
         <section id="reviewsPanel" class="panel ops-panel feedback-panel"><div class="panel-heading"><div><p class="eyebrow">PRODUCT REVIEWS</p><h2>评价回复</h2></div><p>查看商品评价、筛选待回复内容，并直接提交卖家回复。</p></div>
@@ -163,7 +175,8 @@
     </main>
   </div>
   <div id="toast" class="toast" role="status"></div>
+  <dialog id="returnDecisionDialog" class="return-decision-dialog"><form id="returnDecisionForm"><header><div><p class="eyebrow">RETURN DECISION</p><h2>提交退货处理决定</h2></div><button id="returnDecisionClose" class="button ghost" type="button">关闭</button></header><p id="returnDecisionSummary" class="settlement-note"></p><div id="returnDecisionItems" class="return-decision-items"></div><p class="settlement-note">提交后决定会发送到 Yandex。拒绝退款需要理由；部分退款金额必须符合平台返回的范围。</p><button id="returnDecisionSubmit" class="button primary" type="submit">确认提交</button></form></dialog>
   <script>window.YANDEX_BASE_PATH = {{ (base_path | default('')) | tojson }};</script>
-  <script src="{{ base_path | default('') }}/static/app.js?v=20260909-2" defer></script>
+  <script src="{{ base_path | default('') }}/static/app.js?v=20260925-2" defer></script>
 </body>
 </html>

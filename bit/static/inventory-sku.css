@@ -1,0 +1,47 @@
+.inventory-sku-toolbar,
+.inventory-sku-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.inventory-sku-toolbar { margin: 0 0 16px; }
+.inventory-sku-toolbar strong,
+.inventory-sku-toolbar span,
+.inventory-sku-section-head strong,
+.inventory-sku-section-head span { display: block; }
+.inventory-sku-toolbar strong,
+.inventory-sku-section-head strong { color: #202938; font-size: 14px; }
+.inventory-sku-toolbar span,
+.inventory-sku-section-head span { margin-top: 4px; color: #858e9c; font-size: 10px; }
+.inventory-sku-toolbar .inventory-toolbar-actions { flex: 0 0 auto; }
+.inventory-sku-metrics { margin-bottom: 20px; }
+.inventory-sku-section-head { margin: 22px 0 10px; }
+.inventory-sku-table { min-width: 980px; }
+.inventory-sku-mapping-table { min-width: 800px; }
+.inventory-reconciliation-table { min-width: 900px; }
+.inventory-unmapped-table { min-width: 760px; }
+.inventory-reservation-table { min-width: 900px; }
+.inventory-sku-code { color: #263246; font-size: 12px; letter-spacing: .02em; }
+.inventory-sku-reserved { color: #a26822; }
+.inventory-sku-available { color: #277352; }
+.inventory-sku-available.empty { color: #a4493d; }
+.inventory-difference-pill {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: #faece9;
+  color: #a4493d;
+  font-size: 10px;
+  font-weight: 800;
+}
+.inventory-difference-pill.consistent { background: #e8f6ef; color: #277352; }
+.inventory-difference-pill.unknown { background: #eef0f3; color: #7e8795; }
+.inventory-sku-dialog { width: min(680px, calc(100vw - 28px)); }
+
+@media (max-width: 640px) {
+  .inventory-sku-toolbar { align-items: stretch; flex-direction: column; }
+  .inventory-sku-toolbar .inventory-toolbar-actions { width: 100%; }
+  .inventory-sku-toolbar .inventory-toolbar-actions button { flex: 1; }
+}

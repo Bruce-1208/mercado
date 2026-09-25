@@ -7,14 +7,31 @@ const queueCount = document.getElementById("queue-count");
 const resultBox = document.getElementById("result");
 const platformBadge = document.getElementById("platform-badge");
 const productPanel = document.getElementById("product-panel");
+const yandexPanel = document.getElementById("yandex-panel");
 const zyingPanel = document.getElementById("zying-panel");
 const zyingInfringementPanel = document.getElementById("zying-infringement-panel");
 const weightPricePanel = document.getElementById("weight-price-panel");
 const purchasePanel = document.getElementById("purchase-panel");
 const productModeButton = document.getElementById("product-mode");
+const yandexModeButton = document.getElementById("yandex-mode");
+const yandexKeyword = document.getElementById("yandex-keyword");
+const yandexCount = document.getElementById("yandex-count");
+const yandexStartButton = document.getElementById("yandex-start");
+const yandexOpenResultsButton = document.getElementById("yandex-open-results");
+const yandexStatus = document.getElementById("yandex-status");
+const yandexSummary = document.getElementById("yandex-summary");
+const yandexProgress = document.getElementById("yandex-progress");
 const zyingModeButton = document.getElementById("zying-mode");
 const zyingInfringementModeButton = document.getElementById("zying-infringement-mode");
 const weightPriceModeButton = document.getElementById("weight-price-mode");
+const weightDimensionsPanel = document.getElementById("weight-dimensions-panel");
+const weightDimensionsModeButton = document.getElementById("weight-dimensions-mode");
+const weightDimensionsStatus = document.getElementById("weight-dimensions-status");
+const weightDimensionsSummary = document.getElementById("weight-dimensions-summary");
+const weightDimensionsLog = document.getElementById("weight-dimensions-log");
+const weightDimensionsStartButton = document.getElementById("weight-dimensions-start");
+const weightDimensionsRefreshButton = document.getElementById("weight-dimensions-refresh");
+const weightDimensionsOpenConsoleButton = document.getElementById("weight-dimensions-open-console");
 const purchaseModeButton = document.getElementById("purchase-mode");
 const zyingPageStatus = document.getElementById("zying-page-status");
 const zyingRefreshButton = document.getElementById("zying-refresh");
@@ -82,6 +99,9 @@ let weightPriceSelectionRestored = false;
 let weightPriceBusy = false;
 let weightPriceStatusSequence = 0;
 let weightPriceStatusError = "";
+let weightDimensionsTask = null;
+let weightDimensionsBusy = false;
+let weightDimensionsPollTimer = null;
 let purchaseTrackingState = null;
 let purchaseTrackingPollTimer = null;
 const productBatchFields = Object.fromEntries([
@@ -93,6 +113,49 @@ let productBatchState = {};
 let productBatchBusy = false;
 let productBatchPollTimer = null;
 let productZyingLoggedIn = false;
+let yandexRun = null;
+let yandexBusy = false;
+let yandexPollTimer = null;
+
+function syncYandexControls() {
+  yandexStartButton.disabled = !authenticated || yandexBusy || ["queued", "running"].includes(yandexRun?.status);
+  yandexOpenResultsButton.disabled = !Number.isSafeInteger(Number(yandexRun?.id)) || Number(yandexRun?.id) <= 0;
+}
+
+function renderYandexStatus(run, fallbackMessage = "等待启动") {
+  yandexRun = run || null;
+  yandexStatus.textContent = run?.message || fallbackMessage;
+  yandexSummary.textContent = run
+    ? `已找到 ${Number(run.found_count || 0)} / ${Number(run.requested_count || 0)} · 已检查 ${Number(run.scanned_count || 0)} · ${run.status || "等待中"}`
+    : "已找到 0 · 已检查 0";
+  const requested = Math.max(1, Number(run?.requested_count || 0));
+  const found = Math.max(0, Number(run?.found_count || 0));
+  yandexProgress.style.width = run?.status === "completed" ? "100%" : `${Math.min(100, Math.round(found * 100 / requested))}%`;
+  syncYandexControls();
+}
+
+async function loadYandexStatus() {
+  clearTimeout(yandexPollTimer);
+  try {
+    const response = await runtimeMessage({type: "GET_YANDEX_SEARCH_STATUS"});
+    if (!response.ok) throw new Error(response.error || "读取 Yandex 采集进度失败");
+    renderYandexStatus(response.run, response.message || "等待启动");
+  } catch (error) {
+    yandexStatus.textContent = error.message || String(error);
+  }
+  if (!yandexPanel.hidden && ["queued", "running"].includes(yandexRun?.status)) {
+    yandexPollTimer = setTimeout(loadYandexStatus, 2000);
+  }
+}
+
+async function initializeYandexOptions() {
+  if (!chrome.storage?.local) return;
+  const saved = (await chrome.storage.local.get("yandexSearchOptions")).yandexSearchOptions || {};
+  if (typeof saved.keyword === "string") yandexKeyword.value = saved.keyword;
+  if (Number.isInteger(Number(saved.count)) && Number(saved.count) >= 1 && Number(saved.count) <= 500) {
+    yandexCount.value = String(saved.count);
+  }
+}
 
 function productBatchSelection() {
   const params = {};
@@ -244,26 +307,35 @@ function showResult(message, kind) {
 }
 
 function showMode(mode) {
+  const yandex = mode === "yandex";
   const zying = mode === "zying";
   const zyingInfringement = mode === "zying-infringement";
   const weightPrice = mode === "weight-price";
+  const weightDimensions = mode === "weight-dimensions";
   const purchase = mode === "purchase";
-  productPanel.hidden = zying || zyingInfringement || weightPrice || purchase;
+  if (!yandex) clearTimeout(yandexPollTimer);
+  productPanel.hidden = yandex || zying || zyingInfringement || weightPrice || weightDimensions || purchase;
+  yandexPanel.hidden = !yandex;
   zyingPanel.hidden = !zying;
   zyingInfringementPanel.hidden = !zyingInfringement;
   weightPricePanel.hidden = !weightPrice;
+  weightDimensionsPanel.hidden = !weightDimensions;
   purchasePanel.hidden = !purchase;
-  productModeButton.classList.toggle("active", !zying && !zyingInfringement && !weightPrice && !purchase);
+  productModeButton.classList.toggle("active", !yandex && !zying && !zyingInfringement && !weightPrice && !weightDimensions && !purchase);
+  yandexModeButton.classList.toggle("active", yandex);
   zyingModeButton.classList.toggle("active", zying);
   zyingInfringementModeButton.classList.toggle("active", zyingInfringement);
   weightPriceModeButton.classList.toggle("active", weightPrice);
+  weightDimensionsModeButton.classList.toggle("active", weightDimensions);
   purchaseModeButton.classList.toggle("active", purchase);
+  if (yandex) loadYandexStatus();
   if (zying) loadZyingStatus();
   if (zyingInfringement) loadZyingInfringementStatus();
   if (weightPrice) {
     refreshState().catch(error => showResult(error.message || String(error), "error"));
     loadWeightPriceStatus();
   }
+  if (weightDimensions) loadWeightDimensionsStatus();
   if (purchase) loadPurchaseTrackingStatus();
 }
 
@@ -294,9 +366,11 @@ async function refreshState() {
   }
   collectButton.disabled = !detailPage || !authenticated || !productDetailZyingLoggedIn;
   syncProductBatchControls();
+  syncYandexControls();
   zyingStartButton.disabled = !authenticated || !zyingContext || zyingRunning;
   zyingInfringementStartButton.disabled = !authenticated || !zyingContext || zyingInfringementRunning;
   syncWeightPriceControls();
+  syncWeightDimensionsControls();
   if (response.purchaseTracking) renderPurchaseTrackingStatus(response.purchaseTracking);
 }
 
@@ -777,6 +851,93 @@ function finishWeightPriceAction() {
   scheduleWeightPricePoll();
 }
 
+function syncWeightDimensionsControls() {
+  const task = weightDimensionsTask || {};
+  const records = Array.isArray(task.records) ? task.records : [];
+  const eligible = records.filter(row => row.can_execute);
+  const active = ["queued", "running"].includes(String(task.execute_status || ""));
+  weightDimensionsStartButton.disabled = !authenticated || weightDimensionsBusy || task.status !== "ready" || !eligible.length || active || task.execute_status === "completed";
+  weightDimensionsStartButton.textContent = weightDimensionsBusy ? "正在启动…" : active ? "更新进行中…" : task.execute_status === "completed" ? "本批次已执行" : "更新查询成功产品";
+}
+
+function renderWeightDimensionsStatus(task = {}) {
+  weightDimensionsTask = task;
+  const records = Array.isArray(task.records) ? task.records : [];
+  const eligible = records.filter(row => row.can_execute);
+  const productIds = new Set(eligible.map(row => String(row.product_id || "").trim()).filter(Boolean));
+  const queryStatus = String(task.status || "idle");
+  const executeStatus = String(task.execute_status || "idle");
+  if (queryStatus === "ready") {
+    weightDimensionsStatus.textContent = ["queued", "running"].includes(executeStatus)
+      ? `${task.execute_message || "正在执行智赢产品更新"}（${task.execute_processed || 0}/${task.execute_total || 0}）`
+      : task.execute_status === "completed"
+        ? (task.execute_message || "本批次执行完成")
+        : `${task.message || "订单查询完成"}；可以启动重量尺寸更新`;
+  } else {
+    weightDimensionsStatus.textContent = task.message || "请先在泽顺控制台上传订单文件并完成查询";
+  }
+  weightDimensionsSummary.textContent = `查询成功 ${eligible.length} 条 · 智赢产品 ${productIds.size} 个`;
+  const lines = records.flatMap(row => (Array.isArray(row.execution_logs) ? row.execution_logs : []).map(entry => ({
+    ...entry, order_number: row.order_number, product_id: row.product_id
+  }))).sort((left, right) => String(left.time || "").localeCompare(String(right.time || "")));
+  weightDimensionsLog.textContent = lines.length
+    ? lines.slice(-16).reverse().map(entry =>
+      `${entry.time || ""} · 产品 ${entry.product_id || "-"} · 订单 ${entry.order_number || "-"} · ${entry.stage || ""}/${entry.status || ""} · ${entry.message || ""}`
+    ).join("\n")
+    : "完成查询后，这里会显示每个产品的处理日志。";
+  syncWeightDimensionsControls();
+}
+
+function scheduleWeightDimensionsPoll() {
+  clearTimeout(weightDimensionsPollTimer);
+  if (!weightDimensionsPanel.hidden) {
+    const running = ["queued", "running"].includes(String(weightDimensionsTask?.execute_status || "")) ||
+      ["queued", "querying"].includes(String(weightDimensionsTask?.status || ""));
+    weightDimensionsPollTimer = setTimeout(loadWeightDimensionsStatus, running ? 1800 : 7000);
+  }
+}
+
+async function loadWeightDimensionsStatus() {
+  clearTimeout(weightDimensionsPollTimer);
+  try {
+    const response = await runtimeMessage({type: "GET_WEIGHT_DIMENSIONS_STATUS"});
+    if (!response.ok) throw new Error(response.error || "读取重量尺寸任务失败");
+    renderWeightDimensionsStatus(response);
+  } catch (error) {
+    weightDimensionsTask = null;
+    weightDimensionsStatus.textContent = error.message || String(error);
+    weightDimensionsSummary.textContent = "任务状态不可用";
+    weightDimensionsLog.textContent = "请确认已登录泽顺插件，并具有订单分析查看权限。";
+    syncWeightDimensionsControls();
+  } finally {
+    scheduleWeightDimensionsPoll();
+  }
+}
+
+async function startWeightDimensionsUpdate() {
+  if (weightDimensionsBusy) return;
+  const records = Array.isArray(weightDimensionsTask?.records) ? weightDimensionsTask.records : [];
+  const eligible = records.filter(row => row.can_execute);
+  const productIds = new Set(eligible.map(row => String(row.product_id || "").trim()).filter(Boolean));
+  if (!productIds.size) return;
+  if (!window.confirm(`将逐个更新 ${productIds.size} 个智赢产品，涉及 ${eligible.length} 条查询成功记录。同一产品 ID 采用订单时间最新一笔的重量尺寸；保存后继续更新美客多商品并重提当前净收益。`)) return;
+  weightDimensionsBusy = true;
+  weightDimensionsStatus.textContent = "正在启动重量尺寸更新…";
+  syncWeightDimensionsControls();
+  try {
+    const response = await runtimeMessage({type: "START_WEIGHT_DIMENSIONS_UPDATE"});
+    if (!response.ok) throw new Error(response.error || "启动重量尺寸更新失败");
+    await loadWeightDimensionsStatus();
+  } catch (error) {
+    weightDimensionsStatus.textContent = error.message || String(error);
+    showResult(error.message || String(error), "error");
+  } finally {
+    weightDimensionsBusy = false;
+    syncWeightDimensionsControls();
+    scheduleWeightDimensionsPoll();
+  }
+}
+
 collectButton.addEventListener("click", async () => {
   collectButton.disabled = true;
   collectButton.textContent = "正在读取商品…";
@@ -820,6 +981,39 @@ document.getElementById("retry").addEventListener("click", async event => {
 });
 
 productModeButton.addEventListener("click", () => showMode("product"));
+yandexModeButton.addEventListener("click", () => showMode("yandex"));
+yandexStartButton.addEventListener("click", async () => {
+  const keyword = yandexKeyword.value.trim();
+  const count = Number(yandexCount.value);
+  if (!keyword || keyword.length > 200) return showResult("关键词须为 1–200 个字符", "error");
+  if (!Number.isInteger(count) || count < 1 || count > 500) return showResult("采集数量须为 1–500 的整数", "error");
+  yandexBusy = true;
+  syncYandexControls();
+  try {
+    if (chrome.storage?.local) await chrome.storage.local.set({yandexSearchOptions: {keyword, count}});
+    const response = await runtimeMessage({type: "START_YANDEX_SEARCH", keyword, count});
+    if (!response.ok) throw new Error(response.error || "启动 Yandex 采集失败");
+    renderYandexStatus({id: response.run_id, keyword, requested_count: count, status: response.status || "queued", message: "已提交 Yandex 采集任务"});
+    await loadYandexStatus();
+    showResult("Yandex 采集已启动；关闭插件后任务仍会继续。", "");
+  } catch (error) {
+    showResult(error.message || String(error), "error");
+  } finally {
+    yandexBusy = false;
+    syncYandexControls();
+  }
+});
+yandexKeyword.addEventListener("keydown", event => {
+  if (event.key === "Enter") yandexStartButton.click();
+});
+yandexOpenResultsButton.addEventListener("click", async () => {
+  try {
+    const response = await runtimeMessage({type: "OPEN_YANDEX_SEARCH_RESULTS"});
+    if (!response.ok) throw new Error(response.error || "打开 Yandex 采集结果失败");
+  } catch (error) {
+    showResult(error.message || String(error), "error");
+  }
+});
 zyingModeButton.addEventListener("click", async () => {
   showMode("zying");
   const zyingTab = await findZyingPageTab();
@@ -845,7 +1039,18 @@ zyingInfringementModeButton.addEventListener("click", async () => {
   }
 });
 weightPriceModeButton.addEventListener("click", () => showMode("weight-price"));
+weightDimensionsModeButton.addEventListener("click", () => showMode("weight-dimensions"));
 purchaseModeButton.addEventListener("click", () => showMode("purchase"));
+weightDimensionsRefreshButton.addEventListener("click", loadWeightDimensionsStatus);
+weightDimensionsStartButton.addEventListener("click", startWeightDimensionsUpdate);
+weightDimensionsOpenConsoleButton.addEventListener("click", async () => {
+  try {
+    const response = await runtimeMessage({type: "OPEN_CONSOLE", tab: "weight-dimensions-records"});
+    if (!response.ok) throw new Error(response.error || "打开订单记录表失败");
+  } catch (error) {
+    showResult(error.message || String(error), "error");
+  }
+});
 zyingRefreshButton.addEventListener("click", refreshZyingOptions);
 zyingInfringementRefreshButton.addEventListener("click", refreshZyingOptions);
 zyingOpenLoginButton.addEventListener("click", async () => {
@@ -1138,3 +1343,4 @@ document.getElementById("open-console").addEventListener("click", () => runtimeM
 document.getElementById("settings").addEventListener("click", () => chrome.runtime.openOptionsPage());
 initialize();
 initializeProductBatch().catch(error => showResult(error.message || String(error), "error"));
+initializeYandexOptions().catch(error => showResult(error.message || String(error), "error"));

@@ -208,7 +208,7 @@ def run_ai_weight_price(job, stop_event, job_file):
     if action not in {
         "login/open", "login/confirm", "login/supplier", "categories/refresh",
         "start", "continue", "stop", "terminate", "skip-current", "retry",
-        "manual-execute", "probe",
+        "manual-execute", "probe", "weight-dimensions-update",
     }:
         raise ValueError("AI核重核价 Agent 操作无效")
 
@@ -240,6 +240,52 @@ def run_ai_weight_price(job, stop_event, job_file):
             actor.get("display_name") or actor.get("username") or "Agent",
         )
         return {"status": "success", "message": "Agent 已完成人工核验回写", "task": result}
+    if action == "weight-dimensions-update":
+        rows = payload.get("records") or []
+        if not isinstance(rows, list) or not rows:
+            raise ValueError("智赢重量尺寸更新缺少产品记录")
+        results = []
+
+        def browser_log(message, *args, **kwargs):
+            level = kwargs.get("level") or "INFO"
+            log(message, level=level)
+
+        with service.weight_dimensions_browser(browser_log) as browser:
+            for item in rows:
+                item = dict(item or {})
+                order_number = str(item.get("order_number") or "").strip()
+                product_id = str(item.get("product_id") or "").strip()
+                try:
+                    if not product_id:
+                        raise ValueError("缺少智赢产品 id")
+                    result = browser.update_package_by_product_id(
+                        product_id,
+                        str(item.get("actual_weight_g") or "").strip(),
+                        str(item.get("actual_dimensions_cm") or "").strip(),
+                    ) or {}
+                    results.append({
+                        "order_number": order_number,
+                        "product_id": product_id,
+                        "status": "success",
+                        "message": (
+                            f"重量 {result.get('weight_g', item.get('actual_weight_g'))}g、"
+                            f"尺寸 {result.get('dimensions_cm', item.get('actual_dimensions_cm'))}cm、"
+                            "产品级别“重点”已保存并回读确认"
+                        ),
+                    })
+                except Exception as exc:
+                    results.append({
+                        "order_number": order_number,
+                        "product_id": product_id,
+                        "status": "error",
+                        "message": str(exc)[:500],
+                    })
+        success_count = sum(row.get("status") == "success" for row in results)
+        return {
+            "status": "success" if success_count == len(results) else "partial",
+            "message": f"Agent 已完成智赢产品更新，成功 {success_count}/{len(results)} 条",
+            "rows": results,
+        }
     if action == "probe":
         service.start("probe")
     elif action == "start":

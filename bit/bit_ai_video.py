@@ -183,24 +183,27 @@ def _provider_config(provider: str, user_id=None) -> dict:
             ).strip().rstrip("/"),
         }
     if provider == WAN_PROVIDER:
-        return {
-            "api_key": str(
-                account.get("wan_api_key")
-                or saved.get("wan_api_key")
-                or saved.get("api_key")
+        # A workspace endpoint only accepts keys issued for that workspace.
+        # Never combine an account key with a legacy server-side workspace ID.
+        account_wan = bool(account.get("wan_api_key") or account.get("wan_workspace_id"))
+        if account_wan:
+            wan_key = account.get("wan_api_key")
+            workspace_id = account.get("wan_workspace_id")
+        else:
+            wan_key = (
+                saved.get("wan_api_key") or saved.get("api_key")
                 or os.environ.get("AI_VIDEO_WAN_API_KEY")
                 or os.environ.get("AI_VIDEO_API_KEY")
                 or os.environ.get("DASHSCOPE_API_KEY")
-                or ""
-            ).strip(),
-            "workspace_id": str(
-                account.get("wan_workspace_id")
-                or saved.get("wan_workspace_id")
-                or saved.get("workspace_id")
+            )
+            workspace_id = (
+                saved.get("wan_workspace_id") or saved.get("workspace_id")
                 or os.environ.get("AI_VIDEO_WAN_WORKSPACE_ID")
                 or os.environ.get("AI_VIDEO_WORKSPACE_ID")
-                or ""
-            ).strip(),
+            )
+        return {
+            "api_key": str(wan_key or "").strip(),
+            "workspace_id": str(workspace_id or "").strip(),
             "region": str(
                 saved.get("wan_region")
                 or saved.get("region")
@@ -1172,6 +1175,8 @@ def _compact_prompt(job: dict, provider: str = WAN_PROVIDER) -> str:
 
 
 def _wan_endpoint_base(job=None) -> str:
+    if job and job.get("provider_endpoint_base"):
+        return str(job["provider_endpoint_base"])
     config = _provider_config(WAN_PROVIDER, _job_owner(job))
     custom = config["endpoint"]
     if custom:
@@ -1317,6 +1322,16 @@ def _provider_error(payload: dict, default: str) -> str:
     )
 
 
+def _video_provider_error(payload: dict, default: str, provider: str) -> str:
+    message = _provider_error(payload, default)
+    if provider == WAN_PROVIDER and "workspace endpoint is invalid" in message.lower():
+        return (
+            "阿里云百炼工作空间地址无效。请到“集成与凭证设置”核对 Wan API Key "
+            "和 Workspace ID 是否属于同一业务空间，并在视频模型配置中确认地域与该空间一致。"
+        )
+    return message
+
+
 def _submit_provider(job: dict, provider: str) -> str:
     if provider == SEEDANCE_PROVIDER:
         url = f"{_seedance_endpoint_base(job)}/content_generation/tasks"
@@ -1324,11 +1339,13 @@ def _submit_provider(job: dict, provider: str) -> str:
         url = f"{_wan_endpoint_base(job)}/services/aigc/video-generation/video-synthesis"
     else:
         raise ValueError("不支持的视频生成供应商")
+    headers = _provider_headers(provider, async_request=True, job=job)
+    body = build_provider_payload(job, provider)
     try:
         response = requests.post(
             url,
-            headers=_provider_headers(provider, async_request=True, job=job),
-            json=build_provider_payload(job, provider),
+            headers=headers,
+            json=body,
             timeout=(30, 180),
         )
     except requests.RequestException as exc:
@@ -1336,9 +1353,30 @@ def _submit_provider(job: dict, provider: str) -> str:
             "提交视频任务时连接中断，远端结果未知；为避免重复计费，未自动切换备用模型"
         ) from exc
     payload = _response_json(response, "视频模型")
+    # Some Beijing workspaces reject the dedicated video route even though the
+    # same key is accepted by the regional DashScope route. This explicit 400
+    # means no task was created, so a single retry cannot double bill.
+    if (provider == WAN_PROVIDER and response.status_code == 400
+            and payload.get("code") == "BadRequest.IllegalEndpoint"
+            and "workspace endpoint is invalid" in _provider_error(payload, "").lower()
+            and not _provider_config(WAN_PROVIDER, _job_owner(job))["endpoint"]
+            and _provider_config(WAN_PROVIDER, _job_owner(job))["region"] == "cn-beijing"):
+        shared_base = "https://dashscope.aliyuncs.com/api/v1"
+        try:
+            response = requests.post(
+                f"{shared_base}/services/aigc/video-generation/video-synthesis",
+                headers=headers, json=body, timeout=(30, 180),
+            )
+        except requests.RequestException as exc:
+            raise _ProviderStateUncertainError(
+                "切换百炼共享地址后连接中断，远端结果未知；为避免重复计费，未自动重试"
+            ) from exc
+        payload = _response_json(response, "视频模型")
+        if response.ok:
+            job["provider_endpoint_base"] = shared_base
     if response.status_code == 408 or response.status_code >= 500:
         raise _ProviderStateUncertainError(
-            f"{_provider_error(payload, f'视频模型提交状态未知（HTTP {response.status_code}）')}；"
+            f"{_video_provider_error(payload, f'视频模型提交状态未知（HTTP {response.status_code}）', provider)}；"
             "远端结果未知，为避免重复计费，未自动切换备用模型"
         )
     output = payload.get("output") or {}
@@ -1350,7 +1388,7 @@ def _submit_provider(job: dict, provider: str) -> str:
     ).strip()
     if not response.ok or not task_id:
         raise _ProviderRejectedError(
-            _provider_error(payload, "视频模型提交失败")
+            _video_provider_error(payload, "视频模型提交失败", provider)
         )
     return task_id
 
@@ -1379,7 +1417,7 @@ def _query_provider(task_id: str, provider: str, job=None) -> dict:
     if not isinstance(payload, dict):
         raise _ProviderStateUncertainError("视频任务查询返回了无效数据")
     if not response.ok:
-        raise _ProviderStateUncertainError(_provider_error(payload, "视频任务查询失败"))
+        raise _ProviderStateUncertainError(_video_provider_error(payload, "视频任务查询失败", provider))
     return payload
 
 

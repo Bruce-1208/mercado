@@ -320,14 +320,21 @@ def site_discount_rate(
     return rate.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
 
-def discounted_net_proceeds_usd(row: Mapping[str, Any], discount_rate: Any) -> float:
+def discounted_net_proceeds_usd(
+    row: Mapping[str, Any], discount_rate: Any, net_proceeds_ratio: Any = 100
+) -> float:
     net_proceeds = _decimal_value(row.get("net_proceeds_usd"))
     if net_proceeds is None or net_proceeds <= 0:
         raise ValueError("产品净收益必须大于 0")
     rate = _decimal_value(discount_rate)
     if rate is None or rate <= 0 or rate > 100:
         raise ValueError("站点折扣比例必须大于 0 且不超过 100")
-    amount = (net_proceeds * rate / Decimal("100")).quantize(
+    base_ratio = _decimal_value(net_proceeds_ratio)
+    if base_ratio is None or base_ratio <= 0 or base_ratio > 10000:
+        raise ValueError("AI 原创净收益比例必须大于 0 且不超过 10000")
+    if str(row.get("source_type") or "").strip().lower() != "ai_original":
+        base_ratio = Decimal("100")
+    amount = (net_proceeds * base_ratio / Decimal("100") * rate / Decimal("100")).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
     if amount <= 0:
@@ -552,6 +559,7 @@ def publish_product_batch(
     quantity: int = 1,
     workers: int = 16,
     discount_rate: Any = None,
+    net_proceeds_ratio: Any = 100,
     update_state: Callable[..., Any],
     on_progress: Callable[[dict[str, Any]], None] | None = None,
     client: MercadoLibreClient | None = None,
@@ -573,6 +581,16 @@ def publish_product_batch(
     site_name = marketplace_site_name(site_id)
     token = _token_record(token_id)
     resolved_discount_rate = site_discount_rate(token, site_id, discount_rate)
+    resolved_net_proceeds_ratio = _decimal_value(net_proceeds_ratio)
+    if (
+        resolved_net_proceeds_ratio is None
+        or resolved_net_proceeds_ratio <= 0
+        or resolved_net_proceeds_ratio > 10000
+    ):
+        raise ValueError("AI 原创净收益比例必须大于 0 且不超过 10000")
+    resolved_net_proceeds_ratio = resolved_net_proceeds_ratio.quantize(
+        Decimal("0.0001"), rounding=ROUND_HALF_UP
+    )
     token_site_id = str(token.get("site_id") or "").strip().upper()
     if token_site_id and token_site_id != "CBT" and token_site_id != site_id:
         raise ValueError(
@@ -682,9 +700,18 @@ def publish_product_batch(
         source_item_id = str(row.get("source_item_id") or "")
         source_url = str(row.get("source_url") or source_item_id)
         source_net_proceeds = float(_decimal_value(row.get("net_proceeds_usd")) or 0)
+        is_ai_original = str(row.get("source_type") or "").strip().lower() == "ai_original"
         publish_net_proceeds = discounted_net_proceeds_usd(
-            row, resolved_discount_rate
+            row, resolved_discount_rate, resolved_net_proceeds_ratio
         )
+        pricing_metadata = {
+            "source_net_proceeds_usd": source_net_proceeds,
+            "ai_original_ratio_percent": (
+                float(resolved_net_proceeds_ratio) if is_ai_original else 100.0
+            ),
+            "store_site_ratio_percent": float(resolved_discount_rate),
+            "publish_net_proceeds_usd": publish_net_proceeds,
+        }
         try:
             if account_listing_blocked.is_set():
                 raise MercadoLibreError(
@@ -714,6 +741,7 @@ def publish_product_batch(
                 existing_user_product_id=reusable_user_product_ids.get(product_id),
                 publish=True,
             )
+            publication = {**dict(publication or {}), "net_proceeds_calculation": pricing_metadata}
             published_item_id = _published_item_id(publication)
             state_warning = ""
             try:
@@ -747,6 +775,7 @@ def publish_product_batch(
                 "status": "published",
                 "published_item_id": published_item_id,
                 "discount_rate": float(resolved_discount_rate),
+                "net_proceeds_ratio": float(resolved_net_proceeds_ratio),
                 "source_net_proceeds_usd": source_net_proceeds,
                 "publish_net_proceeds_usd": publish_net_proceeds,
                 "timings": dict(publication.get("timings") or {}),
@@ -758,9 +787,15 @@ def publish_product_batch(
                         }
                         else "上架成功；"
                     )
-                    + f"净收益 USD {source_net_proceeds:.2f} × "
-                    f"{float(resolved_discount_rate):g}% = USD {publish_net_proceeds:.2f}"
-                    f"{state_warning}"
+                    + (
+                        f"净收益 USD {source_net_proceeds:.2f} × "
+                        f"{float(resolved_net_proceeds_ratio):g}% × "
+                        f"{float(resolved_discount_rate):g}% = USD {publish_net_proceeds:.2f}"
+                        if is_ai_original
+                        else f"净收益 USD {source_net_proceeds:.2f} × "
+                        f"{float(resolved_discount_rate):g}% = USD {publish_net_proceeds:.2f}"
+                    )
+                    + f"{state_warning}"
                 ),
             }
         except Exception as exc:
@@ -795,6 +830,7 @@ def publish_product_batch(
                 record_id,
                 status="failed",
                 failure_reason=message,
+                result={"net_proceeds_calculation": pricing_metadata},
                 finished=True,
             )
             item_result = {

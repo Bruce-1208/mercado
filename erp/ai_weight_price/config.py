@@ -37,6 +37,8 @@ DEFAULTS = {
         "erp_edit_id": ".curd-detail-wrap .crud-detail-header .h1", "erp_edit_sku": "", "erp_cost_input": "",
         "erp_net_income_input": ".curd-detail-wrap #netproceed",
         "erp_weight_input": ".curd-detail-wrap #weight", "erp_save": "", "erp_saved": "",
+        "erp_product_id_search": "", "erp_product_search_button": "",
+        "erp_dimensions_input": "", "erp_product_level_control": "",
         "search_input": "", "search_button": "", "result_links": "a[href*='detail.1688.com/offer/']",
         "image_search_open": "", "image_search_upload": "input[type='file']", "image_search_submit": "",
         "supplier_title": "", "supplier_image": "", "supplier_description": "",

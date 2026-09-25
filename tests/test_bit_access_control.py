@@ -90,6 +90,38 @@ def test_super_admin_session_always_gets_all_permissions():
     assert bit_interface.workbench_user_has_permission(user, "access.manage") is True
 
 
+def test_task_worker_changes_are_super_admin_only(monkeypatch):
+    non_admin = _access_user("tasks.view", "tasks.execute")
+    super_admin = {
+        **non_admin,
+        "role_key": "super_admin",
+        "permissions": ["*"],
+    }
+    assert bit_interface.workbench_user_can_change_task_workers(non_admin) is False
+    assert bit_interface.workbench_user_can_change_task_workers(super_admin) is True
+
+    monkeypatch.setattr(bit_interface, "get_current_workbench_user", lambda: non_admin)
+    response = bit_interface.app.test_client().post(
+        "/api/tasks/daily/start",
+        json={"max_workers": 2},
+    )
+    assert response.status_code == 403
+    assert "只有超级管理员" in response.get_json()["message"]
+
+
+def test_server_appeal_execution_requires_super_admin(monkeypatch):
+    monkeypatch.setattr(bit_interface, "get_current_workbench_user", lambda: _access_user("appeal.execute", "tasks.execute"))
+    client = bit_interface.app.test_client()
+    response = client.post("/api/run_shensu", json={"execution_target": "server"})
+    assert response.status_code == 403
+    assert "仅超级管理员" in response.get_json()["message"]
+
+    monkeypatch.setattr(bit_interface, "build_daily_task_params", lambda data: {"execution_target": "server"})
+    response = client.post("/api/tasks/daily/start", json={"execution_target": "server"})
+    assert response.status_code == 403
+    assert "仅超级管理员" in response.get_json()["message"]
+
+
 def test_session_user_contains_role_data_scope():
     user = bit_interface.build_workbench_session_user(
         {

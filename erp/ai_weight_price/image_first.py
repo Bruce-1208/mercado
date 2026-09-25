@@ -2,7 +2,7 @@
 import time
 
 from .browser import CircuitOpen, NoExactMatch, SearchTimeout, Stopped, WritebackMismatch
-from .models import number, erp_value_equal, parse_weight_evidence
+from .models import number, erp_value_equal, parse_dimensions_evidence, parse_weight_evidence
 from .pricing import protect_net_income, usd_cost
 
 
@@ -22,6 +22,7 @@ def process(service, task, browser, models, config):
             "supplier_sku_id": None, "supplier_sku": "", "merchant_id": None,
             "match_confidence": None, "supplier_price_evidence": {},
             "cost_price": None, "weight_g": None, "net_income_usd": None,
+            "supplier_dimensions_cm": None, "dimensions_notice": "",
             "pricing": None, "page_info": {}, "page_info_checked": False,
             "supplier_page_text": "", "info_sources": {},
             "decision_status": "", "decision_reason": "", "skip_reason": "",
@@ -138,11 +139,21 @@ def process(service, task, browser, models, config):
         # only when one of the fields is genuinely missing.
         cost = sku.get("price")
         weight = parse_weight_evidence(sku.get("raw_weight", ""))
+        dimensions = parse_dimensions_evidence(sku.get("raw_dimensions") or sku.get("label", ""))
+        dimensions_notice = ""
+        if not dimensions:
+            dimensions_notice = "1688未读取到完整包装尺寸，保留智赢原尺寸"
+        elif any(number(side) > 60 for side in dimensions.split("x")):
+            dimensions_notice = f"1688包装尺寸 {dimensions} cm 单边超过60 cm，保留智赢原尺寸；重量仍可保存"
+        store.log(dimensions_notice or f"1688包装尺寸已读取：{dimensions} cm", key,
+                  "WARNING" if dimensions_notice else "INFO")
         info = {}
         text = service.page_text({**detail, "selected_sku": sku})
         if weight and number(weight) > 1000000:
             weight = None
-        task = store.update(key, cost_price=cost, weight_g=weight, page_info=info,
+        task = store.update(key, cost_price=cost, weight_g=weight,
+                            supplier_dimensions_cm=dimensions, dimensions_notice=dimensions_notice,
+                            page_info=info,
                             page_info_checked=True, supplier_page_text=text,
                             info_sources={"cost_price": "1688目标SKU最终单价（含变体加价）" if cost else "未读取",
                                           "weight_g": "1688页面" if weight else "未读取，保留ERP原重量"})
@@ -154,6 +165,8 @@ def process(service, task, browser, models, config):
                   f" = 计价基准 ¥{pricing['pricing_basis_cny']} ÷ 美元汇率 {pricing['cny_per_usd']}，"
                   f"向上取整为 ${pricing['net_income_usd']}；汇率日期 {pricing['rate_date']}", key)
         changes = {"net_income_usd": task["net_income_usd"]}
+        if dimensions and not dimensions_notice:
+            changes["dimensions_cm"] = dimensions
         if weight:
             changes["weight_g"] = str(number(weight))
             return save_result(service, task, browser, config, "success",
@@ -222,6 +235,9 @@ def save_result(service, task, browser, config, result, reason, changes):
     that the source status is still ``待审核`` immediately before saving.
     """
     key, store = task["erp_goods_id"], service.store
+    notice = task.get("dimensions_notice") or ""
+    if notice and notice not in reason:
+        reason += "；" + notice
     changes = dict(changes)
     changes["review_status"] = "通过" if changes else "价格异常"
     task = store.update(key, decision_status=result, decision_reason=reason, planned_changes=changes)
@@ -257,7 +273,7 @@ def save_result(service, task, browser, config, result, reason, changes):
         actual = browser.write_patch(task, changes, before_save)
         if attempt is None or not isinstance(actual, dict):
             raise ValueError("ERP未提供修改前后回读记录")
-        for field in ("weight_g", "net_income_usd", "review_status"):
+        for field in ("weight_g", "net_income_usd", "review_status", "dimensions_cm"):
             expected = changes.get(field, attempt["before"].get(field))
             if not erp_value_equal(field, actual.get(field), expected):
                 raise ValueError(f"保存回读不一致：{field}（包括应保留的原值）")

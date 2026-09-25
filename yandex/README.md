@@ -57,7 +57,7 @@ start.cmd
 
 ## 使用流程
 
-页面按“订单中心 / 链接管理 / 商品库存 / 退货管理 / 客户消息 / 客户声音 / 搜品上架 / 店铺管理”划分工作区，右上角的当前店铺会同时作用于所有读取、改价、包装重量修改、暂停/恢复、删除、回复、库存调整、订单履约和商品上传操作。
+页面按“订单中心 / 运营待办 / 链接管理 / 商品库存 / 退货管理 / 客户消息 / 客户声音 / 结算对账 / 搜品上架 / 店铺管理”划分工作区，右上角的当前店铺会同时作用于所有读取、改价、包装重量修改、暂停/恢复、删除、回复、库存调整、订单履约和商品上传操作。
 
 ### 订单中心
 
@@ -71,6 +71,7 @@ start.cmd
 - 每 15 分钟查询一次新订单；这一路只插入此前未见过的订单号，不会提前覆盖老订单状态。
 - 每 12 小时刷新一次缓存中已有订单的状态和订单明细。
 - 打开的订单页面每 15 分钟自动读取一次最新缓存；切回订单首页后仍可随时点击“刷新订单”。服务重启后会根据数据库里的上次成功时间继续调度，首次运行则立即建立缓存。
+- 点击“强制同步订单”会绕过自动同步间隔，立即重新读取最近 30 天订单并刷新缓存状态；同步结束后会更新成功时间。该操作仍受 Yandex 订单接口权限和请求限额约束。
 
 Yandex 订单接口一次最多查询 30 天，因此自动缓存和状态刷新覆盖最近 30 天；更早且已经离开该窗口的历史订单会保留最后一次成功同步的状态。
 
@@ -127,7 +128,20 @@ Yandex 订单接口一次最多查询 30 天，因此自动缓存和状态刷新
 - 汇总本页待决定和待领取数量，并展示退款金额、商品 SKU、逆向物流状态、领取点和截止时间。
 - 页面优先提供 `PREMODERATION_DECISION_WAITING`（FBY/FBS/Express）和 `WAITING_FOR_DECISION`（DBS）筛选，方便识别有处理时限的记录。
 
-每条退货记录可以点击“联系买家 / 回复售后”，程序会创建或复用对应退货会话；DBS 和未取件记录会使用关联订单会话。接口参考：[退货和未取件列表](https://yandex.ru/dev/market/partner-api/doc/ru/reference/returns/getReturns)。当前版本不直接提交退款或拒绝决定；涉及退款金额、拒绝理由和争议证据时仍应先核实商品及材料。
+每条退货记录可以点击“联系买家 / 回复售后”，程序会创建或复用对应退货会话；DBS 和未取件记录会使用关联订单会话。处于待决定状态的退货还可打开决定面板：页面先向 Yandex 读取当前允许的处理方案、拒绝原因和部分退款范围，再按商品行提交退款、拒绝、维修、换货等决定；提交前会再次读取退货状态和方案，避免对已变化的记录继续操作。退款决定会实际发送到 Yandex，提交前请核实商品情况和材料。接口参考：[退货和未取件列表](https://yandex.ru/dev/market/partner-api/doc/ru/reference/returns/getReturns)、[退货详情](https://yandex.ru/dev/market/partner-api/doc/ru/reference/returns/getReturn)、[读取允许的处理方案](https://yandex.ru/dev/market/partner-api/doc/ru/reference/returns/getReturnAvailableDecisions)、[提交退货决定](https://yandex.ru/dev/market/partner-api/doc/ru/reference/returns/submitReturnDecision)。
+
+### 运营待办
+
+- 按店铺汇总待处理订单、待决定退货、待回复消息、待回复评价和待回答商品问题，并可直接跳转到对应工作区。
+- 待办调用各功能现有的官方读取接口；某类权限不足或平台暂时不可用时，会单独显示该类警告，不影响其余类别。订单部分先读取本地缓存，必要时按常规调度规则触发同步。
+
+### 结算对账
+
+- 选择日期范围后，工作台异步生成 Yandex 支付报表，轮询报表状态并下载 ZIP JSON 数据，分类汇总工作表、显示支付指令和按订单聚合的流水。
+- 支付主表金额作为总览口径；各分表单独展示，避免把不同用途的工作表金额重复相加。订单按 Yandex 订单号与本机最近 30 天缓存关联；未匹配项可能是较早订单或非订单流水，并不等于账目错误。
+- Yandex 报表字段和工作表名称可能调整，程序会容忍新增列并尽量读取已知字段。支付报表按“支付或计提发生期间”筛选，跨月款项可能出现在相邻期间；请结合实际支付指令核对到账，不要把相邻期间报表简单相加。报表周期最多三个月。
+
+接口参考：[生成支付报表](https://yandex.ru/dev/market/partner-api/doc/ru/reference/reports/generateUnitedNettingReport)、[查询报表状态并获取下载地址](https://yandex.ru/dev/market/partner-api/doc/ru/reference/reports/getReportInfo)。
 
 ### 客户消息
 
@@ -154,6 +168,7 @@ Yandex 订单接口一次最多查询 30 天，因此自动缓存和状态刷新
 - 订单和退货读取：`inventory-and-order-processing:read-only` 或更高权限；订单状态修改需要可写的 `inventory-and-order-processing`。
 - 商品和库存读取：`offers-and-cards-management:read-only` 或更高权限；上架及库存修改需要可写的 `offers-and-cards-management`。
 - 客户消息、评价和问答：读取需要 `communication` 或 `all-methods:read-only`，回复需要 `communication` 或 `all-methods`。
+- 结算报表：需要 `finance-and-accounting`、`all-methods` 或 `all-methods:read-only`。
 
 ### 搜品上架
 
@@ -214,6 +229,7 @@ Yandex 订单接口一次最多查询 30 天，因此自动缓存和状态刷新
 ```powershell
 .\yandex\.venv\Scripts\python.exe -m unittest yandex.tests.test_core -v
 .\yandex\.venv\Scripts\python.exe -m unittest yandex.tests.test_order_finance -v
+.\yandex\.venv\Scripts\python.exe -m unittest yandex.tests.test_new_workflows -v
 .\yandex\.venv\Scripts\python.exe -m unittest yandex.tests.test_operations_api -v
 .\yandex\.venv\Scripts\python.exe -m unittest yandex.tests.test_operations_ui -v
 .\yandex\.venv\Scripts\python.exe -m unittest yandex.tests.test_order_media -v

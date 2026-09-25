@@ -5,7 +5,7 @@
   // extension is reloaded.  Expose a version marker so the background worker
   // can reload that tab before starting a new search instead of silently
   // running stale search logic alongside this copy.
-  const CONTENT_VERSION = "1.8.19";
+  const CONTENT_VERSION = "1.8.22";
   const previousListener = globalThis.__zeshun1688ContentListener;
   if (globalThis.__zeshun1688ContentVersion === CONTENT_VERSION && previousListener &&
       chrome.runtime.onMessage.hasListener?.(previousListener)) return;
@@ -536,10 +536,15 @@
     return style.display !== "none" && style.visibility !== "hidden" && box.width > 0 && box.height > 0;
   }
 
-  function aiWeightPriceClickImageSearchOpen() {
+  function aiWeightPriceClickImageSearchOpen(hasUpload = false) {
+    // With an input already mounted, "搜索图片" may be the submit action.
+    // Only explicit opening labels are safe before a file has been selected.
+    const labels = hasUpload
+      ? /^(以图搜货|以图搜款|上传图片|拍照搜同款|找同款|相似货源)$/i
+      : /^(以图搜货|以图搜款|图片搜索|搜索图片|上传图片|拍照搜同款|找同款|相似货源)$/i;
     const nodes = [...document.querySelectorAll("button, a, input[type='button'], input[type='submit'], [role='button'], div, span")];
     const node = nodes.find(item => aiWeightPriceVisible(item) &&
-      /^(以图搜货|以图搜款|图片搜索|搜索图片|上传图片|拍照搜同款|找同款|相似货源)$/i.test(
+      labels.test(
         String(item.textContent || item.value || item.getAttribute("aria-label") || item.title || "").replace(/\s+/g, "")
       ) && ![...item.children].some(child => child.textContent.trim() && child.textContent.trim() === item.textContent.trim()));
     if (node) { node.click(); return true; }
@@ -556,6 +561,15 @@
     try { nodes = [...document.querySelectorAll(selector || "input[type='file']")]; } catch (_) {}
     return nodes.filter(input => input.type === "file" &&
       (!input.accept || /image|jpg|jpeg|png|bmp|webp/i.test(input.accept)));
+  }
+
+  function aiWeightPriceUploadPanelOpen(input) {
+    // The file input itself is normally hidden; only inspect its ancestors.
+    for (let parent = input.parentElement; parent; parent = parent.parentElement) {
+      const style = getComputedStyle(parent);
+      if (style.display === "none" || style.visibility === "hidden") return false;
+    }
+    return input.isConnected;
   }
 
   function aiWeightPriceActiveUpload(inputs) {
@@ -581,6 +595,7 @@
     const matches = [];
     const clean = value => String(value || "").replace(/\s+/g, "").trim();
     const generic = /^(提交|确定|确认|搜索)$/;
+    const strong = /^(搜索图片|图片搜索|开始搜索|立即搜索|以图搜货|开始搜图|立即搜图|确认上传)$/;
     const selectedImage = aiWeightPriceImageUploads("input[type='file']")
       .some(input => Boolean(input.files?.length));
     const popupCandidates = new Set();
@@ -588,7 +603,8 @@
     const actionSelector = "button,a,input[type='button'],input[type='submit'],[role='button'],div,span";
     const actionNode = node => {
       const control = node.closest("button,a,[role='button'],[data-spm-click]");
-      return control && generic.test(clean(control.innerText || control.value || "")) ? control : node;
+      return control && (generic.test(clean(control.innerText || control.value || "")) ||
+        strong.test(clean(control.innerText || control.value || ""))) ? control : node;
     };
     // The visible upload receipt is stronger evidence than input.files:
     // widgets can clear/replace the input and use an HTTPS preview after
@@ -605,11 +621,15 @@
         if (root.querySelector("input[type='search'],input[type='text'],input:not([type]),textarea")) break;
         if (!/以图搜款|以图搜货|图片搜索/.test(clean(root.innerText))) continue;
         if (![...root.querySelectorAll("img,canvas,[style*='background-image']")].some(aiWeightPriceVisible)) continue;
-        const actions = [...root.querySelectorAll(actionSelector)].filter(node =>
-          aiWeightPriceVisible(node) && generic.test(clean(node.innerText || node.value || "")));
+        const actions = [...root.querySelectorAll(actionSelector)].filter(node => {
+          const label = clean(node.innerText || node.value || node.getAttribute("aria-label") || node.title);
+          return aiWeightPriceVisible(node) && (generic.test(label) || strong.test(label));
+        });
         if (!actions.length) continue;
-        const leaves = actions.filter(node => ![...node.querySelectorAll(actionSelector)].some(child =>
-          generic.test(clean(child.innerText || child.value || ""))));
+        const leaves = actions.filter(node => ![...node.querySelectorAll(actionSelector)].some(child => {
+          const label = clean(child.innerText || child.value || child.getAttribute("aria-label") || child.title);
+          return generic.test(label) || strong.test(label);
+        }));
         for (const action of leaves) uploadedPanelCandidates.add(actionNode(action));
         break;
       }
@@ -669,7 +689,6 @@
         button.title || button.getAttribute("data-title") || button.getAttribute("data-spm-click")
       );
       const className = String(button.className || "");
-      const strong = /^(搜索图片|图片搜索|开始搜索|立即搜索|以图搜货|开始搜图|立即搜图|确认上传)$/;
       const dialog = button.closest('[role="dialog"],.ant-modal,.next-dialog,.dialog,.modal');
       const preview = previewOwner(button);
       let owner = button.parentElement, upload = null, distance = 0;
@@ -687,10 +706,14 @@
       const imagePreviewPrimary = /(^|\s)action--[^\s]+/.test(className) &&
         /(^|\s)actionPrimary--[^\s]+/.test(className);
       let priority = 0;
-      if (strong.test(label) && hasSelectedFile) {
+      if (strong.test(label) && (hasSelectedFile || uploadedPanelCandidates.has(button) ||
+          (hasImagePreview && (dialog || ownsImageUpload)))) {
         // An explicitly named image-search action is sufficient evidence on
         // older 1688 builds, where the upload widget may not render a preview.
-        priority = imagePreviewPrimary ? 8 : dialog ? 7 : ownsImageUpload ? 6 : hasImagePreview ? 5 : 4;
+        // A scoped upload receipt plus preview is also reliable after the site
+        // clears/replaces input.files once the image has reached its server.
+        priority = uploadedPanelCandidates.has(button) ? 10 :
+          imagePreviewPrimary ? 8 : dialog ? 7 : ownsImageUpload ? 6 : hasImagePreview ? 5 : 4;
       } else if (generic.test(label) && uploadedPanelCandidates.has(button)) {
         priority = 10;
       } else if (generic.test(label) && hasSelectedFile &&
@@ -810,22 +833,40 @@
     const selectors = data.selectors || {};
     const searchStartUrl = location.href;
     let inputs = aiWeightPriceImageUploads(selectors.image_search_upload);
-    if (!inputs.length) {
-      let opened = false;
+    const configuredOpen = selectors.image_search_open;
+    let opened = false;
+    // Match the Playwright order: activate the image-search widget first,
+    // even if its hidden placeholder input is already present in the DOM.
+    const openWidget = () => {
+      const open = aiWeightPriceSelectorNode(configuredOpen);
+      if (configuredOpen) {
+        if (!open || !aiWeightPriceVisible(open)) return false;
+        open.click();
+        return true;
+      }
+      return aiWeightPriceClickImageSearchOpen(inputs.length > 0);
+    };
+    opened = openWidget();
+    if (opened) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      inputs = aiWeightPriceImageUploads(selectors.image_search_upload);
+    }
+    const uploadReady = () => inputs.some(aiWeightPriceUploadPanelOpen) && (!configuredOpen || opened);
+    if (!uploadReady()) {
       const deadline = Date.now() + 15000;
-      while (Date.now() < deadline && !inputs.length) {
+      while (Date.now() < deadline && !uploadReady()) {
         // Homepage widgets mount after document.complete. Wait for the actual
         // opener, and activate it once when it becomes available.
         if (!opened) {
-          const open = aiWeightPriceSelectorNode(selectors.image_search_open);
-          if (open && aiWeightPriceVisible(open)) { open.click(); opened = true; }
-          else opened = aiWeightPriceClickImageSearchOpen();
+          opened = openWidget();
         }
         await new Promise(resolve => setTimeout(resolve, 100));
         inputs = aiWeightPriceImageUploads(selectors.image_search_upload);
       }
     }
+    if (configuredOpen && !opened) throw new Error("配置的1688图片搜索入口未就绪，尚未上传主图");
     if (!inputs.length) throw new Error("1688首页没有找到图片上传控件");
+    if (!uploadReady()) throw new Error("1688图片上传面板尚未打开，尚未上传主图");
     const input = aiWeightPriceActiveUpload(inputs);
     const [meta, encoded] = String(data.data_url || "").split(",", 2);
     if (!encoded) throw new Error("当前智赢商品主图数据无效");
@@ -862,7 +903,7 @@
       }
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-    if (!submitted) throw new Error("1688主图已上传，但未找到可执行的图片搜索按钮");
+    if (!submitted) throw new Error("已向1688文件控件传入主图，但页面未确认图片搜索；请检查上传入口、图片预览或上传失败提示");
     const deadline = Date.now() + Math.max(3000, Number(data.timeout_ms || 15000));
     while (Date.now() < deadline) {
       const snapshot = aiWeightPriceSearchSnapshot();

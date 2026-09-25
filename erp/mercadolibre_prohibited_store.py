@@ -419,10 +419,13 @@ def list_prohibited_listings(
     selected_token_ids = sorted({
         int(value) for value in (token_ids or ()) if int(value or 0) > 0
     })
-    if selected_token_ids:
-        placeholders = ", ".join(["%s"] * len(selected_token_ids))
-        conditions.append(f"items.`token_id` IN ({placeholders})")
-        values.extend(selected_token_ids)
+    if token_ids is not None:
+        if selected_token_ids:
+            placeholders = ", ".join(["%s"] * len(selected_token_ids))
+            conditions.append(f"items.`token_id` IN ({placeholders})")
+            values.extend(selected_token_ids)
+        else:
+            conditions.append("1 = 0")
     elif token_id not in (None, ""):
         conditions.append("items.`token_id` = %s")
         values.append(int(token_id))

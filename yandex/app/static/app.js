@@ -47,6 +47,11 @@ const state = {
   questionPageIndex: 0,
   questionNextToken: "",
   questionRequestId: 0,
+  todoRequestId: 0,
+  todoItems: [],
+  returnDecision: null,
+  settlementRequestId: 0,
+  settlementTimer: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -161,11 +166,13 @@ async function readSelectedStorePages(path, pageToken, buildBody, collectionKey)
 
 const VIEW_COPY = {
   orders: ["ORDER OPERATIONS", "订单中心", "查看店铺最近 30 天订单，并快速定位待处理状态。"],
+  todo: ["OPERATIONS INBOX", "运营待办", "集中查看并跳转处理订单、售后和客户沟通待办。"],
   listings: ["STORE LISTINGS", "链接管理", "查看当前店铺全部商品链接，并执行改价或删除。"],
   inventory: ["INVENTORY CONTROL", "商品库存", "巡检各仓库库存并直接调整可售数量。"],
   returns: ["RETURNS OPERATIONS", "退货管理", "跟踪未取件、退货、退款决定和逆向物流。"],
   chats: ["CUSTOMER MESSAGES", "客户消息", "集中查看订单咨询、退货售后和争议消息并直接回复。"],
   feedback: ["CUSTOMER VOICE", "客户声音", "集中处理商品评价与买家问答。"],
+  settlement: ["PAYMENT RECONCILIATION", "结算对账", "生成官方支付报表，核对流水并关联订单缓存。"],
   products: ["PRODUCT OPERATIONS", "搜品上架", "搜索国外商品，补充履约数据并批量挂载到当前店铺。"],
   stores: ["STORE CONNECTIONS", "店铺管理", "管理 API-Key、TG 授权记录和当前操作店铺。"],
 };
@@ -186,11 +193,13 @@ function switchView(view) {
   $("pageTitle").textContent = title;
   $("pageSubtitle").textContent = subtitle;
   if (view === "orders" && selectedStores().length && !state.orders.length) loadOrders({ resetPage: true });
+  if (view === "todo" && selectedStores().length) loadTodos();
   if (view === "listings" && selectedStores().length) loadListings({ resetPage: true });
   if (view === "inventory" && selectedStores().length) loadInventory({ resetPage: true });
   if (view === "returns" && selectedStores().length) loadReturns({ resetPage: true });
   if (view === "chats" && selectedStores().length) loadChats({ resetPage: true });
   if (view === "feedback" && selectedStores().length) loadFeedback({ resetPage: true });
+  if (view === "settlement" && selectedStore()) setSettlementState("请选择日期范围后生成 Yandex 支付报表；范围最多三个月。");
 }
 
 document.addEventListener("click", (event) => {
@@ -533,7 +542,7 @@ function resetOrderMetrics() {
   ["orderListingCoverage", "orderPaymentCoverage", "orderNetCoverage", "orderShippingCoverage"].forEach((id) => { $(id).textContent = "等待订单金额数据"; });
 }
 
-async function loadOrders({ resetPage = false, pageToken = null } = {}) {
+async function loadOrders({ resetPage = false, pageToken = null, forceSync = false } = {}) {
   const stores = selectedStores();
   if (!stores.length) {
     state.orderRequestId += 1;
@@ -542,6 +551,7 @@ async function loadOrders({ resetPage = false, pageToken = null } = {}) {
     showOrderState("ordersNoStore");
     $("orderRefreshButton").disabled = false;
     $("orderRefreshButton").textContent = "刷新订单";
+    $("orderForceSyncButton").disabled = false;
     return;
   }
   const from = $("orderFrom").value;
@@ -564,12 +574,14 @@ async function loadOrders({ resetPage = false, pageToken = null } = {}) {
   resetOrderMetrics();
   showOrderState("ordersLoading");
   $("orderRefreshButton").disabled = true;
-  $("orderRefreshButton").textContent = "读取中…";
+  $("orderRefreshButton").textContent = forceSync ? "同步后读取…" : "读取中…";
+  $("orderForceSyncButton").disabled = true;
+  if (forceSync) $("orderForceSyncButton").textContent = "正在同步…";
   try {
     const status = document.querySelector('input[name="orderStatus"]:checked')?.value || "";
     const data = await readSelectedStorePages("/api/orders", token, (store, storeToken) => ({
       store_id: store.id, statuses: status ? [status] : [], date_from: from || null,
-      date_to: to || null, page_token: storeToken, limit: 50,
+      date_to: to || null, page_token: storeToken, limit: 50, force_sync: forceSync,
     }), "orders");
     if (requestId !== state.orderRequestId) return;
     state.orderNextToken = data.paging?.nextPageToken || "";
@@ -584,11 +596,14 @@ async function loadOrders({ resetPage = false, pageToken = null } = {}) {
     if (requestId === state.orderRequestId) {
       $("orderRefreshButton").disabled = false;
       $("orderRefreshButton").textContent = "刷新订单";
+      $("orderForceSyncButton").disabled = false;
+      $("orderForceSyncButton").textContent = "立即同步平台";
     }
   }
 }
 
 $("orderFilterForm").addEventListener("submit", (event) => { event.preventDefault(); loadOrders({ resetPage: true }); });
+$("orderForceSyncButton").addEventListener("click", () => loadOrders({ resetPage: true, forceSync: true }));
 $("orderPrevButton").addEventListener("click", () => {
   if (state.orderPageIndex === 0) return;
   state.orderPageIndex -= 1;
@@ -994,7 +1009,10 @@ function renderReturns(data) {
     const point = item.logisticPickupPoint || {};
     const address = point.address || {};
     const pointText = [point.name, address.city, address.street, address.house].filter(Boolean).join(" · ");
-    return `<article class="ops-card return-card"><div class="ops-card-head"><div><span class="ops-kicker">${item.returnType === "UNREDEEMED" ? "未取件" : "退货"}</span>${recordStoreTag(item)}<h3>退货 #${escapeHtml(item.id)} · 订单 #${escapeHtml(item.orderId)}</h3></div><div class="ops-status-stack"><span class="status-pill">${escapeHtml(RETURN_STATUS[item.refundStatus] || item.refundStatus || "状态未知")}</span><span>${escapeHtml(RETURN_SHIPMENT[item.shipmentStatus] || item.shipmentStatus || "物流未知")}</span></div></div><div class="return-meta"><span>创建 ${formatDateTime(item.creationDate)}</span><span>更新 ${formatDateTime(item.updateDate)}</span><strong>${formatMoney(amount.value ?? item.refundAmount, amount.currencyId || amount.currency || "RUR")}</strong>${item.fastReturn ? `<span class="fast-return">快速退款</span>` : ""}</div><ul class="return-items">${products || "<li>商品明细未返回</li>"}</ul>${pointText ? `<p class="pickup-point"><strong>领取点：</strong>${escapeHtml(pointText)}${item.pickupTillDate ? ` · 截止 ${formatDateTime(item.pickupTillDate)}` : ""}</p>` : ""}${renderReturnContact(item)}</article>`;
+    const decisionWaiting = item.returnType === "RETURN" && ["WAITING_FOR_DECISION", "PREMODERATION_DECISION_WAITING"].includes(item.refundStatus);
+    const store = storeForRecord(item);
+    const decisionButton = decisionWaiting && store ? `<button class="button primary" type="button" data-return-decide data-store-id="${escapeHtml(store.id)}" data-return-id="${escapeHtml(item.id)}" data-order-id="${escapeHtml(item.orderId)}">办理退货决定</button>` : "";
+    return `<article class="ops-card return-card"><div class="ops-card-head"><div><span class="ops-kicker">${item.returnType === "UNREDEEMED" ? "未取件" : "退货"}</span>${recordStoreTag(item)}<h3>退货 #${escapeHtml(item.id)} · 订单 #${escapeHtml(item.orderId)}</h3></div><div class="ops-status-stack"><span class="status-pill">${escapeHtml(RETURN_STATUS[item.refundStatus] || item.refundStatus || "状态未知")}</span><span>${escapeHtml(RETURN_SHIPMENT[item.shipmentStatus] || item.shipmentStatus || "物流未知")}</span></div></div><div class="return-meta"><span>创建 ${formatDateTime(item.creationDate)}</span><span>更新 ${formatDateTime(item.updateDate)}</span><strong>${formatMoney(amount.value ?? item.refundAmount, amount.currencyId || amount.currency || "RUR")}</strong>${item.fastReturn ? `<span class="fast-return">快速退款</span>` : ""}</div><ul class="return-items">${products || "<li>商品明细未返回</li>"}</ul>${pointText ? `<p class="pickup-point"><strong>领取点：</strong>${escapeHtml(pointText)}${item.pickupTillDate ? ` · 截止 ${formatDateTime(item.pickupTillDate)}` : ""}</p>` : ""}${renderReturnContact(item)}${decisionButton}</article>`;
   }).join("");
   $("returnPageLabel").textContent = `第 ${state.returnPageIndex + 1} 页 · 本页 ${records.length} 条`;
   $("returnPrevButton").disabled = state.returnPageIndex === 0;
@@ -1022,6 +1040,231 @@ async function loadReturns({ resetPage = false, pageToken = null } = {}) {
 $("returnFilterForm").addEventListener("submit", (event) => { event.preventDefault(); loadReturns({ resetPage: true }); });
 $("returnPrevButton").addEventListener("click", () => { if (state.returnPageIndex > 0) { state.returnPageIndex -= 1; loadReturns({ pageToken: state.returnPageTokens[state.returnPageIndex] || "" }); } });
 $("returnNextButton").addEventListener("click", () => { if (hasPageToken(state.returnNextToken)) { state.returnPageIndex += 1; state.returnPageTokens[state.returnPageIndex] = state.returnNextToken; loadReturns({ pageToken: state.returnNextToken }); } });
+
+const RETURN_DECISION_LABEL = {
+  FAST_REFUND_MONEY: "快速退款（商品不退回）", REFUND_MONEY: "退款", REFUND_MONEY_INCLUDING_SHIPMENT: "退款并退回运费",
+  REPAIR: "维修", REPLACE: "更换商品", SEND_TO_EXAMINATION: "送检", DECLINE_REFUND: "拒绝退款",
+  PARTIAL_MONEY_REFUND: "部分退款", OTHER_DECISION: "其他处理",
+};
+const RETURN_REASON_LABEL = {
+  ISSUE_WITH_THE_PRODUCT_WAS_NOT_CONFIRMED: "商品问题未确认", MECHANICAL_DAMAGE: "商品有机械损坏",
+  WARRANTY_PERIOD_HAS_EXPIRED: "已超过保修期", CONFIGURATION_OR_PACKAGING_COMPROMISED: "包装或配件不完整",
+  PRODUCT_APPEARANCE_COMPROMISED: "商品外观受损", WARRANTY_TERMS_VIOLATED: "违反保修条件", DEVICE_ACTIVATED: "设备已激活",
+};
+
+function updateReturnDecisionRow(row) {
+  const type = row.querySelector("[data-decision-type]").value;
+  const reason = row.querySelector("[data-decision-reason]");
+  const amount = row.querySelector("[data-decision-amount]");
+  const choice = state.returnDecision?.available.find((item) => item.decisionType === type) || {};
+  const partial = type === "PARTIAL_MONEY_REFUND";
+  const decline = type === "DECLINE_REFUND";
+  const reasons = choice.decisionReasonTypes || [];
+  reason.innerHTML = reasons.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(RETURN_REASON_LABEL[value] || value)}</option>`).join("");
+  const bounds = choice.partialCompensationBounds || {};
+  const currency = bounds.minAmount?.currencyId || bounds.maxAmount?.currencyId || "RUR";
+  amount.min = bounds.minAmount?.value ?? "";
+  amount.max = bounds.maxAmount?.value ?? "";
+  amount.placeholder = bounds.minAmount?.value ?? "填写金额";
+  row.querySelector("[data-decision-currency]").value = currency;
+  amount.closest("label").firstChild.textContent = `补偿金额 · ${currency}`;
+  reason.closest("label").classList.toggle("hidden", !decline);
+  amount.closest("label").classList.toggle("hidden", !partial);
+  reason.required = decline;
+  amount.required = partial;
+}
+
+function openReturnDecisionDialog(data, store, orderId, returnId) {
+  state.returnDecision = { store, orderId, returnId, items: data.items || [], available: data.available_decisions || [] };
+  const details = state.returnDecision;
+  $("returnDecisionSummary").textContent = `店铺 ${store.alias} · 订单 #${orderId} · 退货 #${returnId}。平台返回 ${details.available.length} 种可选决定。`;
+  const options = details.available.map((choice) => `<option value="${escapeHtml(choice.decisionType)}">${escapeHtml(RETURN_DECISION_LABEL[choice.decisionType] || choice.decisionType)}</option>`).join("");
+  $("returnDecisionItems").innerHTML = details.items.map((item) => {
+    const decision = details.available[0] || {};
+    const reasons = details.available.flatMap((choice) => choice.decisionReasonTypes || []);
+    const uniqueReasons = [...new Set(reasons)];
+    const bounds = decision.partialCompensationBounds || {};
+    const currency = bounds.minAmount?.currencyId || bounds.maxAmount?.currencyId || "RUR";
+    const min = bounds.minAmount?.value ?? "";
+    const max = bounds.maxAmount?.value ?? "";
+    return `<div class="return-decision-row" data-decision-row="${escapeHtml(item.return_item_id)}"><strong>SKU ${escapeHtml(item.shop_sku || "—")} × ${escapeHtml(item.count ?? "—")}</strong><label>处理决定<select data-decision-type required>${options}</select></label><label class="hidden">拒绝原因<select data-decision-reason>${uniqueReasons.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(RETURN_REASON_LABEL[value] || value)}</option>`).join("")}</select></label><label class="hidden">补偿金额 · ${escapeHtml(currency)}<input data-decision-amount type="number" min="${escapeHtml(min)}" ${max !== "" ? `max="${escapeHtml(max)}"` : ""} step="0.01" placeholder="${min || "填写金额"}"></label><input data-decision-currency type="hidden" value="${escapeHtml(currency)}"></div>`;
+  }).join("");
+  $("returnDecisionItems").querySelectorAll("[data-decision-row]").forEach(updateReturnDecisionRow);
+  $("returnDecisionDialog").showModal();
+}
+
+$("returnList").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-return-decide]");
+  if (!button) return;
+  const store = state.stores.find((item) => item.id === Number(button.dataset.storeId));
+  if (!store) return toast("退货对应的店铺不存在", true);
+  button.disabled = true;
+  try {
+    const query = new URLSearchParams({ store_id: String(store.id), order_id: button.dataset.orderId, return_id: button.dataset.returnId });
+    const data = await api(`/api/returns/decisions?${query}`);
+    openReturnDecisionDialog(data, store, Number(button.dataset.orderId), Number(button.dataset.returnId));
+  } catch (error) { toast(error.message, true); }
+  finally { button.disabled = false; }
+});
+
+$("returnDecisionItems").addEventListener("change", (event) => {
+  if (event.target.matches("[data-decision-type]")) updateReturnDecisionRow(event.target.closest("[data-decision-row]"));
+});
+$("returnDecisionClose").addEventListener("click", () => $("returnDecisionDialog").close());
+$("returnDecisionForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const current = state.returnDecision;
+  if (!current) return;
+  const decisions = [...$("returnDecisionItems").querySelectorAll("[data-decision-row]")].map((row) => {
+    const type = row.querySelector("[data-decision-type]").value;
+    const item = { return_item_id: Number(row.dataset.decisionRow), decision_type: type };
+    if (type === "DECLINE_REFUND") item.reason_type = row.querySelector("[data-decision-reason]").value;
+    if (type === "PARTIAL_MONEY_REFUND") {
+      item.compensation_value = Number(row.querySelector("[data-decision-amount]").value);
+      item.currency_id = row.querySelector("[data-decision-currency]").value;
+    }
+    return item;
+  });
+  const labels = [...new Set(decisions.map((item) => RETURN_DECISION_LABEL[item.decision_type] || item.decision_type))].join("、");
+  if (!window.confirm(`确认以“${current.store.alias}”提交退货 #${current.returnId} 的决定：${labels}？提交后会发送到 Yandex。`)) return;
+  const button = $("returnDecisionSubmit"); button.disabled = true; button.textContent = "正在提交…";
+  try {
+    await api("/api/returns/decisions", { method: "POST", body: JSON.stringify({ store_id: current.store.id, order_id: current.orderId, return_id: current.returnId, decisions }) });
+    $("returnDecisionDialog").close(); toast("退货决定已提交，正在刷新平台状态");
+    await loadReturns({ resetPage: true });
+    if (state.currentView === "todo") loadTodos();
+  } catch (error) { toast(error.message, true); }
+  finally { button.disabled = false; button.textContent = "确认提交"; }
+});
+
+async function loadTodos() {
+  const requestId = ++state.todoRequestId;
+  $("todoState").textContent = "正在读取订单、退货和客户沟通待办…";
+  $("todoState").classList.remove("hidden");
+  $("todoList").classList.add("hidden");
+  $("todoWarnings").classList.add("hidden");
+  $("todoRefreshButton").disabled = true;
+  try {
+    const storeIds = selectedStores().map((store) => store.id);
+    const data = await api("/api/todos", { method: "POST", body: JSON.stringify({ store_ids: storeIds }) });
+    if (requestId !== state.todoRequestId) return;
+    state.todoItems = data.items || [];
+    $("todoCount").textContent = String(state.todoItems.length);
+    $("todoUrgentCount").textContent = String(state.todoItems.filter((item) => item.priority === 1).length);
+    $("todoStoreCount").textContent = String(data.store_count ?? selectedStores().length);
+    $("todoWarnings").textContent = (data.warnings || []).join("\n");
+    $("todoWarnings").classList.toggle("hidden", !(data.warnings || []).length);
+    $("todoList").innerHTML = state.todoItems.map((item) => `<article class="ops-card todo-card"><div><span class="ops-kicker">${escapeHtml(item.store_alias)} · ${item.priority === 1 ? "优先处理" : "待处理"}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description)}</p><small>${item.created_at ? `更新 ${formatDateTime(item.created_at)}` : "平台未返回时间"}</small></div><button class="button secondary" type="button" data-todo-open data-store-id="${escapeHtml(item.store_id)}" data-view="${escapeHtml(item.view)}" data-kind="${escapeHtml(item.kind)}">打开处理</button></article>`).join("");
+    $("todoState").textContent = state.todoItems.length ? "" : "当前范围没有待办事项。";
+    $("todoState").classList.toggle("hidden", state.todoItems.length > 0);
+    $("todoList").classList.toggle("hidden", !state.todoItems.length);
+  } catch (error) {
+    if (requestId === state.todoRequestId) { $("todoState").textContent = `待办读取失败：${error.message}`; }
+  } finally {
+    if (requestId === state.todoRequestId) $("todoRefreshButton").disabled = false;
+  }
+}
+
+$("todoRefreshButton").addEventListener("click", loadTodos);
+$("todoList").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-todo-open]");
+  if (!button) return;
+  const storeId = Number(button.dataset.storeId);
+  if (state.stores.some((store) => store.id === storeId)) {
+    state.selectedStoreId = storeId;
+    renderStores();
+  }
+  const kind = button.dataset.kind;
+  if (kind === "return") { $("returnType").value = "RETURN"; $("returnStatus").value = ""; }
+  if (kind === "chat") $("chatStatus").value = "";
+  if (kind === "feedback") { $("feedbackReaction").value = "NEED_REACTION"; document.querySelector('[data-feedback-tab="reviews"]').click(); }
+  if (kind === "question") { $("questionNeedAnswer").value = "true"; document.querySelector('[data-feedback-tab="questions"]').click(); }
+  switchView(button.dataset.view);
+});
+
+function setSettlementState(message, isError = false) {
+  $("settlementState").textContent = message;
+  $("settlementState").classList.remove("hidden");
+  $("settlementState").classList.toggle("error-state", isError);
+}
+
+function renderSettlement(data) {
+  const reconciliation = data.reconciliation || {};
+  const stats = reconciliation.stats || {};
+  $("settlementLineCount").textContent = String(stats.line_count ?? 0);
+  $("settlementTransactionTotal").textContent = formatMoney(stats.transaction_sum ?? 0, "RUR");
+  $("settlementMatchedOrders").textContent = `${stats.cached_order_count ?? 0} / ${stats.order_count ?? 0}`;
+  $("settlementCacheNote").textContent = data.cache_note || "";
+  $("settlementFiles").innerHTML = (reconciliation.files || []).map((file) => `<article class="settlement-file"><strong>${escapeHtml(file.name)}</strong><span>${escapeHtml(file.row_count)} 条流水</span><b>${formatMoney(file.transaction_sum ?? 0, "RUR")}</b></article>`).join("");
+  $("settlementBankOrders").innerHTML = (stats.bank_orders || []).map((order) => `<tr><td>${escapeHtml(order.bank_order_id)}</td><td>${escapeHtml(order.date || "—")}</td><td>${formatMoney(order.sum, "RUR")}</td></tr>`).join("") || `<tr><td colspan="3">报表没有返回支付指令明细</td></tr>`;
+  $("settlementOrders").innerHTML = (stats.orders || []).map((order) => `<tr><td>${escapeHtml(order.order_id)}</td><td>${escapeHtml(order.line_count)}</td><td>${formatMoney(order.transaction_sum, "RUR")}</td><td>${order.cached ? "已匹配" : "本地未匹配"}</td><td>${escapeHtml((order.sources || []).join("、"))}</td></tr>`).join("") || `<tr><td colspan="5">报表没有订单流水</td></tr>`;
+  $("settlementContent").classList.remove("hidden");
+}
+
+async function pollSettlementReport(requestId, storeId, reportId, attempt = 0) {
+  if (requestId !== state.settlementRequestId) return;
+  try {
+    const query = new URLSearchParams({ store_id: String(storeId) });
+    const data = await api(`/api/settlements/${encodeURIComponent(reportId)}?${query}`);
+    if (requestId !== state.settlementRequestId) return;
+    const report = data.report || {};
+    if (report.status === "DONE" && data.reconciliation) {
+      renderSettlement(data);
+      setSettlementState("结算报表已下载并完成订单关联核对。");
+      $("settlementGenerateButton").disabled = false;
+      $("settlementGenerateButton").textContent = "生成并对账";
+      return;
+    }
+    if (["FAILED"].includes(report.status) || report.subStatus) {
+      const detail = report.subStatus ? `（${report.subStatus}）` : "";
+      setSettlementState(`Yandex 报表生成失败${detail}，请检查日期范围和报表权限。`, true);
+      $("settlementGenerateButton").disabled = false;
+      $("settlementGenerateButton").textContent = "生成并对账";
+      return;
+    }
+    setSettlementState(`Yandex 正在生成支付报表：${report.status || "处理中"}。${report.estimatedGenerationTime ? `预计约 ${Math.ceil(report.estimatedGenerationTime / 1000)} 秒。` : ""}`);
+    if (attempt >= 60) {
+      setSettlementState(`报表仍在生成。报表编号 ${reportId}，可稍后重新生成查看。`, true);
+      $("settlementGenerateButton").disabled = false;
+      $("settlementGenerateButton").textContent = "生成并对账";
+      return;
+    }
+    state.settlementTimer = setTimeout(() => pollSettlementReport(requestId, storeId, reportId, attempt + 1), 3000);
+  } catch (error) {
+    if (requestId !== state.settlementRequestId) return;
+    setSettlementState(`读取结算报表失败：${error.message}`, true);
+    $("settlementGenerateButton").disabled = false;
+    $("settlementGenerateButton").textContent = "生成并对账";
+  }
+}
+
+$("settlementForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const store = selectedStore();
+  if (!store) return setSettlementState("结算报表需要选择一家具体店铺。", true);
+  if (state.settlementTimer) clearTimeout(state.settlementTimer);
+  const requestId = ++state.settlementRequestId;
+  $("settlementContent").classList.add("hidden");
+  $("settlementGenerateButton").disabled = true;
+  $("settlementGenerateButton").textContent = "请求报表…";
+  try {
+    const data = await api("/api/settlements", { method: "POST", body: JSON.stringify({ store_id: store.id, date_from: $("settlementFrom").value, date_to: $("settlementTo").value }) });
+    if (requestId !== state.settlementRequestId) return;
+    setSettlementState(`已提交 Yandex 报表生成任务：${data.report_id}`);
+    await pollSettlementReport(requestId, store.id, data.report_id);
+  } catch (error) {
+    if (requestId === state.settlementRequestId) {
+      setSettlementState(`无法生成结算报表：${error.message}`, true);
+      $("settlementGenerateButton").disabled = false;
+      $("settlementGenerateButton").textContent = "生成并对账";
+    }
+  }
+});
+
+const settlementToday = new Date();
+const settlementMonthStart = new Date(settlementToday.getFullYear(), settlementToday.getMonth(), 1);
+$("settlementFrom").value = settlementMonthStart.toLocaleDateString("en-CA");
+$("settlementTo").value = settlementToday.toLocaleDateString("en-CA");
 
 const CHAT_STATUS = {
   NEW: "新会话", WAITING_FOR_CUSTOMER: "等待买家回复", WAITING_FOR_PARTNER: "等待店铺回复",
@@ -1618,11 +1861,13 @@ async function loadStores(preferredId = null) {
   state.selectedStoreId = state.stores.some((store) => store.id === candidate) ? candidate : null;
   renderStores();
   if (state.currentView === "orders") await loadOrders({ resetPage: true });
+  if (state.currentView === "todo") await loadTodos();
   if (state.currentView === "listings") await loadListings({ resetPage: true });
   if (state.currentView === "inventory") await loadInventory({ resetPage: true });
   if (state.currentView === "returns") await loadReturns({ resetPage: true });
   if (state.currentView === "chats") await loadChats({ resetPage: true });
   if (state.currentView === "feedback") await loadFeedback({ resetPage: true });
+  if (state.currentView === "settlement") setSettlementState(state.selectedStoreId ? "请选择日期范围后生成 Yandex 支付报表。" : "请先选择一家店铺。", !state.selectedStoreId);
 }
 
 $("globalStoreSelect").addEventListener("change", () => {
@@ -1643,11 +1888,13 @@ $("globalStoreSelect").addEventListener("change", () => {
   state.questionRequestId += 1;
   renderStores();
   if (state.currentView === "orders") loadOrders({ resetPage: true });
+  if (state.currentView === "todo") loadTodos();
   if (state.currentView === "listings") loadListings({ resetPage: true });
   if (state.currentView === "inventory") loadInventory({ resetPage: true });
   if (state.currentView === "returns") loadReturns({ resetPage: true });
   if (state.currentView === "chats") loadChats({ resetPage: true });
   if (state.currentView === "feedback") loadFeedback({ resetPage: true });
+  if (state.currentView === "settlement") setSettlementState(state.selectedStoreId ? "请选择日期范围后生成 Yandex 支付报表。" : "请先选择一家店铺。", !state.selectedStoreId);
 });
 
 $("storeForm").addEventListener("submit", async (event) => {
@@ -1995,6 +2242,14 @@ initializeOrderDates();
 initializeOpsDates();
 restorePackageValues();
 Promise.all([checkBackend(), loadZeshunStores(), loadStores(), loadExchangeRate()]).catch((error) => toast(error.message, true));
+const linkedSearchRun = Number(new URLSearchParams(window.location.search).get("run_id"));
+if (Number.isSafeInteger(linkedSearchRun) && linkedSearchRun > 0) {
+  state.runId = linkedSearchRun;
+  switchView("products");
+  searchButton.disabled = true;
+  state.searchPollTimer = window.setInterval(pollSearch, 1200);
+  pollSearch();
+}
 window.setInterval(() => {
   if (state.currentView !== "orders" || !selectedStores().length || document.hidden) return;
   if ($("orderRefreshButton").disabled) return;

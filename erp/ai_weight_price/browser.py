@@ -57,10 +57,14 @@ ERP_DETAIL_ID_READ = """(page, expected) => {
   const root=roots[0],headers=Array.from(root.querySelectorAll('.crud-detail-header .h1')).filter(visible);
   if(headers.length!==1)return {id:'',ambiguous:headers.length>1,root_count:1,header_count:headers.length};
   const normalize=value=>String(value||'').replace(/\\s+/g,' ').trim();
-  const titles=Array.from(root.querySelectorAll("textarea[placeholder='请输入内容']")).map(e=>normalize(e.value));
-  const images=Array.from(root.querySelectorAll('img.ant-image-img')).map(e=>e.currentSrc||e.src);
+  // Zying renders the title as a textarea for some products and as an input
+  // for others. Image components also change class names between variants.
+  const titles=Array.from(root.querySelectorAll('textarea,input[type="text"],input:not([type])'))
+    .filter(visible).map(e=>normalize(e.value));
+  const images=Array.from(root.querySelectorAll('img')).map(e=>e.currentSrc||e.src);
   return {id:normalize(headers[0].textContent),root_count:1,header_count:1,
     titles:titles.filter(Boolean).slice(0,4).map(value=>value.slice(0,160)),image_count:images.length,
+    images:images.filter(Boolean).slice(0,4).map(value=>value.slice(0,300)),
     title_match:!!expected.title&&titles.includes(normalize(expected.title)),
     image_match:!!expected.main_image_url&&images.includes(expected.main_image_url)};
 }"""
@@ -173,6 +177,7 @@ CURRENT_1688_DETAIL = r"""candidateImage => {
     const weight=packaged?packaged+'g':sku.labelWeight;
     const {labelWeight,...cleanSku}=sku;
     return {...cleanSku,raw_price:'¥'+sku.price,raw_surcharge:'',raw_weight:weight,
+      raw_dimensions:sku.label+(skus.length===1&&pack?'；'+clean(pack.innerText).slice(0,2000):''),
       raw_text:sku.label+'；页面单价 ¥'+sku.price+(weight?'；包装重量 '+weight:'')};
   });
   // Keep the detail-page read deliberately narrow: pricing, variant labels and
@@ -808,6 +813,7 @@ class Browser:
                 if time.monotonic() >= deadline:
                     diagnostic = {"attempt": attempt, "source_page": record.get("source_page"),
                                   "source_index": record.get("source_index"), "title": record["title"],
+                                  "expected_image": record.get("main_image_url", ""),
                                   "previous_id": previous_id, "observed": current}
                     self.log("智赢详情编号读取超时：" + json.dumps(diagnostic, ensure_ascii=False), level="WARNING")
                     break
@@ -1403,7 +1409,8 @@ class Browser:
                     price = {"price": None, "price_error": str(exc)}
                 skus.append({"id": sku_id, "label": self.value(row, "sku_label", required=True),
                              "raw_text": row.inner_text(), "raw_price": raw_price,
-                             "raw_surcharge": surcharge, "raw_weight": self.value(row, "sku_weight"), **price})
+                             "raw_surcharge": surcharge, "raw_weight": self.value(row, "sku_weight"),
+                             "raw_dimensions": row.inner_text(), **price})
             return {"url": detail.url, "title": self.value(detail, "supplier_title", required=True),
                     "main_image_url": urljoin(detail.url, self.value(detail, "supplier_image", "src", True)),
                     "description": self.value(detail, "supplier_description") or detail.locator("body").inner_text()[:20000],
@@ -1519,6 +1526,263 @@ class Browser:
             raise ValueError("智赢当前商品状态标签为空")
         return label
 
+    def update_package_by_product_id(self, product_id, weight_g, dimensions_cm):
+        """Update one Zying product by exact product number and verify its saved form."""
+        product_id = self.normalize_erp_id(str(product_id or ""))
+        if not re.fullmatch(r"[1-9]\d*", product_id):
+            raise ValueError("智赢产品编号必须是正整数")
+        dims = [part.strip() for part in re.split(r"[x×*＊]\s*", str(dimensions_cm or ""))]
+        if len(dims) != 3 or any(not re.fullmatch(r"\d+(?:\.\d+)?", part) for part in dims):
+            raise ValueError("智赢产品尺寸需要长x宽x高三项数值")
+        weight = str(weight_g).strip()
+        if not re.fullmatch(r"\d+(?:\.\d+)?", weight):
+            raise ValueError("智赢产品重量不是有效数值")
+        page = self.page(self.config["erp_list_url"], "meli.zying.net")
+        try:
+            if "login" in page.url.lower():
+                raise ValueError("智赢登录已失效，请重新登录")
+            root_selector = ".curd-detail-wrap"
+            self._open_zying_product_by_id(page, product_id)
+            actual_id = self.normalize_erp_id(self.value(page, "erp_edit_id", required=True))
+            if actual_id != product_id:
+                raise ValueError(f"智赢详情产品编号不匹配：目标 {product_id}，当前 {actual_id}")
+            root = page.locator(f"{root_selector}:visible")
+            if root.count() != 1:
+                raise ValueError("智赢产品详情未能唯一定位")
+            weight_input = self.unique(page, "erp_weight_input")
+            weight_input.fill(weight)
+            dimensions_controls = self._zying_package_dimension_controls(root)
+            if len(dimensions_controls) == 1:
+                dimensions_controls[0].fill("x".join(dims))
+            elif len(dimensions_controls) == 3:
+                for control, value in zip(dimensions_controls, dims):
+                    control.fill(value)
+            else:
+                raise ValueError("智赢详情页未能识别唯一的包装尺寸字段")
+            self._set_zying_product_level(page, root)
+            if self.unique(page, "erp_weight_input").input_value().strip() != weight:
+                raise ValueError("智赢重量输入框回读与目标值不一致")
+            expected_dims = ["x".join(dims)] if len(dimensions_controls) == 1 else dims
+            if [field.input_value().strip().lower().replace("×", "x") for field in dimensions_controls] != expected_dims:
+                raise ValueError("智赢尺寸输入框回读与目标值不一致")
+            save = self.erp_save_button(page, root)
+            self.check(page)
+            save.click()
+            try:
+                if self.s.get("erp_saved"):
+                    page.locator(self.s["erp_saved"]).first.wait_for(state="visible", timeout=8000)
+                else:
+                    page.get_by_text(re.compile(r"保存成功|操作成功|更新成功|提交成功")).first.wait_for(
+                        state="visible", timeout=8000
+                    )
+            except Exception as exc:
+                if "Timeout" not in str(exc):
+                    raise
+            page.reload(wait_until="domcontentloaded")
+            self._open_zying_product_by_id(page, product_id)
+            root = page.locator(f"{root_selector}:visible")
+            if self.normalize_erp_id(self.value(page, "erp_edit_id", required=True)) != product_id:
+                raise ValueError("保存后智赢详情编号发生变化，无法确认写入结果")
+            dimensions_controls = self._zying_package_dimension_controls(root)
+            if len(dimensions_controls) not in (1, 3):
+                raise ValueError("保存后无法重新定位智赢包装尺寸字段")
+            if self.unique(page, "erp_weight_input").input_value().strip() != weight:
+                raise ValueError("保存后回读的智赢重量与目标值不一致")
+            if [field.input_value().strip().lower().replace("×", "x") for field in dimensions_controls] != expected_dims:
+                raise ValueError("保存后回读的智赢尺寸与目标值不一致")
+            self._verify_zying_product_level(root)
+            self.log(f"智赢产品 {product_id} 已保存：重量 {weight}g，尺寸 {'x'.join(dims)}cm，级别重点")
+            return {"product_id": product_id, "weight_g": weight, "dimensions_cm": "x".join(dims), "level": "重点"}
+        finally:
+            self.release(page)
+
+    def _open_zying_product_by_id(self, page, product_id):
+        root_selector = ".curd-detail-wrap"
+        if root_selector and page.locator(f"{root_selector}:visible").count():
+            if self.normalize_erp_id(self.value(page, "erp_edit_id")) == product_id:
+                return
+        self._search_zying_product(page, product_id)
+        rows = page.locator(self.s["erp_rows"])
+        rows.first.wait_for(state="visible")
+        candidates, last_rows = [], []
+        search_started = time.monotonic()
+        deadline = search_started + 5
+        while time.monotonic() < deadline:
+            last_rows = rows.all()
+            exact = []
+            for row in last_rows:
+                row_id = ""
+                if self.s.get("erp_id"):
+                    try:
+                        row_id = self.normalize_erp_id(self.value(row, "erp_id", required=True))
+                    except Exception:
+                        pass
+                if row_id == product_id or (not row_id and re.search(rf"(?<!\d){re.escape(product_id)}(?!\d)", row.inner_text())):
+                    exact.append(row)
+            if exact:
+                candidates = exact
+                break
+            if len(last_rows) == 1 and time.monotonic() - search_started >= 1.2:
+                break
+            if self.stop.wait(.3):
+                raise Stopped("智赢产品编号搜索等待被停止")
+        if not candidates and len(last_rows) == 1:
+            # The detail header is still checked before any write, so a list
+            # build that omits card IDs can use a sole search result safely.
+            candidates = last_rows
+        if len(candidates) != 1:
+            raise ValueError(f"按产品编号 {product_id} 搜索后匹配到 {len(candidates)} 个智赢商品")
+        card = candidates[0]
+        title_selector = self.s.get("erp_title")
+        title = card.locator(title_selector).first if title_selector and card.locator(title_selector).count() else card
+        title.click()
+        page.locator(f"{root_selector}:visible").wait_for(state="visible")
+        actual_id = self.normalize_erp_id(self.value(page, "erp_edit_id", required=True))
+        if actual_id != product_id:
+            raise ValueError(f"打开的智赢商品编号不匹配：目标 {product_id}，当前 {actual_id}")
+
+    def _search_zying_product(self, page, product_id):
+        selector = self.s.get("erp_product_id_search") or ""
+        if selector:
+            fields = page.locator(selector)
+            visible_fields = [field for field in fields.all() if field.is_visible()]
+        else:
+            visible_fields = []
+            for field in page.locator("input:visible").all():
+                details = field.evaluate("""e => {
+                  const box=e.closest('.ant-form-item')||e.parentElement;
+                  return [e.placeholder,e.getAttribute('aria-label'),box?.innerText].filter(Boolean).join(' ')
+                }""")
+                if re.search(r"产品编号|商品编号|产品ID|商品ID", details or ""):
+                    visible_fields.append(field)
+        if len(visible_fields) != 1:
+            raise ValueError(f"无法唯一定位智赢产品编号搜索框，请配置 erp_product_id_search（当前匹配 {len(visible_fields)} 个）")
+        visible_fields[0].fill(product_id)
+        button_selector = self.s.get("erp_product_search_button") or ""
+        if button_selector:
+            buttons = [button for button in page.locator(button_selector).all() if button.is_visible()]
+        else:
+            buttons = [button for button in page.locator("button").all()
+                       if button.is_visible() and re.fullmatch(r"\s*搜\s*索\s*", button.inner_text() or "")]
+            nearby = visible_fields[0].locator("xpath=ancestor::form[1]")
+            if not nearby.count():
+                nearby = visible_fields[0].locator("xpath=ancestor::*[contains(@class,'ant-form')][1]")
+            if nearby.count():
+                local_buttons = [button for button in nearby.locator("button").all()
+                                 if button.is_visible() and re.fullmatch(r"\s*搜\s*索\s*", button.inner_text() or "")]
+                if len(local_buttons) == 1:
+                    buttons = local_buttons
+        if len(buttons) == 1:
+            buttons[0].click()
+        elif len(buttons) == 0:
+            visible_fields[0].press("Enter")
+        else:
+            raise ValueError(f"智赢产品搜索按钮匹配到 {len(buttons)} 个，请配置 erp_product_search_button")
+        page.wait_for_timeout(500)
+
+    def _zying_package_dimension_controls(self, root):
+        selector = self.s.get("erp_dimensions_input") or ""
+        if selector:
+            matches = [field for field in root.locator(selector).all() if field.is_visible()]
+            if len(matches) not in (1, 3):
+                raise ValueError(f"智赢尺寸字段选择器必须匹配一个整体尺寸框或长宽高三个字段，实际 {len(matches)} 个")
+            return matches
+        dimension_items = []
+        dimension_groups = []
+        side_items = {"长": [], "宽": [], "高": []}
+        for item in root.locator(".ant-form-item").all():
+            label = item.locator(".ant-form-item-label").inner_text() if item.locator(".ant-form-item-label").count() else ""
+            label = re.sub(r"[：:*\s]", "", label)
+            fields = [field for field in item.locator("input,textarea").all() if field.is_visible()]
+            if not fields:
+                continue
+            if re.search(r"包装尺寸|商品尺寸|产品尺寸|尺寸", label):
+                dimension_items.extend(fields)
+                dimension_groups.append(fields)
+            for side, pattern in (("长", r"(?:包装|产品)?(?:长|长度|length)"),
+                                  ("宽", r"(?:包装|产品)?(?:宽|宽度|width)"),
+                                  ("高", r"(?:包装|产品)?(?:高|高度|height)")):
+                if re.fullmatch(pattern, label, flags=re.I):
+                    side_items[side].extend(fields)
+        if len(dimension_items) == 1:
+            return dimension_items
+        if len(dimension_groups) == 1 and len(dimension_groups[0]) == 3:
+            return dimension_groups[0]
+        if all(len(side_items[side]) == 1 for side in ("长", "宽", "高")):
+            return [side_items[side][0] for side in ("长", "宽", "高")]
+        return []
+
+    def _set_zying_product_level(self, page, root):
+        selector = self.s.get("erp_product_level_control") or ""
+        if selector:
+            controls = [control for control in root.locator(selector).all() if control.is_visible()]
+            if len(controls) != 1:
+                raise ValueError(f"智赢产品级别选择器必须唯一，实际 {len(controls)} 个")
+            item = controls[0].locator("xpath=ancestor::*[contains(@class,'ant-form-item')][1]")
+            if item.count() != 1:
+                raise ValueError("产品级别选择器未定位到表单项")
+        else:
+            items = []
+            for item in root.locator(".ant-form-item").all():
+                label = item.locator(".ant-form-item-label").inner_text() if item.locator(".ant-form-item-label").count() else ""
+                if re.search(r"产品级别|产品等级|级别", label):
+                    items.append(item)
+            if len(items) != 1:
+                raise ValueError(f"无法唯一定位智赢“产品级别”字段（当前匹配 {len(items)} 个）")
+            item = items[0]
+        radio_labels = [label for label in item.locator("label").all()
+                        if label.is_visible() and re.sub(r"\s+", "", label.inner_text()) == "重点"
+                        and label.locator("input[type='radio']").count()]
+        if radio_labels:
+            if len(radio_labels) != 1:
+                raise ValueError("智赢产品级别单选项中没有唯一的“重点”选项")
+            radio_labels[0].click()
+            self._verify_zying_product_level(root)
+            return
+        native = [control for control in item.locator("select").all() if control.is_visible()]
+        if len(native) == 1:
+            native[0].select_option(label="重点")
+            self._verify_zying_product_level(root)
+            return
+        selects = [control for control in item.locator(".ant-select-selector,[role='combobox']").all() if control.is_visible()]
+        if len(selects) == 1:
+            selects[0].click()
+            options = [option for option in page.locator(".ant-select-dropdown:visible .ant-select-item-option").all()
+                       if option.is_visible() and re.sub(r"\s+", "", option.inner_text()) == "重点"]
+            if len(options) != 1:
+                raise ValueError("智赢产品级别下拉项中没有唯一的“重点”选项")
+            options[0].click()
+            self._verify_zying_product_level(root)
+            return
+        raise ValueError("智赢产品级别字段不是可识别的单选框或下拉框")
+
+    def _verify_zying_product_level(self, root):
+        items = []
+        for item in root.locator(".ant-form-item").all():
+            label = item.locator(".ant-form-item-label").inner_text() if item.locator(".ant-form-item-label").count() else ""
+            if re.search(r"产品级别|产品等级|级别", label):
+                items.append(item)
+        if len(items) != 1:
+            raise ValueError("保存前后无法唯一核对智赢产品级别")
+        item = items[0]
+        checked = [radio for radio in item.locator("input[type='radio']:checked").all()]
+        if checked:
+            selected = [radio for radio in checked if re.sub(r"\s+", "", radio.evaluate("e => e.closest('label')?.innerText||''")) == "重点"]
+            if len(selected) == 1:
+                return True
+            raise ValueError("智赢产品级别未回读为“重点”")
+        native = [control for control in item.locator("select").all() if control.is_visible()]
+        if len(native) == 1:
+            selected = native[0].locator("option:checked").inner_text()
+            if re.sub(r"\s+", "", selected) == "重点":
+                return True
+        selected = item.locator(".ant-select-selection-item").all_inner_texts()
+        if not selected:
+            selected = item.locator("[role='combobox']").all_inner_texts()
+        if len(selected) == 1 and re.sub(r"\s+", "", selected[0]) == "重点":
+            return True
+        raise ValueError("智赢产品级别未回读为“重点”")
+
     def read_review_status(self, task):
         """Read the live Zying review status before any supplier/AI work."""
         host = urlsplit(self.config["erp_list_url"]).hostname
@@ -1531,8 +1795,12 @@ class Browser:
 
     def write_patch(self, task, changes, before_save):
         from .models import erp_value_equal
-        if not changes or set(changes) - {"weight_g", "net_income_usd", "review_status"}:
+        if not changes or set(changes) - {"weight_g", "net_income_usd", "review_status", "dimensions_cm"}:
             raise ValueError("回填字段无效")
+        if "dimensions_cm" in changes:
+            dims = re.split(r"\s*[x×*＊]\s*", str(changes["dimensions_cm"]))
+            if len(dims) != 3 or any(number(side) > 60 for side in dims):
+                raise ValueError("包装尺寸必须为长x宽x高，且单边不能超过60 cm")
         if "review_status" in changes and changes["review_status"] not in WRITEBACK_REVIEW_STATUSES:
             raise ValueError("审核状态只能回填为通过或价格异常")
         host = urlsplit(self.config["erp_list_url"]).hostname
@@ -1541,9 +1809,16 @@ class Browser:
             if self.normalize_erp_id(self.value(page, "erp_edit_id", required=True)) != task["erp_goods_id"]:
                 raise ValueError("智赢详情产品编号变化，已停止保存")
             root = page.locator(".curd-detail-wrap")
-            return {"weight_g": self.unique(page, "erp_weight_input").input_value(),
-                    "net_income_usd": self.unique(page, "erp_net_income_input").input_value(),
-                    "review_status": self.review_status(root)}
+            dimension_controls = self._zying_package_dimension_controls(root)
+            dimensions = "x".join(control.input_value().strip() for control in dimension_controls)
+            if len(dimension_controls) == 1:
+                dimensions = dimension_controls[0].input_value().strip()
+            result = {"weight_g": self.unique(page, "erp_weight_input").input_value(),
+                      "net_income_usd": self.unique(page, "erp_net_income_input").input_value(),
+                      "review_status": self.review_status(root)}
+            if dimension_controls:
+                result["dimensions_cm"] = dimensions
+            return result
         try:
             self.locate_erp_detail(page, task)
             self.visual(task, "erp_before", "已定位智赢商品，记录修改前重量、净收益和状态", page)
@@ -1565,6 +1840,15 @@ class Browser:
                     if field == "net_income_usd" and value != value.to_integral_value():
                         raise ValueError("净收益必须是整数美元")
                     self.unique(page, selector).fill(str(value))
+            if "dimensions_cm" in changes:
+                controls = self._zying_package_dimension_controls(root)
+                if len(controls) == 1:
+                    controls[0].fill("x".join(dims))
+                elif len(controls) == 3:
+                    for control, side in zip(controls, dims):
+                        control.fill(str(number(side)))
+                else:
+                    raise ValueError("智赢详情未能唯一定位包装尺寸输入框，已停止保存")
             if "review_status" in changes:
                 target = changes["review_status"]
                 radios = root.locator("input[name='stat']")
@@ -1601,7 +1885,7 @@ class Browser:
             actual = snapshot()
             for field in old:
                 expected = changes.get(field, old[field])
-                if not erp_value_equal(field, actual[field], expected):
+                if not erp_value_equal(field, actual.get(field), expected):
                     raise WritebackMismatch(actual)
             self.visual(task, "erp_saved", "保存后重新打开商品，重量、净收益及审核状态回读确认一致", page)
             return actual
@@ -1890,6 +2174,18 @@ class Browser:
             if net_income != net_income.to_integral_value():
                 raise ValueError("回填净收益必须是向上取整后的整数美元")
             old = {"net_income_usd": cost.input_value(), "weight_g": weight.input_value()}
+            root = page.locator(".curd-detail-wrap")
+            dimension_controls = self._zying_package_dimension_controls(root)
+            if dimension_controls:
+                old["dimensions_cm"] = (dimension_controls[0].input_value().strip() if len(dimension_controls) == 1
+                                        else "x".join(control.input_value().strip() for control in dimension_controls))
+            target_dimensions = task.get("supplier_dimensions_cm") if not task.get("dimensions_notice") else None
+            if target_dimensions:
+                dims = re.split(r"\s*[x×*＊]\s*", str(target_dimensions))
+                if len(dims) != 3 or any(number(side) > 60 for side in dims):
+                    raise ValueError("包装尺寸必须为长x宽x高，且单边不能超过60 cm")
+                if len(dimension_controls) not in (1, 3):
+                    raise ValueError("智赢详情未能唯一定位包装尺寸输入框，已停止保存")
             saved = page.locator(self.s["erp_saved"])
             if saved.count() and saved.first.is_visible():
                 raise ValueError("保存成功标识在保存前已可见，无法判断本次保存结果")
@@ -1902,6 +2198,12 @@ class Browser:
             if not keep_original_net_income:
                 cost.fill(str(net_income))
             weight.fill(str(number(task["weight_g"])))
+            if target_dimensions:
+                if len(dimension_controls) == 1:
+                    dimension_controls[0].fill("x".join(dims))
+                else:
+                    for control, side in zip(dimension_controls, dims):
+                        control.fill(str(number(side)))
             self.check(page)
             self.unique(page, "erp_save").click()
             saved.first.wait_for(state="visible")
@@ -1912,10 +2214,18 @@ class Browser:
                 raise ValueError("保存后商品或SKU变化")
             actual = {"net_income_usd": self.unique(page, "erp_net_income_input").input_value(),
                       "weight_g": self.unique(page, "erp_weight_input").input_value()}
+            dimension_controls = self._zying_package_dimension_controls(page.locator(".curd-detail-wrap"))
+            if dimension_controls:
+                actual["dimensions_cm"] = (dimension_controls[0].input_value().strip() if len(dimension_controls) == 1
+                                           else "x".join(control.input_value().strip() for control in dimension_controls))
             try:
                 if number(actual["net_income_usd"]) != net_income or number(actual["weight_g"]) != number(task["weight_g"]):
                     raise ValueError()
             except ValueError:
+                raise WritebackMismatch(actual)
+            from .models import erp_value_equal
+            if "dimensions_cm" in old and not erp_value_equal(
+                    "dimensions_cm", actual.get("dimensions_cm"), target_dimensions or old["dimensions_cm"]):
                 raise WritebackMismatch(actual)
             return actual
         finally:

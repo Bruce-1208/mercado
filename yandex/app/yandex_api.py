@@ -6,7 +6,7 @@ import unicodedata
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode, urlsplit
 
 import httpx
 
@@ -602,6 +602,93 @@ class YandexSellerClient:
             "returns": [item for item in result.get("returns") or [] if isinstance(item, dict)],
             "paging": {"nextPageToken": str((result.get("paging") or {}).get("nextPageToken") or "")},
         }
+
+    async def get_return(self, campaign_id: int, order_id: int, return_id: int) -> dict[str, Any]:
+        response = await self._request(
+            "GET",
+            f"/v2/campaigns/{int(campaign_id)}/orders/{int(order_id)}/returns/{int(return_id)}",
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        result = response.get("result") or response
+        return result.get("return") or result
+
+    async def get_return_available_decisions(
+        self, business_id: int, campaign_id: int, return_id: int
+    ) -> list[dict[str, Any]]:
+        response = await self._request(
+            "POST",
+            f"/v1/businesses/{int(business_id)}/returns/decisions",
+            json_body={"campaignId": int(campaign_id), "returnId": int(return_id)},
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        result = response.get("result") or response
+        return [
+            item for item in result.get("availableDecisions") or []
+            if isinstance(item, dict) and item.get("decisionType")
+        ]
+
+    async def submit_return_decisions(
+        self,
+        campaign_id: int,
+        order_id: int,
+        return_id: int,
+        return_item_decisions: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            f"/v2/campaigns/{int(campaign_id)}/orders/{int(order_id)}/returns/{int(return_id)}/decision/submit",
+            json_body={"returnItemDecisions": return_item_decisions},
+            attempts=1,
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        return response
+
+    async def generate_payment_report(
+        self,
+        business_id: int,
+        campaign_id: int,
+        date_from: str,
+        date_to: str,
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            "/v2/reports/united-netting/generate?format=JSON&language=RU",
+            json_body={
+                "businessId": int(business_id),
+                "campaignIds": [int(campaign_id)],
+                "dateFrom": date_from,
+                "dateTo": date_to,
+            },
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        return response.get("result") or response
+
+    async def get_report_info(self, report_id: str) -> dict[str, Any]:
+        safe_id = quote(str(report_id).strip(), safe="")
+        if not safe_id:
+            raise YandexApiError("报表编号不能为空")
+        response = await self._request("GET", f"/v2/reports/info/{safe_id}")
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        return response.get("result") or response
+
+    async def download_report_archive(self, file_url: str) -> bytes:
+        parsed = urlsplit(str(file_url or ""))
+        if parsed.scheme.lower() != "https" or not parsed.hostname:
+            raise YandexApiError("Yandex 报表下载地址无效")
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(60.0), follow_redirects=True) as client:
+                response = await client.get(file_url)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise YandexApiError("下载 Yandex 结算报表失败") from exc
+        if len(response.content) > 50 * 1024 * 1024:
+            raise YandexApiError("结算报表超过 50 MB，无法在工作台中解析")
+        return response.content
 
     async def get_chats(
         self,

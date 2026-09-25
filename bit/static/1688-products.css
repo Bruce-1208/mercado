@@ -30,6 +30,15 @@
     flex-wrap: wrap;
 }
 
+.products-1688-heading-actions > * {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.products-1688-heading-actions .primary {
+    width: auto;
+}
+
 .p1688-summary-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -92,6 +101,11 @@
     flex-wrap: wrap;
 }
 
+.p1688-toolbar-row > button {
+    flex: 0 0 auto;
+    min-height: 36px;
+}
+
 .p1688-toolbar-row + .p1688-toolbar-row {
     margin-top: 12px;
 }
@@ -143,6 +157,11 @@
     font-size: 12px;
 }
 
+.p1688-batch-bar > button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
 .p1688-batch-bar label {
     display: inline-flex;
     align-items: center;
@@ -191,11 +210,24 @@
 
 .p1688-table {
     width: 100%;
-    min-width: 1350px;
+    min-width: 1450px;
+    table-layout: fixed;
     border-collapse: collapse;
     color: #344256;
     font-size: 12px;
 }
+
+.p1688-table col:nth-child(1) { width: 42px !important; }
+.p1688-table col:nth-child(2) { width: 320px !important; }
+.p1688-table col:nth-child(3) { width: 115px !important; }
+.p1688-table col:nth-child(4) { width: 100px !important; }
+.p1688-table col:nth-child(5) { width: 100px !important; }
+.p1688-table col:nth-child(6) { width: 88px !important; }
+.p1688-table col:nth-child(7) { width: 120px !important; }
+.p1688-table col:nth-child(8) { width: 102px !important; }
+.p1688-table col:nth-child(9) { width: 100px !important; }
+.p1688-table col:nth-child(10) { width: 135px !important; }
+.p1688-table col:nth-child(11) { width: 228px !important; }
 
 .p1688-table th {
     position: sticky;
@@ -233,14 +265,14 @@
 .p1688-product-cell {
     display: flex;
     align-items: center;
-    gap: 11px;
-    min-width: 300px;
+    gap: 9px;
+    min-width: 0;
 }
 
 .p1688-thumb {
-    width: 62px;
-    height: 62px;
-    flex: 0 0 62px;
+    width: 56px;
+    height: 56px;
+    flex: 0 0 56px;
     border: 1px solid #e1e7ef;
     border-radius: 9px;
     object-fit: cover;
@@ -249,7 +281,7 @@
 
 .p1688-product-image-link {
     display: block;
-    flex: 0 0 62px;
+    flex: 0 0 56px;
     line-height: 0;
 }
 
@@ -347,9 +379,10 @@
 .p1688-row-actions button,
 .p1688-row-actions a {
     min-height: 29px;
-    padding: 5px 8px;
+    padding: 5px 6px;
     border-radius: 7px;
-    font-size: 11px;
+    font-size: 10px;
+    white-space: nowrap;
 }
 
 .p1688-row-actions a {

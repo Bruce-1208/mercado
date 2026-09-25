@@ -19,8 +19,8 @@ def test_manifest_is_chrome_edge_manifest_v3_and_declares_supported_sites():
     assert manifest["manifest_version"] == 3
     assert manifest["background"]["service_worker"] == "background.js"
     assert "default_popup" not in manifest["action"]
-    assert manifest["version"] == "1.8.19"
-    assert "v1.8.19 · 1688已上传图片弹层搜索修复" in (EXTENSION / "popup.html").read_text(encoding="utf-8")
+    assert manifest["version"] == "1.8.23"
+    assert "v1.8.23 · Yandex采集" in (EXTENSION / "popup.html").read_text(encoding="utf-8")
     matches = manifest["content_scripts"][0]["matches"]
     assert any("mercadolibre.com.mx" in pattern for pattern in matches)
     assert any("mercadolivre.com.br" in pattern for pattern in matches)
@@ -149,7 +149,7 @@ def test_console_downloads_complete_zeshun_extension_package():
 
     assert response.status_code == 200
     assert response.headers["Content-Type"].startswith("application/zip")
-    assert response.headers["X-Zeshun-Extension-Version"] == "1.8.19"
+    assert response.headers["X-Zeshun-Extension-Version"] == "1.8.23"
     assert "zeshun-collector-extension.zip" in response.headers["Content-Disposition"]
     with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
         names = set(archive.namelist())
@@ -302,7 +302,7 @@ def test_ai_weight_price_console_keeps_product_table_stable_and_shows_owner():
     backend = (ROOT / "bit" / "bit_interface.py").read_text(encoding="utf-8")
 
     assert 'id="refresh-list"' in template
-    assert "refreshStatusOnly();},2000" in template
+    assert "refreshStatusOnly();},5000" in template
     assert "setInterval(()=>{if(document.visibilityState==='visible')refresh();" not in template
     assert "row.owner_display_name||row.owner_username" in template
     assert "entry.owner_name" in template

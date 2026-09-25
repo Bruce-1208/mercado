@@ -28,8 +28,10 @@ STATEFUL_PREFIXES = (
     "/api/browser-extension/zying/", "/api/local-executor/tasks/daily/",
     "/api/local-executor/run_shensu",
     "/api/browser-extension/ai-weight-price/client/",
+    "/api/browser-extension/weight-dimensions-records/",
     "/api/db/ai-weight-price/store",
     "/api/weight-dimensions-records/",
+    "/api/mercado/today/tasks/", "/api/mercado/today/events/",
 )
 STATEFUL_PATHS = {
     "/api/overview-auto-sync", "/api/db/overview-auto-sync",
@@ -40,6 +42,8 @@ STATEFUL_PATHS = {
     "/api/exports", "/api/mercado-tokens/exchange",
     "/api/store-links/bulk-update", "/api/store-links/bulk-update/status",
     "/api/db/store-links/bulk-update", "/api/db/store-links/bulk-update/status",
+    "/api/mercado/notifications", "/api/mercado/today/tasks",
+    "/api/db/mercado-action-center",
 }
 
 

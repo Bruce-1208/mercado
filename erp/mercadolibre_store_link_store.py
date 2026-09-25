@@ -1079,7 +1079,11 @@ def invalidate_store_link_metadata_cache() -> None:
 
     _filtered_count_cache.clear()
     with _metadata_cache_lock:
-        _metadata_cache.update({"expires_at": 0.0, "data": None})
+        _metadata_cache.update({
+            "expires_at": 0.0, "data": None,
+            "expires_at_without_categories": 0.0,
+            "data_without_categories": None,
+        })
         _scoped_metadata_cache.clear()
 
 
@@ -1186,7 +1190,8 @@ def _recent_sales_for_pairs(
 
 
 def _query_store_link_metadata(
-    cursor: Any, *, token_ids: Iterable[int] | None = None
+    cursor: Any, *, token_ids: Iterable[int] | None = None,
+    include_categories: bool = True,
 ) -> dict[str, Any]:
     scoped_token_ids = None
     if token_ids is not None:
@@ -1267,8 +1272,9 @@ def _query_store_link_metadata(
         token_values,
     )
     sites = [_json_safe_row(row) for row in cursor.fetchall()]
-    cursor.execute(
-        f"""
+    if include_categories:
+        cursor.execute(
+            f"""
         SELECT category_counts.`category_id`,
                COALESCE(NULLIF(product.`category_name`, ''), '') AS `category_name`,
                category_counts.`link_count`
@@ -1288,9 +1294,11 @@ def _query_store_link_metadata(
           ON product.`source_item_id` = sample_link.`item_id`
         ORDER BY `category_name`, category_counts.`category_id`
         """,
-        token_values,
-    )
-    mercado_categories = [_json_safe_row(row) for row in cursor.fetchall()]
+            token_values,
+        )
+        mercado_categories = [_json_safe_row(row) for row in cursor.fetchall()]
+    else:
+        mercado_categories = []
     summary_where = token_where.replace("`token_id`", f"`{STORE_LINK_TABLE}`.`token_id`")
     cursor.execute(
         f"SELECT COUNT(*) AS `all_count` FROM `{STORE_LINK_TABLE}`{summary_where}",
@@ -1332,13 +1340,14 @@ def _store_link_metadata(
     *,
     use_cache: bool,
     token_ids: Iterable[int] | None = None,
+    include_categories: bool = True,
 ) -> dict[str, Any]:
     if token_ids is not None:
-        scoped_key = tuple(sorted({
+        scoped_key = (include_categories, *tuple(sorted({
             int(value) for value in token_ids or () if int(value or 0) > 0
-        }))
+        })))
         if not use_cache:
-            return _query_store_link_metadata(cursor, token_ids=scoped_key)
+            return _query_store_link_metadata(cursor, token_ids=token_ids, include_categories=include_categories)
         now = time.monotonic()
         with _metadata_cache_lock:
             cached_entry = _scoped_metadata_cache.get(scoped_key)
@@ -1348,7 +1357,7 @@ def _store_link_metadata(
                 and cached_entry.get("data") is not None
             ):
                 return deepcopy(cached_entry["data"])
-            metadata = _query_store_link_metadata(cursor, token_ids=scoped_key)
+            metadata = _query_store_link_metadata(cursor, token_ids=token_ids, include_categories=include_categories)
             _scoped_metadata_cache[scoped_key] = {
                 "expires_at": time.monotonic() + STORE_LINK_METADATA_CACHE_SECONDS,
                 "data": deepcopy(metadata),
@@ -1363,16 +1372,19 @@ def _store_link_metadata(
                 _scoped_metadata_cache.pop(oldest_key, None)
             return metadata
     if not use_cache:
-        return _query_store_link_metadata(cursor)
+        return (_query_store_link_metadata(cursor) if include_categories
+                else _query_store_link_metadata(cursor, include_categories=False))
     now = time.monotonic()
     with _metadata_cache_lock:
-        cached = _metadata_cache.get("data")
-        if cached is not None and float(_metadata_cache.get("expires_at") or 0) > now:
+        cache_suffix = "" if include_categories else "_without_categories"
+        cached = _metadata_cache.get("data" + cache_suffix)
+        if cached is not None and float(_metadata_cache.get("expires_at" + cache_suffix) or 0) > now:
             return deepcopy(cached)
-        metadata = _query_store_link_metadata(cursor)
+        metadata = (_query_store_link_metadata(cursor) if include_categories
+                    else _query_store_link_metadata(cursor, include_categories=False))
         _metadata_cache.update({
-            "expires_at": time.monotonic() + STORE_LINK_METADATA_CACHE_SECONDS,
-            "data": deepcopy(metadata),
+            "expires_at" + cache_suffix: time.monotonic() + STORE_LINK_METADATA_CACHE_SECONDS,
+            "data" + cache_suffix: deepcopy(metadata),
         })
         return metadata
 
@@ -1391,6 +1403,7 @@ def list_store_links(
     video_uploaded: Any = None,
     management_category_id: Any = None,
     mercado_category: str = "",
+    include_categories: bool = True,
     sales_sort: str = "desc",
     sort_by: str = "sold_quantity",
     sort_order: str = "",
@@ -1520,6 +1533,7 @@ def list_store_links(
                 cursor,
                 use_cache=connection_factory is None,
                 token_ids=scoped_token_ids,
+                include_categories=include_categories,
             )
             group_map = metadata["group_map"]
             groups = metadata["groups"]

@@ -13,6 +13,7 @@
     </script>
     <title>武汉泽顺综合服务台</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/zeshun-monogram-gold.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='store-analysis.css') }}">
     <style>
         :root {
             --bg: #f4f7fb;
@@ -509,7 +510,7 @@
         }
 
         .ai-appeal-filters {
-            grid-template-columns: repeat(2, minmax(145px, 0.8fr)) repeat(3, minmax(150px, 1fr)) auto;
+            grid-template-columns: repeat(2, minmax(145px, 0.8fr)) repeat(4, minmax(150px, 1fr)) auto;
             margin: 14px 0;
             border: 1px solid #e7edf5;
             border-radius: 8px;
@@ -2768,6 +2769,15 @@
             background: var(--primary);
         }
 
+        #daily-task-strategy .site-option input[type="radio"] + span::before {
+            border-radius: 50%;
+        }
+
+        #daily-task-strategy .site-option input[type="radio"]:checked + span::before {
+            content: "";
+            box-shadow: inset 0 0 0 3px #fff;
+        }
+
         .site-option input:focus-visible + span {
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
         }
@@ -4694,6 +4704,20 @@
             width: 136px;
         }
 
+        .appeal-record-table {
+            min-width: 1900px;
+        }
+
+        .appeal-record-table th:nth-child(12),
+        .appeal-record-table td:nth-child(12) {
+            width: 320px;
+        }
+
+        .appeal-record-table th:nth-child(13),
+        .appeal-record-table td:nth-child(13) {
+            width: 300px;
+        }
+
         .reputation-table tbody tr {
             height: 46px;
         }
@@ -6332,6 +6356,38 @@
         .store-link-board {
             overflow: hidden;
         }
+
+        .store-link-category-native { display: none; }
+        .store-link-category-trigger {
+            width: 100%; min-height: 36px; padding: 7px 10px; border: 1px solid var(--border);
+            border-radius: 6px; background: #fff; color: var(--text); text-align: left;
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            cursor: pointer;
+        }
+        .store-link-category-panel {
+            position: fixed; z-index: 2000; width: min(850px, calc(100vw - 24px));
+            max-height: min(470px, calc(100vh - 24px)); background: #fff;
+            border: 1px solid var(--border); border-radius: 8px;
+            box-shadow: 0 14px 38px rgba(15, 23, 42, .22); overflow: hidden;
+        }
+        .store-link-category-panel[hidden] { display: none; }
+        .store-link-category-panel-head {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 9px 12px; border-bottom: 1px solid var(--border);
+        }
+        .store-link-category-panel-head button { border: 0; background: none; color: #1764ae; cursor: pointer; }
+        .store-link-category-columns { display: flex; min-height: 260px; overflow-x: auto; }
+        .store-link-category-column {
+            min-width: 190px; flex: 1; max-height: 410px; overflow-y: auto;
+            border-right: 1px solid var(--border); padding: 5px;
+        }
+        .store-link-category-option {
+            display: flex; width: 100%; justify-content: space-between; gap: 6px;
+            padding: 7px 8px; border: 0; border-radius: 4px; background: transparent;
+            color: var(--text); text-align: left; cursor: pointer;
+        }
+        .store-link-category-option:hover, .store-link-category-option.active { background: #dbeafe; }
+        .store-link-category-option small { color: #64748b; white-space: nowrap; }
 
         .store-link-sync-strip {
             display: grid;
@@ -8996,6 +9052,15 @@
         .icon-button:hover { background: #f2f6fa; color: var(--primary); }
 
         .topbar-tools { gap: 10px; }
+        .enterprise-filter {
+            display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px;
+            border: 1px solid var(--border); border-radius: 10px; background: #fff;
+            color: var(--muted); font-size: 12px; white-space: nowrap;
+        }
+        .enterprise-filter select {
+            max-width: 180px; border: 0; background: transparent; color: var(--text);
+            font: inherit; font-weight: 650; outline: none; cursor: pointer;
+        }
 
         .topbar-plugin-download {
             display: inline-flex;
@@ -9031,6 +9096,48 @@
             background: #e7f2ff;
             color: #14589d;
             transform: translateY(-1px);
+        }
+
+        .topbar-agent-download { position: relative; }
+        .topbar-agent-download[hidden] { display: none; }
+        .topbar-agent-download > summary { list-style: none; cursor: pointer; }
+        .topbar-agent-download > summary::-webkit-details-marker { display: none; }
+        .topbar-agent-download > summary:focus-visible {
+            outline: 2px solid #69a9e9;
+            outline-offset: 2px;
+        }
+        .topbar-agent-download[open] > summary {
+            border-color: #8fb9e8;
+            background: #e7f2ff;
+            color: #14589d;
+        }
+        .topbar-agent-download-menu {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            z-index: 80;
+            min-width: 172px;
+            padding: 5px;
+            border: 1px solid #dce5f0;
+            border-radius: 11px;
+            background: #fff;
+            box-shadow: 0 12px 28px rgba(25, 45, 75, .16);
+        }
+        .topbar-agent-download-menu a {
+            display: block;
+            border-radius: 7px;
+            color: #263041;
+            padding: 9px 11px;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .topbar-agent-download-menu a:hover,
+        .topbar-agent-download-menu a:focus-visible {
+            outline: none;
+            background: #edf5ff;
+            color: #14589d;
         }
 
         .service-pill {
@@ -9681,16 +9788,18 @@
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='console-ui.css') }}?v=20260921-align1">
     <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-products.css') }}?v=20260923-batch-delete1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-workbench.css') }}?v=20260921">
-    <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20260923-batch-delete1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='weight-dimensions-records.css') }}?v=20260924-1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-workbench.css') }}?v=20260925-ai-task-errors">
+    <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20260925-layout-ratio1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='weight-dimensions-records.css') }}?v=20260925-2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='inventory-sku.css') }}?v=20260925-1">
     <script src="{{ url_for('static', filename='console-ui.js') }}?v=20260915"></script>
     <script src="{{ url_for('static', filename='copy-anywhere.js') }}?v=20260922"></script>
     <script src="{{ url_for('static', filename='appeal-polling.js') }}?v=20260922"></script>
-    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260923-batch-delete1"></script>
+    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260925-ai-task-errors"></script>
     <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20260921"></script>
     <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260923-batch-delete1"></script>
-    <script defer src="{{ url_for('static', filename='weight-dimensions-records.js') }}?v=20260924-1"></script>
+    <script defer src="{{ url_for('static', filename='weight-dimensions-records.js') }}?v=20260925-2"></script>
+    <script defer src="{{ url_for('static', filename='inventory-sku.js') }}?v=20260925-1"></script>
     <style>
         .ai-video-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .75fr); gap: 18px; align-items: start; }
         .ai-video-panel { padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
@@ -9795,6 +9904,7 @@
             .ai-video-picker-item > button { grid-column: 1 / -1; }
         }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20260925-1">
 </head>
 <body class="zs-console">
     <header class="topbar">
@@ -9808,9 +9918,24 @@
         </div>
         <div class="topbar-tools">
             <span class="service-pill"><i></i> 服务在线</span>
+            {% if current_user.is_platform_admin %}
+            <label class="enterprise-filter" for="global-enterprise-filter">
+                企业筛选
+                <select id="global-enterprise-filter" aria-label="全局企业筛选" onchange="changeEnterpriseFilter(this.value)">
+                    <option value="">所有企业</option>
+                </select>
+            </label>
+            {% endif %}
             <button class="icon-button" type="button" aria-label="通知" title="暂无新通知">♢</button>
             <a class="topbar-plugin-download" href="/settings/integrations" title="模型 Token、邮件提醒与 Webhook"><span>⚙</span>集成设置</a>
             <a class="topbar-plugin-download" href="/api/browser-extension/download" download title="下载泽顺插件（Chrome / Edge）" aria-label="下载泽顺插件"><span>↓</span>下载插件</a>
+            <details class="topbar-agent-download" id="topbar-agent-download">
+                <summary class="topbar-plugin-download" title="下载本机 Agent" aria-label="下载本机 Agent" aria-controls="topbar-agent-download-menu"><span>↓</span>下载 Agent</summary>
+                <div class="topbar-agent-download-menu" id="topbar-agent-download-menu" role="menu">
+                    <a role="menuitem" href="/api/local-agents/download?platform=windows" download>下载 Windows Agent</a>
+                    <a role="menuitem" href="/api/local-agents/download?platform=macos" download>下载 macOS Agent</a>
+                </div>
+            </details>
             <span class="topbar-divider"></span>
             <div class="topbar-user">
                 <span class="user-avatar">{{ (current_user.display_name or current_user.username)[:1] }}</span>
@@ -9839,10 +9964,11 @@
                 <button class="tab-button active" type="button" data-tab="overview" data-icon="⌂" onclick="switchTab('overview')"><span class="nav-label">总览</span></button>
 
                 <p class="nav-title">订单运营</p>
+                <button class="tab-button" type="button" data-icon="!" data-permission="tasks.view" onclick="window.location.href='/mercado/today'"><span class="nav-label">今日必办</span></button>
                 <button class="tab-button" type="button" data-tab="orders" data-icon="▤" onclick="switchTab('orders')"><span class="nav-label">订单管理</span></button>
                 <button class="tab-button" type="button" data-tab="inventory" data-icon="▥" data-permission="inventory.view" onclick="switchTab('inventory')"><span class="nav-label">库存管理</span></button>
                 <button class="tab-button" type="button" data-tab="order-analysis" data-icon="⌁" data-permission="order_analysis.view" onclick="switchTab('order-analysis')"><span class="nav-label">订单分析</span></button>
-                <button class="tab-button" type="button" data-tab="weight-dimensions-records" data-icon="⚖" data-permission="order_analysis.view" onclick="switchTab('weight-dimensions-records')"><span class="nav-label">重量尺寸变高记录</span></button>
+                <button class="tab-button" type="button" data-tab="weight-dimensions-records" data-icon="⚖" data-permission="order_analysis.view" onclick="switchTab('weight-dimensions-records')"><span class="nav-label">重量尺寸变更记录</span></button>
 
                 <p class="nav-title">商品中心</p>
                 <button class="tab-button" type="button" data-tab="1688-products" data-icon="1688" onclick="switchTab('1688-products')"><span class="nav-label">1688产品区</span></button>
@@ -9858,6 +9984,7 @@
                 <button class="tab-button" type="button" data-tab="window-anomalies" data-icon="◉" data-permission="shop_status.view" onclick="switchTab('window-anomalies')"><span class="nav-label">店铺状态</span></button>
                 <button class="tab-button" type="button" data-tab="store-tokens" data-icon="⌘" onclick="switchTab('store-tokens')"><span class="nav-label">店铺授权</span></button>
                 <button class="tab-button" type="button" data-tab="store-links" data-icon="↗" onclick="switchTab('store-links')"><span class="nav-label">店铺链接</span></button>
+                <button class="tab-button" type="button" data-tab="store-analysis" data-icon="◔" data-permission="order_analysis.view" onclick="switchTab('store-analysis')"><span class="nav-label">店铺分析</span></button>
                 <button class="tab-button" type="button" data-tab="yandex" data-icon="Y" onclick="switchTab('yandex')"><span class="nav-label">Yandex 店铺</span></button>
 
                 <p class="nav-title">客户服务</p>
@@ -9872,7 +9999,7 @@
                 <p class="nav-title">自动化工具</p>
                 <button class="tab-button" type="button" data-tab="tasks" data-icon="✓" data-permission="tasks.view" onclick="switchTab('tasks')"><span class="nav-label">任务模块</span></button>
                 <button class="tab-button" type="button" data-tab="appeal" data-icon="✦" data-permission="appeal.view" onclick="switchTab('appeal')"><span class="nav-label">自动化 AI 申诉</span></button>
-                <button class="tab-button" type="button" data-tab="ai-appeals" data-icon="◫" data-permission="ai_appeals.view" onclick="switchTab('ai-appeals')"><span class="nav-label">AI 申诉记录</span></button>
+                <button class="tab-button" type="button" data-tab="ai-appeals" data-icon="◫" data-permission="ai_appeals.view" onclick="switchTab('ai-appeals')"><span class="nav-label">自动化申诉记录</span></button>
 
                 <p class="nav-title">风控与合规</p>
                 <button class="tab-button" type="button" data-tab="prohibited-listings" data-icon="禁" onclick="switchTab('prohibited-listings')"><span class="nav-label">禁限售列表</span></button>
@@ -10402,6 +10529,7 @@
                     <div class="inventory-view-tabs" role="tablist" aria-label="库存管理视图">
                         <button class="active" type="button" data-inventory-view="stock" onclick="switchInventoryView('stock')"><span>库存明细</span><b id="inventory-stock-tab-count">0</b></button>
                         <button type="button" data-inventory-view="logs" onclick="switchInventoryView('logs')"><span>出入库日志</span><b id="inventory-log-tab-count">0</b></button>
+                        <button type="button" data-inventory-view="sku" onclick="switchInventoryView('sku')"><span>SKU 与平台库存</span><b id="inventory-sku-tab-count">0</b></button>
                         <button type="button" data-inventory-view="shelves" onclick="switchInventoryView('shelves')"><span>货架管理</span><b id="inventory-shelf-tab-count">0</b></button>
                     </div>
 
@@ -10452,6 +10580,57 @@
                             </table>
                         </div>
                     </div>
+
+                    <div class="inventory-view" id="inventory-view-sku">
+                        <div class="inventory-sku-toolbar">
+                            <div><strong>统一 SKU 台账</strong><span>把内部产品关联到各店铺的商品或变体；平台库存按可售库存核对。</span></div>
+                            <div class="inventory-toolbar-actions">
+                                <button class="secondary" type="button" onclick="loadInventorySkuData(true)">检查平台差异</button>
+                                <button class="primary inventory-manage-action" type="button" onclick="openInventorySkuDialog()">＋ 新建内部 SKU</button>
+                            </div>
+                        </div>
+                        <div class="inventory-metrics inventory-sku-metrics">
+                            <article><span>内部 SKU</span><strong id="inventory-sku-metric-total">—</strong><small>已建立商品主档</small></article>
+                            <article><span>预占件数</span><strong id="inventory-sku-metric-reserved">—</strong><small>有效订单预占</small></article>
+                            <article><span>平台差异</span><strong id="inventory-sku-metric-differences">—</strong><small>含未同步或缺少变体库存</small></article>
+                            <article><span>待匹配商品</span><strong id="inventory-sku-metric-unmapped">—</strong><small>需要补充 SKU 映射</small></article>
+                        </div>
+                        <div class="inventory-sku-section-head"><div><strong>内部 SKU 可售情况</strong><span>可售 = 在库 − 订单预占 − 安全库存</span></div></div>
+                        <div class="inventory-table-wrap">
+                            <table class="inventory-table inventory-sku-table">
+                                <thead><tr><th>内部 SKU</th><th>商品主档</th><th>在库</th><th>预占</th><th>安全库存</th><th>可售</th><th>映射</th><th>操作</th></tr></thead>
+                                <tbody id="inventory-sku-body"><tr><td colspan="8" class="empty-state">打开此视图后加载 SKU 数据</td></tr></tbody>
+                            </table>
+                        </div>
+                        <div class="inventory-sku-section-head"><div><strong>店铺商品 / 变体映射</strong><span>支持同一内部 SKU 对应多个店铺与站点销售条件</span></div></div>
+                        <div class="inventory-table-wrap">
+                            <table class="inventory-table inventory-sku-mapping-table">
+                                <thead><tr><th>内部 SKU</th><th>店铺 / 站点</th><th>商品 / 变体 ID</th><th>卖家 SKU</th><th>操作</th></tr></thead>
+                                <tbody id="inventory-sku-mapping-body"><tr><td colspan="5" class="empty-state">暂无商品映射</td></tr></tbody>
+                            </table>
+                        </div>
+                        <div class="inventory-sku-section-head"><div><strong>平台库存差异</strong><span>使用最近同步的店铺商品库存快照，不会直接改写平台库存</span></div></div>
+                        <div class="inventory-table-wrap">
+                            <table class="inventory-table inventory-reconciliation-table">
+                                <thead><tr><th>内部 SKU</th><th>店铺 / 站点商品</th><th>平台库存</th><th>系统可售</th><th>差异</th><th>快照时间</th></tr></thead>
+                                <tbody id="inventory-reconciliation-body"><tr><td colspan="6" class="empty-state">正在加载平台库存快照…</td></tr></tbody>
+                            </table>
+                        </div>
+                        <div class="inventory-sku-section-head"><div><strong>有效订单预占 <b id="inventory-reservation-count">0</b></strong><span>新同步订单按商品/变体映射预占库存；取消、退款或作废状态会释放预占</span></div></div>
+                        <div class="inventory-table-wrap">
+                            <table class="inventory-table inventory-reservation-table">
+                                <thead><tr><th>订单</th><th>内部 SKU</th><th>订单商品</th><th>店铺站点</th><th>预占</th><th>状态 / 更新时间</th></tr></thead>
+                                <tbody id="inventory-reservation-body"><tr><td colspan="6" class="empty-state">暂无有效订单预占</td></tr></tbody>
+                            </table>
+                        </div>
+                        <div class="inventory-sku-section-head"><div><strong>尚未匹配的订单商品</strong><span>完成映射后，新同步订单会自动预占；刷新映射时会补算近期有效订单</span></div></div>
+                        <div class="inventory-table-wrap">
+                            <table class="inventory-table inventory-unmapped-table">
+                                <thead><tr><th>订单</th><th>商品 / 变体</th><th>店铺站点</th><th>数量</th><th>订单状态</th></tr></thead>
+                                <tbody id="inventory-unmapped-body"><tr><td colspan="5" class="empty-state">没有待匹配的订单商品</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
                     <p class="inventory-message" id="inventory-message" aria-live="polite"></p>
                 </section>
 
@@ -10475,6 +10654,7 @@
                             <div class="inventory-dialog-section-head"><div><b id="inventory-detail-step">2</b><span><strong>填写出入库信息</strong><small>数量与成本将写入不可变更的操作日志</small></span></div></div>
                             <div class="inventory-form-grid">
                                 <label><span id="inventory-movement-shelf-label">入库货架 *</span><select id="inventory-movement-shelf"><option value="">请选择货架</option></select></label>
+                                <label><span>内部 SKU（自动匹配，可调整）</span><select id="inventory-movement-sku"><option value="">不关联内部 SKU</option></select></label>
                                 <label><span>数量 *</span><input id="inventory-movement-quantity" type="number" min="1" max="1000000" step="1" value="1"></label>
                                 <label><span>单位成本（人民币）*</span><input id="inventory-movement-cost" type="number" min="0" step="0.0001" placeholder="0.00"></label>
                                 <label><span>业务时间 *</span><input id="inventory-movement-time" type="datetime-local" step="60"></label>
@@ -10484,6 +10664,30 @@
                         </section>
                     </div>
                     <div class="order-sync-footer"><span class="order-sync-footer-status" id="inventory-movement-message">请先匹配订单和产品</span><div class="order-sync-footer-actions"><button class="secondary" type="button" onclick="closeInventoryMovementDialog()">取消</button><button class="primary" id="inventory-movement-save" type="button" onclick="saveInventoryMovement()">确认入库</button></div></div>
+                </dialog>
+
+                <dialog class="inventory-dialog inventory-sku-dialog" id="inventory-sku-dialog">
+                    <div class="order-detail-header"><div><h3 id="inventory-sku-dialog-title">新建内部 SKU</h3><p>内部 SKU 是产品主档，各店铺商品和变体作为独立映射维护。</p></div><button class="order-detail-close" type="button" aria-label="关闭" onclick="closeInventorySkuDialog()">×</button></div>
+                    <div class="inventory-dialog-body"><div class="inventory-form-grid">
+                        <label><span>内部 SKU 编码 *</span><input id="inventory-sku-code" type="text" maxlength="64" placeholder="例如 BAG-BLACK-M"></label>
+                        <label><span>内部商品名称 *</span><input id="inventory-sku-name" type="text" maxlength="255" placeholder="黑色中号收纳袋"></label>
+                        <label><span>安全库存 *</span><input id="inventory-sku-safety" type="number" min="0" max="100000000" step="1" value="0"></label>
+                        <label><span>User Products 产品记录 ID</span><input id="inventory-sku-product-item" type="number" min="1" step="1" placeholder="可选，关联产品主档"></label>
+                        <label class="inventory-active-field"><span>状态</span><span class="inventory-switch"><input id="inventory-sku-active" type="checkbox" checked><i></i><em>启用 SKU</em></span></label>
+                    </div></div>
+                    <div class="order-sync-footer"><span class="order-sync-footer-status" id="inventory-sku-dialog-message">可售库存将扣除订单预占和安全库存</span><div class="order-sync-footer-actions"><button class="secondary" type="button" onclick="closeInventorySkuDialog()">取消</button><button class="primary" id="inventory-sku-save" type="button" onclick="saveInventorySku()">保存 SKU</button></div></div>
+                </dialog>
+
+                <dialog class="inventory-dialog inventory-sku-dialog" id="inventory-sku-mapping-dialog">
+                    <div class="order-detail-header"><div><h3 id="inventory-sku-mapping-dialog-title">新增店铺映射</h3><p>商品 ID 与变体 ID 使用已同步店铺商品快照中的平台编号。</p></div><button class="order-detail-close" type="button" aria-label="关闭" onclick="closeInventorySkuMappingDialog()">×</button></div>
+                    <div class="inventory-dialog-body"><div class="inventory-form-grid">
+                        <label><span>内部 SKU *</span><select id="inventory-sku-mapping-sku"><option value="">请选择内部 SKU</option></select></label>
+                        <label><span>店铺 / 站点 *</span><select id="inventory-sku-mapping-store"><option value="">请选择店铺站点</option></select></label>
+                        <label><span>平台商品 ID *</span><input id="inventory-sku-mapping-item" type="text" maxlength="64" placeholder="例如 MLB1234567890"></label>
+                        <label><span>平台变体 ID</span><input id="inventory-sku-mapping-variation" type="text" maxlength="64" placeholder="单商品可留空"></label>
+                        <label class="wide"><span>卖家 SKU</span><input id="inventory-sku-mapping-seller" type="text" maxlength="255" placeholder="可选；订单变体未提供 ID 时作为匹配依据"></label>
+                    </div></div>
+                    <div class="order-sync-footer"><span class="order-sync-footer-status" id="inventory-sku-mapping-message">一个平台商品/变体只能对应一个内部 SKU</span><div class="order-sync-footer-actions"><button class="secondary" type="button" onclick="closeInventorySkuMappingDialog()">取消</button><button class="primary" id="inventory-sku-mapping-save" type="button" onclick="saveInventorySkuMapping()">保存映射</button></div></div>
                 </dialog>
 
                 <dialog class="inventory-dialog inventory-shelf-dialog" id="inventory-shelf-dialog" onclick="if(event.target === this && !inventoryShelfSaving) this.close()">
@@ -10603,10 +10807,11 @@
                         <input id="ai-original-api-key" type="hidden" value="">
                         <div class="wide"><span>文案 Token</span><small class="shop-search-hint">使用账号已保存的 DeepSeek / 百炼凭证 · <a href="/settings/integrations">前往集成设置</a></small></div>
                         <div class="wide"><span>白底图</span><small class="shop-search-hint">本机免费使用 rembg / isnet-general-use 抠图，不调用付费图片 API，也不需要 Token。</small></div>
-                        <label><span>并发</span><input id="ai-original-workers" type="number" min="1" max="6" value="3"></label>
+                        {% if can_change_task_workers %}<label><span>并发</span><input id="ai-original-workers" type="number" min="1" max="6" value="3"></label>{% endif %}
                         <button class="primary" id="ai-original-process" type="button" onclick="processSelectedAiOriginalProducts()" disabled>执行所选 AI 任务</button>
                     </div>
                     <div class="ai-original-status" id="ai-original-task-status">等待选择 1688 产品</div>
+                    <div class="ai-original-task-log" id="ai-original-task-log" hidden></div>
                 </section>
 
                 <section class="panel ai-original-list-panel">
@@ -10615,6 +10820,13 @@
                         <strong id="ai-original-selection">已选择 0 件</strong>
                         <button class="danger" id="ai-original-delete" type="button" onclick="deleteSelectedAiOriginalProducts()" disabled>删除所选</button>
                         <span id="ai-original-total">共 0 件</span>
+                    </div>
+                    <div class="ai-original-bulk-dimensions">
+                        <div><strong>批量填写包装尺寸</strong><small>单位：厘米。仅对长、宽、高都未填写的所选产品生效；已有尺寸的产品保持原值。</small></div>
+                        <label><span>长</span><input id="ai-original-bulk-length" type="number" min="0.01" step="any" placeholder="长度 cm"></label>
+                        <label><span>宽</span><input id="ai-original-bulk-width" type="number" min="0.01" step="any" placeholder="宽度 cm"></label>
+                        <label><span>高</span><input id="ai-original-bulk-height" type="number" min="0.01" step="any" placeholder="高度 cm"></label>
+                        <button class="secondary" id="ai-original-bulk-dimensions-button" type="button" onclick="bulkSetAiOriginalDimensions()">应用到所选产品</button>
                     </div>
                     <div class="ai-original-grid" id="ai-original-grid"><div class="empty-state">打开模块后加载 1688 商品</div></div>
                 </section>
@@ -10661,13 +10873,41 @@
                 </dialog>
 
                 <section class="panel ai-original-publish-panel">
-                    <div><span class="ai-original-eyebrow">PUBLISH</span><h3>上架所选 AI 美客多刊登稿</h3><p>先补齐类目、属性、双语文案、白底主图、重量与净收益并审核。上架时按平台当前类目规则再次校验；巴西使用葡萄牙语，其余站点使用西班牙语。</p></div>
-                    <label><span>Global Selling 店铺（可多选）</span><select id="ai-original-stores" multiple size="4"></select></label>
-                    <fieldset><legend>目标站点（可多选）</legend><label><input type="checkbox" name="ai-original-site" value="MLM" checked> 墨西哥</label><label><input type="checkbox" name="ai-original-site" value="MLB"> 巴西</label><label><input type="checkbox" name="ai-original-site" value="MLA"> 阿根廷</label><label><input type="checkbox" name="ai-original-site" value="MLC"> 智利</label><label><input type="checkbox" name="ai-original-site" value="MCO"> 哥伦比亚</label><label><input type="checkbox" name="ai-original-site" value="MLU"> 乌拉圭</label></fieldset>
-                    <label><span>库存</span><input id="ai-original-quantity" type="number" min="1" max="9999" value="500"></label>
-                    <label><span>上架并发</span><input id="ai-original-publish-workers" type="number" min="1" max="32" value="8"></label>
-                    <button class="primary" id="ai-original-publish" type="button" onclick="publishSelectedAiOriginalProducts()" disabled>上架所选到对应店铺</button>
-                    <div class="ai-original-status" id="ai-original-publish-status">请先选择已完成并审核通过的产品</div>
+                    <header class="ai-original-publish-heading">
+                        <div>
+                            <span class="ai-original-eyebrow">04 · PUBLISH</span>
+                            <h3>发布到 Mercado Libre</h3>
+                            <p>选店铺、选站点，再确认库存与收益比例。只有完成 AI 生成并审核通过的产品可以上架。</p>
+                        </div>
+                        <div class="ai-original-publish-selection"><small>当前选择</small><strong id="ai-original-publish-selection">0 件</strong></div>
+                    </header>
+                    <div class="ai-original-publish-layout">
+                        <div class="ai-original-publish-targets">
+                            <section class="ai-original-publish-step">
+                                <div class="ai-original-publish-step-head"><span>01</span><div><strong>选择 Global Selling 店铺</strong><small>可按业务员和店铺组筛选</small></div></div>
+                                <div class="ai-original-publish-filters">
+                                    <label><span>业务员</span><select id="ai-original-salesperson"><option value="">全部业务员</option></select></label>
+                                    <label><span>店铺组</span><select id="ai-original-store-group"><option value="">全部店铺组</option></select></label>
+                                </div>
+                                <label class="ai-original-store-select-field"><span>可用店铺</span><select id="ai-original-stores" multiple size="5"></select><small id="ai-original-store-status">店铺比例沿用各店铺的站点设置；上架记录会写入“产品上架记录”。</small></label>
+                            </section>
+                            <section class="ai-original-publish-step">
+                                <div class="ai-original-publish-step-head"><span>02</span><div><strong>选择目标站点</strong><small>站点语言会自动匹配刊登文案</small></div></div>
+                                <fieldset class="ai-original-site-fieldset"><legend>目标站点</legend><label><input type="checkbox" name="ai-original-site" value="MLM" checked> 墨西哥 <small>西班牙语</small></label><label><input type="checkbox" name="ai-original-site" value="MLB"> 巴西 <small>葡萄牙语</small></label><label><input type="checkbox" name="ai-original-site" value="MLA"> 阿根廷 <small>西班牙语</small></label><label><input type="checkbox" name="ai-original-site" value="MLC"> 智利 <small>西班牙语</small></label><label><input type="checkbox" name="ai-original-site" value="MCO"> 哥伦比亚 <small>西班牙语</small></label><label><input type="checkbox" name="ai-original-site" value="MLU"> 乌拉圭 <small>西班牙语</small></label></fieldset>
+                            </section>
+                        </div>
+                        <aside class="ai-original-publish-settings">
+                            <div class="ai-original-publish-step-head"><span>03</span><div><strong>上架设置</strong><small>本次任务使用的刊登参数</small></div></div>
+                            <div class="ai-original-publish-settings-grid">
+                                <label><span>每件库存</span><input id="ai-original-quantity" type="number" min="1" max="9999" value="500"></label>
+                                {% if can_change_task_workers %}<label><span>并发任务</span><input id="ai-original-publish-workers" type="number" min="1" max="32" value="8"></label>{% endif %}
+                                <label class="ai-original-publish-ratio"><span>AI 原创净收益比例</span><div class="ai-original-percent-input"><input id="ai-original-net-ratio" type="number" min="0.01" max="10000" step="any" value="200"><b>%</b></div></label>
+                            </div>
+                            <div class="ai-original-publish-formula"><strong>收益计算</strong><span>产品净收益 × AI 比例 × 店铺站点比例</span><small id="ai-original-publish-formula-note">店铺站点比例沿用各店铺设置。</small></div>
+                            <button class="primary" id="ai-original-publish" type="button" onclick="publishSelectedAiOriginalProducts()" disabled>上架所选产品</button>
+                            <div class="ai-original-status" id="ai-original-publish-status">请先选择已完成并审核通过的产品</div>
+                        </aside>
+                    </div>
                 </section>
             </div>
 
@@ -10981,10 +11221,10 @@
                                 <label for="mercado-publish-quantity">库存</label>
                                 <input class="market-publish-quantity" id="mercado-publish-quantity" type="number" min="1" max="9999" value="500">
                             </div>
-                            <div class="market-publish-field market-publish-field-number">
+                            {% if can_change_task_workers %}<div class="market-publish-field market-publish-field-number">
                                 <label for="mercado-publish-workers">并发</label>
                                 <input class="market-publish-workers" id="mercado-publish-workers" type="number" min="1" value="16">
-                            </div>
+                            </div>{% endif %}
                         </div>
                         <div class="market-group-publish-options" id="mercado-group-publish-mode-field" style="display:none">
                             <label for="mercado-group-publish-mode">账号组上架模式</label>
@@ -11120,21 +11360,43 @@
                 <div class="tab-heading">
                     <div>
                         <span class="section-kicker">ORDER PACKAGE REVIEW</span>
-                        <h2>重量尺寸变高记录</h2>
-                        <p>上传订单表，读取运单实测重量、尺寸和运费；核对后可更新对应美客多商品。</p>
+                        <h2>重量尺寸变更记录</h2>
+                        <p>默认展示 8–9 月 API 记录中运费发生变化的订单，可按时间和业务字段进一步筛选。</p>
                     </div>
                 </div>
                 <section class="panel wdr-toolbar">
-                    <label class="wdr-file-label" for="wdr-file">订单文件（.xlsx / .xlsm）</label>
-                    <input id="wdr-file" type="file" accept=".xlsx,.xlsm">
-                    <button class="primary" id="wdr-upload" type="button">上传并读取</button>
-                    <button id="wdr-export" type="button" disabled>导出 Excel</button>
-                    <button class="danger" id="wdr-execute" type="button" data-permission="order_analysis.execute" disabled>执行更新</button>
-                    <span id="wdr-state" role="status">请选择订单文件</span>
+                    <label class="wdr-dropzone" id="wdr-dropzone" for="wdr-file">
+                        <strong>手动读取订单文件，或点击选择</strong>
+                        <span id="wdr-file-name">支持 .xlsx / .xlsm；产品编号请先通过订单导入补全</span>
+                    </label>
+                    <input id="wdr-file" type="file" accept=".xlsx,.xlsm" hidden>
+                    <button class="primary" id="wdr-upload" type="button">读取订单文件</button>
+                    <button id="wdr-refresh-changed" type="button">刷新变更订单</button>
+                    <button id="wdr-export" type="button" disabled>导出筛选结果</button>
+                    <label class="wdr-agent-picker" for="wdr-agent-id">智赢 Agent
+                        <select id="wdr-agent-id" aria-label="智赢 Agent"><option value="">正在读取在线 Agent…</option></select>
+                    </label>
+                    <button id="wdr-agent-refresh" type="button">刷新 Agent</button>
+                    <button class="primary" id="wdr-zeshun-execute" type="button" data-permission="order_analysis.execute" disabled>更新泽顺数据和链接</button>
+                    <button class="danger" id="wdr-zying-execute" type="button" data-permission="order_analysis.execute" disabled>更新智赢产品</button>
+                    <span id="wdr-selection-summary" class="wdr-selection-summary">已选择 0 条</span>
+                    <span id="wdr-state" role="status">正在读取运费变更订单…</span>
                 </section>
-                <p class="wdr-note">执行时先更新包装重量与尺寸，再将商品当前的美元净收益重新提交。每条记录会显示执行状态。</p>
+                <section class="panel wdr-filters" aria-label="重量尺寸变更记录筛选器">
+                    <label>变更开始时间<input id="wdr-filter-date-from" type="datetime-local" step="60"></label>
+                    <label>变更结束时间<input id="wdr-filter-date-to" type="datetime-local" step="60"></label>
+                    <label>业务员<input id="wdr-filter-salesperson" type="text" placeholder="可输入多个，逗号分隔"></label>
+                    <label>来源<input id="wdr-filter-source" type="text" placeholder="来源关键词"></label>
+                    <label>店铺<input id="wdr-filter-store" type="text" placeholder="店铺名称或店铺 ID"></label>
+                    <label>产品分类<input id="wdr-filter-category" type="text" placeholder="分类关键词"></label>
+                    <label>地区<input id="wdr-filter-region" type="text" placeholder="地区关键词"></label>
+                    <label>运费差值最小值<input id="wdr-filter-freight-min" type="number" step="0.01" placeholder="USD"></label>
+                    <label>运费差值最大值<input id="wdr-filter-freight-max" type="number" step="0.01" placeholder="USD"></label>
+                    <button class="primary" id="wdr-filter-apply" type="button">筛选变更订单</button>
+                </section>
+                <p class="wdr-note">默认读取当前年度 8 月 1 日至 9 月 30 日运费检查时间内发生变化的订单；时间筛选针对运费变更时间。产品 id、业务员、来源和分类等缺失信息通过订单导入补全。勾选订单后可分别执行两个更新动作；泽顺先更新关联链接重量尺寸，再重新提交当前净收益；智赢调用已登录的本机 Agent 逐个更新产品重量尺寸并将级别改为“重点”。</p>
                 <section class="panel wdr-table-panel">
-                    <div class="wdr-table-wrap"><table id="wdr-table"><thead></thead><tbody><tr><td class="wdr-empty">上传文件后显示记录</td></tr></tbody></table></div>
+                    <div class="wdr-table-wrap"><table id="wdr-table"><thead></thead><tbody><tr><td class="wdr-empty">正在加载运费变更订单</td></tr></tbody></table></div>
                 </section>
             </div>
 
@@ -11436,7 +11698,7 @@
                             <select id="appeal-execution-target">
                                 <option value="agent" selected>本机 Agent（免更新客户端）</option>
                                 <option value="local">旧版 client 工作台（兼容）</option>
-                                <option value="server">服务器比特浏览器</option>
+                                {% if current_user.role_key == 'super_admin' %}<option value="server">服务器比特浏览器</option>{% endif %}
                             </select>
                             <small class="shop-search-hint" id="appeal-local-executor-hint">请选择已安装并在线的本机 Agent。</small>
                         </div>
@@ -11448,8 +11710,6 @@
                             </select>
                             <div class="actions" style="margin-top: 8px; flex-wrap: wrap;">
                                 <button class="secondary" type="button" id="refresh-execution-agents">刷新电脑</button>
-                                <button class="secondary" type="button" id="download-local-agent">下载 Windows Agent</button>
-                                <button class="secondary" type="button" id="download-local-agent-macos">下载 macOS Agent</button>
                             </div>
                             <small class="shop-search-hint" id="appeal-agent-hint">Agent 安装一次后会自动同步最新业务代码。</small>
                         </div>
@@ -11623,7 +11883,7 @@
                             <select id="daily-task-execution-target">
                                 <option value="agent" {% if runtime_role != 'client' %}selected{% endif %}>本机 Agent</option>
                                 <option value="local" {% if runtime_role == 'client' %}selected{% endif %}>旧版 client 工作台（兼容）</option>
-                                <option value="server">服务器比特浏览器</option>
+                                {% if current_user.role_key == 'super_admin' %}<option value="server">服务器比特浏览器</option>{% endif %}
                             </select>
                             <small class="shop-search-hint" id="daily-task-local-executor-hint">选择在线电脑，由该电脑的 Agent 执行任务。</small>
                         </div>
@@ -11633,8 +11893,6 @@
                             <select id="daily-task-agent-id"><option value="">正在读取在线电脑...</option></select>
                             <div class="actions" style="margin-top: 8px; flex-wrap: wrap;">
                                 <button class="secondary" type="button" id="refresh-daily-task-agents">刷新电脑</button>
-                                <button class="secondary" type="button" id="download-daily-task-agent">下载 Windows Agent</button>
-                                <button class="secondary" type="button" id="download-daily-task-agent-macos">下载 macOS Agent</button>
                             </div>
                             <small class="shop-search-hint" id="daily-task-agent-hint">请在执行电脑启动 Agent 1.1.0 或更高版本。</small>
                         </div>
@@ -11661,7 +11919,15 @@
                         </div>
 
                         <div class="field">
-                            <label>任务开关（可同时开启多个）</label>
+                            <label>任务模式</label>
+                            <div class="site-picker" id="daily-task-strategy">
+                                <label class="site-option"><input id="daily-task-normal-mode" type="radio" name="daily-task-strategy" value="normal" checked onchange="updateDailyTaskStrategyFields()"><span>普通模式</span></label>
+                                <label class="site-option"><input id="daily-task-algorithm-mode" type="radio" name="daily-task-strategy" value="algorithm" onchange="updateDailyTaskStrategyFields()"><span>算法模式</span></label>
+                            </div>
+                        </div>
+
+                        <div class="field" id="daily-task-normal-options">
+                            <label>普通模式任务开关（可同时开启多个）</label>
                             <div class="site-picker" id="daily-task-switches">
                                 <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="侵权" checked onchange="updateDailyTaskAppealSwitch(this)"><span>侵权</span></label>
                                 <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="禁限售" onchange="updateDailyTaskAppealSwitch(this)"><span>禁限售</span></label>
@@ -11669,10 +11935,11 @@
                                 <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="投诉" onchange="updateDailyTaskAppealSwitch(this)"><span>投诉</span></label>
                                 <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="取消率" onchange="updateDailyTaskAppealSwitch(this)"><span>取消率</span></label>
                                 <label class="site-option"><input id="daily-task-mixed-mode" type="checkbox" role="switch" name="daily-task-appeal-type" value="混合模式" onchange="updateDailyTaskAppealSwitch(this)"><span>混合模式</span></label>
-                                <label class="site-option"><input id="daily-task-algorithm-mode" type="checkbox" role="switch" name="daily-task-appeal-type" value="算法模式" onchange="updateDailyTaskAppealSwitch(this)"><span>算法模式</span></label>
                             </div>
                             <small class="shop-search-hint">混合模式一轮：侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率；混合模式与自定义任务互斥。侵权任务不限制 Top N；每轮先实时遍历店铺授权中勾选的全部站点，再只执行本站点普通侵权数超过标准的站点。侵权和禁限售会拆成小批次，并按待申诉数量设置 1–5 级权重平滑轮转；数量越多，执行频率越高，低量站点也不会跳过。禁限售是独立任务，需单独开启后读取当前禁限售列表。</small>
-                            <small class="shop-search-hint">算法模式：每轮读取实时侵权及最新声誉数据，综合侵权数量、投诉率、延误率和取消率，优先执行高风险店铺和站点。按本轮综合分分配 1–5 级权重：侵权商品分批且不重复，声誉申诉每轮安排 1–5 次，低风险站点也会轮转。仍遵守下方执行标准及间隔；算法模式与混合模式、自定义任务互斥。</small>
+                        </div>
+                        <div class="field" id="daily-task-algorithm-hint" hidden>
+                            <small class="shop-search-hint">算法模式：每轮读取实时侵权及最新声誉数据，综合侵权数量、投诉率、延误率和取消率，优先执行高风险店铺和站点。按本轮综合分分配 1–5 级权重：侵权商品分批且不重复，声誉申诉每轮安排 1–5 次，低风险站点也会轮转。仍遵守下方执行标准及间隔。</small>
                         </div>
 
                         <div class="field">
@@ -11709,10 +11976,10 @@
                             <small class="shop-search-hint">不勾选表示所有店铺组；选择店铺组会清空业务员。</small>
                         </div>
 
-                        <div class="field">
+                        {% if can_change_task_workers %}<div class="field">
                             <label for="daily-task-max-workers">并发进程</label>
                             <input type="number" id="daily-task-max-workers" value="10" min="1" max="10">
-                        </div>
+                        </div>{% endif %}
 
                         <div class="field">
                             <label for="daily-task-recent-days">统计天数（仅侵权）</label>
@@ -11822,6 +12089,28 @@
                         </details>
                     </section>
                 </div>
+            </div>
+
+            <div class="tab-page" id="tab-store-analysis">
+                <div class="tab-heading">
+                    <div>
+                        <h2>店铺分析</h2>
+                        <p>按站点查看销售排名及美客多二级分类前五</p>
+                    </div>
+                </div>
+                <section class="panel store-analysis-board">
+                    <form class="store-analysis-filters zs-filter-panel" id="store-analysis-form">
+                        <div class="order-filter-field"><label for="store-analysis-start">开始日期</label><input id="store-analysis-start" type="date" required></div>
+                        <div class="order-filter-field"><label for="store-analysis-end">结束日期</label><input id="store-analysis-end" type="date" required></div>
+                        <div class="order-filter-field"><label for="store-analysis-salesperson">业务员</label><select id="store-analysis-salesperson"><option value="">全部业务员</option></select></div>
+                        <div class="order-filter-field"><label for="store-analysis-group">店铺组</label><select id="store-analysis-group"><option value="">全部店铺组</option></select></div>
+                        <div class="order-filter-field"><label for="store-analysis-store">店铺</label><select id="store-analysis-store"><option value="">全部店铺</option></select></div>
+                        <div class="order-filter-field"><label for="store-analysis-metric">排序指标</label><select id="store-analysis-metric"><option value="orders">销售单量</option><option value="gmv">GMV（USD）</option></select></div>
+                        <button class="primary" type="submit" id="store-analysis-submit">查看分析</button>
+                    </form>
+                    <p class="store-link-bulk-note" id="store-analysis-message">按北京时间统计订单创建日期；销售单量为去重订单数，取消及无效订单不计入。</p>
+                    <div class="store-analysis-sites" id="store-analysis-sites" aria-live="polite"></div>
+                </section>
             </div>
 
             <div class="tab-page" id="tab-order-analysis">
@@ -12038,7 +12327,7 @@
                     <div class="infractions-header">
                         <h2 class="panel-title" style="margin: 0;">需要处理的店铺</h2>
                         <div class="header-actions">
-                            <label class="header-worker-control" for="mercado-login-workers"><span>并发进程</span><input id="mercado-login-workers" type="number" min="1" max="10" value="3"></label>
+                            {% if can_change_task_workers %}<label class="header-worker-control" for="mercado-login-workers"><span>并发进程</span><input id="mercado-login-workers" type="number" min="1" max="10" value="3"></label>{% endif %}
                             <button class="primary" id="start-selected-mercado-login-btn" type="button" onclick="startSelectedShopsAutoLogin()" disabled>重新检测所选店铺</button>
                             <button class="primary" id="start-mercado-login-btn" type="button" onclick="startMercadoLogin()">重新检测全部店铺</button>
                             <button class="secondary" type="button" onclick="loadWindowAnomalies()">刷新数据</button>
@@ -12263,7 +12552,7 @@
 
                 <dialog class="ai-video-dialog" id="ai-video-settings-dialog">
                     <div class="ai-video-dialog-head">
-                        <div><h3>视频模型配置</h3><p>Token 与 Workspace ID 已移到账号“集成与凭证设置”；此处仅保留模型运行参数。</p></div>
+                        <div><h3>视频模型配置</h3><p>Wan 的 API Key 与 Workspace ID 请在<a href="/settings/integrations">集成与凭证设置</a>中填写；两者须属于同一业务空间，地域也须一致。</p></div>
                         <button class="secondary" type="button" onclick="document.getElementById('ai-video-settings-dialog').close()">关闭</button>
                     </div>
                     <div class="ai-video-dialog-body">
@@ -12356,7 +12645,12 @@
                         </div>
                         <div class="order-filter-field">
                             <label for="store-link-mercado-category-filter">美客多分类</label>
-                            <select id="store-link-mercado-category-filter" onchange="loadStoreLinks(1)">
+                            <button class="store-link-category-trigger" id="store-link-category-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" onclick="toggleStoreLinkCategoryPicker()">全部美客多分类 <span>⌄</span></button>
+                            <div class="store-link-category-panel" id="store-link-category-panel" role="dialog" aria-label="按美客多分类筛选" hidden>
+                                <div class="store-link-category-panel-head"><strong>选择美客多分类</strong><button type="button" onclick="selectStoreLinkCategory('')">全部分类</button></div>
+                                <div class="store-link-category-columns" id="store-link-category-columns"></div>
+                            </div>
+                            <select id="store-link-mercado-category-filter" class="store-link-category-native" onchange="loadStoreLinks(1)">
                                 <option value="">全部美客多分类</option>
                             </select>
                         </div>
@@ -12406,8 +12700,8 @@
                         <div class="order-filter-field">
                             <label for="store-link-page-size">每页条数</label>
                             <select id="store-link-page-size" onchange="loadStoreLinks(1)">
-                                <option value="50">50 条</option>
-                                <option value="200" selected>200 条</option>
+                                <option value="50" selected>50 条</option>
+                                <option value="200">200 条</option>
                                 <option value="500">500 条</option>
                                 <option value="1000">1,000 条</option>
                             </select>
@@ -13699,9 +13993,9 @@
                                 </div>
                             </div>
                             <div class="collection-scope-field">
-                                <label for="infraction-collection-workers">并发进程</label>
+                                {% if can_change_task_workers %}<label for="infraction-collection-workers">并发进程</label>
                                 <input id="infraction-collection-workers" type="number" min="1" max="10" value="3" onchange="updateCollectionScopeSummary('infraction')">
-                                <p class="collection-scope-hint">默认 3 个进程。</p>
+                                <p class="collection-scope-hint">默认 3 个进程。</p>{% endif %}
                                 <p class="collection-scope-summary" id="infraction-collection-summary">正在加载采集范围...</p>
                             </div>
                         </div>
@@ -13813,9 +14107,9 @@
                                 </div>
                             </div>
                             <div class="collection-scope-field">
-                                <label for="reputation-collection-workers">并发进程</label>
+                                {% if can_change_task_workers %}<label for="reputation-collection-workers">并发进程</label>
                                 <input id="reputation-collection-workers" type="number" min="1" max="10" value="3" onchange="updateCollectionScopeSummary('reputation')">
-                                <p class="collection-scope-hint">默认 3 个进程。</p>
+                                <p class="collection-scope-hint">默认 3 个进程。</p>{% endif %}
                                 <p class="collection-scope-summary" id="reputation-collection-summary">正在加载采集范围...</p>
                             </div>
                         </div>
@@ -14002,13 +14296,13 @@
 
             <div class="tab-page" id="tab-ai-appeals">
                 <div class="tab-heading">
-                    <h2>AI申诉记录</h2>
-                    <p>话术成功发送即记为执行成功；用户与客服的完整聊天记录按组入库。发送成功不代表申诉获批，未确认发送会单独标记。</p>
+                    <h2>自动化申诉记录</h2>
+                    <p>点击发送按钮即记为话术发送成功，并记录每次实际发送的话术和话术模式；发送成功不代表申诉获批。</p>
                 </div>
 
                 <section class="panel infractions-panel">
                     <div class="infractions-header">
-                        <h2 class="panel-title" style="margin: 0;">最新 AI 申诉记录</h2>
+                        <h2 class="panel-title" style="margin: 0;">最新自动化申诉记录</h2>
                         <div class="header-actions">
                             <button class="secondary" type="button" onclick="loadAiAppealRecords()">刷新数据</button>
                         </div>
@@ -14044,17 +14338,22 @@
                             <label for="ai-appeal-agent-filter">申诉 Agent</label>
                             <select id="ai-appeal-agent-filter" onchange="applyAiAppealFilters()"><option value="">全部 Agent</option></select>
                         </div>
+                        <div class="order-filter-field">
+                            <label for="ai-appeal-copy-mode-filter">话术模式</label>
+                            <select id="ai-appeal-copy-mode-filter" onchange="applyAiAppealFilters()"><option value="">全部话术模式</option></select>
+                        </div>
                         <div class="order-filter-actions">
                             <button class="primary" type="submit">筛选</button>
                             <button class="secondary" type="button" onclick="resetAiAppealFilters()">重置</button>
                         </div>
                     </form>
                     <div class="table-wrap reputation-table-wrap">
-                        <table class="reputation-table">
+                        <table class="reputation-table appeal-record-table">
                             <thead>
                                 <tr>
                                     <th>日期/时间</th>
                                     <th>类型/组别</th>
+                                    <th>话术模式</th>
                                     <th>业务员</th>
                                     <th>店铺组</th>
                                     <th>店铺名</th>
@@ -14064,10 +14363,11 @@
                                     <th>申诉编号</th>
                                     <th>客服最后回复</th>
                                     <th>异常</th>
+                                    <th>发送话术</th>
                                 </tr>
                             </thead>
                             <tbody id="ai-appeal-record-body">
-                                <tr><td class="empty-state" colspan="11">正在加载 AI 申诉记录...</td></tr>
+                                <tr><td class="empty-state" colspan="13">正在加载自动化申诉记录...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -14081,6 +14381,27 @@
                 </div>
 
                 <div class="access-grid">
+                    {% if current_user.is_platform_admin %}
+                    <section class="panel access-card access-span-2">
+                        <div class="infractions-header">
+                            <h2 class="panel-title" style="margin: 0;">企业管理</h2>
+                        </div>
+                        <p class="panel-subtitle">新增企业后，可在人员账号中分配企业，并在顶部企业筛选中查看该企业数据。</p>
+                        <form class="access-form-grid" id="access-organization-form">
+                            <div class="field">
+                                <label for="access-organization-name">企业名称</label>
+                                <input id="access-organization-name" maxlength="100" placeholder="例如：武汉泽顺" required>
+                            </div>
+                            <div class="field">
+                                <label for="access-organization-key">企业标识</label>
+                                <input id="access-organization-key" maxlength="64" pattern="[a-zA-Z0-9][a-zA-Z0-9_.-]{1,63}" placeholder="例如：wuhan-zeshun" required>
+                            </div>
+                            <div class="field" style="align-self: end;">
+                                <button class="primary" id="save-access-organization-btn" type="submit">新增企业</button>
+                            </div>
+                        </form>
+                    </section>
+                    {% endif %}
                     <section class="panel access-card">
                         <div class="infractions-header">
                             <h2 class="panel-title" style="margin: 0;">角色配置</h2>
@@ -14144,13 +14465,14 @@
                                     <tr>
                                         <th>人员/账号</th>
                                         <th>部门</th>
+                                        <th>企业</th>
                                         <th>角色</th>
                                         <th>状态</th>
                                         <th>操作</th>
                                     </tr>
                                 </thead>
                                 <tbody id="access-user-body">
-                                    <tr><td class="empty-state" colspan="5">正在加载账号...</td></tr>
+                                    <tr><td class="empty-state" colspan="6">正在加载账号...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -14169,6 +14491,12 @@
                                     <label for="access-department">部门</label>
                                     <input id="access-department" maxlength="64">
                                 </div>
+                                {% if current_user.is_platform_admin %}
+                                <div class="field">
+                                    <label for="access-user-organization">所属企业</label>
+                                    <select id="access-user-organization" required></select>
+                                </div>
+                                {% endif %}
                                 <div class="field">
                                     <label for="access-email">邮箱</label>
                                     <input id="access-email" type="email" maxlength="128">
@@ -14216,6 +14544,62 @@
     <script>
         const currentWorkbenchUser = {{ current_user | tojson }};
         const workbenchRuntimeRole = {{ (runtime_role or 'server') | tojson }};
+        const isPlatformAdmin = Boolean(currentWorkbenchUser.is_platform_admin);
+        const canChangeTaskWorkers = {{ can_change_task_workers | tojson }};
+        window.canChangeTaskWorkers = canChangeTaskWorkers;
+        let selectedWorkbenchOrganization = "";
+        try {
+            selectedWorkbenchOrganization = isPlatformAdmin
+                ? (window.localStorage.getItem("zeshun-enterprise-filter") || "")
+                : "";
+        } catch (_) {}
+        const nativeWorkbenchFetch = window.fetch.bind(window);
+        window.fetch = function(input, init) {
+            if (!isPlatformAdmin) return nativeWorkbenchFetch(input, init);
+            const source = input instanceof Request ? input.url : String(input);
+            let target;
+            try {
+                target = new URL(source, window.location.href);
+            } catch (_) {
+                return nativeWorkbenchFetch(input, init);
+            }
+            if (target.origin !== window.location.origin
+                || !target.pathname.startsWith("/api/")
+                || target.pathname.startsWith("/api/db/")) {
+                return nativeWorkbenchFetch(input, init);
+            }
+            const selector = document.getElementById("global-enterprise-filter");
+            const organizationKey = selector?.value || selectedWorkbenchOrganization;
+            if (organizationKey) target.searchParams.set("organization_key", organizationKey);
+            else target.searchParams.delete("organization_key");
+            if (input instanceof Request) {
+                return nativeWorkbenchFetch(
+                    new Request(target.toString(), new Request(input, init)),
+                );
+            }
+            return nativeWorkbenchFetch(target.toString(), init);
+        };
+
+        function changeEnterpriseFilter(organizationKey) {
+            if (!isPlatformAdmin) return;
+            selectedWorkbenchOrganization = String(organizationKey || "");
+            try {
+                window.localStorage.setItem("zeshun-enterprise-filter", selectedWorkbenchOrganization);
+                const activePage = document.querySelector(".tab-page.active");
+                if (activePage?.id) window.localStorage.setItem("zeshun-enterprise-last-tab", activePage.id.slice(4));
+            } catch (_) {}
+            window.location.reload();
+        }
+
+        function enterpriseScopedUrl(value) {
+            const url = new URL(value, window.location.href);
+            if (!isPlatformAdmin) return url.toString();
+            if (selectedWorkbenchOrganization) {
+                url.searchParams.set("organization_key", selectedWorkbenchOrganization);
+            }
+            return url.toString();
+        }
+
         const currentWorkbenchPermissions = new Set(
             Array.isArray(currentWorkbenchUser.permissions)
                 ? currentWorkbenchUser.permissions
@@ -14236,8 +14620,6 @@
         const appealAgentId = document.getElementById("appeal-agent-id");
         const appealAgentHint = document.getElementById("appeal-agent-hint");
         const refreshExecutionAgentsBtn = document.getElementById("refresh-execution-agents");
-        const downloadLocalAgentBtn = document.getElementById("download-local-agent");
-        const downloadLocalAgentMacosBtn = document.getElementById("download-local-agent-macos");
         const appealShopInput = document.getElementById("name");
         const appealShopOptions = document.getElementById("appeal-shop-options");
         const statusBox = document.getElementById("status");
@@ -14350,6 +14732,7 @@
         const aiAppealSalespersonFilter = document.getElementById("ai-appeal-salesperson-filter");
         const aiAppealGroupFilter = document.getElementById("ai-appeal-group-filter");
         const aiAppealAgentFilter = document.getElementById("ai-appeal-agent-filter");
+        const aiAppealCopyModeFilter = document.getElementById("ai-appeal-copy-mode-filter");
         const startDailyTaskBtn = document.getElementById("start-daily-task-btn");
         const dailyTaskExecutionTarget = document.getElementById("daily-task-execution-target");
         const dailyTaskAgentId = document.getElementById("daily-task-agent-id");
@@ -14528,6 +14911,9 @@
         const storeLinkStatusFilter = document.getElementById("store-link-status-filter");
         const storeLinkProductCategoryFilter = document.getElementById("store-link-product-category-filter");
         const storeLinkMercadoCategoryFilter = document.getElementById("store-link-mercado-category-filter");
+        const storeLinkCategoryTrigger = document.getElementById("store-link-category-trigger");
+        const storeLinkCategoryPanel = document.getElementById("store-link-category-panel");
+        const storeLinkCategoryColumns = document.getElementById("store-link-category-columns");
         const storeLinkPromotionFilter = document.getElementById("store-link-promotion-filter");
         const storeLinkAdvertisingFilter = document.getElementById("store-link-advertising-filter");
         const storeLinkVideoFilter = document.getElementById("store-link-video-filter");
@@ -14926,6 +15312,12 @@
         let customerServiceLastAttemptAt = 0;
         let customerServiceAutoUpdateTimer = null;
         let storeLinksLoaded = false;
+        let storeLinkCategoryRows = [];
+        let storeLinkCategoryPaths = {};
+        let storeLinkCategoryPathLoading = false;
+        let storeLinkCategoryPathLoaded = false;
+        let storeLinkCategoryActivePath = [];
+        let storeLinkCategoryOptionsLoading = false;
         let storeLinkRows = [];
         let storeLinkStoreOptions = [];
         let storeLinkStoreGroups = {};
@@ -14977,6 +15369,7 @@
         let accessPermissionGroups = [];
         let accessRoles = [];
         let accessUsers = [];
+        let accessOrganizations = [];
         let yandexConsoleLoaded = false;
         let yandexConsoleLoading = false;
         let yandexConsoleExternalUrl = "";
@@ -15118,9 +15511,14 @@
             document.querySelectorAll(".tab-button[data-permission], .workspace-tab[data-permission]").forEach(button => {
                 button.hidden = !hasWorkbenchPermission(button.dataset.permission);
             });
+            const agentDownload = document.getElementById("topbar-agent-download");
+            if (agentDownload) {
+                agentDownload.hidden = !["appeal.execute", "tasks.execute", "ai_weight_price.execute"]
+                    .some(hasWorkbenchPermission);
+            }
             const actionSelectors = {
-                "appeal.execute": ["#start-btn", "#stop-btn", "#appeal-execution-target", "#appeal-agent-id", "#refresh-execution-agents", "#download-local-agent", "#download-local-agent-macos", "#add-appeal-phrase-btn", "#save-appeal-phrase-btn"],
-                "tasks.execute": ["#start-daily-task-btn", "#daily-task-execution-target", "#daily-task-agent-id", "#download-daily-task-agent", "#download-daily-task-agent-macos"],
+                "appeal.execute": ["#start-btn", "#stop-btn", "#appeal-execution-target", "#appeal-agent-id", "#refresh-execution-agents", "#add-appeal-phrase-btn", "#save-appeal-phrase-btn"],
+                "tasks.execute": ["#start-daily-task-btn", "#daily-task-execution-target", "#daily-task-agent-id"],
                 "order_analysis.execute": [
                     "#order-analysis-folder", "#import-order-analysis-btn",
                     "#order-bulk-status", "#order-bulk-status-button", "#order-bulk-purchase-button",
@@ -15222,21 +15620,21 @@
             if (tabName === "ai-weight-price") {
                 const frame = document.getElementById("ai-weight-price-frame");
                 if (frame && !frame.dataset.loaded) {
-                    frame.src = frame.dataset.src;
+                    frame.src = enterpriseScopedUrl(frame.dataset.src);
                     frame.dataset.loaded = "1";
                 }
             }
             if (tabName === "infractions") {
                 const frame = document.getElementById("infraction-dashboard-frame");
                 if (frame && frame.dataset.loaded !== "1") {
-                    frame.src = frame.dataset.src;
+                    frame.src = enterpriseScopedUrl(frame.dataset.src);
                     frame.dataset.loaded = "1";
                 }
             }
             if (tabName === "ip-rights") {
                 const frame = document.getElementById("ip-rights-dashboard-frame");
                 if (frame && frame.dataset.loaded !== "1") {
-                    frame.src = frame.dataset.src;
+                    frame.src = enterpriseScopedUrl(frame.dataset.src);
                     frame.dataset.loaded = "1";
                 }
             }
@@ -15290,6 +15688,7 @@
                 if (!highAfterSaleLoaded) setHighAfterSalePeriod(30);
                 if (!highProfitLoaded) setHighProfitPeriod(30);
             }
+            if (tabName === "store-analysis") loadStoreAnalysis();
             if (tabName === "orders" && !ordersLoaded) {
                 loadOrders(1);
             }
@@ -15322,7 +15721,7 @@
             if (tabName === "promotions") {
                 const frame = document.getElementById("promotions-frame");
                 if (frame && !frame.dataset.loaded) {
-                    frame.src = frame.dataset.src;
+                    frame.src = enterpriseScopedUrl(frame.dataset.src);
                     frame.dataset.loaded = "1";
                 }
             }
@@ -15444,7 +15843,7 @@
         }
 
         function switchInventoryView(view) {
-            const normalized = ["stock", "logs", "shelves"].includes(view) ? view : "stock";
+            const normalized = ["stock", "logs", "sku", "shelves"].includes(view) ? view : "stock";
             inventoryCurrentView = normalized;
             document.querySelectorAll("[data-inventory-view]").forEach(button => {
                 button.classList.toggle("active", button.dataset.inventoryView === normalized);
@@ -15453,6 +15852,7 @@
                 panel.classList.toggle("active", panel.id === `inventory-view-${normalized}`);
             });
             if (normalized === "logs") loadInventoryLogs(1);
+            if (normalized === "sku" && typeof window.loadInventorySkuData === "function") window.loadInventorySkuData();
             if (normalized === "shelves") loadInventoryShelves(true);
         }
 
@@ -15575,7 +15975,7 @@
                     <button class="secondary inventory-outbound-button" type="button" onclick="openInventoryMovementDialog('outbound', ${Number(row.id)})" ${quantity <= 0 ? "disabled" : ""}>出库</button>
                 </div>` : "—";
                 return `<tr>
-                    <td><div class="inventory-product-cell">${inventoryImageHtml(row.image_url, row.product_name)}<div class="inventory-product-copy"><strong title="${escapeHtml(row.product_name)}">${escapeHtml(row.product_name)}</strong><small>${escapeHtml(row.product_id)}</small></div></div></td>
+                    <td><div class="inventory-product-cell">${inventoryImageHtml(row.image_url, row.product_name)}<div class="inventory-product-copy"><strong title="${escapeHtml(row.product_name)}">${escapeHtml(row.product_name)}</strong><small>${escapeHtml(row.product_id)}${row.internal_sku ? ` · ${escapeHtml(row.internal_sku)}` : " · 未关联内部 SKU"}</small></div></div></td>
                     <td><span class="inventory-link-code">${escapeHtml(row.order_id)}</span><div class="inventory-cell-meta" title="${escapeHtml(row.order_remark || "")}">${escapeHtml(row.salesperson ? `业务员 ${row.salesperson}` : (row.order_remark || "入库订单"))}</div></td>
                     <td><span class="inventory-shelf-code">${escapeHtml(row.shelf_code)}</span><div class="inventory-cell-meta">${escapeHtml(row.warehouse || row.shelf_name || "")}</div></td>
                     <td><span class="inventory-quantity ${quantity ? "" : "inventory-zero"}">${quantity.toLocaleString("zh-CN")}</span><div class="inventory-cell-meta">件</div></td>
@@ -15687,11 +16087,18 @@
             inventoryEl("inventory-movement-time").value = localDateTimeText(new Date());
             inventoryEl("inventory-movement-cost").disabled = inventoryMovementType === "outbound";
             inventoryEl("inventory-movement-shelf").disabled = inventoryMovementType === "outbound";
+            inventoryEl("inventory-movement-sku").disabled = inventoryMovementType === "outbound";
             inventoryEl("inventory-change-match").hidden = inventoryMovementType === "outbound";
+            if (inventoryMovementType === "inbound" && typeof window.loadInventorySkuOptions === "function") {
+                try { await window.loadInventorySkuOptions(); } catch (error) { setInventoryMessage(error.message || String(error), "error"); }
+            }
             if (row) {
                 inventorySelectedMatch = {
                     order_id: row.order_id,
                     product_id: row.product_id,
+                    variation_id: row.variation_id,
+                    seller_sku: row.seller_sku,
+                    sku_id: row.sku_id,
                     product_name: row.product_name,
                     image_url: row.image_url,
                     suggested_unit_cost: row.unit_cost,
@@ -15701,6 +16108,7 @@
                 };
                 setInventorySelectedProduct(inventorySelectedMatch);
                 inventoryEl("inventory-movement-shelf").value = String(row.shelf_id);
+                inventoryEl("inventory-movement-sku").value = String(row.sku_id || "");
                 inventoryEl("inventory-movement-cost").value = String(row.unit_cost ?? "");
                 inventoryEl("inventory-match-section").hidden = true;
             } else if (inventoryMovementType === "inbound" && presetMatches) {
@@ -15719,6 +16127,7 @@
                 clearInventoryMatch();
                 inventoryEl("inventory-movement-shelf").value = "";
                 inventoryEl("inventory-movement-cost").value = "";
+                inventoryEl("inventory-movement-sku").value = "";
             }
             if (!presetMatches || row || inventoryMovementType === "outbound") {
                 inventoryEl("inventory-movement-message").textContent = inventoryMovementType === "outbound"
@@ -15736,6 +16145,7 @@
         function clearInventoryMatch() {
             if (inventoryMovementType === "outbound") return;
             inventorySelectedMatch = null;
+            if (inventoryEl("inventory-movement-sku")) inventoryEl("inventory-movement-sku").value = "";
             inventoryEl("inventory-selected-product").hidden = true;
             inventoryEl("inventory-match-section").hidden = false;
             inventoryEl("inventory-movement-message").textContent = "请先匹配订单和产品";
@@ -15749,6 +16159,7 @@
             image.hidden = !image.src;
             inventoryEl("inventory-selected-name").textContent = row.product_name || row.product_id || "未命名产品";
             inventoryEl("inventory-selected-meta").textContent = `订单 ${row.order_id} · 产品 ${row.product_id}${row.stock_quantity !== undefined ? ` · 当前库存 ${row.stock_quantity}` : ""}`;
+            if (inventoryEl("inventory-movement-sku")) inventoryEl("inventory-movement-sku").value = String(row.sku_id || "");
             inventoryEl("inventory-selected-product").hidden = false;
             inventoryEl("inventory-match-section").hidden = true;
             if (row.suggested_unit_cost !== null && row.suggested_unit_cost !== undefined && row.suggested_unit_cost !== "") {
@@ -15825,6 +16236,9 @@
                 payload.shelf_id = Number(inventoryEl("inventory-movement-shelf").value || 0);
                 payload.order_id = inventorySelectedMatch.order_id;
                 payload.product_id = inventorySelectedMatch.product_id;
+                payload.variation_id = inventorySelectedMatch.variation_id || "";
+                payload.seller_sku = inventorySelectedMatch.seller_sku || "";
+                payload.sku_id = inventoryEl("inventory-movement-sku").value || "";
                 payload.unit_cost = inventoryEl("inventory-movement-cost").value;
             } else {
                 payload.stock_id = inventoryMovementStockId;
@@ -19755,7 +20169,7 @@
             const groupNames = mercadoSelectedValues(mercadoPublishGroup);
             const siteIds = mercadoSelectedValues(mercadoPublishSite);
             const quantity = Number(mercadoPublishQuantity.value || 0);
-            const workerCount = Number(mercadoPublishWorkers.value || 0);
+            const workerCount = Number(mercadoPublishWorkers?.value || 16);
             if (!itemIds.length) return;
             const selectedRows = mercadoListRows.filter(row => selectedMercadoCollectionIds.has(Number(row.id)));
             const blockedRows = selectedRows.filter(row => mercadoProductPublishIssues(row).length);
@@ -19808,19 +20222,20 @@
             mercadoPublishSelected.disabled = true;
             mercadoPublishStatus.textContent = "正在创建批量上架任务...";
             try {
+                const publishPayload = {
+                    product_item_ids: itemIds,
+                    selection_mode: selectionMode,
+                    token_ids: tokenIds,
+                    group_names: groupNames,
+                    group_publish_mode: groupPublishMode,
+                    site_ids: siteIds,
+                    quantity,
+                };
+                if (canChangeTaskWorkers) publishPayload.worker_count = workerCount;
                 const response = await fetch("/api/mercado-products/publish", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({
-                        product_item_ids: itemIds,
-                        selection_mode: selectionMode,
-                        token_ids: tokenIds,
-                        group_names: groupNames,
-                        group_publish_mode: groupPublishMode,
-                        site_ids: siteIds,
-                        quantity,
-                        worker_count: workerCount,
-                    }),
+                    body: JSON.stringify(publishPayload),
                 });
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
@@ -20014,7 +20429,7 @@
         async function startMercadoCollection() {
             const sourceInput = mercadoCollectionUrl.value.trim();
             const requestedCount = Number(mercadoCollectionCount.value || 0);
-            const workerCount = Number(mercadoCollectionWorkers.value || 0);
+            const workerCount = Number(mercadoCollectionWorkers?.value || 4);
             const browser = mercadoCollectionBrowserPayload();
             if (!sourceInput) {
                 mercadoCollectionMessage.textContent = "请先输入采集关键词或 Mercado 商品列表链接";
@@ -20034,18 +20449,19 @@
             mercadoCollectionStart.disabled = true;
             mercadoCollectionMessage.textContent = "正在创建采集任务...";
             try {
+                const collectionPayload = {
+                    source_url: /^https?:\/\//i.test(sourceInput) ? sourceInput : "",
+                    keyword: /^https?:\/\//i.test(sourceInput) ? "" : sourceInput,
+                    site_id: String(mercadoCollectionSite.value || "MLM"),
+                    collection_scope: String(mercadoCollectionScope.value || "cross_border"),
+                    requested_count: requestedCount,
+                    ...browser,
+                };
+                if (canChangeTaskWorkers) collectionPayload.worker_count = workerCount;
                 const response = await fetch("/api/mercado-collection/start", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({
-                        source_url: /^https?:\/\//i.test(sourceInput) ? sourceInput : "",
-                        keyword: /^https?:\/\//i.test(sourceInput) ? "" : sourceInput,
-                        site_id: String(mercadoCollectionSite.value || "MLM"),
-                        collection_scope: String(mercadoCollectionScope.value || "cross_border"),
-                        requested_count: requestedCount,
-                        worker_count: workerCount,
-                        ...browser,
-                    }),
+                    body: JSON.stringify(collectionPayload),
                 });
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
@@ -21907,16 +22323,17 @@
 
         async function preSaleAggregateRequest(stores, filters) {
             const workerCount = Math.max(1, Math.min(12, 8, stores.length));
+            const requestData = {
+                token_ids: stores.map(store => Number(store.id)),
+                ...filters,
+                status: preSaleStatus,
+            };
+            if (canChangeTaskWorkers) requestData.workers = workerCount;
             const response = await fetch("/api/mercado-communications/pre-sale-aggregate", {
                 method: "POST",
                 headers: {"Accept": "application/json", "Content-Type": "application/json"},
                 cache: "no-store",
-                body: JSON.stringify({
-                    token_ids: stores.map(store => Number(store.id)),
-                    ...filters,
-                    status: preSaleStatus,
-                    workers: workerCount,
-                }),
+                body: JSON.stringify(requestData),
             });
             const payload = await response.json().catch(() => ({}));
             if (!response.ok || payload.status !== "success") {
@@ -22848,15 +23265,16 @@
                 storeBatches.push(stores.slice(index, index + 100));
             }
             const batches = await Promise.all(storeBatches.map(async batch => {
+                const requestData = {
+                    ...options,
+                    token_ids: batch.map(store => Number(store.id || 0)).filter(Boolean),
+                };
+                if (canChangeTaskWorkers) requestData.workers = Math.min(8, Math.max(1, batch.length));
                 const response = await fetch("/api/mercado-communications/customer-service-aggregate", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     cache: "no-store",
-                    body: JSON.stringify({
-                        ...options,
-                        token_ids: batch.map(store => Number(store.id || 0)).filter(Boolean),
-                        workers: Math.min(8, Math.max(1, batch.length)),
-                    }),
+                    body: JSON.stringify(requestData),
                 });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok || payload.status !== "success") {
@@ -25276,17 +25694,163 @@
         function renderStoreLinkMercadoCategories(categories) {
             const previous = String(storeLinkMercadoCategoryFilter.value || "");
             const rows = Array.isArray(categories) ? categories : [];
+            storeLinkCategoryRows = rows;
             storeLinkMercadoCategoryFilter.innerHTML = '<option value="">全部美客多分类</option>' + rows.map(row => {
                 const categoryId = String(row.category_id || "");
-                const categoryName = String(row.category_name || "").trim();
-                const label = categoryName ? `${categoryName} (${categoryId})` : categoryId;
+                const rawName = String(row.category_name || "").trim();
+                const categoryName = rawName === categoryId ? "" : rawName;
+                const path = storeLinkCategoryPaths[categoryId] || [];
+                const label = categoryName || String(path.at(-1)?.name || "分类名称待同步");
                 const count = Number(row.link_count || 0).toLocaleString("zh-CN");
                 return `<option value="${escapeHtml(categoryId)}">${escapeHtml(label)} · ${count} 条</option>`;
             }).join("");
             if (rows.some(row => String(row.category_id || "") === previous)) {
                 storeLinkMercadoCategoryFilter.value = previous;
             }
+            const selected = storeLinkMercadoCategoryFilter.selectedOptions[0];
+            storeLinkCategoryTrigger.firstChild.textContent = previous && selected
+                ? selected.textContent.replace(/ · [\d,]+ 条$/, "") + " " : "全部美客多分类 ";
+            if (!storeLinkCategoryPanel.hidden) renderStoreLinkCategoryTree();
         }
+
+        function storeLinkCategoryTree() {
+            const root = {children: new Map(), count: 0};
+            const chineseNames = {
+                "Animals and Pets": "动物和宠物", "Antiques and Collectibles": "古董和收藏品",
+                "Appliances": "家电", "Art, Craft and School Supplies": "艺术、工艺和学校用品",
+                "Babies": "婴儿", "Beauty and Personal Care": "美容及个人护理",
+                "Books, Magazines and Comics": "书籍、杂志和漫画",
+                "Cameras and Accessories": "相机及配件", "Cars, Motorcycles and Others": "汽车、摩托车及其他",
+                "Cell Phones and Phones": "手机和电话", "Clothing and Accessories": "服装和配饰",
+                "Computers": "计算机", "Consoles and Video Games": "游戏机和视频游戏",
+                "Construction": "建筑", "Air Conditioning": "空调", "Cooking": "烹饪",
+                "Personal Care Appliances": "个人护理电器", "Refrigerators & Freezers": "冰箱和冰柜",
+                "Small Appliances": "小家电", "Washing Machines & Dryers": "洗衣机和烘干机",
+                "Water Dispensers & Filters": "饮水机和过滤器",
+                "Beverage Refrigerators": "饮料冰箱", "Freezers": "冷冻柜",
+                "Refrigerators": "冰箱", "Beer Coolers": "啤酒冷却器", "Wine Cellars": "酒柜",
+            };
+            const names = new Map(storeLinkCategoryRows.map(row => {
+                const id = String(row.category_id || "");
+                const name = String(row.category_name || "").trim();
+                return [id, name === id ? "" : name];
+            }));
+            storeLinkCategoryRows.forEach(row => {
+                const id = String(row.category_id || "");
+                if (!id) return;
+                const officialPath = storeLinkCategoryPaths[id] || [];
+                const path = officialPath.length ? officialPath : [{id: id.slice(0, 3), name: "站点 " + id.slice(0, 3)}, {id, name: names.get(id) || "分类名称待同步"}];
+                let node = root;
+                path.forEach(part => {
+                    const partId = String(part.id || "");
+                    if (!node.children.has(partId)) node.children.set(partId, {id: partId, name: names.get(partId) || chineseNames[part.name] || String(part.name || "分类名称待同步"), children: new Map(), count: 0, selectable: false});
+                    node = node.children.get(partId);
+                    node.count += Number(row.link_count || 0);
+                });
+                node.selectable = true;
+            });
+            return root;
+        }
+
+        function renderStoreLinkCategoryTree() {
+            const root = storeLinkCategoryTree();
+            const columns = [];
+            let parent = root;
+            for (let depth = 0; depth < 5; depth += 1) {
+                const children = [...parent.children.values()].sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+                if (!children.length) break;
+                columns.push(`<div class="store-link-category-column">${children.map(node => {
+                    const hasChildren = node.children.size > 0;
+                    const active = storeLinkCategoryActivePath[depth] === node.id;
+                    return `<button class="store-link-category-option${active ? " active" : ""}" type="button" data-depth="${depth}" data-id="${escapeHtml(node.id)}" title="${escapeHtml(node.name)}"><span>${escapeHtml(node.name)}</span><small>${hasChildren ? "›" : Number(node.count).toLocaleString("zh-CN")}</small></button>`;
+                }).join("")}</div>`);
+                const active = parent.children.get(storeLinkCategoryActivePath[depth]);
+                if (!active) break;
+                parent = active;
+            }
+            storeLinkCategoryColumns.innerHTML = columns.join("");
+        }
+
+        async function loadStoreLinkCategoryPaths() {
+            if (storeLinkCategoryPathLoaded || storeLinkCategoryPathLoading || !storeLinkCategoryRows.length) return;
+            storeLinkCategoryPathLoading = true;
+            try {
+                const response = await fetch("/api/store-links/category-paths", {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({category_ids: storeLinkCategoryRows.map(row => row.category_id)}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "分类路径读取失败");
+                storeLinkCategoryPaths = payload.data || {};
+                storeLinkCategoryPathLoaded = true;
+                renderStoreLinkMercadoCategories(storeLinkCategoryRows);
+            } catch (error) {
+                storeLinkMessage.textContent = `分类路径读取失败：${error.message || error}`;
+            } finally {
+                storeLinkCategoryPathLoading = false;
+            }
+        }
+
+        async function loadStoreLinkCategoryOptions() {
+            if (storeLinkCategoryRows.length || storeLinkCategoryOptionsLoading) return;
+            storeLinkCategoryOptionsLoading = true;
+            storeLinkCategoryColumns.innerHTML = '<div class="store-link-category-column">正在加载分类…</div>';
+            try {
+                const response = await fetch("/api/store-links?include_categories=1&page_size=1", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "分类加载失败");
+                renderStoreLinkMercadoCategories(payload.data?.mercado_categories || []);
+                renderStoreLinkCategoryTree();
+                await loadStoreLinkCategoryPaths();
+            } catch (error) {
+                storeLinkCategoryColumns.innerHTML = `<div class="store-link-category-column">${escapeHtml(error.message || error)}</div>`;
+            } finally {
+                storeLinkCategoryOptionsLoading = false;
+            }
+        }
+
+        function toggleStoreLinkCategoryPicker() {
+            const opening = storeLinkCategoryPanel.hidden;
+            storeLinkCategoryPanel.hidden = !opening;
+            storeLinkCategoryTrigger.setAttribute("aria-expanded", String(opening));
+            if (!opening) return;
+            const rect = storeLinkCategoryTrigger.getBoundingClientRect();
+            storeLinkCategoryPanel.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - Math.min(850, window.innerWidth - 24) - 12))}px`;
+            storeLinkCategoryPanel.style.top = `${Math.max(12, Math.min(rect.bottom + 4, window.innerHeight - Math.min(470, window.innerHeight - 24) - 12))}px`;
+            renderStoreLinkCategoryTree();
+            loadStoreLinkCategoryOptions();
+        }
+
+        function selectStoreLinkCategory(categoryId) {
+            storeLinkMercadoCategoryFilter.value = categoryId;
+            storeLinkCategoryPanel.hidden = true;
+            storeLinkCategoryTrigger.setAttribute("aria-expanded", "false");
+            renderStoreLinkMercadoCategories(storeLinkCategoryRows);
+            loadStoreLinks(1);
+        }
+
+        storeLinkCategoryColumns.addEventListener("click", event => {
+            const button = event.target.closest("[data-depth][data-id]");
+            if (!button) return;
+            const depth = Number(button.dataset.depth);
+            const id = button.dataset.id;
+            let node = storeLinkCategoryTree();
+            for (const ancestorId of storeLinkCategoryActivePath.slice(0, depth)) node = node.children.get(ancestorId);
+            node = node?.children.get(id);
+            if (!node) return;
+            if (node.children.size) {
+                storeLinkCategoryActivePath = [...storeLinkCategoryActivePath.slice(0, depth), id];
+                renderStoreLinkCategoryTree();
+            } else if (node.selectable) {
+                selectStoreLinkCategory(id);
+            }
+        });
+        document.addEventListener("click", event => {
+            if (!storeLinkCategoryPanel.hidden && !storeLinkCategoryPanel.contains(event.target) && !storeLinkCategoryTrigger.contains(event.target)) {
+                storeLinkCategoryPanel.hidden = true;
+                storeLinkCategoryTrigger.setAttribute("aria-expanded", "false");
+            }
+        });
 
         function renderStoreLinkPagination() {
             if (!storeLinkPageButtons) return;
@@ -25368,6 +25932,7 @@
                 video_uploaded: storeLinkVideoFilter.value,
                 management_category_id: storeLinkProductCategoryFilter.value,
                 mercado_category: storeLinkMercadoCategoryFilter.value,
+                include_categories: "0",
                 sort_by: storeLinkSortBy || "sold_quantity",
                 sort_order: storeLinkSortOrder || "desc",
                 sales_sort: storeLinkSortOrder || "desc",
@@ -25393,7 +25958,7 @@
                 renderStoreLinkStores(data.stores || [], data.store_groups || {});
                 renderStoreLinkSites(data.sites || []);
                 renderStoreLinkGroups(data.groups || []);
-                renderStoreLinkMercadoCategories(data.mercado_categories || []);
+                if (data.mercado_categories?.length) renderStoreLinkMercadoCategories(data.mercado_categories);
                 const summary = data.summary || {};
                 storeLinkAllCount.textContent = Number(summary.all_count || 0).toLocaleString("zh-CN");
                 storeLinkCurrentCount.textContent = Number(summary.current_count || 0).toLocaleString("zh-CN");
@@ -27522,15 +28087,16 @@
             updateFundScopeControls();
             if (actionButton) actionButton.textContent = "正在启动...";
             try {
+                const fundPayload = {
+                    all_shops: allShops,
+                    salesperson: String(fundOwnerFilter?.value || ""),
+                    window_ids: windowIds.filter(Boolean),
+                };
+                if (canChangeTaskWorkers) fundPayload.max_workers = 3;
                 const response = await fetch("/api/funds/collect", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({
-                        all_shops: allShops,
-                        salesperson: String(fundOwnerFilter?.value || ""),
-                        window_ids: windowIds.filter(Boolean),
-                        max_workers: 3,
-                    }),
+                    body: JSON.stringify(fundPayload),
                 });
                 const payload = await response.json();
                 if (response.status === 409) {
@@ -28148,7 +28714,11 @@
             if (!sites.length) throw new Error("请至少选择一个站点");
             const maxWorkers = Math.max(1, Math.min(10, Number(elements.workers?.value || 3)));
             if (elements.workers) elements.workers.value = String(maxWorkers);
-            return {shops, sites, max_workers: maxWorkers};
+            return {
+                shops,
+                sites,
+                ...(canChangeTaskWorkers ? {max_workers: maxWorkers} : {}),
+            };
         }
 
         function resetCollectionRerunButton(kind) {
@@ -28337,10 +28907,12 @@
 
                 selectedReputationUpdateRunning = true;
                 updateReputationTableSelection();
+                const selectedUpdatePayload = {shops, sites};
+                if (canChangeTaskWorkers) selectedUpdatePayload.max_workers = 3;
                 const response = await fetch("/api/reputation/update-selected", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({shops, sites, max_workers: 3}),
+                    body: JSON.stringify(selectedUpdatePayload),
                 });
                 const payload = await response.json();
                 if (response.status === 409) {
@@ -28940,7 +29512,7 @@
             const switches = Array.from(
                 document.querySelectorAll('input[name="daily-task-appeal-type"]'),
             );
-            if (["混合模式", "算法模式"].includes(changedSwitch.value)) {
+            if (changedSwitch.value === "混合模式") {
                 switches.forEach(input => {
                     if (input !== changedSwitch) input.checked = false;
                 });
@@ -28948,8 +29520,14 @@
             }
             const mixedMode = document.getElementById("daily-task-mixed-mode");
             if (mixedMode) mixedMode.checked = false;
-            const algorithmMode = document.getElementById("daily-task-algorithm-mode");
-            if (algorithmMode) algorithmMode.checked = false;
+        }
+
+        function updateDailyTaskStrategyFields() {
+            const algorithmMode = document.getElementById("daily-task-algorithm-mode")?.checked;
+            const normalOptions = document.getElementById("daily-task-normal-options");
+            const algorithmHint = document.getElementById("daily-task-algorithm-hint");
+            if (normalOptions) normalOptions.hidden = Boolean(algorithmMode);
+            if (algorithmHint) algorithmHint.hidden = !algorithmMode;
         }
 
         function syncDailyTaskScopePicker(changedSelect) {
@@ -28973,6 +29551,7 @@
             if (input) input.required = enabled;
         }
         updateDailyTaskCopyModeFields();
+        updateDailyTaskStrategyFields();
 
         function getDailyTaskPayload() {
             const salespeople = mercadoSelectedValues(dailyTaskSalesperson);
@@ -28983,21 +29562,23 @@
             const deepseekApiKey = String(
                 document.getElementById("daily-task-deepseek-api-key")?.value || ""
             ).trim();
-            const appealTypes = Array.from(
-                document.querySelectorAll('input[name="daily-task-appeal-type"]:checked'),
-                input => input.value,
-            );
+            const algorithmMode = Boolean(document.getElementById("daily-task-algorithm-mode")?.checked);
+            const appealTypes = algorithmMode
+                ? ["算法模式"]
+                : Array.from(
+                    document.querySelectorAll('input[name="daily-task-appeal-type"]:checked'),
+                    input => input.value,
+                );
             if (!appealTypes.length) {
                 throw new Error("请至少开启一个任务");
             }
-            return {
+            const payload = {
                 execution_target: String(dailyTaskExecutionTarget?.value || "agent"),
                 agent_id: String(dailyTaskAgentId?.value || ""),
                 mode: document.getElementById("daily-task-mode").value,
                 appeal_copy_mode: appealCopyMode,
                 deepseek_api_key: deepseekApiKey,
                 appeal_types: appealTypes,
-                max_workers: Number(document.getElementById("daily-task-max-workers").value || 10),
                 recent_days: Number(document.getElementById("daily-task-recent-days").value || 100),
                 round_interval: Number(document.getElementById("daily-task-round-interval").value || 180),
                 site_pause: Number(document.getElementById("daily-task-site-pause").value || 30),
@@ -29009,6 +29590,12 @@
                 cancellation_min_rate: `${Number(document.getElementById("daily-task-cancellation-min-rate").value || 0)}%`,
                 message: document.getElementById("daily-task-message").value || "",
             };
+            if (canChangeTaskWorkers) {
+                payload.max_workers = Number(
+                    document.getElementById("daily-task-max-workers")?.value || 10
+                );
+            }
+            return payload;
         }
 
         async function loadDailyTaskOptions() {
@@ -29858,16 +30445,21 @@
                 ? String(aiAppealRows.length)
                 : `${visibleRows.length} / ${aiAppealRows.length}`;
             if (!visibleRows.length) {
-                aiAppealRecordBody.innerHTML = '<tr><td class="empty-state" colspan="11">暂无符合条件的 AI 申诉记录</td></tr>';
+                aiAppealRecordBody.innerHTML = '<tr><td class="empty-state" colspan="13">暂无符合条件的自动化申诉记录</td></tr>';
                 return;
             }
 
             aiAppealRecordBody.innerHTML = visibleRows.map(row => {
                 const identifiers = formatAppealList(row.identifiers_json);
+                const sentCopy = String(row.appeal_content || "");
+                const copyDetails = sentCopy
+                    ? `<details class="publish-record-details"><summary>查看话术</summary><pre>${escapeHtml(sentCopy)}</pre></details>`
+                    : "-";
                 return `
                 <tr>
                     <td title="${escapeHtml(row.appeal_time)}">${escapeHtml(row.appeal_time)}</td>
                     <td title="${escapeHtml(row.appeal_type)}"><span class="tag">${escapeHtml(row.appeal_type)}</span></td>
+                    <td title="${escapeHtml(row.appeal_copy_mode || "未记录")}">${escapeHtml(row.appeal_copy_mode || "未记录")}</td>
                     <td title="${escapeHtml(row.salesperson)}">${escapeHtml(row.salesperson || "未分配")}</td>
                     <td title="${escapeHtml(row.group_name)}">${escapeHtml(row.group_name || "未分组")}</td>
                     <td title="${escapeHtml(row.shop_name)}">${escapeHtml(row.shop_name)}</td>
@@ -29877,6 +30469,7 @@
                     <td title="${escapeHtml(identifiers)}">${escapeHtml(identifiers || "-")}</td>
                     <td title="${escapeHtml(row.ai_summary)}">${escapeHtml(row.ai_summary || "-")}</td>
                     <td title="${escapeHtml(row.error)}">${escapeHtml(row.error || "-")}</td>
+                    <td>${copyDetails}</td>
                 </tr>
                 `;
             }).join("");
@@ -29888,26 +30481,28 @@
             const salesperson = String(aiAppealSalespersonFilter?.value || "");
             const groupName = String(aiAppealGroupFilter?.value || "");
             const agent = String(aiAppealAgentFilter?.value || "");
+            const copyMode = String(aiAppealCopyModeFilter?.value || "");
             const rows = aiAppealRows.filter(row => {
                 const appealDate = String(row.appeal_time || "").slice(0, 10);
                 return (!dateFrom || appealDate >= dateFrom)
                     && (!dateTo || appealDate <= dateTo)
                     && (!salesperson || String(row.salesperson || "") === salesperson)
                     && (!groupName || String(row.group_name || "") === groupName)
-                    && (!agent || String(row.executor_label || "") === agent);
+                    && (!agent || String(row.executor_label || "") === agent)
+                    && (!copyMode || String(row.appeal_copy_mode || "未记录") === copyMode);
             });
             renderAiAppealRecords(rows);
         }
 
         function resetAiAppealFilters() {
-            [aiAppealDateFrom, aiAppealDateTo, aiAppealSalespersonFilter, aiAppealGroupFilter, aiAppealAgentFilter]
+            [aiAppealDateFrom, aiAppealDateTo, aiAppealSalespersonFilter, aiAppealGroupFilter, aiAppealAgentFilter, aiAppealCopyModeFilter]
                 .forEach(control => { if (control) control.value = ""; });
             renderAiAppealRecords(aiAppealRows);
         }
 
         async function loadAiAppealRecords() {
             if (!aiAppealRecordBody) return;
-            aiAppealRecordBody.innerHTML = '<tr><td class="empty-state" colspan="11">正在加载 AI 申诉记录...</td></tr>';
+            aiAppealRecordBody.innerHTML = '<tr><td class="empty-state" colspan="13">正在加载自动化申诉记录...</td></tr>';
             try {
                 const response = await fetch("/api/ai-appeal-records?limit=500", {cache: "no-store"});
                 const payload = await response.json();
@@ -29924,9 +30519,14 @@
                 setAiAppealFilterOptions(aiAppealSalespersonFilter, options.salespeople || rows.map(row => row.salesperson), "全部业务员");
                 setAiAppealFilterOptions(aiAppealGroupFilter, options.group_names || rows.map(row => row.group_name), "全部店铺组");
                 setAiAppealFilterOptions(aiAppealAgentFilter, options.executors || rows.map(row => row.executor_label), "全部 Agent");
+                setAiAppealFilterOptions(
+                    aiAppealCopyModeFilter,
+                    ["普通模式", "AI话术模式", "未记录", ...(options.appeal_copy_modes || rows.map(row => row.appeal_copy_mode))],
+                    "全部话术模式",
+                );
                 applyAiAppealFilters();
             } catch (err) {
-                aiAppealRecordBody.innerHTML = `<tr><td class="empty-state" colspan="11">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+                aiAppealRecordBody.innerHTML = `<tr><td class="empty-state" colspan="13">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
             }
         }
 
@@ -30712,10 +31312,12 @@
             startMercadoLoginBtn.disabled = true;
             updateWindowAnomalySelection();
             try {
+                const requestBody = windowId ? {window_id: windowId} : {};
+                if (canChangeTaskWorkers && !windowId) requestBody.workers = workers;
                 const response = await fetch("/api/window-anomalies/mercado-login/start", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify(windowId ? {window_id: windowId} : {workers}),
+                    body: JSON.stringify(requestBody),
                 });
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
@@ -30742,10 +31344,12 @@
             windowIds.forEach(windowId => activeMercadoLoginWindowIds.add(String(windowId)));
             updateWindowAnomalySelection();
             try {
+                const requestBody = {window_ids: windowIds};
+                if (canChangeTaskWorkers) requestBody.workers = workers;
                 const response = await fetch("/api/window-anomalies/mercado-login/start", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({window_ids: windowIds, workers}),
+                    body: JSON.stringify(requestBody),
                 });
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
@@ -30814,6 +31418,50 @@
             return payload.data;
         }
 
+        function renderAccessOrganizationOptions(selectedKey = "") {
+            const select = document.getElementById("access-user-organization");
+            if (!select) return;
+            const organizations = [...accessOrganizations];
+            const normalizedKey = String(selectedKey || "wuhan-zeshun");
+            if (!organizations.some(item => item.organization_key === normalizedKey)) {
+                organizations.push({
+                    organization_key: normalizedKey,
+                    organization_name: normalizedKey === "wuhan-zeshun" ? "武汉泽顺" : normalizedKey,
+                });
+            }
+            select.innerHTML = organizations.map(item => `
+                <option value="${escapeHtml(item.organization_key)}" ${item.organization_key === normalizedKey ? "selected" : ""}>
+                    ${escapeHtml(item.organization_name || item.organization_key)}
+                </option>
+            `).join("");
+        }
+
+        async function loadEnterpriseOptions(selectedKey = selectedWorkbenchOrganization) {
+            if (!isPlatformAdmin) return;
+            const organizations = await requestAccessApi("/api/access/organizations");
+            accessOrganizations = Array.isArray(organizations) ? organizations : [];
+            const selector = document.getElementById("global-enterprise-filter");
+            if (selector) {
+                const wanted = String(selectedKey || "");
+                const exists = accessOrganizations.some(item => item.organization_key === wanted);
+                selectedWorkbenchOrganization = exists ? wanted : "";
+                selector.innerHTML = '<option value="">所有企业</option>' + accessOrganizations.map(item => `
+                    <option value="${escapeHtml(item.organization_key)}">
+                        ${escapeHtml(item.organization_name || item.organization_key)}
+                    </option>
+                `).join("");
+                selector.value = selectedWorkbenchOrganization;
+                try {
+                    window.localStorage.setItem("zeshun-enterprise-filter", selectedWorkbenchOrganization);
+                } catch (_) {}
+            }
+            renderAccessOrganizationOptions(
+                document.getElementById("access-user-organization")?.value
+                    || selectedWorkbenchOrganization
+                    || "wuhan-zeshun",
+            );
+        }
+
         function accessPermissionLabel(permissionKey) {
             for (const group of accessPermissionGroups) {
                 const permission = (group.permissions || []).find(item => item.key === permissionKey);
@@ -30851,7 +31499,11 @@
                 const permissionSummary = permissions.includes("*")
                     ? "全部权限"
                     : permissions.map(accessPermissionLabel).join("、") || "未分配权限";
-                const dataScopeSummary = role.own_store_only ? "仅本人店铺和产品" : "全部授权店铺和产品";
+                const dataScopeSummary = role.role_key === "super_admin"
+                    ? "全部企业数据"
+                    : role.role_key === "enterprise_admin"
+                        ? "本企业全部店铺和产品"
+                        : role.own_store_only ? "仅本人店铺和产品" : "全部授权店铺和产品";
                 return `
                     <tr>
                         <td>
@@ -30876,10 +31528,13 @@
         function renderAccessUsers() {
             if (!accessUserBody) return;
             if (!accessUsers.length) {
-                accessUserBody.innerHTML = '<tr><td class="empty-state" colspan="5">暂无账号</td></tr>';
+                accessUserBody.innerHTML = '<tr><td class="empty-state" colspan="6">暂无账号</td></tr>';
                 return;
             }
             const canManage = hasWorkbenchPermission("access.manage");
+            const organizationNames = new Map(accessOrganizations.map(item => [
+                item.organization_key, item.organization_name || item.organization_key,
+            ]));
             accessUserBody.innerHTML = accessUsers.map((user, index) => `
                 <tr>
                     <td>
@@ -30887,6 +31542,7 @@
                         <span class="access-role-summary">${escapeHtml(user.username)}${user.email ? ` · ${escapeHtml(user.email)}` : ""}</span>
                     </td>
                     <td>${escapeHtml(user.department || "-")}</td>
+                    <td>${escapeHtml(organizationNames.get(user.organization_key) || (user.organization_key === "wuhan-zeshun" ? "武汉泽顺" : user.organization_key || "武汉泽顺"))}</td>
                     <td><span class="tag">${escapeHtml(user.role_name || user.role_key || "-")}</span></td>
                     <td><span class="status-tag ${user.is_active ? "" : "fail"}">${user.is_active ? "启用" : "停用"}</span></td>
                     <td>
@@ -30913,13 +31569,14 @@
         async function loadAccessManagement(force = false) {
             if (accessLoaded && !force) return;
             if (accessRoleBody) accessRoleBody.innerHTML = '<tr><td class="empty-state" colspan="4">正在加载角色...</td></tr>';
-            if (accessUserBody) accessUserBody.innerHTML = '<tr><td class="empty-state" colspan="5">正在加载账号...</td></tr>';
+            if (accessUserBody) accessUserBody.innerHTML = '<tr><td class="empty-state" colspan="6">正在加载账号...</td></tr>';
             try {
                 const [catalog, roles, users] = await Promise.all([
                     requestAccessApi("/api/access/catalog"),
                     requestAccessApi("/api/access/roles"),
                     requestAccessApi("/api/access/users"),
                 ]);
+                if (isPlatformAdmin) await loadEnterpriseOptions();
                 accessPermissionGroups = catalog?.groups || [];
                 accessRoles = Array.isArray(roles) ? roles : [];
                 accessUsers = Array.isArray(users) ? users : [];
@@ -30928,10 +31585,15 @@
                 renderAccessRoles();
                 renderAccessUsers();
                 renderAccessRoleOptions();
+                renderAccessOrganizationOptions(
+                    document.getElementById("access-user-organization")?.value
+                        || selectedWorkbenchOrganization
+                        || "wuhan-zeshun",
+                );
                 applyWorkbenchPermissions();
             } catch (error) {
                 if (accessRoleBody) accessRoleBody.innerHTML = `<tr><td class="empty-state" colspan="4">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
-                if (accessUserBody) accessUserBody.innerHTML = `<tr><td class="empty-state" colspan="5">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
+                if (accessUserBody) accessUserBody.innerHTML = `<tr><td class="empty-state" colspan="6">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
             }
         }
 
@@ -30955,6 +31617,31 @@
             if (accessRoleForm) accessRoleForm.hidden = true;
         }
 
+        document.getElementById("access-organization-form")?.addEventListener("submit", async event => {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const button = document.getElementById("save-access-organization-btn");
+            button.disabled = true;
+            try {
+                await requestAccessApi("/api/access/organizations", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        organization_name: document.getElementById("access-organization-name").value.trim(),
+                        organization_key: document.getElementById("access-organization-key").value.trim().toLowerCase(),
+                    }),
+                });
+                const key = document.getElementById("access-organization-key").value.trim().toLowerCase();
+                form.reset();
+                await loadEnterpriseOptions();
+                renderAccessOrganizationOptions(key);
+            } catch (error) {
+                alert(`新增企业失败：${error.message || error}`);
+            } finally {
+                button.disabled = false;
+            }
+        });
+
         async function deleteAccessRole(roleIndex) {
             const role = accessRoles[roleIndex];
             if (!role || role.is_system || !window.confirm(`确定删除角色“${role.role_name}”吗？`)) return;
@@ -30977,10 +31664,13 @@
             document.getElementById("access-display-name").value = user?.display_name || "";
             document.getElementById("access-department").value = user?.department || "";
             document.getElementById("access-email").value = user?.email || "";
+            renderAccessOrganizationOptions(
+                user?.organization_key || selectedWorkbenchOrganization || "wuhan-zeshun",
+            );
             document.getElementById("access-user-password").value = "";
             document.getElementById("access-user-password").required = !user;
             document.getElementById("access-user-active").checked = user ? Boolean(user.is_active) : true;
-            renderAccessRoleOptions(user?.role_key || "viewer");
+            renderAccessRoleOptions(user?.role_key || "member");
             accessUserForm.hidden = false;
             usernameInput.focus();
         }
@@ -31031,6 +31721,9 @@
                 display_name: document.getElementById("access-display-name").value.trim(),
                 department: document.getElementById("access-department").value.trim(),
                 email: document.getElementById("access-email").value.trim(),
+                organization_key: document.getElementById("access-user-organization")?.value
+                    || currentWorkbenchUser.organization_key
+                    || "wuhan-zeshun",
                 role_key: document.getElementById("access-user-role").value,
                 is_active: document.getElementById("access-user-active").checked,
             };
@@ -31215,12 +31908,6 @@
             appealAgentHint.textContent = `在线 · Agent ${agent.agent_version || "未知版本"} · 业务代码 ${agent.business_version || "正在同步"}`;
         });
         refreshExecutionAgentsBtn?.addEventListener("click", loadExecutionAgents);
-        downloadLocalAgentBtn?.addEventListener("click", () => {
-            window.location.assign("/api/local-agents/download?platform=windows");
-        });
-        downloadLocalAgentMacosBtn?.addEventListener("click", () => {
-            window.location.assign("/api/local-agents/download?platform=macos");
-        });
         dailyTaskExecutionTarget?.addEventListener("change", () => {
             syncExecutionTargetHint(
                 dailyTaskExecutionTarget,
@@ -31234,17 +31921,24 @@
         dailyTaskAgentId?.addEventListener("change", () => {
             window.localStorage.setItem("zeshun-daily-task-agent-id", dailyTaskAgentId.value);
         });
-        document.getElementById("download-daily-task-agent")?.addEventListener("click", () => {
-            window.location.assign("/api/local-agents/download?platform=windows");
-        });
-        document.getElementById("download-daily-task-agent-macos")?.addEventListener("click", () => {
-            window.location.assign("/api/local-agents/download?platform=macos");
-        });
         restoreApiReputationViewState();
         setOrderDensity(window.localStorage.getItem("zeshun-order-density") || "compact", false);
         initializeMinuteDateTimeInputs();
         refreshOverviewClock();
         applyWorkbenchPermissions();
+        if (isPlatformAdmin) {
+            loadEnterpriseOptions().catch(error => console.warn("读取企业列表失败：", error));
+        }
+        let restoreTab = new URLSearchParams(window.location.search).get("tab") || "";
+        if (!restoreTab && isPlatformAdmin) {
+            try {
+                restoreTab = window.localStorage.getItem("zeshun-enterprise-last-tab") || "";
+                window.localStorage.removeItem("zeshun-enterprise-last-tab");
+            } catch (_) {}
+        }
+        if (restoreTab) {
+            window.setTimeout(() => switchTab(restoreTab), 0);
+        }
         if (hasWorkbenchPermission("appeal.view")) {
             loadAppealPhrases();
             syncExecutionTargetHint(
@@ -31255,5 +31949,6 @@
         }
 
     </script>
+    <script src="{{ url_for('static', filename='store-analysis.js') }}"></script>
 </body>
 </html>

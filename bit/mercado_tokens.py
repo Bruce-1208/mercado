@@ -293,7 +293,7 @@ def exchange_and_save(
     upsert,
     application_id: int | None = None,
     get_application=None,
-    organization_key: str = "default",
+    organization_key: str = "wuhan-zeshun",
     http: requests.Session | None = None,
     timeout: int = 30,
 ) -> dict[str, Any]:
@@ -342,7 +342,7 @@ def exchange_and_save(
     )
     if profile_error:
         record["last_error"] = profile_error
-    record["organization_key"] = str(organization_key or "default").strip().lower()
+    record["organization_key"] = str(organization_key or "wuhan-zeshun").strip().lower()
     result = upsert(record)
     return {
         **dict(result or {}),

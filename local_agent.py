@@ -34,7 +34,7 @@ from urllib.parse import urlsplit
 import requests
 
 
-AGENT_VERSION = "1.2.4"
+AGENT_VERSION = "1.2.6"
 DEFAULT_SERVER_URL = "https://wuhanzeshun.com"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
@@ -142,7 +142,10 @@ class WorkerProcessGuard:
             if not handle:
                 return None
             limits = ExtendedLimitInformation()
-            limits.BasicLimitInformation.LimitFlags = 0x00002000
+            # Worker descendants normally die when this Agent job closes. Allow
+            # the dedicated interactive Edge process to explicitly break away;
+            # otherwise its login window is killed as soon as login/open ends.
+            limits.BasicLimitInformation.LimitFlags = 0x00002000 | 0x00000800
             configured = kernel32.SetInformationJobObject(
                 handle, 9, ctypes.byref(limits), ctypes.sizeof(limits)
             )
@@ -301,7 +304,7 @@ class AgentStatusWindow:
         self.messagebox = messagebox
         self.root = tk.Tk()
         self.root.title(f"泽顺 Mercado Local Agent {AGENT_VERSION}")
-        self.root.geometry("960x620")
+        self.root.geometry("960x660")
         self.root.minsize(720, 420)
         self.root.configure(background="#f4f6f8")
         self.log_queue = queue.Queue()
@@ -327,6 +330,54 @@ class AgentStatusWindow:
             foreground="#d9ecff",
             background="#17324d",
         ).pack(side="right")
+
+        connection = tk.Frame(
+            self.root,
+            background="#eaf1f8",
+            padx=14,
+            pady=10,
+            highlightthickness=1,
+            highlightbackground="#d6e2ee",
+        )
+        connection.pack(fill="x", padx=18, pady=(12, 2))
+        tk.Label(
+            connection,
+            text="服务端地址",
+            font=("Microsoft YaHei UI", 9, "bold"),
+            foreground="#30465e",
+            background="#eaf1f8",
+        ).grid(row=0, column=0, sticky="w", padx=(0, 10))
+        self.server_url_text = tk.StringVar(value=agent.config.server_url)
+        self.server_url_entry = tk.Entry(
+            connection,
+            textvariable=self.server_url_text,
+            font=("Consolas", 10),
+            relief="solid",
+            borderwidth=1,
+        )
+        self.server_url_entry.grid(row=0, column=1, sticky="ew", ipady=5)
+        self.save_server_url_button = tk.Button(
+            connection,
+            text="保存地址",
+            command=self._save_server_url,
+            font=("Microsoft YaHei UI", 9, "bold"),
+            foreground="white",
+            background="#1769aa",
+            activebackground="#12568f",
+            activeforeground="white",
+            relief="flat",
+            padx=14,
+            pady=5,
+        )
+        self.save_server_url_button.grid(row=0, column=2, padx=(10, 0))
+        tk.Label(
+            connection,
+            text="填写完整地址，例如 https://wuhanzeshun.com 或 http://127.0.0.1:5000。保存后重启 Agent 生效。",
+            font=("Microsoft YaHei UI", 8),
+            foreground="#64778b",
+            background="#eaf1f8",
+        ).grid(row=1, column=1, columnspan=2, sticky="w", pady=(6, 0))
+        connection.grid_columnconfigure(1, weight=1)
 
         details = tk.Frame(self.root, background="#f4f6f8", padx=18, pady=10)
         details.pack(fill="x")
@@ -411,6 +462,31 @@ class AgentStatusWindow:
             self.log_view.delete("1.0", "1001.0")
         self.log_view.see("end")
         self.log_view.configure(state="disabled")
+
+    def _save_server_url(self):
+        try:
+            server_url = _validate_server_url(
+                self.server_url_text.get(),
+                allow_http=self.agent.config.allow_http,
+            )
+            self.agent.config.save_server_url(server_url)
+        except (OSError, ValueError, RuntimeError) as exc:
+            self.messagebox.showerror("服务端地址无效", str(exc), parent=self.root)
+            return
+
+        changed = server_url != self.agent.config.server_url
+        self.status_text.set("服务端地址已保存（重启后生效）" if changed else "服务端地址已确认")
+        self.agent.log(
+            f"服务端地址已保存：{server_url}；"
+            + ("重启 Agent 后应用" if changed else "地址未变化")
+        )
+        message = "服务端地址已保存。请重启 Agent 后让新地址生效。"
+        if changed:
+            message += (
+                "\n\n如果切换到另一套泽顺服务，请从目标服务端重新下载 Agent 安装包，"
+                "以使用匹配的注册凭证。"
+            )
+        self.messagebox.showinfo("服务端地址", message, parent=self.root)
 
     def _set_status_from_log(self, content):
         if "Agent 已停止" in content:
@@ -639,25 +715,38 @@ class AgentConfig:
         self.data_dir = Path(
             _first_nonempty(args.data_dir, payload.get("data_dir")) or _default_data_dir()
         ).expanduser().resolve()
+        self.allow_http = bool(args.allow_http)
+        self.settings_path = self.data_dir / "agent-settings.json"
+        user_settings = _load_json(self.settings_path)
         self.server_url = _validate_server_url(
             _first_nonempty(
                 args.server,
                 os.environ.get("BIT_LOCAL_AGENT_SERVER_URL"),
+                user_settings.get("server_url"),
                 payload.get("server_url"),
                 DEFAULT_SERVER_URL,
             ),
-            allow_http=args.allow_http,
+            allow_http=self.allow_http,
         )
         identity = _identity(
             self.data_dir,
             _first_nonempty(args.agent_id, payload.get("agent_id")),
         )
         self.agent_id = str(identity["agent_id"])
+        identity_server_url = _validate_server_url(
+            _first_nonempty(identity.get("server_url"), payload.get("server_url"), DEFAULT_SERVER_URL),
+            allow_http=True,
+        )
+        identity_agent_token = (
+            identity.get("agent_token")
+            if identity_server_url == self.server_url
+            else ""
+        )
         self.agent_token = _first_nonempty(
             args.token,
             os.environ.get("BIT_LOCAL_AGENT_TOKEN"),
             payload.get("agent_token"),
-            identity.get("agent_token"),
+            identity_agent_token,
             os.environ.get("BIT_DB_API_TOKEN"),
         )
         self.enrollment_token = _first_nonempty(
@@ -695,10 +784,26 @@ class AgentConfig:
         )
         self.once = bool(args.once)
 
+    def save_server_url(self, server_url):
+        server_url = _validate_server_url(server_url, allow_http=self.allow_http)
+        current = _load_json(self.settings_path)
+        current["server_url"] = server_url
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        temporary = self.settings_path.with_suffix(".tmp")
+        temporary.write_text(
+            json.dumps(current, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        os.replace(temporary, self.settings_path)
+
     def save_agent_token(self, token):
         identity_path = self.data_dir / "identity.json"
         identity = _load_json(identity_path)
-        identity.update({"agent_id": self.agent_id, "agent_token": str(token)})
+        identity.update({
+            "agent_id": self.agent_id,
+            "agent_token": str(token),
+            "server_url": self.server_url,
+        })
         temporary = identity_path.with_suffix(".tmp")
         temporary.write_text(
             json.dumps(identity, ensure_ascii=False, indent=2), encoding="utf-8"

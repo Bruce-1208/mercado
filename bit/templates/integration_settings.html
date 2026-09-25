@@ -61,8 +61,9 @@
     .security { padding:12px 15px; border-left:4px solid #5b91d5; border-radius:7px; background:#f2f7fd; color:#46546a; }
     @media (max-width:760px) { .hero,.section-head { flex-direction:column; } .grid,.form-grid { grid-template-columns:1fr; } .account { align-self:flex-start; } section { padding:18px; } }
   </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20260925-1">
 </head>
-<body>
+<body class="zs-standalone">
   <header class="bar">
     <div class="brand"><span class="mark">ZS</span><span><strong>武汉泽顺</strong><small>集成与凭证设置</small></span></div>
     <a href="/">← 返回运营服务台</a>

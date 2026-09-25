@@ -773,6 +773,12 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
             "is_current": False,
         }
     ]
+    calls.clear()
+    fast_result = store.list_store_links(
+        include_categories=False, page_size=25, connection_factory=Connection,
+    )
+    assert fast_result["mercado_categories"] == []
+    assert not any("AS category_counts" in sql for sql, _params in calls)
     assert result["groups"] == [
         {"group_name": "运营一组"},
         {"group_name": "__ungrouped__"},

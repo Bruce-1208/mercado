@@ -1,6 +1,6 @@
 # 泽顺本机 Agent 部署说明
 
-本机 Agent 用于让公网泽顺控制台把申诉和任务派发到指定 Windows 或 macOS 电脑。AI核重核价不使用 Agent，由浏览器插件直接驱动 Edge。Agent 是一个常驻的出站客户端：只访问 `https://wuhanzeshun.com`，不开放本机 HTTP 端口，也不依赖浏览器的“本地网络访问”权限。
+本机 Agent 用于让泽顺控制台把申诉、任务和智赢核重核价派发到指定 Windows 或 macOS 电脑。核重核价由 Agent 在本机通过 Playwright 驱动可见 Edge。Agent 是一个常驻的出站客户端，不开放本机 HTTP 端口，也不依赖浏览器的“本地网络访问”权限。
 
 ## 工作方式
 
@@ -26,9 +26,13 @@ Agent 1.2.2 将任务领取合并到心跳请求，避免反向代理或滚动�
 
 Agent 1.2.3 在状态窗口增加“结束任务”按钮。按钮只结束当前电脑正在运行的任务，Agent 本身会保持在线并继续接收后续任务；没有运行任务时按钮不可用。
 
-Agent 默认数据目录在 Windows 为 `%LOCALAPPDATA%\Zeshun\MercadoLocalAgent`，在 macOS 为 `~/Library/Application Support/Zeshun/MercadoLocalAgent`。其中包含电脑身份、业务版本、`agent.log` 和运行日志所需的临时任务数据。Agent 保留最近两个业务版本。
+Agent 1.2.5 在图形状态窗口增加服务端地址设置。地址保存到本机用户数据目录的 `agent-settings.json`，重启 Agent 后生效；命令行 `--server` 和环境变量 `BIT_LOCAL_AGENT_SERVER_URL` 优先级更高。公网地址必须使用 HTTPS；本机回环地址可使用 HTTP。切换到另一套服务端时，从目标控制台重新下载对应 Agent 安装包，以获取匹配的注册凭证。升级需要重新构建并替换 Agent EXE。
 
-AI核重核价不需要安装或升级本机 Agent；请更新泽顺插件，由插件直接执行当前 Edge 的页面操作。
+Agent 1.2.6 修复 Windows 核重核价登录页闪退：任务结束时仍清理普通业务子进程，但将持久化的可见 Edge 从任务 Job Object 中分离，避免登录页随短时登录任务一起关闭。Windows 端需要重新构建并替换 Agent EXE；Agent 会自动下载最新业务代码。
+
+Agent 默认数据目录在 Windows 为 `%LOCALAPPDATA%\Zeshun\MercadoLocalAgent`，在 macOS 为 `~/Library/Application Support/Zeshun/MercadoLocalAgent`。其中包含电脑身份、服务端地址设置、业务版本、`agent.log` 和运行日志所需的临时任务数据。Agent 保留最近两个业务版本。
+
+控制台以本机 Agent 执行核重核价时，目标电脑需要运行在线 Agent。首次点击登录后，智赢和1688的可见 Edge 登录页会保留打开，完成登录后回到控制台确认。
 
 ## 服务端部署
 
@@ -72,7 +76,7 @@ python3 -m pip install pyinstaller
 
 ## Windows 客户端安装
 
-1. 在控制台下载 `Zeshun-MercadoLocalAgent.zip`，解压到固定目录。
+1. 登录控制台，点击网页右上角插件旁的“下载 Agent”并选择 Windows，解压下载的 `Zeshun-MercadoLocalAgent.zip` 到固定目录。
 2. 先双击 `start-agent.bat` 验证。正式 EXE 启动后只保留可视化状态窗口；网页控制台出现电脑名且状态为在线即表示成功。
 3. 右键 `install-agent.ps1` 并选择“使用 PowerShell 运行”，安装名为 `ZeshunMercadoLocalAgent` 的当前用户登录启动任务。可视化程序必须等用户登录桌面后才能显示，所以这里采用“登录时”而不是“系统启动时”触发。
 4. 如需取消自启动，运行同目录的 `uninstall-agent.ps1`。
@@ -80,13 +84,15 @@ python3 -m pip install pyinstaller
 
 ## macOS 客户端安装
 
-1. 在控制台点击“下载 macOS Agent”，解压 ZIP 到固定目录。
+1. 登录控制台，点击网页右上角插件旁的“下载 Agent”并选择 macOS，解压 ZIP 到固定目录。
 2. 双击 `start-agent.command` 验证，确认运行状态窗口中的时间和日志正常显示；如果系统拦截，在“系统设置 → 隐私与安全性”中允许打开。
 3. 控制台出现电脑名后，先关闭手动启动的 Agent，再双击 `install-agent.command` 安装登录启动项。
 4. 如需取消登录启动，双击 `uninstall-agent.command`。LaunchAgent 输出位于 `~/Library/Logs/Zeshun/MercadoLocalAgent.log`。
 5. 保持 macOS 版比特浏览器客户端启动；无需启动 `bit_interface` 或完整 client 工作台。
 
 同一电脑重复启动 Agent 会由进程锁拦截。需要更改显示名称时，编辑安装目录的 `local-agent.json` 中 `name` 字段并重启任务。
+
+需要更改连接的服务端时，在 Agent 图形窗口的“服务端地址”栏填写完整 URL 并保存，然后重启 Agent。HTTP 仅用于回环地址（或显式启用 `--allow-http` 的部署）；更换到另一套服务时，请从该服务端下载 Agent 安装包，让 Agent 使用对应的注册凭证。
 
 ## 常用检查
 

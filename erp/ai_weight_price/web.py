@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 from flask import Blueprint, Response, g, jsonify, render_template, request, send_file, session
 
 
-def create_blueprint(service, authorize=None, agent_dispatch=None):
+def create_blueprint(service, authorize=None, agent_dispatch=None, server_execution=False):
     bp = Blueprint("ai_weight_price", __name__, template_folder=str(Path(__file__).resolve().parents[2] / "bit" / "templates"))
 
     @bp.before_request
@@ -40,6 +40,24 @@ def create_blueprint(service, authorize=None, agent_dispatch=None):
         g.awp_agent_request = bool(
             agent_dispatch and requested_target == "agent"
         )
+        browser_actions = {
+            "/api/ai-weight-price/login/open",
+            "/api/ai-weight-price/login/confirm",
+            "/api/ai-weight-price/supplier/login/open",
+            "/api/ai-weight-price/categories/refresh",
+            "/api/ai-weight-price/start",
+            "/api/ai-weight-price/stop",
+            "/api/ai-weight-price/terminate",
+            "/api/ai-weight-price/continue",
+            "/api/ai-weight-price/skip-current",
+        }
+        browser_action = request.path in browser_actions or (
+            request.path.startswith("/api/ai-weight-price/tasks/")
+            and request.path.endswith(("/retry", "/manual-execute"))
+        )
+        if (server_execution and browser_action and request.method != "GET"
+                and not is_admin and not g.awp_agent_request):
+            return jsonify(message="仅超级管理员可以在服务器执行AI核重核价，请选择本机 Agent"), 403
         if not local_request and not authorize:
             if request.path == "/ai-weight-price":
                 return render_template("ai_weight_price.html", local_only=True, can_execute=False)
@@ -54,6 +72,7 @@ def create_blueprint(service, authorize=None, agent_dispatch=None):
             and request.method != "GET"
             and not remote_config_write
             and not g.awp_agent_request
+            and not (server_execution and is_admin and browser_action)
         ):
             return jsonify(message="请打开本机 http://127.0.0.1:5000 控制台使用AI核重核价"), 403
         if request.method != "GET":
@@ -103,9 +122,10 @@ def create_blueprint(service, authorize=None, agent_dispatch=None):
             local_only=False,
             can_execute=can_execute,
             can_configure=has_execute_permission,
-            remote_read_only=not local_request,
+            remote_read_only=not local_request and not (server_execution and bool(getattr(g, "awp_is_admin", False))),
             plugin_launch_only=bool(authorize),
             agent_launch_available=bool(agent_dispatch),
+            server_execution=server_execution,
             is_admin=bool(getattr(g, "awp_is_admin", False)),
         )
 

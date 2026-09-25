@@ -55,6 +55,26 @@ def parse_weight_evidence(text):
     return str(converted[0])
 
 
+def parse_dimensions_evidence(text):
+    """Return one unambiguous three-side package size in centimetres."""
+    if not isinstance(text, str):
+        return None
+    pattern = (r"(?<![\d.])([0-9]+(?:\.[0-9]+)?)\s*[x×*＊]\s*"
+               r"([0-9]+(?:\.[0-9]+)?)\s*[x×*＊]\s*"
+               r"([0-9]+(?:\.[0-9]+)?)\s*(cm|厘米|mm|毫米|m|米)(?![A-Za-z])")
+    found = []
+    for match in re.finditer(pattern, text, re.I):
+        unit = match[4].lower()
+        factor = Decimal("0.1") if unit in ("mm", "毫米") else Decimal("100") if unit in ("m", "米") else Decimal(1)
+        sides = tuple(Decimal(match[i]) * factor for i in (1, 2, 3))
+        if all(side > 0 for side in sides):
+            found.append(sides)
+    if not found or any(sides != found[0] for sides in found[1:]):
+        return None
+    return "x".join(format(side, "f").rstrip("0").rstrip(".")
+                    if "." in format(side, "f") else format(side, "f") for side in found[0])
+
+
 def parse_price_evidence(text):
     """Return a single explicit RMB price from quoted evidence."""
     if not isinstance(text, str) or not text.strip():
@@ -73,6 +93,14 @@ def erp_value_equal(field, actual, expected):
         return True
     if field == "review_status":
         return False
+    if field == "dimensions_cm":
+        def sides(value):
+            parts = re.split(r"\s*[x×*＊]\s*", str(value or "").strip())
+            return tuple(number(part) for part in parts) if len(parts) == 3 else None
+        try:
+            return sides(actual) is not None and sides(actual) == sides(expected)
+        except ValueError:
+            return False
     try:
         return number(actual, allow_zero=True) == number(expected, allow_zero=True)
     except ValueError:

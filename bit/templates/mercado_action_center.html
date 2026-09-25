@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>今日必办 · 泽顺运营中心</title>
+  <style>
+    :root{font-family:Inter,"Microsoft YaHei",system-ui,sans-serif;color:#172033;background:#f3f6fb;font-synthesis:none}
+    *{box-sizing:border-box}body{margin:0}.shell{max-width:1440px;margin:auto;padding:28px 24px 60px}
+    .top{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:22px}.eyebrow{font-size:11px;letter-spacing:.13em;color:#64748b;font-weight:800}
+    h1{font-size:28px;margin:6px 0 4px}.subtitle{color:#64748b;font-size:14px}.user{color:#667085;font-size:13px;white-space:nowrap}
+    .button{border:1px solid #d0d5dd;background:#fff;border-radius:9px;padding:9px 13px;font-weight:700;color:#344054;cursor:pointer}.button.primary{background:#175cd3;color:#fff;border-color:#175cd3}.button:disabled{opacity:.5;cursor:default}
+    .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}.metric,.panel,.task{background:#fff;border:1px solid #e4e9f0;border-radius:14px;box-shadow:0 2px 7px #10182808}
+    .metric{padding:16px 18px}.metric span{display:block;color:#667085;font-size:12px}.metric strong{font-size:25px;display:block;margin-top:7px}.metric.danger strong{color:#b42318}.metric.warning strong{color:#b54708}
+    .panel{padding:18px;margin-bottom:18px}.heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.heading h2{margin:0;font-size:17px}.hint{font-size:12px;color:#667085}
+    .toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.toolbar select,.task input,.task select,.task textarea{font:inherit;border:1px solid #d0d5dd;border-radius:8px;padding:9px;background:#fff;color:#344054}.toolbar select{font-size:13px}
+    .error{border:1px solid #fecdca;background:#fef3f2;color:#912018;padding:12px;border-radius:10px;margin-bottom:14px;display:none}.issue{border:1px solid #fedf89;background:#fffaeb;border-radius:10px;padding:12px 14px;margin:8px 0;color:#7a2e0e}.issue strong{display:block;margin-bottom:3px}.issue a,.task a{color:#175cd3;font-weight:700;text-decoration:none}.issue a:hover,.task a:hover{text-decoration:underline}
+    .task-list{display:grid;gap:12px}.task{padding:16px;border-left:4px solid #84adff}.task.overdue{border-left-color:#d92d20}.task.urgent{border-left-color:#f79009}.task.resolved{opacity:.78;border-left-color:#12b76a}
+    .task-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.task-title{font-size:16px;font-weight:800;line-height:1.45}.task-meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.tag{font-size:11px;background:#f2f4f7;color:#475467;padding:4px 8px;border-radius:999px}.tag.red{background:#fef3f2;color:#b42318}.tag.amber{background:#fffaeb;color:#b54708}.tag.green{background:#ecfdf3;color:#027a48}
+    .task-details{font-size:13px;line-height:1.65;color:#475467;white-space:pre-wrap;margin:12px 0}.task-controls{display:grid;grid-template-columns:1fr 190px 150px minmax(180px,2fr) auto;gap:8px;align-items:center}.task-controls textarea{height:39px;resize:vertical;min-height:39px}.history{border-top:1px solid #eaecf0;margin-top:12px;padding-top:10px}.history summary{font-size:12px;color:#667085;cursor:pointer}.history ol{margin:8px 0 0;padding-left:18px;color:#667085;font-size:12px}.history li{margin:4px 0;line-height:1.5}.empty{padding:36px;text-align:center;color:#667085;border:1px dashed #d0d5dd;border-radius:11px;background:#fcfcfd}
+    .event{border-top:1px solid #eaecf0;padding:11px 0;display:grid;grid-template-columns:120px 150px minmax(160px,1fr) 2fr auto;gap:12px;align-items:start;font-size:12px}.event:first-of-type{border-top:0}.event code{white-space:normal;word-break:break-all;color:#475467}.event-error{color:#b42318;white-space:pre-wrap;word-break:break-word}.small{font-size:11px;color:#667085}.toast{position:fixed;right:20px;bottom:20px;background:#101828;color:#fff;padding:12px 16px;border-radius:10px;display:none;box-shadow:0 8px 24px #10182833}
+    @media(max-width:900px){.metrics{grid-template-columns:repeat(2,1fr)}.task-controls{grid-template-columns:1fr 1fr}.task-controls textarea{grid-column:1/-1}.event{grid-template-columns:1fr 1fr}.event-error{grid-column:1/-1}}
+    @media(max-width:560px){.shell{padding:18px 12px 40px}.top{align-items:flex-start;flex-direction:column}h1{font-size:24px}.metrics{gap:8px}.metric{padding:13px}.metric strong{font-size:21px}.panel{padding:13px}.task-head{display:block}.task-controls{grid-template-columns:1fr}.task-controls textarea{grid-column:auto}.event{grid-template-columns:1fr}.event-error{grid-column:auto}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="top">
+      <div><div class="eyebrow">MERCADO LIBRE · DAILY OPERATIONS</div><h1>今日必须处理</h1><div class="subtitle">把需要跟进的订单、物流、消息、索赔、商品和促销集中到一处。</div></div>
+      <div class="toolbar"><span class="user">{{ current_user.display_name or current_user.username }}</span><button class="button" type="button" onclick="location.href='/'">返回工作台</button><button class="button primary" type="button" id="refresh">刷新待办</button></div>
+    </header>
+    <div class="error" id="error"></div>
+    <section class="metrics">
+      <div class="metric"><span>待处理</span><strong id="count-open">—</strong></div>
+      <div class="metric danger"><span>已逾期</span><strong id="count-overdue">—</strong></div>
+      <div class="metric warning"><span>高优先级 / 紧急</span><strong id="count-urgent">—</strong></div>
+      <div class="metric"><span>授权异常店铺</span><strong id="count-auth">—</strong></div>
+    </section>
+    <section class="panel" id="issues-panel" style="display:none">
+      <div class="heading"><h2>店铺授权需要检查</h2><span class="hint">授权失效会导致通知和同步无法继续</span></div>
+      <div id="issues"></div>
+    </section>
+    <section class="panel">
+      <div class="heading"><h2>运营待办</h2><div class="toolbar"><select id="filter"><option value="active">未完成</option><option value="all">全部状态</option><option value="overdue">已逾期</option><option value="urgent">高优先级 / 紧急</option></select><span class="hint" id="generated-at"></span></div></div>
+      <div class="task-list" id="tasks"><div class="empty">正在读取待办…</div></div>
+    </section>
+    <section class="panel">
+      <div class="heading"><h2>通知处理记录</h2><span class="hint">失败或死信可以从这里重放；重复通知按事件 ID 去重。</span></div>
+      <div id="events"><div class="empty">正在读取通知记录…</div></div>
+    </section>
+  </main>
+  <div class="toast" id="toast"></div>
+  <script>
+    const canExecute = {{ can_execute | tojson }};
+    let actionData = {rows: [], events: [], authorization_issues: []};
+    const $ = id => document.getElementById(id);
+    function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+    function safeHref(value) { const path = String(value || '/'); return path.startsWith('/') && !path.startsWith('//') ? path : '/'; }
+    function showToast(message) { const box=$('toast'); box.textContent=message; box.style.display='block'; setTimeout(()=>box.style.display='none',2600); }
+    function localInput(value) { if (!value) return ''; const date=new Date(String(value).replace(' ', 'T')); if (Number.isNaN(date.getTime())) return ''; const offset=date.getTimezoneOffset()*60000; return new Date(date.getTime()-offset).toISOString().slice(0,16); }
+    function dateLabel(value) { if(!value) return '未设置'; const date=new Date(String(value).replace(' ','T')); return Number.isNaN(date.getTime())?String(value):date.toLocaleString('zh-CN',{hour12:false}); }
+    function statusLabel(status) { return ({open:'待处理',in_progress:'处理中',resolved:'已完成',pending:'排队中',retry:'等待重试',dead:'死信',processing:'处理中',done:'已处理'})[status] || status || '—'; }
+    function taskCard(task) {
+      const overdue=Boolean(task.overdue), resolved=task.status==='resolved', priority=task.priority||'normal';
+      const logs=(task.logs||[]).map(log=>`<li><b>${escapeHtml(log.actor||'系统')}</b> · ${escapeHtml(dateLabel(log.created_at))} · ${escapeHtml(log.note||log.action||'')}</li>`).join('');
+      const classes=['task',overdue?'overdue':'',priority==='urgent'?'urgent':'',resolved?'resolved':''].filter(Boolean).join(' ');
+      return `<article class="${classes}" data-task-id="${Number(task.id)}">
+        <div class="task-head"><div><div class="task-title">${escapeHtml(task.title)}</div><div class="task-meta"><span class="tag">${escapeHtml(task.store_name||`店铺 #${task.token_id||'—'}`)}</span><span class="tag">${escapeHtml(task.topic||'业务提醒')}</span><span class="tag ${overdue?'red':priority==='urgent'?'amber':''}">${overdue?'已逾期 · ':''}${escapeHtml(statusLabel(task.status))}</span><span class="tag ${priority==='urgent'?'red':priority==='high'?'amber':''}">${escapeHtml(priority==='urgent'?'紧急':priority==='high'?'高优先级':'普通')}</span><span class="tag">处理时限：${escapeHtml(dateLabel(task.due_at))}</span></div></div><a href="${escapeHtml(safeHref(task.entry_url))}">打开处理入口 →</a></div>
+        <div class="task-details">${escapeHtml(task.details||task.resource||'请打开处理入口核实平台当前状态。')}</div>
+        ${canExecute?`<div class="task-controls"><input data-role="owner" maxlength="100" value="${escapeHtml(task.owner||'')}" placeholder="负责人"><input data-role="due" type="datetime-local" value="${escapeHtml(localInput(task.due_at))}"><select data-role="status"><option value="open" ${task.status==='open'?'selected':''}>待处理</option><option value="in_progress" ${task.status==='in_progress'?'selected':''}>处理中</option><option value="resolved" ${resolved?'selected':''}>已完成</option></select><textarea data-role="note" maxlength="2000" placeholder="填写本次处理记录；标记完成时请说明结果"></textarea><button class="button primary" type="button" onclick="saveTask(${Number(task.id)},this)">保存记录</button></div>`:''}
+        <details class="history"><summary>处理记录（${(task.logs||[]).length}）</summary><ol>${logs||'<li>暂无处理记录</li>'}</ol></details>
+      </article>`;
+    }
+    function renderTasks() {
+      const filter=$('filter').value; let rows=actionData.rows||[];
+      if(filter==='active') rows=rows.filter(row=>row.status!=='resolved');
+      if(filter==='overdue') rows=rows.filter(row=>row.overdue&&row.status!=='resolved');
+      if(filter==='urgent') rows=rows.filter(row=>['urgent','high'].includes(row.priority)&&row.status!=='resolved');
+      $('tasks').innerHTML=rows.length?rows.map(taskCard).join(''):'<div class="empty">当前筛选下没有待办。收到新通知或刷新订单、活动数据后，相关异常会出现在这里。</div>';
+      const open=(actionData.rows||[]).filter(row=>row.status!=='resolved');
+      $('count-open').textContent=open.length;
+      $('count-overdue').textContent=open.filter(row=>row.overdue).length;
+      $('count-urgent').textContent=open.filter(row=>['urgent','high'].includes(row.priority)).length;
+      const issues=actionData.authorization_issues||[];
+      $('count-auth').textContent=issues.length;
+      $('issues-panel').style.display=issues.length?'block':'none';
+      $('issues').innerHTML=issues.map(issue=>`<div class="issue"><strong>${escapeHtml(issue.store_name||`店铺 #${issue.id}`)} · ${escapeHtml(issue.status||'授权异常')}</strong>${escapeHtml(issue.reason||'请重新授权或检查凭证')}　<a href="${escapeHtml(safeHref(issue.entry_url))}">查看店铺授权 →</a></div>`).join('');
+      $('generated-at').textContent=actionData.generated_at?`更新于 ${actionData.generated_at}`:'';
+    }
+    function renderEvents() {
+      const rows=actionData.events||[];
+      if(!rows.length){$('events').innerHTML='<div class="empty">暂无通知记录</div>';return;}
+      $('events').innerHTML=rows.map(event=>`<div class="event"><span>${escapeHtml(dateLabel(event.received_at))}</span><span><b>${escapeHtml(statusLabel(event.status))}</b><div class="small">${Number(event.attempts||0)} 次处理</div></span><span>${escapeHtml(event.topic||'')}<div class="small">${escapeHtml(event.store_name||'')}</div></span><code>${escapeHtml(event.resource||'')}</code><span>${event.last_error?`<div class="event-error">${escapeHtml(event.last_error)}</div>`:''}${canExecute&&['retry','dead'].includes(event.status)?`<button class="button" type="button" onclick="replayEvent(${Number(event.id)},this)">重放</button>`:''}</span></div>`).join('');
+    }
+    async function loadData() {
+      $('error').style.display='none'; $('refresh').disabled=true;
+      try {
+        const includeClosed=$('filter').value==='all';
+        const response=await fetch(`/api/mercado/today/tasks${includeClosed?'?include_closed=1':''}`,{credentials:'same-origin'}); const payload=await response.json();
+        if(!response.ok||payload.status!=='success') throw new Error(payload.message||`请求失败 (${response.status})`);
+        actionData=payload.data||{rows:[],events:[],authorization_issues:[]}; renderTasks(); renderEvents();
+      } catch(error) { $('error').textContent=`加载失败：${error.message||error}`; $('error').style.display='block'; $('tasks').innerHTML='<div class="empty">暂时无法读取待办，请稍后重试。</div>'; }
+      finally {$('refresh').disabled=false;}
+    }
+    async function saveTask(id,button) {
+      const card=button.closest('[data-task-id]'); const body={owner:card.querySelector('[data-role=owner]').value,status:card.querySelector('[data-role=status]').value,due_at:card.querySelector('[data-role=due]').value||null,note:card.querySelector('[data-role=note]').value};
+      button.disabled=true;
+      try { const response=await fetch(`/api/mercado/today/tasks/${id}`,{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const result=await response.json(); if(!response.ok||result.status!=='success') throw new Error(result.message||'保存失败'); showToast('处理记录已保存'); await loadData(); }
+      catch(error){showToast(error.message||'保存失败');} finally{button.disabled=false;}
+    }
+    async function replayEvent(id,button) {
+      button.disabled=true;
+      try {const response=await fetch(`/api/mercado/today/events/${id}/replay`,{method:'POST',credentials:'same-origin'});const result=await response.json();if(!response.ok||result.status!=='success')throw new Error(result.message||'重放失败');showToast('通知已加入重试队列');await loadData();}
+      catch(error){showToast(error.message||'重放失败');}finally{button.disabled=false;}
+    }
+    $('refresh').addEventListener('click',loadData); $('filter').addEventListener('change',loadData); loadData();
+  </script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+# Unified Python dependency set for the complete Mercado project.
+# The service-specific files remain usable for smaller deployments.
+-r bit/requirements-server.txt
+-r bit/requirements-pdf.txt
+-r erp/ai_weight_price/requirements.txt
+-r yandex/requirements.txt
+
+# Shared data analysis, collection, and legacy browser workflows.
+APScheduler>=3.10,<4
+beautifulsoup4>=4.12,<5
+cryptography>=42,<47
+numpy>=1.26,<3
+opencv-python-headless>=4.9,<6
+opencc-python-reimplemented>=0.1.7,<1
+pandas>=2.2,<4
+playwright-stealth>=2,<3
+psutil>=5.9,<8
+pyautogui>=0.9.54,<1
+pyperclip>=1.8,<2
+pywin32>=306 ; sys_platform == "win32"
+pywinauto>=0.6.8,<1 ; sys_platform == "win32"
+pytz>=2024.1
+rapidocr-onnxruntime==1.4.4
+selenium>=4.25,<5
+undetected-chromedriver>=3.5,<4
+websocket-client>=1.8,<2
+
+# Legacy Alibaba Cloud image segmentation integration.
+alibabacloud-imageseg20191230
+alibabacloud-tea-openapi
+alibabacloud-tea-util
+
+# Test and maintenance scripts.
+pytest>=8,<9
+
+# Non-Python runtime tools are installed separately: MySQL, FFmpeg/FFprobe,
+# and Playwright Chromium (python -m playwright install chromium).

@@ -219,6 +219,12 @@ def initialize_appeal_storage():
                         "chat_json",
                         "LONGTEXT NULL AFTER `ai_replies_json`",
                     )
+                    _ensure_column(
+                        cursor,
+                        "ai_appeal_records",
+                        "appeal_copy_mode",
+                        "VARCHAR(32) NULL AFTER `appeal_type`",
+                    )
                     for table in ("appeal_chat_records", "ai_appeal_records"):
                         _ensure_column(cursor, table, "event_id", "CHAR(32) NULL")
                         cursor.execute(f"SHOW INDEX FROM `{table}` WHERE Key_name = 'uniq_appeal_event'")
@@ -2487,6 +2493,9 @@ def upsert_mercado_synced_orders(token_record, orders):
     try:
         with connection.cursor() as cursor:
             _ensure_mercado_synced_orders_table(cursor)
+            from bit import bit_inventory
+
+            bit_inventory.ensure_inventory_tables(cursor)
             order_ids = [str(order["id"]) for order in orders]
             placeholders = ",".join(["%s"] * len(order_ids))
             cursor.execute(
@@ -2645,6 +2654,9 @@ def upsert_mercado_synced_orders(token_record, orders):
                     `synced_at` = VALUES(`synced_at`)
                 """,
                 rows,
+            )
+            bit_inventory.reconcile_inventory_order_reservations(
+                cursor, order_ids, ensure_tables=False
             )
         connection.commit()
         inserted = sum(1 for order_id in order_ids if order_id not in existing)
@@ -3042,6 +3054,7 @@ def list_mercado_after_sale_order_contexts(token_id, resource_ids):
 def list_orders(
     country="", status="", salesperson="", group_name="", search="", start_date="", end_date="",
     origin="", freight_variance="", page=1, page_size=200, store_ids=None, salespeople=None,
+    freight_checked_from="", freight_checked_to="",
 ):
     """分页查询当前已授权店铺的 Token 同步订单。"""
     page = max(1, int(page or 1))
@@ -3051,13 +3064,19 @@ def list_orders(
         for value in (country, status, salesperson, group_name, search)
     )
     start_date, end_date = (str(value or "").strip() for value in (start_date, end_date))
+    freight_checked_from = str(freight_checked_from or "").strip()
+    freight_checked_to = str(freight_checked_to or "").strip()
     start_at, end_exclusive = _filter_datetime_bounds(start_date, end_date)
+    freight_start_at, freight_end_exclusive = _filter_datetime_bounds(
+        freight_checked_from, freight_checked_to,
+    )
     origin = str(origin or "").strip().lower()
     if origin not in ("", "token", "zying"):
         origin = ""
     freight_variance = str(freight_variance or "").strip().lower()
     if freight_variance not in (
-        "", "different", "actual_higher", "actual_lower", "pending_actual", "pending_quote",
+        "", "different", "different_any", "actual_higher", "actual_lower",
+        "pending_actual", "pending_quote",
     ):
         raise ValueError("运费差异筛选参数无效")
 
@@ -3139,6 +3158,11 @@ def list_orders(
                     f"{quoted} IS NOT NULL AND {actual} IS NOT NULL "
                     f"AND ABS({actual} - {quoted}) > 0.01"
                 )
+            elif freight_variance == "different_any":
+                clauses.append(
+                    f"{quoted} IS NOT NULL AND {actual} IS NOT NULL "
+                    f"AND ABS({actual} - {quoted}) > 0"
+                )
             elif freight_variance == "actual_higher":
                 clauses.append(
                     f"{quoted} IS NOT NULL AND {actual} IS NOT NULL "
@@ -3159,6 +3183,12 @@ def list_orders(
         if end_exclusive:
             clauses.append(f"{column('ordered_at')} < %s")
             params.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
+        if freight_start_at:
+            clauses.append(f"{column('freight_checked_at')} >= %s")
+            params.append(freight_start_at.strftime("%Y-%m-%d %H:%M:%S"))
+        if freight_end_exclusive:
+            clauses.append(f"{column('freight_checked_at')} < %s")
+            params.append(freight_end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
         if search:
             pattern = f"%{search}%"
             clauses.append(
@@ -3436,6 +3466,7 @@ def list_orders(
                            synced.`product_id`, synced.`title`,
                            synced.`buyer_name` AS `buyer`, synced.`purchase_remark`,
                            synced.`status_detail` AS `remark`, synced.`country`,
+                           synced.`freight_checked_at`,
                            {currency_sql} AS `currency_id`, {order_date_sql} AS `order_date`,
                            synced.`currency_id` AS `platform_currency_id`,
                            COALESCE(synced.`total_amount`, 0) AS `total_amount`,
@@ -4565,7 +4596,11 @@ def save_mercado_shipment_statuses(token_id, entries):
     try:
         with connection.cursor() as cursor:
             _ensure_mercado_synced_orders_table(cursor)
+            from bit import bit_inventory
+
+            bit_inventory.ensure_inventory_tables(cursor)
             updated = 0
+            changed_order_ids = []
             for status, label, detail, error, shipping_id, normalized_token_id in normalized:
                 cursor.execute(
                     f"""
@@ -4592,6 +4627,18 @@ def save_mercado_shipment_statuses(token_id, entries):
                     ],
                 )
                 updated += max(0, int(getattr(cursor, "rowcount", 0) or 0))
+                cursor.execute(
+                    "SELECT `order_id` FROM `mercado_synced_orders` "
+                    "WHERE `shipping_id` = %s AND `token_id` = %s",
+                    (shipping_id, normalized_token_id),
+                )
+                changed_order_ids.extend(
+                    str(row.get("order_id") or "") for row in cursor.fetchall() or []
+                )
+            if changed_order_ids:
+                bit_inventory.reconcile_inventory_order_reservations(
+                    cursor, changed_order_ids, ensure_tables=False
+                )
         connection.commit()
         return {"shipments": len(normalized), "orders": updated}
     except Exception:
@@ -5295,6 +5342,7 @@ def get_high_after_sale_alerts(
     date_to="",
     limit=100,
     salesperson="",
+    salespeople=None,
 ):
     """按产品汇总“取消-发货后”订单数量及其占全部销量的比例。"""
 
@@ -5317,7 +5365,17 @@ def get_high_after_sale_alerts(
     order_conditions = ["`id` IS NOT NULL", "TRIM(`id`) <> ''"]
     params = []
     salesperson = str(salesperson or "").strip()
-    if salesperson:
+    normalized_salespeople = list(dict.fromkeys(
+        str(value or "").strip() for value in salespeople or () if str(value or "").strip()
+    ))
+    if salespeople is not None:
+        if normalized_salespeople:
+            placeholders = ", ".join(["%s"] * len(normalized_salespeople))
+            order_conditions.append(f"COALESCE(`业务员`, '') IN ({placeholders})")
+            params.extend(normalized_salespeople)
+        else:
+            order_conditions.append("1 = 0")
+    elif salesperson:
         order_conditions.append("COALESCE(`业务员`, '') = %s")
         params.append(salesperson)
     if start_date:
@@ -5675,6 +5733,7 @@ def get_high_profit_products(
     date_to="",
     limit=100,
     salesperson="",
+    salespeople=None,
 ):
     """按产品汇总利润，并按总利润或利润率排序。"""
 
@@ -5697,7 +5756,17 @@ def get_high_profit_products(
     order_conditions = ["`id` IS NOT NULL", "TRIM(`id`) <> ''"]
     params = []
     salesperson = str(salesperson or "").strip()
-    if salesperson:
+    normalized_salespeople = list(dict.fromkeys(
+        str(value or "").strip() for value in salespeople or () if str(value or "").strip()
+    ))
+    if salespeople is not None:
+        if normalized_salespeople:
+            placeholders = ", ".join(["%s"] * len(normalized_salespeople))
+            order_conditions.append(f"COALESCE(`业务员`, '') IN ({placeholders})")
+            params.extend(normalized_salespeople)
+        else:
+            order_conditions.append("1 = 0")
+    elif salesperson:
         order_conditions.append("COALESCE(`业务员`, '') = %s")
         params.append(salesperson)
     if start_date:
@@ -6109,6 +6178,395 @@ def _ensure_zying_product_table(cursor):
     _ensure_column(cursor, "zying_product", "上架快照", "LONGTEXT NULL")
     _ensure_column(cursor, "zying_product", "疑似侵权", "VARCHAR(8) NULL")
     _ensure_column(cursor, "zying_product", "侵权关键词", "VARCHAR(1024) NULL")
+
+
+def _ensure_weight_dimensions_record_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `zying_weight_dimensions_records` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `order_number` VARCHAR(128) NOT NULL,
+            `order_time` VARCHAR(64) NULL,
+            `record_json` LONGTEXT NOT NULL,
+            `execution_logs_json` LONGTEXT NOT NULL,
+            `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_wdr_order_number` (`order_number`),
+            KEY `idx_wdr_order_time` (`order_time`, `id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
+def save_weight_dimensions_records(rows):
+    rows = [dict(row or {}) for row in rows or () if isinstance(row, dict)]
+    if not rows:
+        return {"inserted": 0, "duplicates": 0, "inserted_order_numbers": []}
+    connection = pymysql.connect(**config)
+    inserted = 0
+    inserted_order_numbers = []
+    try:
+        with connection.cursor() as cursor:
+            _ensure_weight_dimensions_record_table(cursor)
+            for row in rows:
+                order_number = str(row.get("order_number") or "").strip()
+                if not order_number:
+                    continue
+                logs = row.pop("execution_logs", [])
+                for private_key in ("_token_id", "_global_item_id", "_net_proceeds_usd"):
+                    row.pop(private_key, None)
+                cursor.execute(
+                    "INSERT IGNORE INTO `zying_weight_dimensions_records` "
+                    "(`order_number`, `order_time`, `record_json`, `execution_logs_json`) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (order_number, str(row.get("time") or "")[:64],
+                     json.dumps(row, ensure_ascii=False, default=str),
+                     json.dumps(logs if isinstance(logs, list) else [], ensure_ascii=False, default=str)),
+                )
+                if int(cursor.rowcount or 0):
+                    inserted += 1
+                    inserted_order_numbers.append(order_number)
+        connection.commit()
+        return {
+            "inserted": inserted,
+            "duplicates": max(0, len(rows) - inserted),
+            "inserted_order_numbers": inserted_order_numbers,
+        }
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_weight_dimensions_changed_orders(filters=None):
+    """Return API freight changes with optional order-import enrichment.
+
+    ``mercado_synced_orders`` is the authoritative source for freight checks
+    and deltas. The legacy ``orders`` table is deliberately
+    joined in Python because it is an order-import snapshot and may not exist
+    on every installation.  This also lets an order import fill product id,
+    salesperson, category, source and other fields without changing the API
+    sync schema.
+    """
+    filters = dict(filters or {})
+    if "store_ids" in filters and not filters.get("store_ids"):
+        return []
+    requested_limit = filters.get("limit")
+    try:
+        limit = max(1, int(requested_limit)) if requested_limit not in (None, "") else None
+    except (TypeError, ValueError):
+        limit = None
+    salespeople = filters.get("salespeople") or []
+    if isinstance(salespeople, str):
+        salespeople = [salespeople]
+    store_ids = filters.get("store_ids") or []
+    if isinstance(store_ids, (str, int)):
+        store_ids = [store_ids]
+
+    # The default view covers all freight changes checked during August and
+    # September of the current year. Filters below are freight-change times,
+    # not order creation times.
+    default_year = datetime.now().year
+    freight_checked_from = str(filters.get("date_from") or "").strip()
+    freight_checked_to = str(filters.get("date_to") or "").strip()
+    if not freight_checked_from and not freight_checked_to:
+        freight_checked_from = f"{default_year}-08-01 00:00"
+        freight_checked_to = f"{default_year}-09-30 23:59"
+
+    # The order list query already calculates actual USD freight and the
+    # quoted/current freight using the same exchange-rate rules as the orders
+    # screen.  Page through it so the WDR screen is not limited to one page.
+    api_rows = []
+    page = 1
+    while limit is None or len(api_rows) < limit:
+        page_size = 200 if limit is None else min(200, limit - len(api_rows))
+        page_data = list_orders(
+            # Apply salesperson/region after the optional orders-table
+            # enrichment below; otherwise an imported value cannot fill an
+            # API row whose synced snapshot is blank.
+            country="",
+            search="",
+            start_date="",
+            end_date="",
+            origin="",
+            freight_variance="different_any",
+            page=page,
+            page_size=page_size,
+            store_ids=store_ids,
+            salespeople=[],
+            freight_checked_from=freight_checked_from,
+            freight_checked_to=freight_checked_to,
+        ) or {}
+        rows = list(page_data.get("rows") or [])
+        api_rows.extend(rows)
+        if not rows or page * int(page_data.get("page_size") or len(rows)) >= int(page_data.get("total") or len(api_rows)):
+            break
+        page += 1
+
+    if not api_rows:
+        return []
+
+    def _text(value):
+        return str(value or "").strip()
+
+    order_keys = []
+    for row in api_rows:
+        for value in (row.get("order_number"), row.get("id")):
+            value = _text(value)
+            if value and value not in order_keys:
+                order_keys.append(value)
+
+    imported_by_key = {}
+    raw_by_order_id = {}
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            for start in range(0, len(order_keys), 500):
+                batch_keys = order_keys[start:start + 500]
+                if batch_keys:
+                    placeholders = ",".join(["%s"] * len(batch_keys))
+                    try:
+                        cursor.execute(
+                            f"""
+                            SELECT `id`, `编号`, `时间`, `业务员`, `来源`, `产品id`,
+                                   `采购追踪`, `产品分类`, `标题`, `图片`, `订单运费`,
+                                   `地区`, `买家姓名`
+                            FROM `orders`
+                            WHERE `id` IN ({placeholders}) OR `编号` IN ({placeholders})
+                            """,
+                            [*batch_keys, *batch_keys],
+                        )
+                        for imported in cursor.fetchall() or ():
+                            imported = dict(imported or {})
+                            for key in (_text(imported.get("id")), _text(imported.get("编号"))):
+                                if key:
+                                    imported_by_key.setdefault(key, imported)
+                    except Exception:
+                        # The order-import table is optional on a fresh install;
+                        # API rows remain useful and simply show missing fields.
+                        connection.rollback()
+
+            order_ids = [_text(row.get("id")) for row in api_rows if _text(row.get("id"))]
+            for start in range(0, len(order_ids), 500):
+                batch_ids = order_ids[start:start + 500]
+                if batch_ids:
+                    placeholders = ",".join(["%s"] * len(batch_ids))
+                    cursor.execute(
+                        f"SELECT `order_id`, `raw_json` FROM `mercado_synced_orders` "
+                        f"WHERE `order_id` IN ({placeholders})",
+                        batch_ids,
+                    )
+                    raw_by_order_id.update({
+                        _text(row.get("order_id")): row.get("raw_json") or "{}"
+                        for row in cursor.fetchall() or ()
+                    })
+    finally:
+        connection.close()
+
+    source_filter = _text(filters.get("source")).casefold()
+    store_filters = [
+        value.strip().casefold()
+        for value in re.split(r"[,，]", _text(filters.get("store")))
+        if value.strip()
+    ]
+    category_filter = _text(filters.get("category")).casefold()
+    region_filter = _text(filters.get("region")).casefold()
+    salesperson_filters = {
+        _text(value).casefold() for value in salespeople if _text(value)
+    }
+    freight_min = filters.get("freight_min")
+    freight_max = filters.get("freight_max")
+    try:
+        freight_min = Decimal(str(freight_min)) if freight_min not in (None, "") else None
+        freight_max = Decimal(str(freight_max)) if freight_max not in (None, "") else None
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError("运费差值区间必须是有效数字") from exc
+    if freight_min is not None and freight_max is not None and freight_min > freight_max:
+        raise ValueError("运费差值最小值不能大于最大值")
+
+    def _money_text(value):
+        if value in (None, ""):
+            return ""
+        try:
+            return f"{Decimal(str(value)).normalize()} USD"
+        except (InvalidOperation, TypeError, ValueError):
+            return f"{value} USD"
+
+    result = []
+    for api_row in api_rows:
+        order_id = _text(api_row.get("id"))
+        order_number = _text(api_row.get("order_number")) or order_id
+        imported = imported_by_key.get(order_number) or imported_by_key.get(order_id) or {}
+        source = _text(imported.get("来源")) or _text(api_row.get("source")) or "美客多 Token"
+        category = _text(imported.get("产品分类"))
+        salesperson = _text(imported.get("业务员")) or _text(api_row.get("salesperson"))
+        company_store = _text(api_row.get("shop_name"))
+        region = _text(imported.get("地区")) or _text(api_row.get("country"))
+        if source_filter and source_filter not in source.casefold():
+            continue
+        store_value = " ".join((company_store, _text(api_row.get("store_id")))).casefold()
+        if store_filters and not any(value in store_value for value in store_filters):
+            continue
+        if category_filter and category_filter not in category.casefold():
+            continue
+        if region_filter and region_filter not in region.casefold():
+            continue
+        if salesperson_filters:
+            salesperson_value = salesperson.casefold() or "__unassigned__"
+            if salesperson_value not in salesperson_filters:
+                continue
+        try:
+            actual_freight = Decimal(str(api_row.get("actual_freight_usd")))
+            current_freight = Decimal(str(api_row.get("quoted_freight_usd")))
+        except (InvalidOperation, TypeError, ValueError):
+            continue
+        if not actual_freight.is_finite() or not current_freight.is_finite():
+            continue
+        difference_decimal = (actual_freight - current_freight).quantize(Decimal("0.01"))
+        if difference_decimal == 0:
+            continue
+        difference = difference_decimal
+        if freight_min is not None and difference_decimal < freight_min:
+            continue
+        if freight_max is not None and difference_decimal > freight_max:
+            continue
+
+        global_item_id = ""
+        raw_text = raw_by_order_id.get(order_id) or "{}"
+        try:
+            raw = json.loads(raw_text) if isinstance(raw_text, str) else dict(raw_text or {})
+        except (TypeError, ValueError):
+            raw = {}
+        order_items = raw.get("order_items") or []
+        if order_items:
+            item = (order_items[0] or {}).get("item") or {}
+            global_item_id = _text(item.get("parent_item_id"))
+
+        result.append({
+            "time": _text(imported.get("时间")) or _text(api_row.get("ordered_at")),
+            "freight_changed_at": _text(api_row.get("freight_checked_at")),
+            "image_url": _text(imported.get("图片")) or _text(api_row.get("image_url")),
+            "order_number": order_number,
+            "salesperson": salesperson,
+            "source": source,
+            "company_store": company_store,
+            "store_token_id": int(api_row.get("store_id") or 0),
+            "product_id": _text(imported.get("产品id")),
+            "category": category,
+            "title": _text(imported.get("标题")) or _text(api_row.get("title")),
+            "shipment_id": _text(api_row.get("platform_shipping_id")),
+            "tracking_number": _text(imported.get("采购追踪")),
+            "carrier": _text(api_row.get("logistics_company")),
+            "region": region,
+            "declared_weight_g": _text(api_row.get("quoted_freight_weight_g")),
+            "declared_dimensions_cm": "",
+            "declared_freight": _money_text(api_row.get("quoted_freight_usd")),
+            "actual_weight_g": "",
+            "actual_dimensions_cm": "",
+            "actual_freight": _money_text(api_row.get("actual_freight_usd")),
+            "freight_difference": _money_text(difference),
+            "freight_difference_usd": str(difference) if difference is not None else "",
+            "marketplace_item_id": _text(api_row.get("product_id")),
+            "query_status": "待补全",
+            "query_error": (
+                "缺少产品id，请先通过订单导入补全"
+                if not _text(imported.get("产品id")) else ""
+            ),
+            "last_updated": _text(api_row.get("last_updated")),
+            "_token_id": int(api_row.get("store_id") or 0) or None,
+            "_global_item_id": global_item_id,
+            "_net_proceeds_usd": None,
+            "_package_status": "",
+            "_net_status": "",
+            "_source_type": "freight_changes",
+        })
+    return result
+
+
+def get_weight_dimensions_record_order_numbers(order_numbers):
+    values = list(dict.fromkeys(
+        str(value or "").strip() for value in order_numbers or () if str(value or "").strip()
+    ))
+    if not values:
+        return []
+    connection = pymysql.connect(**config)
+    try:
+        result = []
+        with connection.cursor() as cursor:
+            _ensure_weight_dimensions_record_table(cursor)
+            for start in range(0, len(values), 500):
+                batch = values[start:start + 500]
+                placeholders = ", ".join(["%s"] * len(batch))
+                cursor.execute(
+                    f"SELECT `order_number` FROM `zying_weight_dimensions_records` "
+                    f"WHERE `order_number` IN ({placeholders})",
+                    batch,
+                )
+                result.extend(str(row.get("order_number") or "") for row in cursor.fetchall() or [])
+        return result
+    finally:
+        connection.close()
+
+
+def list_weight_dimensions_records():
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_weight_dimensions_record_table(cursor)
+            cursor.execute(
+                "SELECT `order_number`, `record_json`, `execution_logs_json` "
+                "FROM `zying_weight_dimensions_records` "
+                "ORDER BY COALESCE(NULLIF(`order_time`, ''), '0000-00-00') DESC, `id` DESC"
+            )
+            rows = cursor.fetchall() or []
+        result = []
+        for row in rows:
+            try:
+                record = json.loads(row.get("record_json") or "{}")
+            except (TypeError, ValueError):
+                record = {}
+            try:
+                record["execution_logs"] = json.loads(row.get("execution_logs_json") or "[]")
+            except (TypeError, ValueError):
+                record["execution_logs"] = []
+            record["order_number"] = row.get("order_number") or record.get("order_number")
+            result.append(record)
+        return result
+    finally:
+        connection.close()
+
+
+def append_weight_dimensions_record_log(order_number, log_entry, record_updates=None):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_weight_dimensions_record_table(cursor)
+            cursor.execute(
+                "SELECT `record_json`, `execution_logs_json` FROM `zying_weight_dimensions_records` "
+                "WHERE `order_number` = %s FOR UPDATE", (str(order_number or "").strip(),)
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise KeyError("永久记录中不存在该订单编号")
+            record = json.loads(row.get("record_json") or "{}")
+            logs = json.loads(row.get("execution_logs_json") or "[]")
+            logs.append(dict(log_entry or {}))
+            record.update(dict(record_updates or {}))
+            cursor.execute(
+                "UPDATE `zying_weight_dimensions_records` SET `record_json` = %s, `execution_logs_json` = %s "
+                "WHERE `order_number` = %s",
+                (json.dumps(record, ensure_ascii=False, default=str),
+                 json.dumps(logs, ensure_ascii=False, default=str), str(order_number or "").strip()),
+            )
+        connection.commit()
+        return {"record": record, "execution_logs": logs}
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def insert_zying_product_info(product_list):
@@ -6895,6 +7353,7 @@ def _ensure_ai_appeal_records_table(cursor):
             `id` BIGINT NOT NULL AUTO_INCREMENT,
             `appeal_time` DATETIME NULL,
             `appeal_type` VARCHAR(64) NULL,
+            `appeal_copy_mode` VARCHAR(32) NULL,
             `shop_name` VARCHAR(128) NULL,
             `site` VARCHAR(64) NULL,
             `status` VARCHAR(64) NULL,
@@ -6929,6 +7388,7 @@ def insert_ai_appeal_record(record):
                 INSERT INTO `ai_appeal_records` (
                     `appeal_time`,
                     `appeal_type`,
+                    `appeal_copy_mode`,
                     `shop_name`,
                     `site`,
                     `status`,
@@ -6942,7 +7402,7 @@ def insert_ai_appeal_record(record):
                     `error`,
                     `raw_json`,
                     `created_at`, `event_id`
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)
             """
             cursor.execute(
@@ -6950,6 +7410,7 @@ def insert_ai_appeal_record(record):
                 (
                     record.get("appeal_time") or None,
                     record.get("appeal_type", ""),
+                    record.get("appeal_copy_mode") or "未记录",
                     record.get("shop_name", ""),
                     record.get("site", ""),
                     record.get("status", ""),
@@ -6971,7 +7432,7 @@ def insert_ai_appeal_record(record):
         return record_id
     except Exception as e:
         connection.rollback()
-        print(f"AI申诉记录写入失败，已回滚: {e}")
+        print(f"自动化申诉记录写入失败，已回滚: {e}")
         raise
     finally:
         connection.close()
@@ -6993,6 +7454,7 @@ def get_ai_appeal_records(limit=100):
                     `id`,
                     `appeal_time`,
                     `appeal_type`,
+                    `appeal_copy_mode`,
                     `shop_name`,
                     `site`,
                     `status`,
@@ -7045,6 +7507,11 @@ def get_ai_appeal_records(limit=100):
                     if isinstance(raw_record.get("executor"), dict)
                     else {}
                 )
+                row["appeal_copy_mode"] = str(
+                    row.get("appeal_copy_mode")
+                    or raw_record.get("appeal_copy_mode")
+                    or "未记录"
+                )
                 row["record_scope"] = str(raw_record.get("record_scope") or "")
             return {"total": len(rows), "rows": rows}
     finally:
@@ -7078,7 +7545,7 @@ def _ensure_mercado_store_tokens_table(cursor):
         """
         CREATE TABLE IF NOT EXISTS `mercado_store_tokens` (
             `id` BIGINT NOT NULL AUTO_INCREMENT,
-            `organization_key` VARCHAR(64) NOT NULL DEFAULT 'default',
+            `organization_key` VARCHAR(64) NOT NULL DEFAULT 'wuhan-zeshun',
             `display_name` VARCHAR(100) NOT NULL,
             `enabled` TINYINT(1) NOT NULL DEFAULT 1,
             `meli_user_id` VARCHAR(64) NULL,
@@ -7118,8 +7585,19 @@ def _ensure_mercado_store_tokens_table(cursor):
         "VARCHAR(64) NULL AFTER `id`",
     )
     cursor.execute(
-        "UPDATE `mercado_store_tokens` SET `organization_key` = 'default' "
+        "UPDATE `mercado_store_tokens` SET `organization_key` = 'wuhan-zeshun' "
         "WHERE `organization_key` IS NULL OR `organization_key` = ''"
+    )
+    cursor.execute(
+        """
+        UPDATE `mercado_store_tokens` AS `legacy`
+        LEFT JOIN `mercado_store_tokens` AS `current_org`
+          ON `current_org`.`organization_key` = 'wuhan-zeshun'
+         AND `current_org`.`display_name` = `legacy`.`display_name`
+        SET `legacy`.`organization_key` = 'wuhan-zeshun'
+        WHERE `legacy`.`organization_key` = 'default'
+          AND `current_org`.`id` IS NULL
+        """
     )
     # Store names are only unique inside a customer.  Keep the migration
     # idempotent so existing single-tenant databases can be upgraded safely.
@@ -8431,7 +8909,9 @@ def delete_mercado_application(application_id):
 
 
 def _mercado_token_record(record):
-    organization_key = str(record.get("organization_key") or "default").strip().lower()
+    organization_key = str(record.get("organization_key") or "wuhan-zeshun").strip().lower()
+    if organization_key == "default":
+        organization_key = "wuhan-zeshun"
     if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{1,63}", organization_key):
         raise ValueError("店铺授权的客户标识格式无效")
     normalized = {
@@ -9018,6 +9498,733 @@ def get_window_anomalies(active_only=True, limit=500):
                         row[key] = str(row[key])
                 row["active"] = bool(row.get("active"))
             return {"total": len(rows), "rows": rows}
+    finally:
+        connection.close()
+
+
+def _ensure_mercado_action_center_tables(cursor):
+    """Durable inbox for Mercado notifications and operator follow-up."""
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `mercado_notification_events` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `event_key` CHAR(64) NOT NULL,
+            `organization_key` VARCHAR(64) NOT NULL,
+            `application_id` BIGINT NOT NULL,
+            `token_id` BIGINT NULL,
+            `user_id` VARCHAR(64) NOT NULL,
+            `topic` VARCHAR(80) NOT NULL,
+            `resource` VARCHAR(500) NOT NULL,
+            `payload_json` LONGTEXT NOT NULL,
+            `status` VARCHAR(24) NOT NULL DEFAULT 'pending',
+            `attempts` INT NOT NULL DEFAULT 0,
+            `received_at` DATETIME NOT NULL,
+            `next_attempt_at` DATETIME NULL,
+            `lease_until` DATETIME NULL,
+            `processed_at` DATETIME NULL,
+            `last_error` TEXT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_mercado_notification_event_key` (`event_key`),
+            KEY `idx_mercado_notification_queue` (`status`, `next_attempt_at`, `id`),
+            KEY `idx_mercado_notification_scope` (`organization_key`, `token_id`, `received_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `mercado_operator_tasks` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `task_key` CHAR(64) NOT NULL,
+            `organization_key` VARCHAR(64) NOT NULL,
+            `token_id` BIGINT NULL,
+            `event_id` BIGINT NULL,
+            `source` VARCHAR(32) NOT NULL DEFAULT 'mercado_notification',
+            `topic` VARCHAR(80) NOT NULL,
+            `resource` VARCHAR(500) NOT NULL,
+            `title` VARCHAR(255) NOT NULL,
+            `details` TEXT NULL,
+            `entry_url` VARCHAR(1000) NOT NULL DEFAULT '/',
+            `priority` VARCHAR(16) NOT NULL DEFAULT 'normal',
+            `due_at` DATETIME NOT NULL,
+            `owner` VARCHAR(100) NOT NULL DEFAULT '',
+            `status` VARCHAR(24) NOT NULL DEFAULT 'open',
+            `resolution` TEXT NULL,
+            `created_at` DATETIME NOT NULL,
+            `updated_at` DATETIME NOT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_mercado_operator_task_key` (`task_key`),
+            KEY `idx_mercado_operator_task_due` (`organization_key`, `status`, `due_at`),
+            KEY `idx_mercado_operator_task_store` (`token_id`, `status`, `due_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `mercado_operator_task_logs` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `task_id` BIGINT NOT NULL,
+            `actor` VARCHAR(100) NOT NULL,
+            `action` VARCHAR(24) NOT NULL,
+            `note` TEXT NULL,
+            `created_at` DATETIME NOT NULL,
+            PRIMARY KEY (`id`),
+            KEY `idx_mercado_operator_task_log` (`task_id`, `created_at`, `id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
+def initialize_mercado_action_center_tables():
+    """Create notification/task tables during server startup, not callback delivery."""
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            _ensure_mercado_action_center_tables(cursor)
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def _mercado_action_topic_details(topic, resource, event_payload):
+    normalized = str(topic or "").strip().lower().replace(" ", "_")
+    if normalized in {"orders", "marketplace_orders", "marketplace_orders_on_site"}:
+        return "订单状态有更新", "urgent", 4, "orders"
+    if normalized in {"shipments", "marketplace_shipments"}:
+        return "物流状态变化，请检查发货节点", "urgent", 2, "orders"
+    if normalized in {"questions", "marketplace_questions"}:
+        return "收到新的售前问题", "urgent", 8, "pre-sale"
+    if normalized in {"messages", "marketplace_messages"}:
+        return "收到新的售后消息", "high", 12, "customer-service"
+    if normalized in {"claims", "marketplace_claims"}:
+        return "索赔状态变化，请检查可执行动作和截止时间", "urgent", 8, "customer-service"
+    if normalized in {"items", "marketplace_items", "items_prices", "marketplace_fbm_stock", "marketplace_user_products", "marketplace_user_products_families"}:
+        return "商品信息变化，请检查在售状态和库存", "high", 24, "mercado-products"
+    if normalized in {"public_candidates", "public_offers"}:
+        return "促销资格或报名状态变化", "normal", 24, "promotions"
+    if normalized in {"marketplace_item_competition", "item_competition"}:
+        return "商品竞争状态变化，请复核售价和利润", "normal", 24, "mercado-products"
+    if normalized == "marketplace_cbt_items_uptin":
+        return "商品迁移事件待确认", "high", 24, "mercado-products"
+    return "美客多业务事件待处理", "normal", 24, "orders"
+
+
+def receive_mercado_notification(event):
+    """Persist one verified-app callback and its idempotent operator task."""
+    payload = dict(event or {})
+    application_id = int(payload.get("application_id") or 0)
+    event_key = str(payload.get("event_key") or "").strip()
+    user_id = str(payload.get("user_id") or "").strip()
+    topic = str(payload.get("topic") or "").strip()[:80]
+    resource = str(payload.get("resource") or "").strip()
+    if application_id <= 0 or not event_key or len(event_key) != 64:
+        raise ValueError("通知缺少有效的 application_id 或 event_key")
+    if not user_id or len(user_id) > 64 or not topic or not resource or len(resource) > 500:
+        raise ValueError("通知字段不完整或超出长度限制")
+    now = datetime.now().replace(microsecond=0)
+    incoming_body = dict(payload.get("payload") or {})
+    # Mercado's callback sample includes request/response diagnostics. Keep
+    # only delivery metadata so authorization headers can never be persisted.
+    body = {
+        key: incoming_body[key]
+        for key in ("_id", "id", "sent", "received", "attempts", "actions")
+        if key in incoming_body
+    }
+    raw_json = json.dumps(body, ensure_ascii=False, separators=(",", ":"))
+    if len(raw_json.encode("utf-8")) > 64 * 1024:
+        raise ValueError("通知正文超过 64 KB")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT tokens.`id`, tokens.`organization_key`, tokens.`display_name`,
+                          tokens.`meli_user_id`
+                   FROM `mercado_store_tokens` AS tokens
+                   LEFT JOIN `mercado_applications` AS apps
+                     ON apps.`id` = tokens.`application_id`
+                   WHERE tokens.`enabled` = 1
+                     AND (apps.`client_id` = %s OR tokens.`client_id` = %s)""",
+                (str(application_id), str(application_id)),
+            )
+            store_rows = [dict(row or {}) for row in (cursor.fetchall() or ())]
+            if not store_rows:
+                raise ValueError("没有找到该 application_id 对应的已启用店铺授权")
+            exact = [row for row in store_rows if str(row.get("meli_user_id") or "") == user_id]
+            if len(exact) == 1:
+                resolved = exact[0]
+            elif len(store_rows) == 1 and not str(store_rows[0].get("meli_user_id") or "").strip():
+                resolved = store_rows[0]
+            else:
+                raise ValueError("通知 user_id 无法唯一匹配已启用店铺，请检查店铺授权中的卖家 ID")
+            organization_key = str(resolved.get("organization_key") or "wuhan-zeshun")
+            token_id = int(resolved.get("id") or 0) or None
+            cursor.execute(
+                """
+                INSERT IGNORE INTO `mercado_notification_events`
+                    (`event_key`, `organization_key`, `application_id`, `token_id`, `user_id`,
+                     `topic`, `resource`, `payload_json`, `status`, `received_at`, `next_attempt_at`)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s, %s)
+                """,
+                (event_key, organization_key, application_id, token_id, user_id,
+                 topic, resource, raw_json, now, now),
+            )
+            inserted = cursor.rowcount == 1
+            if inserted and token_id:
+                title, priority, hours, tab = _mercado_action_topic_details(topic, resource, body)
+                cursor.execute(
+                    "SELECT `id` FROM `mercado_notification_events` WHERE `event_key` = %s LIMIT 1",
+                    (event_key,),
+                )
+                event_row = cursor.fetchone() or {}
+                event_id = int(event_row.get("id") or 0) or None
+                cursor.execute(
+                    """SELECT `id` FROM `mercado_operator_tasks`
+                       WHERE `organization_key` = %s AND `token_id` = %s
+                         AND `topic` = %s AND `resource` = %s AND `status` <> 'resolved'
+                       ORDER BY `id` DESC LIMIT 1""",
+                    (organization_key, token_id, topic, resource),
+                )
+                open_task = cursor.fetchone()
+                if open_task:
+                    cursor.execute(
+                        "UPDATE `mercado_operator_tasks` SET `event_id` = %s, `updated_at` = %s WHERE `id` = %s",
+                        (event_id, now, int(open_task["id"])),
+                    )
+                else:
+                    task_key = hashlib.sha256(
+                        f"{organization_key}\0{token_id}\0{topic.lower()}\0{user_id}\0{resource}\0{event_key}".encode("utf-8")
+                    ).hexdigest()
+                    cursor.execute(
+                        """
+                        INSERT IGNORE INTO `mercado_operator_tasks`
+                            (`task_key`, `organization_key`, `token_id`, `event_id`, `source`,
+                             `topic`, `resource`, `title`, `details`, `entry_url`, `priority`,
+                             `due_at`, `owner`, `status`, `created_at`, `updated_at`)
+                        VALUES (%s, %s, %s, %s, 'mercado_notification', %s, %s, %s, %s, %s,
+                                %s, %s, '', 'open', %s, %s)
+                        """,
+                        (task_key, organization_key, token_id, event_id, topic, resource,
+                         title, f"{resource}；工作台建议在 {hours} 小时内核实并按美客多当前状态处理。", f"/?tab={tab}", priority,
+                         now + timedelta(hours=hours), now, now),
+                    )
+            connection.commit()
+            return {"accepted": True, "duplicate": not inserted, "token_id": token_id}
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def claim_next_mercado_notification_event():
+    now = datetime.now().replace(microsecond=0)
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_action_center_tables(cursor)
+            cursor.execute(
+                """
+                SELECT `id` FROM `mercado_notification_events`
+                WHERE (`status` IN ('pending', 'retry') AND (`next_attempt_at` IS NULL OR `next_attempt_at` <= %s))
+                   OR (`status` = 'processing' AND `lease_until` < %s)
+                ORDER BY `received_at` ASC, `id` ASC LIMIT 1
+                """,
+                (now, now),
+            )
+            row = cursor.fetchone()
+            if not row:
+                connection.commit()
+                return None
+            event_id = int(row["id"])
+            cursor.execute(
+                """
+                UPDATE `mercado_notification_events`
+                SET `status` = 'processing', `attempts` = `attempts` + 1,
+                    `lease_until` = %s, `last_error` = NULL
+                WHERE `id` = %s AND (
+                    (`status` IN ('pending', 'retry') AND (`next_attempt_at` IS NULL OR `next_attempt_at` <= %s))
+                    OR (`status` = 'processing' AND `lease_until` < %s)
+                )
+                """,
+                (now + timedelta(minutes=2), event_id, now, now),
+            )
+            if cursor.rowcount != 1:
+                connection.commit()
+                return None
+            cursor.execute(
+                "SELECT * FROM `mercado_notification_events` WHERE `id` = %s LIMIT 1",
+                (event_id,),
+            )
+            event = dict(cursor.fetchone() or {})
+            try:
+                event["payload"] = json.loads(event.pop("payload_json", "{}") or "{}")
+            except (TypeError, ValueError):
+                event["payload"] = {}
+            for key in ("received_at", "next_attempt_at", "lease_until", "processed_at"):
+                if event.get(key) is not None:
+                    event[key] = str(event[key])
+            connection.commit()
+            return event
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def finish_mercado_notification_event(event_id, *, error=""):
+    now = datetime.now().replace(microsecond=0)
+    error_text = str(error or "").strip()[:2000]
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_action_center_tables(cursor)
+            cursor.execute(
+                "SELECT `attempts` FROM `mercado_notification_events` WHERE `id` = %s LIMIT 1",
+                (int(event_id),),
+            )
+            row = cursor.fetchone()
+            attempts = int((row or {}).get("attempts") or 1)
+            if error_text:
+                dead = attempts >= 5
+                retry_at = now + timedelta(seconds=min(300, 2 ** min(attempts, 8)))
+                cursor.execute(
+                    """
+                    UPDATE `mercado_notification_events`
+                    SET `status` = %s, `next_attempt_at` = %s, `lease_until` = NULL,
+                        `last_error` = %s, `processed_at` = %s
+                    WHERE `id` = %s
+                    """,
+                    ("dead" if dead else "retry", None if dead else retry_at,
+                     error_text, now if dead else None, int(event_id)),
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE `mercado_notification_events`
+                    SET `status` = 'done', `next_attempt_at` = NULL,
+                        `lease_until` = NULL, `last_error` = NULL, `processed_at` = %s
+                    WHERE `id` = %s
+                    """,
+                    (now, int(event_id)),
+                )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_mercado_operator_tasks(*, token_ids=None, organization_key="", include_closed=False, limit=300):
+    ids = sorted({int(value) for value in token_ids or () if int(value or 0) > 0}) if token_ids is not None else []
+    limit = max(1, min(int(limit or 300), 1000))
+    clauses, params = [], []
+    if organization_key:
+        clauses.append("t.`organization_key` = %s")
+        params.append(str(organization_key))
+    if token_ids is not None:
+        if ids:
+            clauses.append(f"t.`token_id` IN ({','.join(['%s'] * len(ids))})")
+            params.extend(ids)
+        else:
+            return {"rows": [], "total": 0, "open": 0, "overdue": 0}
+    if not include_closed:
+        clauses.append("t.`status` <> 'resolved'")
+    where = "WHERE " + " AND ".join(clauses) if clauses else ""
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_action_center_tables(cursor)
+            cursor.execute(
+                f"""
+                SELECT t.`id`, t.`organization_key`, t.`token_id`, t.`event_id`, t.`source`, t.`topic`,
+                       t.`resource`, t.`title`, t.`details`, t.`entry_url`, t.`priority`, t.`due_at`,
+                       t.`owner`, t.`status`, t.`resolution`, t.`created_at`, t.`updated_at`,
+                       COALESCE(NULLIF(s.`display_name`, ''), s.`nickname`, CONCAT('店铺 #', t.`token_id`)) AS `store_name`
+                FROM `mercado_operator_tasks` AS t
+                LEFT JOIN `mercado_store_tokens` AS s ON s.`id` = t.`token_id`
+                {where}
+                ORDER BY (t.`status` = 'resolved') ASC, t.`due_at` ASC, t.`id` DESC LIMIT %s
+                """,
+                (*params, limit),
+            )
+            rows = [dict(row or {}) for row in (cursor.fetchall() or ())]
+            for row in rows:
+                for key in ("due_at", "created_at", "updated_at"):
+                    if row.get(key) is not None:
+                        row[key] = str(row[key])
+            task_ids = [int(row["id"]) for row in rows]
+            logs_by_task = {task_id: [] for task_id in task_ids}
+            if task_ids:
+                cursor.execute(
+                    "SELECT `task_id`, `actor`, `action`, `note`, `created_at` "
+                    f"FROM `mercado_operator_task_logs` WHERE `task_id` IN ({','.join(['%s'] * len(task_ids))}) "
+                    "ORDER BY `created_at` DESC, `id` DESC",
+                    task_ids,
+                )
+                for log in cursor.fetchall() or ():
+                    target = logs_by_task.get(int(log.get("task_id") or 0))
+                    if target is not None and len(target) < 5:
+                        entry = dict(log)
+                        if entry.get("created_at") is not None:
+                            entry["created_at"] = str(entry["created_at"])
+                        target.append(entry)
+            now = datetime.now()
+            for row in rows:
+                row["logs"] = logs_by_task.get(int(row["id"]), [])
+                due = row.get("due_at")
+                row["overdue"] = bool(due and str(due) < now.strftime("%Y-%m-%d %H:%M:%S"))
+            return {
+                "rows": rows,
+                "total": len(rows),
+                "open": sum(1 for row in rows if row.get("status") != "resolved"),
+                "overdue": sum(1 for row in rows if row.get("overdue")),
+            }
+    finally:
+        connection.close()
+
+
+def get_mercado_operator_task(task_id):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_action_center_tables(cursor)
+            cursor.execute(
+                "SELECT * FROM `mercado_operator_tasks` WHERE `id` = %s LIMIT 1",
+                (int(task_id),),
+            )
+            row = dict(cursor.fetchone() or {})
+            if not row:
+                return None
+            for key in ("due_at", "created_at", "updated_at"):
+                if row.get(key) is not None:
+                    row[key] = str(row[key])
+            cursor.execute(
+                "SELECT `actor`, `action`, `note`, `created_at` FROM `mercado_operator_task_logs` "
+                "WHERE `task_id` = %s ORDER BY `created_at` DESC, `id` DESC LIMIT 5",
+                (int(task_id),),
+            )
+            row["logs"] = [dict(log or {}) for log in (cursor.fetchall() or ())]
+            for log in row["logs"]:
+                if log.get("created_at") is not None:
+                    log["created_at"] = str(log["created_at"])
+            return row
+    finally:
+        connection.close()
+
+
+def list_mercado_notification_events(*, token_ids=None, organization_key="", limit=100):
+    ids = sorted({int(value) for value in token_ids or () if int(value or 0) > 0}) if token_ids is not None else []
+    limit = max(1, min(int(limit or 100), 500))
+    clauses, params = [], []
+    if organization_key:
+        clauses.append("n.`organization_key` = %s")
+        params.append(str(organization_key))
+    if token_ids is not None:
+        if not ids:
+            return {"rows": [], "total": 0}
+        clauses.append(f"n.`token_id` IN ({','.join(['%s'] * len(ids))})")
+        params.extend(ids)
+    where = "WHERE " + " AND ".join(clauses) if clauses else ""
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_action_center_tables(cursor)
+            cursor.execute(
+                f"""
+                SELECT n.`id`, n.`organization_key`, n.`token_id`, n.`application_id`, n.`user_id`,
+                       n.`topic`, n.`resource`, n.`status`, n.`attempts`, n.`received_at`,
+                       n.`processed_at`, n.`last_error`,
+                       COALESCE(NULLIF(s.`display_name`, ''), s.`nickname`, CONCAT('店铺 #', n.`token_id`)) AS `store_name`
+                FROM `mercado_notification_events` AS n
+                LEFT JOIN `mercado_store_tokens` AS s ON s.`id` = n.`token_id`
+                {where}
+                ORDER BY n.`received_at` DESC, n.`id` DESC LIMIT %s
+                """,
+                (*params, limit),
+            )
+            rows = [dict(row or {}) for row in (cursor.fetchall() or ())]
+            for row in rows:
+                for key in ("received_at", "processed_at"):
+                    if row.get(key) is not None:
+                        row[key] = str(row[key])
+            return {"rows": rows, "total": len(rows)}
+    finally:
+        connection.close()
+
+
+def replay_mercado_notification_event(event_id):
+    now = datetime.now().replace(microsecond=0)
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_action_center_tables(cursor)
+            cursor.execute(
+                """
+                UPDATE `mercado_notification_events`
+                SET `status` = 'pending', `attempts` = 0, `next_attempt_at` = %s,
+                    `lease_until` = NULL, `processed_at` = NULL, `last_error` = NULL
+                WHERE `id` = %s AND `status` IN ('retry', 'dead')
+                """,
+                (now, int(event_id)),
+            )
+            changed = cursor.rowcount
+        connection.commit()
+        if not changed:
+            raise ValueError("只有失败或死信事件可以重放")
+        return {"id": int(event_id), "status": "pending"}
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def get_mercado_notification_event(event_id):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_action_center_tables(cursor)
+            cursor.execute(
+                "SELECT `id`, `organization_key`, `token_id`, `application_id`, `topic`, `resource`, `status` "
+                "FROM `mercado_notification_events` WHERE `id` = %s LIMIT 1",
+                (int(event_id),),
+            )
+            return dict(cursor.fetchone() or {}) or None
+    finally:
+        connection.close()
+
+
+def enrich_mercado_notification_task(event_id, *, title="", details="", priority="", due_at=None):
+    updates, values = [], []
+    if str(title or "").strip():
+        updates.append("`title` = %s")
+        values.append(str(title).strip()[:255])
+    if str(details or "").strip():
+        updates.append("`details` = %s")
+        values.append(str(details).strip()[:2000])
+    if str(priority or "").strip() in {"normal", "high", "urgent"}:
+        updates.append("`priority` = %s")
+        values.append(str(priority).strip())
+    if due_at:
+        try:
+            due = datetime.fromisoformat(str(due_at).replace("Z", "+00:00"))
+            if due.tzinfo is not None:
+                due = due.astimezone(timezone(timedelta(hours=8))).replace(tzinfo=None)
+            updates.append("`due_at` = %s")
+            values.append(due)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("截止时间格式无效") from exc
+    if not updates:
+        return 0
+    updates.append("`updated_at` = %s")
+    values.extend((datetime.now().replace(microsecond=0), int(event_id)))
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_action_center_tables(cursor)
+            cursor.execute(
+                f"UPDATE `mercado_operator_tasks` SET {', '.join(updates)} "
+                "WHERE `event_id` = %s AND `status` <> 'resolved'",
+                tuple(values),
+            )
+            changed = cursor.rowcount
+        connection.commit()
+        return changed
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def resolve_mercado_notification_task(event_id, reason):
+    event_id = int(event_id)
+    reason = str(reason or "已检查，当前无需运营处理").strip()[:2000]
+    now = datetime.now().replace(microsecond=0)
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_action_center_tables(cursor)
+            cursor.execute(
+                "SELECT `id` FROM `mercado_operator_tasks` WHERE `event_id` = %s AND `status` <> 'resolved'",
+                (event_id,),
+            )
+            task_ids = [int(row["id"]) for row in (cursor.fetchall() or ())]
+            if task_ids:
+                cursor.execute(
+                    f"UPDATE `mercado_operator_tasks` SET `status` = 'resolved', `resolution` = %s, `updated_at` = %s "
+                    f"WHERE `id` IN ({','.join(['%s'] * len(task_ids))})",
+                    (reason, now, *task_ids),
+                )
+                cursor.executemany(
+                    "INSERT INTO `mercado_operator_task_logs` (`task_id`, `actor`, `action`, `note`, `created_at`) "
+                    "VALUES (%s, '系统', 'auto_resolve', %s, %s)",
+                    [(task_id, reason, now) for task_id in task_ids],
+                )
+        connection.commit()
+        return len(task_ids)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_mercado_action_center_orders(*, token_ids=None, limit=500):
+    ids = sorted({int(value) for value in token_ids or () if int(value or 0) > 0})
+    if not ids:
+        return []
+    limit = max(1, min(int(limit or 500), 1000))
+    placeholders = ",".join(["%s"] * len(ids))
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                f"""
+                SELECT `order_id`, `token_id`, `shop_name`, `site_id`, `status`, `status_label`,
+                       `date_created`, `last_updated`, `shipping_id`, `workflow_status`,
+                       `purchase_order`, `purchase_tracking`, `logistics_company`,
+                       `tracking_cache_json`, `tracking_checked_at`, `raw_json`
+                FROM `mercado_synced_orders`
+                WHERE `token_id` IN ({placeholders})
+                  AND `date_created` >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                  AND (`status` IN ('paid', 'ready_to_ship') OR `purchase_tracking` IS NOT NULL)
+                ORDER BY `last_updated` DESC, `date_created` DESC LIMIT %s
+                """,
+                (*ids, limit),
+            )
+            rows = [dict(row or {}) for row in (cursor.fetchall() or ())]
+            for row in rows:
+                try:
+                    row["raw"] = json.loads(row.pop("raw_json", "{}") or "{}")
+                except (TypeError, ValueError):
+                    row["raw"] = {}
+                try:
+                    row["tracking"] = json.loads(row.pop("tracking_cache_json", "{}") or "{}")
+                except (TypeError, ValueError):
+                    row["tracking"] = {}
+                for key in ("date_created", "last_updated", "tracking_checked_at"):
+                    if row.get(key) is not None:
+                        row[key] = str(row[key])
+            return rows
+    finally:
+        connection.close()
+
+
+def upsert_mercado_operator_task(task):
+    row = dict(task or {})
+    required = ("task_key", "organization_key", "topic", "resource", "title", "due_at")
+    if any(not str(row.get(key) or "").strip() for key in required):
+        raise ValueError("待办缺少必要字段")
+    now = datetime.now().replace(microsecond=0)
+    key = str(row["task_key"])
+    if len(key) != 64:
+        raise ValueError("待办幂等键格式无效")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_action_center_tables(cursor)
+            cursor.execute(
+                """
+                INSERT INTO `mercado_operator_tasks`
+                    (`task_key`, `organization_key`, `token_id`, `source`, `topic`, `resource`,
+                     `title`, `details`, `entry_url`, `priority`, `due_at`, `owner`, `status`,
+                     `created_at`, `updated_at`)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, '', 'open', %s, %s)
+                ON DUPLICATE KEY UPDATE `id` = LAST_INSERT_ID(`id`)
+                """,
+                (key, str(row["organization_key"]), row.get("token_id"),
+                 str(row.get("source") or "order_watch"), str(row["topic"]),
+                 str(row["resource"])[:500], str(row["title"])[:255],
+                 str(row.get("details") or "")[:2000], str(row.get("entry_url") or "/")[:1000],
+                 str(row.get("priority") or "normal"), row["due_at"], now, now),
+            )
+            task_id = int(cursor.lastrowid or 0)
+        connection.commit()
+        return task_id
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def update_mercado_operator_task(task_id, *, actor, owner=None, status=None, due_at=None, note=""):
+    task_id = int(task_id)
+    actor = str(actor or "unknown").strip()[:100]
+    note = str(note or "").strip()
+    if len(note) > 2000:
+        raise ValueError("处理记录不能超过 2000 个字符")
+    normalized_status = None
+    if status is not None:
+        normalized_status = str(status or "").strip().lower()
+        if normalized_status not in {"open", "in_progress", "resolved"}:
+            raise ValueError("待办状态无效")
+    normalized_owner = None
+    if owner is not None:
+        normalized_owner = str(owner or "").strip()
+        if len(normalized_owner) > 100:
+            raise ValueError("负责人名称不能超过 100 个字符")
+    normalized_due = None
+    if due_at is not None:
+        try:
+            normalized_due = datetime.fromisoformat(str(due_at).replace("Z", "+00:00"))
+            if normalized_due.tzinfo is not None:
+                normalized_due = normalized_due.astimezone(timezone(timedelta(hours=8))).replace(tzinfo=None)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("截止时间格式无效") from exc
+    if normalized_status == "resolved" and not note:
+        note = "已处理完成"
+    now = datetime.now().replace(microsecond=0)
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_action_center_tables(cursor)
+            cursor.execute("SELECT `id` FROM `mercado_operator_tasks` WHERE `id` = %s LIMIT 1", (task_id,))
+            if not cursor.fetchone():
+                raise KeyError("待办不存在")
+            assignments, values, changes = [], [], []
+            if normalized_owner is not None:
+                assignments.append("`owner` = %s")
+                values.append(normalized_owner)
+                changes.append(("assign", f"负责人：{normalized_owner or '未分配'}"))
+            if normalized_status is not None:
+                assignments.append("`status` = %s")
+                values.append(normalized_status)
+                changes.append(("status", f"状态：{normalized_status}"))
+                if normalized_status == "resolved":
+                    assignments.append("`resolution` = %s")
+                    values.append(note or "已处理完成")
+            if normalized_due is not None:
+                assignments.append("`due_at` = %s")
+                values.append(normalized_due)
+                changes.append(("deadline", f"截止时间：{normalized_due:%Y-%m-%d %H:%M}"))
+            if assignments:
+                assignments.append("`updated_at` = %s")
+                values.extend((now, task_id))
+                cursor.execute(
+                    f"UPDATE `mercado_operator_tasks` SET {', '.join(assignments)} WHERE `id` = %s",
+                    tuple(values),
+                )
+            if note:
+                changes.append(("note", note))
+            for action, text in changes:
+                cursor.execute(
+                    "INSERT INTO `mercado_operator_task_logs` (`task_id`, `actor`, `action`, `note`, `created_at`) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (task_id, actor, action, text[:2000], now),
+                )
+        connection.commit()
+        return get_mercado_operator_task(task_id)
+    except Exception:
+        connection.rollback()
+        raise
     finally:
         connection.close()
 

@@ -299,6 +299,34 @@ class Database:
             ).fetchone()
         return int(row["total"] if row else 0)
 
+    def cached_order_ids(self, store_id: int) -> set[str]:
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT order_id FROM yandex_orders WHERE store_id = ?",
+                (int(store_id),),
+            ).fetchall()
+        return {str(row["order_id"]) for row in rows}
+
+    def list_cached_order_todos(self, store_id: int, limit: int = 200) -> list[dict[str, Any]]:
+        with self.connect() as db:
+            rows = db.execute(
+                """
+                SELECT raw_json FROM yandex_orders
+                WHERE store_id = ? AND status IN ('PENDING', 'PROCESSING')
+                ORDER BY creation_date ASC, order_id ASC LIMIT ?
+                """,
+                (int(store_id), max(1, min(int(limit), 500))),
+            ).fetchall()
+        orders: list[dict[str, Any]] = []
+        for row in rows:
+            try:
+                order = json.loads(row["raw_json"] or "{}")
+            except (TypeError, ValueError):
+                continue
+            if isinstance(order, dict):
+                orders.append(order)
+        return orders
+
     def list_cached_orders(
         self,
         store_id: int,
