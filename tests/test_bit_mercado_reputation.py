@@ -569,7 +569,8 @@ def test_console_template_keeps_old_reputation_and_adds_api_panel():
     assert "function showReputationWarningDetail(cell, event)" in template
     assert "reputation-warning-preview" in template
     assert "七天变化率由官方订单 API 自算" in template
-    assert "每天北京时间 14:00 自动刷新，并发 30" in template
+    assert "每天北京时间 14:00 自动刷新" in template
+    assert 'id="reputation-browser-sync-btn"' in template
     assert "下次自动刷新 ${data.next_auto_refresh_at}" in template
     assert "账号状态" in reputation_table.group(1)
     assert "openReputationBrowser(this)" in template
@@ -797,7 +798,7 @@ def test_full_refresh_keeps_successes_and_logs_failed_stores(monkeypatch):
     assert any("失败店铺：失败" in line for line in result["logs"])
     assert result["elapsed_seconds"] >= 0
     assert collection_options["max_workers"] == 30
-    assert collection_options["collect_browser_auxiliary"] is True
+    assert collection_options["collect_browser_auxiliary"] is False
 
 
 def test_api_reputation_auto_refresh_is_daily_at_14_beijing():
@@ -842,7 +843,7 @@ def test_api_reputation_selected_refresh_keeps_other_and_failed_sites(monkeypatc
     updated = {"store_name": "店铺A", "site_id": "MLM", "sales_completed": 10}
     def collect(**kwargs):
         assert kwargs["selected_shops"] == ["店铺A"]
-        assert kwargs["collect_browser_auxiliary"] is True
+        assert kwargs["collect_browser_auxiliary"] is False
         return {"api_rows": [updated], "total_stores": 1, "success_stores": 1}
     monkeypatch.setattr(bit_interface.bit_reputation_info, "main", collect)
     monkeypatch.setattr(bit_interface, "_persist_api_reputation_snapshot", lambda: True)
@@ -1053,7 +1054,7 @@ def test_default_reputation_collection_uses_api_and_writes_legacy_table(monkeypa
     assert result["api_rows"][0]["infraction_count"] == 3
     assert result["api_rows"][0]["rights_holder_count"] == 2
     assert result["api_rows"][0]["infraction_recent_days"] == 100
-    assert database_calls[0][1] == {"preserve_account_status": True}
+    assert database_calls[0][1] == {"preserve_account_status": False}
     legacy_row = next(
         row for row in database_calls[0][0] if row[1] == "墨西哥"
     )
@@ -1066,7 +1067,7 @@ def test_default_reputation_collection_uses_api_and_writes_legacy_table(monkeypa
         "8.77%",
         "0%",
     ]
-    assert legacy_row[9] == "正常"
+    assert legacy_row[9] is None
     assert legacy_row[11] == "[]"
     assert task_calls[0][0][0:4] == (
         "获取声誉信息",
@@ -1157,7 +1158,7 @@ def test_selected_api_reputation_update_merges_only_returned_site(monkeypatch):
     assert kwargs == {
         "merge_latest": True,
         "replace_targets": [("选定店铺", "巴西")],
-        "preserve_account_status": True,
+        "preserve_account_status": False,
     }
 
 
@@ -1409,6 +1410,7 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
         retry_failed=False,
         export_excel=False,
         send_email=False,
+        collect_browser_auxiliary=True,
     )
 
     assert captured_browser_rows == [
@@ -1417,7 +1419,7 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
             {"visit_site_codes": ["MLM"]},
         ),
     ]
-    assert database_calls[0][1] == {"preserve_account_status": True}
+    assert database_calls[0][1] == {"preserve_account_status": False}
     legacy_row = next(
         row for row in database_calls[0][0] if row[1] == "墨西哥"
     )
@@ -1433,7 +1435,7 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
     assert legacy_row[7:10] == [
         "增长",
         "12%",
-        "正常",
+        None,
     ]
     assert legacy_row[10] != "2026-08-27 23:10:00"
     assert legacy_row[11] == "[11, 22, 33]"

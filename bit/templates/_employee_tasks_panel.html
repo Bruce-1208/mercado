@@ -1,0 +1,7 @@
+<section class="panel" id="employee-panel" data-mode="{{ 'manage' if organization_key is defined else 'mine' }}" data-organization="{{ organization_key | default('') }}">
+  <div class="heading"><h2>{{ '企业员工任务' if organization_key is defined else '我的员工任务' }}</h2></div>
+  <div class="employee-toolbar"><select id="employee-filter" aria-label="筛选员工任务"><option value="active">进行中 / 逾期</option><option value="upcoming">未开始</option><option value="completed">已完成</option><option value="all">全部任务</option></select><button class="button" id="employee-refresh" type="button">刷新员工任务</button><span class="hint">时间为北京时间；逾期未完成任务持续保留。</span></div>
+  <div class="employee-summary" id="employee-summary"></div>
+  <div class="employee-error" id="employee-error" role="alert"></div>
+  <div id="employee-list" class="employee-task-list"><div class="empty">正在读取员工任务…</div></div>
+</section>

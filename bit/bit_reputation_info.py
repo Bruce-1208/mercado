@@ -3569,7 +3569,7 @@ def _api_reputation_database_row(store_name, api_row, updated_at):
         _format_api_percentage(api_row.get("cancellations_rate_percent")),
         str(api_row.get("direction") or ""),
         str(api_row.get("gradient_rate") or ""),
-        _official_api_system_warning(api_row),
+        None,  # Browser sync owns system warnings; preserve the last value.
         updated_at,
         "[]",
         str(api_row.get("site_status_display") or "未知"),
@@ -3839,7 +3839,7 @@ def get_reputation_info_all(
     progress_callback=None,
     send_email=True,
     export_excel=True,
-    collect_browser_auxiliary=True,
+    collect_browser_auxiliary=False,
 ):
     """通过 Mercado Libre 官方 API 更新声誉并兼容原有声誉数据链路。"""
     started_monotonic = time.monotonic()
@@ -4248,12 +4248,12 @@ def get_reputation_info_all(
                     reputation_rows,
                     merge_latest=True,
                     replace_targets=replace_targets,
-                    preserve_account_status=True,
+                    preserve_account_status=False,
                 )
                 if scoped_collection
                 else inset_reputation_info(
                     reputation_rows,
-                    preserve_account_status=True,
+                    preserve_account_status=False,
                 )
             ),
         ),

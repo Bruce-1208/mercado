@@ -1476,6 +1476,10 @@ def inset_reputation_info(
                 if str(row.get("一周流量趋势") or "").strip()
                 not in ("", "[]")
             }
+            previous_warnings_by_target = {
+                (str(row.get("店铺名") or "").strip(), str(row.get("站点") or "").strip()): row.get("系统告警")
+                for row in previous_snapshot_rows
+            }
             previous_status_by_target = {
                 (
                     str(row.get("店铺名") or "").strip(),
@@ -1516,6 +1520,8 @@ def inset_reputation_info(
                     ))
                     if previous_traffic not in (None, ""):
                         row[11] = previous_traffic
+                if row[9] is None:
+                    row[9] = previous_warnings_by_target.get((str(row[0]).strip(), str(row[1]).strip())) or "尚未浏览器同步"
                 extras = row[12:15] if len(row) >= 15 else ["", None, None]
                 row = row[:12] + extras + [submit_time]
                 normalized_list.append(row)
@@ -3228,6 +3234,9 @@ def list_orders(
             ensure_profitability_cache_tables(cursor)
             ensure_store_link_table(cursor)
             connection.commit()
+            # Keep session-local temporary tables on one physical pooled connection.
+            # DBUtils otherwise recycles the session at maxusage between statements.
+            connection.begin()
             order_date_sql = "DATE(DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR))"
             currency_sql = (
                 "UPPER(COALESCE(NULLIF(synced.`amount_currency_id`, ''), "
@@ -6060,6 +6069,7 @@ def get_latest_pago_info(salesperson=""):
                     "window_id": "",
                     "店铺名": shop_name,
                     "店铺归属人": display_owner,
+                    "店铺组": str(setting.get("group_name") or "").strip() or "未分组",
                     "站点": site,
                     "配置状态": "",
                     "sequence_no": "",
@@ -6074,7 +6084,7 @@ def get_latest_pago_info(salesperson=""):
                 """
                 SELECT
                     p.`店铺名`, p.`站点`, p.`已释放美元`, p.`未释放美元`,
-                    p.`状态`, p.`更新时间`, p.`提交时间`
+                    p.`状态`, p.`更新时间`, p.`提交时间`, p.`页面原始信息`
                 FROM `pago` p
                 INNER JOIN (
                     SELECT `店铺名`, `站点`, MAX(`id`) AS latest_id
@@ -6116,6 +6126,10 @@ def get_latest_pago_info(salesperson=""):
                 "待释放美元": pending,
                 "未释放美元": pending,
                 "状态": str(latest.get("状态") or "无数据"),
+                "原因": (str(latest.get("页面原始信息") or "").strip()[:1000]
+                    or ("登录已失效，请重新登录店铺后采集" if "登录" in str(latest.get("状态"))
+                        else "平台访问限频，请稍后重试" if "限频" in str(latest.get("状态")) else ""))
+                    if str(latest.get("状态") or "") not in ("成功", "手动更新") else "",
                 "更新时间": update_time,
                 "提交时间": submit_time,
             }
@@ -6188,18 +6202,55 @@ def _ensure_weight_dimensions_record_table(cursor):
             `order_number` VARCHAR(128) NOT NULL,
             `order_time` VARCHAR(64) NULL,
             `record_json` LONGTEXT NOT NULL,
+            `wdr_source_type` VARCHAR(32) GENERATED ALWAYS AS (
+                CAST(JSON_UNQUOTE(JSON_EXTRACT(`record_json`, '$._source_type')) AS CHAR(32))
+            ) VIRTUAL,
+            `wdr_freight_changed_at` VARCHAR(64) GENERATED ALWAYS AS (
+                CAST(REPLACE(JSON_UNQUOTE(JSON_EXTRACT(`record_json`, '$.freight_changed_at')), 'T', ' ') AS CHAR(64))
+            ) VIRTUAL,
+            `wdr_store_token_id` VARCHAR(32) GENERATED ALWAYS AS (
+                CAST(JSON_UNQUOTE(JSON_EXTRACT(`record_json`, '$.store_token_id')) AS CHAR(32))
+            ) VIRTUAL,
             `execution_logs_json` LONGTEXT NOT NULL,
             `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`),
             UNIQUE KEY `uniq_wdr_order_number` (`order_number`),
-            KEY `idx_wdr_order_time` (`order_time`, `id`)
+            KEY `idx_wdr_order_time` (`order_time`, `id`),
+            KEY `idx_wdr_source_changed_at` (`wdr_source_type`, `wdr_freight_changed_at`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
+    # Existing installations get virtual columns and a matching index. The index
+    # makes the default recent-week lookup selective without copying JSON rows
+    # into Python first.
+    for name, definition in (
+        (
+            "wdr_source_type",
+            "VARCHAR(32) GENERATED ALWAYS AS (CAST(JSON_UNQUOTE(JSON_EXTRACT(`record_json`, '$._source_type')) AS CHAR(32))) VIRTUAL",
+        ),
+        (
+            "wdr_freight_changed_at",
+            "VARCHAR(64) GENERATED ALWAYS AS (CAST(REPLACE(JSON_UNQUOTE(JSON_EXTRACT(`record_json`, '$.freight_changed_at')), 'T', ' ') AS CHAR(64))) VIRTUAL",
+        ),
+        (
+            "wdr_store_token_id",
+            "VARCHAR(32) GENERATED ALWAYS AS (CAST(JSON_UNQUOTE(JSON_EXTRACT(`record_json`, '$.store_token_id')) AS CHAR(32))) VIRTUAL",
+        ),
+    ):
+        _ensure_column(cursor, "zying_weight_dimensions_records", name, definition)
+    cursor.execute(
+        "SHOW INDEX FROM `zying_weight_dimensions_records` WHERE Key_name = %s",
+        ("idx_wdr_source_changed_at",),
+    )
+    if not cursor.fetchone():
+        cursor.execute(
+            "ALTER TABLE `zying_weight_dimensions_records` "
+            "ADD KEY `idx_wdr_source_changed_at` (`wdr_source_type`, `wdr_freight_changed_at`)"
+        )
 
 
-def save_weight_dimensions_records(rows):
+def save_weight_dimensions_records(rows, refresh=False):
     rows = [dict(row or {}) for row in rows or () if isinstance(row, dict)]
     if not rows:
         return {"inserted": 0, "duplicates": 0, "inserted_order_numbers": []}
@@ -6214,8 +6265,25 @@ def save_weight_dimensions_records(rows):
                 if not order_number:
                     continue
                 logs = row.pop("execution_logs", [])
-                for private_key in ("_token_id", "_global_item_id", "_net_proceeds_usd"):
-                    row.pop(private_key, None)
+                # These internal identifiers are needed for execution after a DB read.
+                if refresh:
+                    cursor.execute(
+                        "SELECT `record_json` FROM `zying_weight_dimensions_records` "
+                        "WHERE `order_number` = %s FOR UPDATE", (order_number,),
+                    )
+                    existing = cursor.fetchone()
+                    if existing:
+                        previous = json.loads(existing.get("record_json") or "{}")
+                        for key in ("execution_status", "execution_error", "_zeshun_status", "_zying_status"):
+                            row.pop(key, None)
+                        previous.update(row)
+                        cursor.execute(
+                            "UPDATE `zying_weight_dimensions_records` SET `order_time` = %s, "
+                            "`record_json` = %s WHERE `order_number` = %s",
+                            (str(row.get("time") or "")[:64],
+                             json.dumps(previous, ensure_ascii=False, default=str), order_number),
+                        )
+                        continue
                 cursor.execute(
                     "INSERT IGNORE INTO `zying_weight_dimensions_records` "
                     "(`order_number`, `order_time`, `record_json`, `execution_logs_json`) "
@@ -6265,15 +6333,9 @@ def list_weight_dimensions_changed_orders(filters=None):
     if isinstance(store_ids, (str, int)):
         store_ids = [store_ids]
 
-    # The default view covers all freight changes checked during August and
-    # September of the current year. Filters below are freight-change times,
-    # not order creation times.
-    default_year = datetime.now().year
+    # Empty dates intentionally include all historical freight changes.
     freight_checked_from = str(filters.get("date_from") or "").strip()
     freight_checked_to = str(filters.get("date_to") or "").strip()
-    if not freight_checked_from and not freight_checked_to:
-        freight_checked_from = f"{default_year}-08-01 00:00"
-        freight_checked_to = f"{default_year}-09-30 23:59"
 
     # The order list query already calculates actual USD freight and the
     # quoted/current freight using the same exchange-rate rules as the orders
@@ -6510,15 +6572,85 @@ def get_weight_dimensions_record_order_numbers(order_numbers):
         connection.close()
 
 
-def list_weight_dimensions_records():
+def _weight_dimensions_saved_filters(filters):
+    """Filter persisted snapshots in SQL, before transferring their JSON payloads."""
+    filters = dict(filters or {})
+    clauses, params = [], []
+    def field(key):
+        return f"COALESCE(JSON_UNQUOTE(JSON_EXTRACT(`record_json`, '$.{key}')), '')"
+    clauses.append("`wdr_source_type` = %s")
+    params.append("freight_changes")
+    if "store_ids" in filters:
+        ids = list(filters.get("store_ids") or [])
+        if not ids:
+            clauses.append("1 = 0")
+        else:
+            clauses.append("`wdr_store_token_id` IN (" + ",".join(["%s"] * len(ids)) + ")")
+            params.extend(str(value) for value in ids)
+    for key, operator in (("date_from", ">="), ("date_to", "<=")):
+        value = str(filters.get(key) or "").strip().replace("T", " ")
+        if value:
+            if len(value) == 10:
+                value += " 00:00:00" if key == "date_from" else " 23:59:59"
+            elif len(value) == 16:
+                value += ":00" if key == "date_from" else ":59"
+            clauses.append("`wdr_freight_changed_at` " + operator + " %s")
+            params.append(value)
+    for key in ("source", "category", "region"):
+        value = str(filters.get(key) or "").strip().casefold()
+        if value:
+            clauses.append("LOCATE(%s, LOWER(" + field(key) + ")) > 0")
+            params.append(value)
+    stores = [value.strip().casefold() for value in re.split(r"[,，;；\n]+", str(filters.get("store") or "")) if value.strip()]
+    if stores:
+        expression = "LOWER(CONCAT(" + field("company_store") + ", ' ', " + field("store_token_id") + "))"
+        clauses.append("(" + " OR ".join("LOCATE(%s, " + expression + ") > 0" for _ in stores) + ")")
+        params.extend(stores)
+    people = filters.get("salespeople") or []
+    if people:
+        clauses.append("LOWER(COALESCE(NULLIF(" + field("salesperson") + ", ''), '__unassigned__')) IN (" + ",".join(["%s"] * len(people)) + ")")
+        params.extend(str(value).casefold() for value in people)
+    bounds = []
+    for key, operator in (("freight_min", ">="), ("freight_max", "<=")):
+        value = filters.get(key)
+        try:
+            value = Decimal(str(value)) if value not in (None, "") else None
+            if value is not None and not value.is_finite():
+                raise ValueError()
+        except (InvalidOperation, ValueError, TypeError) as exc:
+            raise ValueError("运费差值区间必须是有效数字") from exc
+        bounds.append(value)
+        if value is not None:
+            clauses.append("CAST(" + field("freight_difference_usd") + " AS DECIMAL(20, 2)) " + operator + " %s")
+            params.append(str(value))
+    if all(value is not None for value in bounds) and bounds[0] > bounds[1]:
+        raise ValueError("运费差值最小值不能大于最大值")
+    return clauses, params
+
+
+def list_weight_dimensions_records(order_numbers=None, filters=None):
+    values = None if order_numbers is None else list(dict.fromkeys(str(value or "").strip() for value in order_numbers if str(value or "").strip()))
+    if values == []:
+        return []
+    clauses, params = _weight_dimensions_saved_filters(filters) if filters is not None else ([], [])
+    if values is not None:
+        clauses.append("`order_number` IN (" + ",".join(["%s"] * len(values)) + ")")
+        params.extend(values)
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
             _ensure_weight_dimensions_record_table(cursor)
+            order_clause = (
+                "ORDER BY `wdr_freight_changed_at` DESC, `id` DESC"
+                if filters is not None else
+                "ORDER BY COALESCE(NULLIF(`order_time`, ''), '0000-00-00') DESC, `id` DESC"
+            )
             cursor.execute(
                 "SELECT `order_number`, `record_json`, `execution_logs_json` "
                 "FROM `zying_weight_dimensions_records` "
-                "ORDER BY COALESCE(NULLIF(`order_time`, ''), '0000-00-00') DESC, `id` DESC"
+                + ("WHERE " + " AND ".join(clauses) + " " if clauses else "")
+                + order_clause,
+                params or (),
             )
             rows = cursor.fetchall() or []
         result = []
@@ -6533,6 +6665,8 @@ def list_weight_dimensions_records():
                 record["execution_logs"] = []
             record["order_number"] = row.get("order_number") or record.get("order_number")
             result.append(record)
+        if filters is not None:
+            result.sort(key=lambda row: str(row.get("freight_changed_at") or ""), reverse=True)
         return result
     finally:
         connection.close()
@@ -9672,7 +9806,7 @@ def receive_mercado_notification(event):
                  topic, resource, raw_json, now, now),
             )
             inserted = cursor.rowcount == 1
-            if inserted and token_id:
+            if inserted and token_id and topic.lower().replace(" ", "_") not in {"public_candidates", "public_offers"}:
                 title, priority, hours, tab = _mercado_action_topic_details(topic, resource, body)
                 cursor.execute(
                     "SELECT `id` FROM `mercado_notification_events` WHERE `event_key` = %s LIMIT 1",
@@ -9834,6 +9968,7 @@ def list_mercado_operator_tasks(*, token_ids=None, organization_key="", include_
             return {"rows": [], "total": 0, "open": 0, "overdue": 0}
     if not include_closed:
         clauses.append("t.`status` <> 'resolved'")
+    clauses.append("t.`topic` NOT IN ('promotion_deadline', 'promotion_result_unknown')")
     where = "WHERE " + " AND ".join(clauses) if clauses else ""
     connection = pymysql.connect(**config)
     try:
@@ -10093,9 +10228,28 @@ def list_mercado_action_center_orders(*, token_ids=None, limit=500):
                        `tracking_cache_json`, `tracking_checked_at`, `raw_json`
                 FROM `mercado_synced_orders`
                 WHERE `token_id` IN ({placeholders})
-                  AND `date_created` >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-                  AND (`status` IN ('paid', 'ready_to_ship') OR `purchase_tracking` IS NOT NULL)
-                ORDER BY `last_updated` DESC, `date_created` DESC LIMIT %s
+                  AND (
+                      `status` IN ('paid', 'ready_to_ship', 'confirmed', 'partially_paid',
+                                   'payment_in_process', 'pending', 'pending_cancel',
+                                   'payment_required')
+                      OR (
+                          `status` IN ('shipped', 'delivered', 'not_delivered', 'cancelled',
+                                       'canceled', 'invalid', 'expired', 'refunded',
+                                       'partially_refunded')
+                          AND `date_created` >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                      )
+                      OR (`purchase_tracking` IS NOT NULL
+                          AND `date_created` >= DATE_SUB(NOW(), INTERVAL 30 DAY))
+                  )
+                ORDER BY
+                    CASE
+                        WHEN `status` = 'ready_to_ship'
+                             AND `date_created` >= DATE_SUB(NOW(), INTERVAL 12 HOUR) THEN 0
+                        WHEN `date_created` < DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1
+                        ELSE 2
+                    END,
+                    `date_created` ASC, `last_updated` DESC
+                LIMIT %s
                 """,
                 (*ids, limit),
             )
@@ -10148,6 +10302,43 @@ def upsert_mercado_operator_task(task):
             task_id = int(cursor.lastrowid or 0)
         connection.commit()
         return task_id
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def resolve_mercado_operator_tasks_by_keys(task_keys, reason):
+    keys = sorted({str(key or "").strip() for key in task_keys or () if len(str(key or "").strip()) == 64})
+    if not keys:
+        return 0
+    if len(keys) > 1000:
+        raise ValueError("一次最多结束 1000 条系统待办")
+    note = str(reason or "系统已确认无需继续处理").strip()[:2000]
+    now = datetime.now().replace(microsecond=0)
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_action_center_tables(cursor)
+            placeholders = ",".join(["%s"] * len(keys))
+            cursor.execute(
+                f"SELECT `id` FROM `mercado_operator_tasks` WHERE `task_key` IN ({placeholders}) AND `status` <> 'resolved' FOR UPDATE",
+                tuple(keys),
+            )
+            task_ids = [int(row["id"]) for row in (cursor.fetchall() or ())]
+            if task_ids:
+                task_placeholders = ",".join(["%s"] * len(task_ids))
+                cursor.execute(
+                    f"UPDATE `mercado_operator_tasks` SET `status` = 'resolved', `resolution` = %s, `updated_at` = %s WHERE `id` IN ({task_placeholders})",
+                    (note, now, *task_ids),
+                )
+                cursor.executemany(
+                    "INSERT INTO `mercado_operator_task_logs` (`task_id`, `actor`, `action`, `note`, `created_at`) VALUES (%s, '系统', 'auto_resolve', %s, %s)",
+                    [(task_id, note, now) for task_id in task_ids],
+                )
+        connection.commit()
+        return len(task_ids)
     except Exception:
         connection.rollback()
         raise
@@ -10231,3 +10422,35 @@ def update_mercado_operator_task(task_id, *, actor, owner=None, status=None, due
 
 if __name__ == "__main__":
     mysql_demo()
+
+
+def update_reputation_browser_fields(rows):
+    """Patch only browser-owned columns in the latest snapshot."""
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            latest = _latest_reputation_snapshot_rows(cursor)
+            targets = {(str(row.get("店铺名") or ""), str(row.get("站点") or "")): row
+                       for row in latest}
+            count = 0
+            for row in rows:
+                previous = targets.get((row.get("store_name"), row.get("site")))
+                fields = [(column, row[key]) for key, column in (
+                    ("visits", "一周流量趋势"), ("system_warning", "系统告警")) if key in row]
+                if not fields:
+                    continue
+                if not previous:
+                    raise ValueError(f"{row.get('store_name')}/{row.get('site')} 尚无声誉记录，请先更新所选店铺再同步浏览器")
+                cursor.execute(
+                    "UPDATE reputation SET " + ", ".join(f"`{column}` = %s" for column, _ in fields)
+                    + " WHERE `店铺名` = %s AND `站点` = %s AND `提交时间` = %s",
+                    [value for _, value in fields] + [row["store_name"], row["site"], previous["提交时间"]],
+                )
+                count += cursor.rowcount
+            connection.commit()
+            return count
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()

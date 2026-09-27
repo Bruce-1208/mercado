@@ -2525,12 +2525,15 @@ def _find_edge_executable():
             str(Path(os.environ.get("PROGRAMFILES", "")) / "Microsoft/Edge/Application/msedge.exe"),
             r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
             r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/usr/bin/microsoft-edge",
+            "/usr/bin/microsoft-edge-stable",
         ]
     )
     for candidate in candidates:
         if candidate and Path(candidate).is_file():
             return str(Path(candidate))
-    raise RuntimeError("未找到 Microsoft Edge，请改用比特浏览器登录")
+    raise RuntimeError("未找到 Microsoft Edge，请安装 Edge 或配置 BIT_ZYING_EDGE_EXECUTABLE")
 
 
 def ensure_visible_zying_edge_login_window(

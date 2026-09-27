@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from erp.store_link_audit import audited, record
 import json
 import re
 import threading
@@ -310,6 +311,7 @@ def ensure_store_link_sync_state_table(cursor: Any) -> None:
         _sync_state_schema_ready = True
 
 
+@audited
 def request_store_link_sync(
     token_ids: Iterable[int],
     *,
@@ -408,6 +410,7 @@ def order_store_link_token_ids_for_full_sync(
     return sorted(ids, key=priority)
 
 
+@audited
 def mark_store_link_sync_started(
     token_id: int,
     *,
@@ -438,6 +441,7 @@ def mark_store_link_sync_started(
         connection.close()
 
 
+@audited
 def mark_store_link_sync_finished(
     token_id: int,
     status: str,
@@ -942,6 +946,7 @@ def listing_record(token: Mapping[str, Any], item: Mapping[str, Any], synced_at:
     }
 
 
+@audited
 def replace_store_snapshot(
     token: Mapping[str, Any],
     items: Iterable[Mapping[str, Any]],
@@ -1054,6 +1059,7 @@ def replace_store_snapshot(
         connection.close()
 
 
+@audited
 def finalize_store_snapshot(
     token_id: int,
     sync_marker: str,
@@ -1835,6 +1841,7 @@ def get_store_links_by_ids(
         connection.close()
 
 
+@audited
 def bulk_update_store_links(
     link_ids: Iterable[int],
     changes: Mapping[str, Any],
@@ -1891,6 +1898,11 @@ def bulk_update_store_links(
         with connection.cursor() as cursor:
             ensure_store_link_table(cursor)
             cursor.execute(
+                f"SELECT * FROM `{STORE_LINK_TABLE}` WHERE `id` IN ({placeholders}) FOR UPDATE",
+                tuple(ids),
+            )
+            record("bulk_update_store_links", "before", {"link_ids": ids, "rows": cursor.fetchall()})
+            cursor.execute(
                 f"SELECT COUNT(*) AS `total` FROM `{STORE_LINK_TABLE}` WHERE `id` IN ({placeholders})",
                 tuple(ids),
             )
@@ -1909,6 +1921,7 @@ def bulk_update_store_links(
         connection.close()
 
 
+@audited
 def delete_store_links(
     link_ids: Iterable[int],
     *,
@@ -1933,6 +1946,11 @@ def delete_store_links(
     try:
         with connection.cursor() as cursor:
             ensure_store_link_table(cursor)
+            cursor.execute(
+                f"SELECT * FROM `{STORE_LINK_TABLE}` WHERE `id` IN ({placeholders}) FOR UPDATE",
+                tuple(ids),
+            )
+            record("delete_store_links", "before", {"link_ids": ids, "rows": cursor.fetchall()})
             cursor.execute(
                 f"DELETE FROM `{STORE_LINK_TABLE}` WHERE `id` IN ({placeholders})",
                 tuple(ids),

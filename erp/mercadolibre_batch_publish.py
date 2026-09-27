@@ -188,17 +188,6 @@ def product_publish_issues(product_row: Mapping[str, Any]) -> list[str]:
             or "-ai-white.jpg" not in image_url
         ):
             issues.append("首图尚未完成 AI 白底生成")
-        risk_level = row.get("infringement_risk_level")
-        checked_at = str(row.get("infringement_checked_at") or "").strip()
-        try:
-            normalized_risk_level = int(risk_level)
-        except (TypeError, ValueError):
-            normalized_risk_level = None
-        if normalized_risk_level is None or not checked_at:
-            issues.append("AI 原创商品尚未完成侵权检测")
-        elif normalized_risk_level != 0:
-            risk_label = "疑似侵权" if normalized_risk_level == 1 else "侵权"
-            issues.append(f"AI 原创商品侵权检测未通过：{risk_label}")
     if row.get("review_status") != "approved":
         issues.append("审核状态未通过")
     actual_weight = _actual_weight_value(row)
@@ -268,29 +257,6 @@ def validate_publishable_products(product_rows: Iterable[Mapping[str, Any]]) -> 
     ]
     if nonpositive_net:
         issues.append(f"净收益小于等于 0 {_row_references(nonpositive_net)}")
-    ai_original_unchecked = []
-    ai_original_risky = []
-    for row in rows:
-        if str(row.get("source_type") or "").strip().lower() != "ai_original":
-            continue
-        try:
-            risk_level = int(row.get("infringement_risk_level"))
-        except (TypeError, ValueError):
-            risk_level = None
-        if risk_level is None or not str(row.get("infringement_checked_at") or "").strip():
-            ai_original_unchecked.append(row)
-        elif risk_level != 0:
-            ai_original_risky.append(row)
-    if ai_original_unchecked:
-        issues.append(
-            "AI 原创商品尚未完成侵权检测 "
-            f"{_row_references(ai_original_unchecked)}"
-        )
-    if ai_original_risky:
-        issues.append(
-            "AI 原创商品侵权检测未通过 "
-            f"{_row_references(ai_original_risky)}"
-        )
     if issues:
         raise ValueError("不能上架：" + "；".join(issues))
 
@@ -530,6 +496,25 @@ def _prepared_listing_from_product_row(
             generated_variations.append(variation)
         if "variations" in prepared:
             source["variations"] = generated_variations
+        snapshot["description"] = {"plain_text": description_text}
+    elif (
+        isinstance(snapshot.get("ai_copy"), Mapping)
+        and str(snapshot["ai_copy"].get("title_es") or "").strip()
+        == str(row.get("title") or "").strip()
+        and str(snapshot["ai_copy"].get("description_es") or "").strip()
+        == str(row.get("description_text") or "").strip()
+    ):
+        copy = snapshot["ai_copy"]
+        portuguese = str(destination_site_id or "").strip().upper() == "MLB"
+        suffix = "pt" if portuguese else "es"
+        title = str(copy.get(f"title_{suffix}") or "").strip()
+        description_text = str(copy.get(f"description_{suffix}") or "").strip()
+        if not 50 <= len(title) <= 60:
+            raise ValueError("AI 双语文案标题必须为 50–60 个字符，请重新生成")
+        if not description_text:
+            raise ValueError("AI 双语文案缺少目标站点的详情描述，请重新生成")
+        source["title"] = title
+        source["site_id"] = str(destination_site_id or "").strip().upper()
         snapshot["description"] = {"plain_text": description_text}
     source.setdefault("id", str(row.get("source_item_id") or ""))
     source.setdefault("site_id", str(source.get("id") or "")[:3])

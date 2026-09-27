@@ -4,6 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pandas as pd
 from selenium import webdriver
@@ -441,7 +442,7 @@ def _click_country_option(driver, site):
             .map((node) => ({node, text: nodeText(node)}))
             .filter((item) => {
                 const textLower = item.text.toLowerCase();
-                return aliasLower.some((alias) => textLower === alias || textLower.includes(alias));
+                return aliasLower.some((alias) => textLower === alias);
             });
 
         if (!matches.length) {
@@ -581,15 +582,13 @@ def _get_pago_site_state(driver):
 
 def _state_matches_site(state, site):
     target_remote = SITE_REMOTE_VALUE_MAP.get(site, "")
+    # The country alone cannot distinguish Mexico Full from Mexico remote.
+    if state.get("selectedRemote"):
+        return bool(target_remote and state["selectedRemote"] == target_remote)
     target_id = SITE_ID_MAP.get(site, "")
-    target_short = SITE_SHORT_CODE_MAP.get(site, "")
-    return any(
-        [
-            target_remote and state.get("selectedRemote") == target_remote,
-            target_id and state.get("operatingSiteId") == target_id,
-            target_short and state.get("currentShort") == target_short,
-        ]
-    )
+    if state.get("operatingSiteId"):
+        return bool(target_id and state["operatingSiteId"] == target_id)
+    return bool(SITE_SHORT_CODE_MAP.get(site) and state.get("currentShort") == SITE_SHORT_CODE_MAP[site])
 
 
 def _site_available_in_state(state, site):
@@ -603,6 +602,8 @@ def _wait_pago_site_options(driver, timeout=20, stop_event=None):
     last_state = {}
     while time.time() < end_time:
         _raise_if_cancelled(stop_event)
+        if _is_pago_rate_limited_page(driver):
+            raise PagoRateLimitError("Pago 切换站点时访问限频，请稍后重试")
         if _is_not_logged_in(driver):
             return "login", last_state
         state = _get_pago_site_state(driver)
@@ -723,19 +724,24 @@ def _select_country(
             + f"开始切换 Pago 站点：{site} -> {target_remote}，第 {attempt}/3 次"
         )
         try:
-            _set_pago_site_cookie(driver, target_remote)
-            _reload_pago_home(
-                driver,
-                shop_name,
-                site,
-                stop_event=stop_event,
-                batch_source=batch_source,
-            )
-            ready_state, new_state = _wait_pago_site_options(
-                driver,
-                timeout=12,
-                stop_event=stop_event,
-            )
+            _open_country_switch(driver)
+            clicked = _click_country_option(driver, site)
+            if not clicked.get("clicked"):
+                raise RuntimeError("未找到目标站点选项")
+            deadline = time.time() + 15
+            ready_state, new_state = "timeout", {}
+            while time.time() < deadline:
+                _raise_if_cancelled(stop_event)
+                if _is_pago_rate_limited_page(driver):
+                    raise PagoRateLimitError("Pago 切换站点时访问限频，请稍后重试")
+                if _is_not_logged_in(driver):
+                    ready_state = "login"
+                    break
+                new_state = _get_pago_site_state(driver)
+                if _state_matches_site(new_state, site):
+                    ready_state = "ready"
+                    break
+                _interruptible_wait(0.5, stop_event)
             last_state = new_state
             if ready_state == "login":
                 return {"ok": False, "status": "未登录", "detail": "刷新后进入登录页面"}
@@ -744,14 +750,14 @@ def _select_country(
                 return {"ok": True, "status": "成功", "detail": str(new_state)}
             print(get_now_time() + shop_name + f"Pago 站点切换后校验失败：{new_state}")
             _interruptible_wait(2, stop_event)
-        except PagoCollectionCancelled:
+        except (PagoCollectionCancelled, PagoRateLimitError):
             raise
         except Exception as e:
             last_state = {"error": str(e), "state": last_state}
             print(get_now_time() + shop_name + "Pago 站点切换异常:", site, e)
             _interruptible_wait(2, stop_event)
 
-    debug_file = _save_pago_debug(driver, shop_name, site, "cookie_switch_failed")
+    debug_file = _save_pago_debug(driver, shop_name, site, "site_switch_failed")
     return {
         "ok": False,
         "status": "站点切换失败",
@@ -804,7 +810,7 @@ def _wait_pago_home_ready(driver, stop_event=None):
     WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
     for _ in range(30):
         _raise_if_cancelled(stop_event)
-        if _is_not_logged_in(driver):
+        if _is_not_logged_in(driver) or _is_pago_rate_limited_page(driver):
             return True
         ready = driver.execute_script(
             """
@@ -864,6 +870,42 @@ def _is_pago_open_failure(driver):
     return any(marker in normalized for marker in failure_markers)
 
 
+def _trusted_pago_entry(url):
+    parsed = urlparse(str(url or ""))
+    return parsed.scheme == "https" and parsed.hostname in {
+        "global-selling.mercadopago.com", "global-selling.mercadolibre.com",
+    } and not parsed.username and not parsed.password
+
+
+def _resolve_pago_entry(driver):
+    """Follow the seller navigation's current funds link instead of assuming /home."""
+    configured = str(os.environ.get("BIT_PAGO_HOME_URL") or "").strip()
+    if configured:
+        if not _trusted_pago_entry(configured):
+            raise ValueError("BIT_PAGO_HOME_URL 必须是美客多 Global Selling 官方 HTTPS 地址")
+        return configured
+    cached = getattr(driver, "_resolved_pago_entry", "")
+    if isinstance(cached, str) and _trusted_pago_entry(cached):
+        return cached
+    try:
+        links = driver.execute_script("""
+            return [...document.querySelectorAll('a[href]')].map(a => ({
+                href: a.href, text: (a.innerText || a.getAttribute('aria-label') || '').trim()
+            }));
+        """) or []
+        for link in links:
+            url = str(link.get("href") or "")
+            if _trusted_pago_entry(url) and re.fullmatch(
+                r"mercado pago|global payments|payments|my money|资金|款项|pagos|pagamentos",
+                str(link.get("text") or "").strip(), re.I,
+            ):
+                driver._resolved_pago_entry = url
+                return url
+    except Exception:
+        pass
+    return PAGO_HOME_URL
+
+
 def _open_pago_home_with_retry(
     driver,
     name="",
@@ -883,16 +925,25 @@ def _open_pago_home_with_retry(
         _wait_for_pago_batch_resume(batch_source, stop_event)
         try:
             print(get_now_time() + f"{name}{site}{reason}，第 {attempt}/{max_retries} 次")
-            driver.get(PAGO_HOME_URL)
+            entry = _resolve_pago_entry(driver)
+            if attempt > 1 and entry == PAGO_HOME_URL and not os.environ.get("BIT_PAGO_HOME_URL"):
+                from bit.bit_mercado_login import MERCADO_HOME_URL
+                driver.get(MERCADO_HOME_URL)
+                WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+                if _is_pago_rate_limited_page(driver):
+                    raise PagoRateLimitError("美客多入口访问限频，请稍后重试")
+                if _is_not_logged_in(driver):
+                    return True
+                entry = _resolve_pago_entry(driver)
+            driver.get(entry)
             ready = _wait_pago_home_ready(driver, stop_event=stop_event)
             if _is_pago_rate_limited_page(driver):
                 last_error = _pago_page_text(driver)[:500] or "Pago 页面触发限频"
                 last_was_rate_limit = True
                 trip_batch_rate_limit(f"{batch_source}:{name}:{site}", last_error)
-                if attempt < max_retries:
-                    _wait_for_pago_batch_resume(batch_source, stop_event)
-                    continue
-                break
+                raise PagoRateLimitError("Pago 访问限频，请稍后重试：" + last_error)
+            if _is_not_logged_in(driver):
+                return True
             state = _get_pago_site_state(driver)
             if ready and not _is_pago_open_failure(driver):
                 return True
@@ -900,7 +951,7 @@ def _open_pago_home_with_retry(
                 return True
             last_error = f"页面未就绪，ready={ready}，state={state}"
             last_was_rate_limit = False
-        except PagoCollectionCancelled:
+        except (PagoCollectionCancelled, PagoRateLimitError):
             raise
         except Exception as e:
             last_error = str(e)
@@ -1038,83 +1089,8 @@ def _extract_money_candidates(driver):
 
 
 def _extract_pago_amounts(driver):
-    candidates = _extract_money_candidates(driver)
-    if not candidates:
-        body_text = ""
-        try:
-            body_text = driver.find_element(By.TAG_NAME, "body").text[:1000]
-        except Exception:
-            pass
-        return {
-            "released_usd": "",
-            "unreleased_usd": "",
-            "raw_text": body_text,
-            "candidate_count": 0,
-        }
-
-    for item in candidates:
-        item["amountText"] = _normalize_money_text(item.get("amountText") or item.get("text"))
-        item["amountNumber"] = _amount_to_number(item["amountText"])
-
-    candidates = [item for item in candidates if item.get("amountText")]
-    if not candidates:
-        return {
-            "released_usd": "",
-            "unreleased_usd": "",
-            "raw_text": "",
-            "candidate_count": 0,
-        }
-
-    pending_candidates = [item for item in candidates if item.get("pendingContext")]
-    released_candidates = [item for item in candidates if item.get("releasedContext")]
-
-    def released_score(item):
-        return (
-            (100 if item.get("releasedContext") else 0)
-            + (40 if item.get("fontWeight", 0) >= 600 else 0)
-            + (20 if item.get("darkColor") else 0)
-            + float(item.get("fontSize") or 0) * 2
-            + min(float(item.get("amountNumber") or 0), 999999) / 100000
-            - (80 if item.get("pendingContext") else 0)
-        )
-
-    released = max(released_candidates or candidates, key=released_score)
-
-    below_candidates = [
-        item
-        for item in candidates
-        if item is not released and item.get("top", 0) >= released.get("top", 0) - 5
-    ]
-    if pending_candidates:
-        unreleased = min(
-            pending_candidates,
-            key=lambda item: (
-                abs(float(item.get("top", 0)) - float(released.get("top", 0))),
-                -float(item.get("fontSize") or 0),
-            ),
-        )
-    elif below_candidates:
-        unreleased = min(
-            below_candidates,
-            key=lambda item: (
-                abs(float(item.get("top", 0)) - float(released.get("top", 0))),
-                0 if float(item.get("fontSize") or 0) <= float(released.get("fontSize") or 0) else 1,
-            ),
-        )
-    else:
-        unreleased = None
-
-    raw_text_parts = []
-    for item in candidates[:12]:
-        raw_text_parts.append(item.get("parentText") or item.get("text") or "")
-    raw_text = "\n".join(dict.fromkeys(raw_text_parts))
-
-    return {
-        "released_usd": released.get("amountText", ""),
-        "unreleased_usd": unreleased.get("amountText", "") if unreleased else "",
-        "raw_text": raw_text,
-        "candidate_count": len(candidates),
-    }
+    from bit.pago_page import parse_pago_home
+    return parse_pago_home(driver.page_source)
 
 
 def get_pago_info(
@@ -1150,7 +1126,7 @@ def get_pago_info(
             "",
             "未登录",
             get_now_time(),
-            "",
+            "登录已失效，请重新登录店铺后采集",
         ]
 
     switch_result = _select_country(
@@ -1189,14 +1165,9 @@ def get_pago_info(
             switch_result.get("detail", "") or switch_result.get("debug_file", ""),
         ]
 
-    _open_pago_home_with_retry(
-        driver,
-        name,
-        site,
-        reason="读取款项前刷新 Pago 首页",
-        stop_event=stop_event,
-        batch_source=batch_source,
-    )
+    _wait_pago_home_ready(driver, stop_event=stop_event)
+    if _is_pago_rate_limited_page(driver):
+        raise PagoRateLimitError("读取 Pago 余额时访问限频，请稍后重试")
     if _is_not_logged_in(driver):
         print(get_now_time() + name + site + "未登录 Mercado Pago")
         _record_pago_logged_out(driver, window_id, name, site, "读取款项前刷新后进入登录页")
@@ -1207,13 +1178,15 @@ def get_pago_info(
             "",
             "未登录",
             get_now_time(),
-            "",
+            "登录已失效，请重新登录店铺后采集",
         ]
 
+    if not _state_matches_site(_get_pago_site_state(driver), site):
+        return _build_pago_failure_row(name, site, "站点校验失败", "读取前站点发生变化，未保存其他站点的金额")
     amounts = _extract_pago_amounts(driver)
     released = amounts.get("released_usd", "")
     unreleased = amounts.get("unreleased_usd", "")
-    status = "成功" if released or unreleased else "未读取到金额"
+    status = "成功" if released and unreleased else "金额读取不完整" if released or unreleased else "未读取到金额"
     if switch_result.get("status") == "已点击站点但未能验证" and status == "成功":
         status = "成功-站点未验证"
 
@@ -1329,7 +1302,7 @@ def _run_pago_for_browser(row, sites=None, stop_event=None):
                     )
                     if is_rate_limited:
                         trip_batch_rate_limit(f"资金采集:{name}:{site}", str(e))
-                    if i == 3:
+                    if i == 3 or is_rate_limited:
                         status = "失败：限频" if is_rate_limited else "失败"
                         result.append(("获取款项信息", name, site, status, get_now_time()))
                         pago_info_sum.append(
@@ -1340,6 +1313,10 @@ def _run_pago_for_browser(row, sites=None, stop_event=None):
                                 str(e),
                             )
                         )
+                        if is_rate_limited:
+                            for remaining_site in sites[site_index + 1:]:
+                                pago_info_sum.append(_build_pago_failure_row(name, remaining_site, "限频", "同一店铺触发限频，请稍后重试：" + str(e)))
+                            return pago_info_sum, result
                     else:
                         if is_rate_limited:
                             _wait_for_pago_batch_resume(f"资金采集:{name}", stop_event)
@@ -1352,7 +1329,7 @@ def _run_pago_for_browser(row, sites=None, stop_event=None):
                             name,
                             remaining_site,
                             "未登录",
-                            "同一店铺已检测到登录失效，等待自动登录修复",
+                            "同一店铺已检测到登录失效，请重新登录后采集",
                         )
                     )
                     result.append(
@@ -1526,6 +1503,7 @@ def _execute_pago_jobs(
                 browser_pagos,
                 browser_result,
             )
+            _safe_insert_pago_info(browser_pagos)
             print(get_now_time() + name + f"窗口任务完成，站点：{','.join(sites)}")
     return outcomes
 

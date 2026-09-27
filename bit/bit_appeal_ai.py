@@ -3679,33 +3679,34 @@ def handle_infraction(
     open_ai_contact_window(driver, name, site, window_id)
     for index, current_group in enumerate(groups, start=1):
         infraction_ids = "、".join(str(item) for item in current_group)
-        if ai_script_mode:
-            generated = generate_ai_appeal_copy(
-                "侵权", current_group, deepseek_api_key
-            )
-            huashu = generated["message"]
-            print(
-                f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
-                f"已根据 {len(generated['products'])} 个产品的标题和描述生成 AI 话术<br>"
-            )
-        else:
-            huashu = (
-                f"{infraction_ids}{message}"
-                if message
-                else render_appeal_phrase(
-                    selected_phrase,
-                    nickname=nickname,
-                    order_ids=infraction_ids,
-                    appeal_type="侵权",
-                )
-                if selected_phrase
-                else f"{infraction_ids}{appeal_suffix}"
-            )
-        print(f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组侵权申诉：{huashu}<br>")
         group_appeal_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         group_log_start = len(get_appeal_log_records())
         group_error = ""
+        huashu = ""
         try:
+            if ai_script_mode:
+                generated = generate_ai_appeal_copy(
+                    "侵权", current_group, deepseek_api_key
+                )
+                huashu = generated["message"]
+                print(
+                    f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
+                    f"已根据 {len(generated['products'])} 个产品的标题和描述生成 AI 话术<br>"
+                )
+            else:
+                huashu = (
+                    f"{infraction_ids}{message}"
+                    if message
+                    else render_appeal_phrase(
+                        selected_phrase,
+                        nickname=nickname,
+                        order_ids=infraction_ids,
+                        appeal_type="侵权",
+                    )
+                    if selected_phrase
+                    else f"{infraction_ids}{appeal_suffix}"
+                )
+            print(f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组侵权申诉：{huashu}<br>")
             send_infraction_message_with_retry(driver, huashu, infraction_ids, name, site, index, len(groups))
         except Exception as e:
             group_error = str(e)
@@ -3778,36 +3779,37 @@ def handle_prohibited(
     open_ai_contact_window(driver, name, site, window_id)
     for index, current_group in enumerate(groups, start=1):
         group_ids = "、".join(current_group)
-        if ai_script_mode:
-            generated = generate_ai_appeal_copy(
-                "禁限售", current_group, deepseek_api_key
-            )
-            huashu = generated["message"]
-            print(
-                f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
-                f"已根据 {len(generated['products'])} 个产品的标题和描述生成 AI 话术<br>"
-            )
-        else:
-            huashu = (
-                f"{group_ids}{message}"
-                if message
-                else render_appeal_phrase(
-                    selected_phrase,
-                    nickname=nickname,
-                    order_ids=group_ids,
-                    appeal_type="禁限售",
-                )
-                if selected_phrase
-                else f"{group_ids}{default_message}"
-            )
-        print(
-            f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组"
-            f"禁限售申诉：{huashu}<br>"
-        )
         group_appeal_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         group_log_start = len(get_appeal_log_records())
         group_error = ""
+        huashu = ""
         try:
+            if ai_script_mode:
+                generated = generate_ai_appeal_copy(
+                    "禁限售", current_group, deepseek_api_key
+                )
+                huashu = generated["message"]
+                print(
+                    f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
+                    f"已根据 {len(generated['products'])} 个产品的标题和描述生成 AI 话术<br>"
+                )
+            else:
+                huashu = (
+                    f"{group_ids}{message}"
+                    if message
+                    else render_appeal_phrase(
+                        selected_phrase,
+                        nickname=nickname,
+                        order_ids=group_ids,
+                        appeal_type="禁限售",
+                    )
+                    if selected_phrase
+                    else f"{group_ids}{default_message}"
+                )
+            print(
+                f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组"
+                f"禁限售申诉：{huashu}<br>"
+            )
             send_infraction_message_with_retry(
                 driver,
                 huashu,

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Callable, Iterable, Mapping
 
@@ -15,6 +16,7 @@ TASK_TABLE = "erp_mercadolibre_collection_tasks"
 COLLECTION_TABLE = "erp_mercadolibre_collection_items"
 PRODUCT_TABLE = "erp_mercadolibre_products"
 PUBLISH_RECORD_TABLE = "erp_mercadolibre_publish_records"
+PRODUCT_PUBLISH_SCHEDULE_TABLE = "erp_mercadolibre_publish_schedules"
 MANAGEMENT_CATEGORY_TABLE = "erp_mercadolibre_management_categories"
 EXCHANGE_RATE_TABLE = "erp_mercadolibre_exchange_rates"
 
@@ -62,6 +64,7 @@ ZYING_PROFITABILITY_SOURCE = "zying_collection"
 COLLECTION_WORKFLOW_COLUMN_DEFINITIONS = (
     ("review_status", "VARCHAR(32) NOT NULL DEFAULT 'unreviewed' AFTER `added_to_products`"),
     ("last_publish_status", "VARCHAR(32) NULL AFTER `review_status`"),
+    ("ai_copy_json", "LONGTEXT NULL AFTER `description_json`"),
 )
 PRODUCT_WORKFLOW_COLUMN_DEFINITIONS = (
     ("source_type", "VARCHAR(32) NOT NULL DEFAULT 'collected' AFTER `collection_item_id`"),
@@ -91,6 +94,19 @@ def _connect() -> Any:
 
 def _now() -> str:
     return datetime.now().replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _schedule_utc_iso(value: Any) -> str:
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        try:
+            parsed = datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            return str(value or "")
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _dumps(value: Any) -> str:
@@ -184,6 +200,12 @@ def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
             result[key] = float(value)
         elif isinstance(value, bytes):
             result[key] = value.decode("utf-8", errors="replace")
+    result["ai_weight_price"] = _loads(result.get("ai_weight_price_json"), {})
+    collection_copy = _loads(result.get("ai_copy_json"), {})
+    if not collection_copy:
+        snapshot = _loads(result.get("source_snapshot_json"), {})
+        collection_copy = snapshot.get("ai_copy") if isinstance(snapshot, Mapping) else {}
+    result["ai_copy"] = collection_copy if isinstance(collection_copy, Mapping) else {}
     result["added_to_products"] = bool(result.get("added_to_products"))
     result["actual_weight_complete"] = has_valid_actual_weight(result)
     result["weight_dimensions_complete"] = has_complete_weight_dimensions(result)
@@ -213,6 +235,9 @@ def _mirror_zying_snapshot_fields(row: Mapping[str, Any]) -> dict[str, Any]:
         )
         result["source_variation_max_price_cny"] = max_variant_price
         result["suggested_net_proceeds_usd"] = suggested_net
+        plugin = snapshot.get("plugin_snapshot") or {}
+        result["collector_salesperson"] = str(plugin.get("created_by") or "").removeprefix("浏览器插件：").strip()
+        result["generator_salesperson"] = str(result["ai_original"].get("generated_by") or "").strip()
         return result
     if source_type != "zying":
         return result
@@ -354,6 +379,7 @@ def _migrate_collection_tables(cursor: Any) -> None:
             `error_message` TEXT NULL,
             `source_json` LONGTEXT NULL,
             `description_json` LONGTEXT NULL,
+            `ai_copy_json` LONGTEXT NULL,
             `page_snapshot_json` LONGTEXT NULL,
             `plugin_snapshot_json` LONGTEXT NULL,
             `added_to_products` TINYINT(1) NOT NULL DEFAULT 0,
@@ -500,6 +526,7 @@ def _migrate_collection_tables(cursor: Any) -> None:
     for column, definition in PRODUCT_WORKFLOW_COLUMN_DEFINITIONS:
         _ensure_column(cursor, PRODUCT_TABLE, column, definition)
     for table in (COLLECTION_TABLE, PRODUCT_TABLE):
+        _ensure_column(cursor, table, "ai_weight_price_json", "LONGTEXT NULL")
         for column, definition in INFRINGEMENT_RESULT_COLUMN_DEFINITIONS:
             _ensure_column(cursor, table, column, definition)
         _ensure_column(
@@ -652,6 +679,8 @@ def _migrate_collection_tables(cursor: Any) -> None:
 
 def _collection_schema_is_current(cursor: Any) -> bool:
     required = {
+        (COLLECTION_TABLE, "ai_weight_price_json"),
+        (PRODUCT_TABLE, "ai_weight_price_json"),
         (TASK_TABLE, "worker_count"),
         (TASK_TABLE, "elapsed_seconds"),
         (COLLECTION_TABLE, "volumetric_weight_kg"),
@@ -659,6 +688,7 @@ def _collection_schema_is_current(cursor: Any) -> bool:
         (COLLECTION_TABLE, "added_to_products"),
         (COLLECTION_TABLE, "review_status"),
         (COLLECTION_TABLE, "last_publish_status"),
+        (COLLECTION_TABLE, "ai_copy_json"),
         (COLLECTION_TABLE, "management_category_id"),
         (COLLECTION_TABLE, "infringement_risk_level"),
         (COLLECTION_TABLE, "infringement_keywords"),
@@ -722,7 +752,207 @@ def ensure_collection_tables(cursor: Any) -> None:
                     cursor, table, "idx_erp_meli_profit_refresh",
                     "(`profitability_updated_at`, `id`)",
                 )
+        cursor.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS `{PRODUCT_PUBLISH_SCHEDULE_TABLE}` (
+                `id` BIGINT NOT NULL AUTO_INCREMENT,
+                `batch_id` VARCHAR(64) NOT NULL,
+                `scheduled_at` DATETIME NOT NULL,
+                `status` VARCHAR(32) NOT NULL DEFAULT 'scheduled',
+                `payload_json` LONGTEXT NOT NULL,
+                `metadata_json` LONGTEXT NULL,
+                `result_json` LONGTEXT NULL,
+                `message` TEXT NULL,
+                `created_by` VARCHAR(128) NULL,
+                `started_at` DATETIME NULL,
+                `finished_at` DATETIME NULL,
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `uniq_erp_meli_publish_schedule_batch` (`batch_id`),
+                KEY `idx_erp_meli_publish_schedule_due` (`status`, `scheduled_at`, `id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """
+        )
         _schema_ready = True
+
+
+def create_product_publish_schedule(
+    scheduled_at: str,
+    payload: Mapping[str, Any],
+    *,
+    metadata: Mapping[str, Any] | None = None,
+    batch_id: str,
+    created_by: str = "",
+    connection_factory: Callable[[], Any] | None = None,
+) -> int:
+    """Persist a prepared product publish run for the central scheduler."""
+    run_at = str(scheduled_at or "").strip()
+    batch = str(batch_id or "").strip()
+    if not run_at or not batch:
+        raise ValueError("定时上架缺少触发时间或任务编号")
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"""
+                INSERT INTO `{PRODUCT_PUBLISH_SCHEDULE_TABLE}`
+                    (`batch_id`, `scheduled_at`, `status`, `payload_json`,
+                     `metadata_json`, `message`, `created_by`)
+                VALUES (%s, %s, 'scheduled', %s, %s, %s, %s)
+                """,
+                (
+                    batch,
+                    run_at,
+                    _dumps(dict(payload or {})),
+                    _dumps(dict(metadata or {})),
+                    "等待定时触发",
+                    str(created_by or "")[:128],
+                ),
+            )
+            schedule_id = int(cursor.lastrowid)
+        connection.commit()
+        return schedule_id
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def get_latest_product_publish_schedule(
+    *, connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any] | None:
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT * FROM `{PRODUCT_PUBLISH_SCHEDULE_TABLE}` "
+                "ORDER BY `id` DESC LIMIT 1"
+            )
+            row = cursor.fetchone()
+        connection.commit()
+        if not row:
+            return None
+        result = _json_safe_row(row)
+        result["scheduled_at"] = _schedule_utc_iso(result.get("scheduled_at"))
+        result["payload"] = _loads(result.pop("payload_json", None), {})
+        result["metadata"] = _loads(result.pop("metadata_json", None), {})
+        result["result"] = _loads(result.pop("result_json", None), {})
+        return result
+    finally:
+        connection.close()
+
+
+def claim_due_product_publish_schedule(
+    now: str,
+    *, connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any] | None:
+    """Atomically claim the earliest due schedule so it cannot fire twice."""
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT * FROM `{PRODUCT_PUBLISH_SCHEDULE_TABLE}` "
+                "WHERE `status` = 'scheduled' AND `scheduled_at` <= %s "
+                "ORDER BY `scheduled_at`, `id` LIMIT 1 FOR UPDATE",
+                (str(now),),
+            )
+            row = cursor.fetchone()
+            if not row:
+                connection.commit()
+                return None
+            schedule_id = int(row.get("id") or 0)
+            cursor.execute(
+                f"UPDATE `{PRODUCT_PUBLISH_SCHEDULE_TABLE}` "
+                "SET `status` = 'running', `message` = %s, "
+                "`started_at` = COALESCE(`started_at`, %s) WHERE `id` = %s "
+                "AND `status` = 'scheduled'",
+                ("定时上架已触发", _now(), schedule_id),
+            )
+            if int(cursor.rowcount or 0) != 1:
+                connection.rollback()
+                return None
+        connection.commit()
+        result = _json_safe_row(row)
+        result["scheduled_at"] = _schedule_utc_iso(result.get("scheduled_at"))
+        result["payload"] = _loads(result.pop("payload_json", None), {})
+        result["metadata"] = _loads(result.pop("metadata_json", None), {})
+        result["result"] = _loads(result.pop("result_json", None), {})
+        result["status"] = "running"
+        result["message"] = "定时上架已触发"
+        result["started_at"] = _now()
+        return result
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def recover_interrupted_product_publish_schedules(
+    *, connection_factory: Callable[[], Any] | None = None,
+) -> int:
+    """Put claimed schedules back in the durable queue after a service restart."""
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"UPDATE `{PRODUCT_PUBLISH_SCHEDULE_TABLE}` "
+                "SET `status` = 'scheduled', `message` = %s, `started_at` = NULL "
+                "WHERE `status` = 'running'",
+                ("服务重启后已恢复，等待触发",),
+            )
+            recovered = int(cursor.rowcount or 0)
+        connection.commit()
+        return recovered
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def update_product_publish_schedule(
+    schedule_id: int,
+    *,
+    status: str,
+    message: str = "",
+    result: Mapping[str, Any] | None = None,
+    finished: bool = False,
+    connection_factory: Callable[[], Any] | None = None,
+) -> None:
+    normalized_status = str(status or "").strip().lower()
+    if normalized_status not in {"scheduled", "running", "completed", "partial", "error"}:
+        raise ValueError("定时上架任务状态无效")
+    assignments = ["`status` = %s", "`message` = %s"]
+    values: list[Any] = [normalized_status, str(message or "")[:2000]]
+    if result is not None:
+        assignments.append("`result_json` = %s")
+        values.append(_dumps(dict(result)))
+    if finished:
+        assignments.append("`finished_at` = %s")
+        values.append(_now())
+    values.append(int(schedule_id))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"UPDATE `{PRODUCT_PUBLISH_SCHEDULE_TABLE}` "
+                f"SET {', '.join(assignments)} WHERE `id` = %s",
+                tuple(values),
+            )
+        connection.commit()
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def create_collection_task(
@@ -1119,6 +1349,8 @@ def _list_rows(
     task_id: int | None = None,
     source_type: str = "",
     ai_status: str = "",
+    collector_salesperson: str = "",
+    generator_salesperson: str = "",
     review_status: str = "",
     publish_status: str = "",
     weight_status: str = "",
@@ -1320,6 +1552,18 @@ def _list_rows(
             timedelta(days=1) if end_precision == "day" else timedelta(minutes=1)
         )
         params.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
+    for owner, path, prefix in (
+        (collector_salesperson, "$.plugin_snapshot.created_by", "浏览器插件："),
+        (generator_salesperson, "$.ai_original.generated_by", ""),
+    ):
+        if str(owner or "").strip():
+            expression = (
+                "TRIM(REPLACE(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT("
+                "IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{}'), "
+                f"'{path}')), 'null'), ''), '{prefix}', ''))"
+            )
+            where.append(f"{expression} LIKE %s")
+            params.append("%" + str(owner).strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     connection = (connection_factory or _connect)()
     try:
@@ -1360,6 +1604,184 @@ def _list_rows(
 
 def list_collection_items(**kwargs: Any) -> dict[str, Any]:
     return _list_rows(COLLECTION_TABLE, **kwargs)
+
+
+def get_collection_items_by_ids(
+    collection_item_ids: Iterable[int],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> list[dict[str, Any]]:
+    ids = _normalize_row_ids(
+        collection_item_ids, empty_message="请至少勾选一个采集商品"
+    )
+    if len(ids) > 100:
+        raise ValueError("每批最多生成 100 件采集商品文案")
+    placeholders = ", ".join(["%s"] * len(ids))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT * FROM `{COLLECTION_TABLE}` WHERE `id` IN ({placeholders})",
+                tuple(ids),
+            )
+            rows = {int(row["id"]): _json_safe_row(row) for row in cursor.fetchall()}
+        connection.commit()
+        if len(rows) != len(ids):
+            raise ValueError("部分采集商品已删除，请刷新列表后重试")
+        return [rows[item_id] for item_id in ids]
+    finally:
+        connection.close()
+
+
+def save_collection_item_ai_copy(
+    collection_item_id: int,
+    expected: Mapping[str, Any],
+    generated: Mapping[str, Any],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Persist validated bilingual copy only while its source facts are unchanged."""
+    try:
+        item_id = int(collection_item_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("采集商品编号无效") from exc
+    if item_id <= 0:
+        raise ValueError("采集商品编号无效")
+    if not isinstance(expected, Mapping) or not isinstance(generated, Mapping):
+        raise ValueError("文案保存数据格式无效")
+    copy = {
+        key: str(generated.get(key) or "").strip()
+        for key in ("title_es", "title_pt", "description_es", "description_pt")
+    }
+    for language, key in (("西班牙语", "title_es"), ("葡萄牙语", "title_pt")):
+        if not 50 <= len(copy[key]) <= 60:
+            raise ValueError(f"{language}标题必须为 50–60 个字符")
+    if not copy["description_es"] or not copy["description_pt"]:
+        raise ValueError("西班牙语和葡萄牙语描述都不能为空")
+    if len(copy["description_es"]) > 50000 or len(copy["description_pt"]) > 50000:
+        raise ValueError("产品描述不能超过 50000 个字符")
+    terms = generated.get("brand_terms") or []
+    if isinstance(terms, str):
+        terms = [terms]
+    if not isinstance(terms, list):
+        terms = []
+    copy["brand_terms"] = [str(value).strip()[:120] for value in terms if str(value).strip()][:50]
+    copy["generated_at"] = _now()
+
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT * FROM `{COLLECTION_TABLE}` WHERE `id` = %s FOR UPDATE",
+                (item_id,),
+            )
+            current = cursor.fetchone()
+            if not current:
+                raise ValueError("采集商品已删除，不能保存文案")
+            source_json = current.get("source_json") or ""
+            if isinstance(source_json, bytes):
+                source_json = source_json.decode("utf-8", errors="replace")
+            description_json = current.get("description_json") or ""
+            if isinstance(description_json, bytes):
+                description_json = description_json.decode("utf-8", errors="replace")
+            expected_source_hash = str(expected.get("source_json_sha256") or "").strip()
+            current_source_hash = hashlib.sha256(str(source_json).encode("utf-8")).hexdigest()
+            expected_description_hash = str(expected.get("description_json_sha256") or "").strip()
+            current_description_hash = hashlib.sha256(
+                str(description_json).encode("utf-8")
+            ).hexdigest()
+            numeric_facts = (
+                "price", "weight_g", "package_length_cm", "package_width_cm",
+                "package_height_cm",
+            )
+            numeric_facts_changed = any(
+                _decimal_from_text(current.get(field))
+                != _decimal_from_text(expected.get(field))
+                for field in numeric_facts
+            )
+            text_facts = ("currency_id", "category_id", "category_name")
+            text_facts_changed = any(
+                str(current.get(field) or "") != str(expected.get(field) or "")
+                for field in text_facts
+            )
+            is_stale = (
+                str(current.get("title") or "") != str(expected.get("title") or "")
+                or str(current.get("description_text") or "")
+                != str(expected.get("description_text") or "")
+                or numeric_facts_changed
+                or text_facts_changed
+                or (
+                    current_source_hash != expected_source_hash
+                    if expected_source_hash
+                    else str(source_json) != str(expected.get("source_json") or "")
+                )
+                or (
+                    current_description_hash != expected_description_hash
+                    if expected_description_hash
+                    else str(description_json) != str(expected.get("description_json") or "")
+                )
+            )
+            if is_stale:
+                connection.rollback()
+                return {"saved": False, "status": "conflict", "collection_item_id": item_id}
+
+            previous_copy = _loads(current.get("ai_copy_json"), {})
+            previous_copy = previous_copy if isinstance(previous_copy, Mapping) else {}
+            copy["source_title"] = str(
+                previous_copy.get("source_title") or current.get("title") or ""
+            )[:255]
+            copy["source_description"] = str(
+                previous_copy.get("source_description") or current.get("description_text") or ""
+            )[:50000]
+
+            source = _loads(source_json, {})
+            if not isinstance(source, dict):
+                source = {}
+            source["title"] = copy["title_es"]
+            description = {"plain_text": copy["description_es"]}
+            cursor.execute(
+                f"UPDATE `{COLLECTION_TABLE}` SET `title` = %s, `description_text` = %s, "
+                "`description_json` = %s, `source_json` = %s, `ai_copy_json` = %s "
+                "WHERE `id` = %s",
+                (
+                    copy["title_es"], copy["description_es"], _dumps(description),
+                    _dumps(source), _dumps(copy), item_id,
+                ),
+            )
+
+            # Keep a product already created from this collection item in sync.
+            cursor.execute(
+                f"SELECT `id`, `source_snapshot_json` FROM `{PRODUCT_TABLE}` "
+                "WHERE `collection_item_id` = %s FOR UPDATE",
+                (item_id,),
+            )
+            product = cursor.fetchone()
+            if product:
+                snapshot = _loads(product.get("source_snapshot_json"), {})
+                if not isinstance(snapshot, dict):
+                    snapshot = {}
+                product_source = dict(snapshot.get("source") or {})
+                product_source["title"] = copy["title_es"]
+                snapshot.update({
+                    "source": product_source,
+                    "description": description,
+                    "ai_copy": copy,
+                })
+                cursor.execute(
+                    f"UPDATE `{PRODUCT_TABLE}` SET `title` = %s, `description_text` = %s, "
+                    "`source_snapshot_json` = %s WHERE `id` = %s",
+                    (copy["title_es"], copy["description_es"], _dumps(snapshot), product["id"]),
+                )
+        connection.commit()
+        return {"saved": True, "status": "completed", "collection_item_id": item_id,
+                "product_mirrored": bool(product)}
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def list_product_items(**kwargs: Any) -> dict[str, Any]:
@@ -4313,6 +4735,9 @@ def _add_collection_items_to_products_once(
                     "page_snapshot": _loads(row.get("page_snapshot_json"), {}),
                     "plugin_snapshot": _loads(row.get("plugin_snapshot_json"), {}),
                 }
+                ai_copy = _loads(row.get("ai_copy_json"), {})
+                if isinstance(ai_copy, Mapping) and ai_copy:
+                    snapshot["ai_copy"] = dict(ai_copy)
                 description_text = str(
                     (snapshot.get("description") or {}).get("plain_text")
                     or (snapshot.get("description") or {}).get("text")
@@ -4338,7 +4763,7 @@ def _add_collection_items_to_products_once(
                     row.get("infringement_reason"),
                     row.get("infringement_checked_at"),
                     *(row.get(column) for column in PROFITABILITY_COLUMNS),
-                    _dumps(snapshot), _now(),
+                    _dumps(snapshot), _now(), row.get("ai_weight_price_json"),
                 )
                 cursor.execute(
                     f"""
@@ -4353,7 +4778,7 @@ def _add_collection_items_to_products_once(
                         `infringement_risk_level`, `infringement_keywords`,
                         `infringement_reason`, `infringement_checked_at`,
                         {profitability_columns_sql},
-                        `source_snapshot_json`, `added_at`
+                        `source_snapshot_json`, `added_at`, `ai_weight_price_json`
                     ) VALUES ({", ".join(["%s"] * len(values))})
                     ON DUPLICATE KEY UPDATE
                         `collection_item_id` = VALUES(`collection_item_id`),
@@ -4378,6 +4803,7 @@ def _add_collection_items_to_products_once(
                         `infringement_reason` = VALUES(`infringement_reason`),
                         `infringement_checked_at` = VALUES(`infringement_checked_at`),
                         {profitability_updates_sql},
+                        `ai_weight_price_json` = VALUES(`ai_weight_price_json`),
                         `source_snapshot_json` = VALUES(`source_snapshot_json`),
                         `updated_at` = CURRENT_TIMESTAMP
                     """,

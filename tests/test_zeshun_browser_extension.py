@@ -19,8 +19,8 @@ def test_manifest_is_chrome_edge_manifest_v3_and_declares_supported_sites():
     assert manifest["manifest_version"] == 3
     assert manifest["background"]["service_worker"] == "background.js"
     assert "default_popup" not in manifest["action"]
-    assert manifest["version"] == "1.8.23"
-    assert "v1.8.23 · Yandex采集" in (EXTENSION / "popup.html").read_text(encoding="utf-8")
+    assert manifest["version"] == "1.8.24"
+    assert "v1.8.24 · 跟卖AI核查" in (EXTENSION / "popup.html").read_text(encoding="utf-8")
     matches = manifest["content_scripts"][0]["matches"]
     assert any("mercadolibre.com.mx" in pattern for pattern in matches)
     assert any("mercadolivre.com.br" in pattern for pattern in matches)
@@ -149,7 +149,7 @@ def test_console_downloads_complete_zeshun_extension_package():
 
     assert response.status_code == 200
     assert response.headers["Content-Type"].startswith("application/zip")
-    assert response.headers["X-Zeshun-Extension-Version"] == "1.8.23"
+    assert response.headers["X-Zeshun-Extension-Version"] == "1.8.24"
     assert "zeshun-collector-extension.zip" in response.headers["Content-Disposition"]
     with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
         names = set(archive.namelist())
@@ -1087,3 +1087,27 @@ def test_zying_options_fresh_developers_override_cached_response(monkeypatch):
         }, headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 200
         assert response.get_json()["data"]["developers"] == [{"id": "17", "name": name}]
+
+
+def test_collection_ai_endpoint_requires_execute_and_queues_for_current_actor(monkeypatch, tmp_path, isolated_legacy_console_user):
+    import bit.bit_interface as workbench
+    from erp.ai_weight_price.service import Service
+    from bit import collection_ai_workflow
+
+    workbench.app.config.update(TESTING=True, SECRET_KEY="collection-ai-test")
+    service = Service(tmp_path)
+    monkeypatch.setattr(workbench, 'ai_weight_price_service', service)
+    monkeypatch.setattr(workbench.browser_extension_models, 'get_api_key', lambda *_: 'test-key')
+    captured = []
+    monkeypatch.setattr(collection_ai_workflow, 'enqueue', lambda svc, ids: captured.append((svc.store.actor(), ids)) or {'count': len(ids)})
+    client = workbench.app.test_client()
+    with client.session_transaction() as session:
+        session['workbench_user'] = _browser_extension_user()
+    response = client.post('/api/mercado-collection/ai-weight-price', json={'collection_item_ids': [12]})
+    assert response.status_code == 200
+    assert captured[0][0]['id'] == 7
+    assert captured[0][0]['view_all'] is False
+    assert captured[0][1] == [12]
+    monkeypatch.setattr(workbench, '_authorize_ai_weight_price', lambda _: (workbench.jsonify({'message': 'denied'}), 403))
+    assert client.post('/api/mercado-collection/ai-weight-price', json={'collection_item_ids': [12]}).status_code == 403
+    assert len(captured) == 1

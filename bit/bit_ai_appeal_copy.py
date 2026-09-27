@@ -79,7 +79,9 @@ def fetch_product_contexts(product_ids, *, session=None, timeout=15):
 
 
 def _clean_model_text(value):
-    text = str(value or "").strip()
+    if not isinstance(value, str):
+        raise RuntimeError("DeepSeek 返回的话术格式无效")
+    text = value.strip()
     text = re.sub(r"^```(?:text|markdown)?\s*", "", text, flags=re.I)
     text = re.sub(r"\s*```$", "", text)
     text = text.strip().strip('"').strip()
@@ -133,7 +135,11 @@ def generate_ai_appeal_copy(
     api_key = str(api_key or "").strip()
     if not api_key:
         raise ValueError("AI话术模式必须手动填写 DeepSeek Token")
+    if appeal_type not in SUPPORTED_APPEAL_TYPES:
+        raise ValueError("AI话术模式只支持侵权和禁限售")
     product_ids = normalize_product_ids(product_ids)
+    if not product_ids:
+        raise ValueError("AI话术模式缺少产品编号")
     if len(product_ids) > MAX_PRODUCTS_PER_APPEAL:
         raise ValueError(
             f"AI话术模式每次最多处理 {MAX_PRODUCTS_PER_APPEAL} 个产品"
@@ -143,12 +149,21 @@ def generate_ai_appeal_copy(
         from AI_Agent.deepseek import chat_deepseek
 
         chat = chat_deepseek
-    text = chat(
-        build_deepseek_messages(appeal_type, product_contexts),
-        temperature=0.2,
-        max_tokens=120,
-        api_key=api_key,
-    )
+    try:
+        text = chat(
+            build_deepseek_messages(appeal_type, product_contexts),
+            temperature=0.2,
+            max_tokens=256,
+            api_key=api_key,
+            thinking=False,
+            timeout=60,
+            max_retries=0,
+        )
+    except Exception as exc:
+        # Provider errors may echo credentials or request bodies into task logs.
+        status = getattr(exc, "status_code", None)
+        detail = f"（HTTP {status}）" if isinstance(status, int) else ""
+        raise RuntimeError(f"DeepSeek 话术生成失败{detail}，请检查 Token、服务及网络后重试") from None
     generated = _clean_model_text(text)
     identifiers = "、".join(row["product_id"] for row in product_contexts)
     return {

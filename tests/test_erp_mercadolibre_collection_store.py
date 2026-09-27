@@ -1479,3 +1479,22 @@ def test_1688_recollection_clears_unverified_old_weight_and_package():
     snapshot = json.loads(params[11])
     assert snapshot['original_1688']['variations'][0]['weight_g'] == 250
     assert connection.committed
+
+
+@pytest.mark.parametrize("field, path", [
+    ("collector_salesperson", "$.plugin_snapshot.created_by"),
+    ("generator_salesperson", "$.ai_original.generated_by"),
+])
+def test_product_owner_filter_applies_before_pagination(field, path):
+    connection = _FakeConnection()
+    with patch.object(store, "ensure_collection_tables"):
+        store.list_product_items(
+            source_type="ai_original", limit=50, offset=50,
+            connection_factory=lambda: connection, **{field: "张三"},
+        )
+    queries = connection.fake_cursor.queries
+    assert len(queries) == 2
+    for sql, params in queries:
+        assert path in sql
+        assert "%张三%" in params
+    assert queries[-1][1][-2:] == (50, 50)

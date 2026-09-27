@@ -878,6 +878,7 @@ def create_job(uploads, form: dict) -> dict:
             "provider_task_id": "",
             "provider_attempts": [],
             "credential_owner_id": credential_owner_id,
+            "created_by_name": str(form.get("created_by_name") or "").strip()[:64],
             "output_filename": "",
             "published": [],
             "publish_attempts": [],
@@ -904,30 +905,113 @@ def create_job(uploads, form: dict) -> dict:
     return _public_job(job)
 
 
-def list_jobs(limit: int = 30, user_id=None) -> dict:
-    rows: list[dict] = []
+def _job_created_datetime(job: dict, fallback_path: Path | None = None) -> datetime:
+    value = str((job or {}).get("created_at") or "").strip()
+    if value:
+        try:
+            created_at = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            return created_at.astimezone(timezone.utc)
+        except ValueError:
+            pass
+    if fallback_path is not None:
+        try:
+            return datetime.fromtimestamp(fallback_path.stat().st_mtime, tz=timezone.utc)
+        except OSError:
+            pass
+    return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _parse_job_datetime(value, label: str) -> datetime | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"{label}格式无效") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def list_jobs(
+    limit: int = 30,
+    user_id=None,
+    *,
+    page: int = 1,
+    allowed_user_ids=None,
+    creator_id=None,
+    created_from=None,
+    created_before=None,
+) -> dict:
     try:
         requested_user_id = int(user_id or 0)
     except (TypeError, ValueError):
         requested_user_id = 0
-    for path in sorted(
-        storage_root().glob("*/job.json"),
-        key=lambda item: item.stat().st_mtime if item.exists() else 0,
-        reverse=True,
-    ):
-        if len(rows) >= max(1, min(100, int(limit or 30))):
-            break
+    try:
+        selected_creator_id = int(creator_id) if creator_id not in (None, "") else None
+    except (TypeError, ValueError) as exc:
+        raise ValueError("生成者筛选无效") from exc
+    try:
+        page_number = max(1, int(page or 1))
+    except (TypeError, ValueError):
+        page_number = 1
+    page_size = max(1, min(30, int(limit or 30)))
+    lower_bound = _parse_job_datetime(created_from, "开始时间")
+    upper_bound = _parse_job_datetime(created_before, "结束时间")
+    if lower_bound and upper_bound and upper_bound <= lower_bound:
+        raise ValueError("生成时间范围无效")
+    allowed_ids = None
+    if allowed_user_ids is not None:
+        allowed_ids = {0}
+        for value in allowed_user_ids:
+            try:
+                allowed_ids.add(int(value))
+            except (TypeError, ValueError):
+                continue
+
+    matched: list[tuple[datetime, dict, int]] = []
+    for path in storage_root().glob("*/job.json"):
         try:
             job = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
         owner_id = _job_owner(job)
-        if requested_user_id and owner_id not in {0, requested_user_id}:
+        if allowed_ids is not None and owner_id not in allowed_ids:
             continue
+        if allowed_ids is None and requested_user_id and owner_id not in {0, requested_user_id}:
+            continue
+        if selected_creator_id is not None and owner_id != selected_creator_id:
+            continue
+        created_at = _job_created_datetime(job, path)
+        if lower_bound and created_at < lower_bound:
+            continue
+        if upper_bound and created_at >= upper_bound:
+            continue
+        matched.append((created_at, job, owner_id))
+
+    matched.sort(key=lambda item: item[0], reverse=True)
+    total = len(matched)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    page_number = min(page_number, total_pages)
+    start = (page_number - 1) * page_size
+    rows: list[dict] = []
+    for _, job, owner_id in matched[start:start + page_size]:
         if job.get("status") in ACTIVE_STATUSES:
             _start_worker(str(job.get("id") or ""))
-        rows.append(_public_job(job))
-    return {"rows": rows, "settings": provider_settings(user_id)}
+        public = _public_job(job)
+        public["creator_id"] = owner_id
+        public["creator_name"] = str(job.get("created_by_name") or "").strip()
+        rows.append(public)
+    return {
+        "rows": rows,
+        "total": total,
+        "page": page_number,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "settings": provider_settings(user_id),
+    }
 
 
 def public_job(job_id: str) -> dict:
@@ -1056,6 +1140,7 @@ def retry_job(job_id: str, changes: dict | None = None, uploads=None) -> dict:
         if "local_fit_mode" not in form:
             form["local_fit_mode"] = source.get("local_fit_mode") or "crop"
         form["credential_owner_id"] = _job_owner(source)
+        form["created_by_name"] = str(source.get("created_by_name") or "")
         form["force_new"] = "1"
         # The files have already been assembled in the requested order above;
         # these retry-only fields are not understood by the normal creator.

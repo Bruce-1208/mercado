@@ -774,6 +774,18 @@ async function stopZyingCollection() {
   });
 }
 
+let collectionAiClaiming = false;
+async function claimCollectionAiCheck() {
+  if (aiWeightPriceRunPromise || collectionAiClaiming || !(await authSession())) return;
+  collectionAiClaiming = true;
+  try {
+    const step = await aiWeightPriceAction("collection/claim", {});
+    startAIWeightPriceClientRun(step);
+  } finally {
+    collectionAiClaiming = false;
+  }
+}
+
 async function aiWeightPriceStatus() {
   const data = await apiRequest("/api/browser-extension/ai-weight-price/client/status", {method: "GET"});
   void handleAiWeightPricePauseNotification(data).catch(() => {});
@@ -1350,13 +1362,13 @@ async function runAIWeightPriceClient(step) {
   } catch (error) {
     const failure = error.message || String(error);
     await storageSet("local", {aiWeightPriceClientRun: {
-      action: current?.action || "error", task_id: current?.task_id || task?.erp_goods_id || "",
+      action: current?.action || "error", task_id: current?.task_id || current?.task?.erp_goods_id || task?.erp_goods_id || "",
       error: failure, at: Date.now()
     }});
     try {
       await aiWeightPriceAction("fail", {
         action: current?.action || "error",
-        task_id: current?.task_id || task?.erp_goods_id || "",
+        task_id: current?.task_id || current?.task?.erp_goods_id || task?.erp_goods_id || "",
         error: failure
       });
     } catch (_) {}
@@ -1365,7 +1377,7 @@ async function runAIWeightPriceClient(step) {
   }
 }
 
-function launchAIWeightPriceClient(step) {
+function startAIWeightPriceClientRun(step) {
   if (!step || step.action === "done" || aiWeightPriceRunPromise) return;
   aiWeightPriceRunPromise = runAIWeightPriceClient(step).catch(() => null).finally(() => {
     aiWeightPriceRunPromise = null;
@@ -1425,6 +1437,7 @@ chrome.runtime.onStartup.addListener(async () => {
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === RETRY_ALARM) {
     flushQueue();
+    claimCollectionAiCheck().catch(() => {});
     monitorAttentionEvents().catch(() => {});
   }
   if (alarm.name === PURCHASE_TRACKING_RESUME_ALARM) resumePurchaseTracking().catch(() => {});

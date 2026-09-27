@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from erp.store_link_audit import audited, contextual_target, record
 import os
 import threading
 import uuid
@@ -184,6 +185,7 @@ def _desired_group_changes(
     return groups
 
 
+@audited
 def _update_one_link(
     row: Mapping[str, Any],
     token: Mapping[str, Any],
@@ -288,6 +290,7 @@ def _update_one_link(
     }
 
 
+@audited
 def run_store_link_remote_update(
     rows: Iterable[Mapping[str, Any]],
     changes: Mapping[str, Any],
@@ -338,10 +341,11 @@ def run_store_link_remote_update(
                     "applied_fields": [],
                     "errors": [f"店铺授权不可用：{token_errors[token_id]}"],
                 }
+                record("remote_update_item", result["status"], {"result": result, "task_id": _update_state.get("task_id")})
                 results.append(result)
                 _append_log(f"{item_id} 失败：{result['errors'][0]}")
                 continue
-            futures[executor.submit(_update_one_link, row, token_records[token_id], changes)] = row
+            futures[executor.submit(contextual_target(_update_one_link), row, token_records[token_id], changes)] = row
 
         for future in as_completed(futures):
             row = futures[future]
@@ -358,6 +362,7 @@ def run_store_link_remote_update(
                     "applied_fields": [],
                     "errors": [str(exc)],
                 }
+            record("remote_update_item", result["status"], {"result": result, "task_id": _update_state.get("task_id")})
             results.append(result)
             if result["status"] == "success":
                 _append_log(f"{item_id} 后台修改成功：{', '.join(result.get('remote_groups') or [])}")
@@ -422,6 +427,7 @@ def _run_background(rows: list[dict[str, Any]], changes: dict[str, Any]) -> None
         task_lock.release()
 
 
+@audited
 def start_store_link_remote_update(
     link_ids: Iterable[int],
     changes: Mapping[str, Any],
@@ -453,7 +459,7 @@ def start_store_link_remote_update(
             logs=[],
         )
     thread = threading.Thread(
-        target=_run_background,
+        target=contextual_target(_run_background),
         args=(rows, normalized),
         name="mercado-store-link-remote-update",
         daemon=True,

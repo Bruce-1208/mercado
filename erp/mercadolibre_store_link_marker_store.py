@@ -8,6 +8,7 @@ amount of workflow metadata in a separate SQLite database keyed by the stable
 
 from __future__ import annotations
 
+from erp.store_link_audit import audited
 import os
 import sqlite3
 from contextlib import contextmanager
@@ -125,18 +126,21 @@ def _mark(identity: tuple[int, str, str], **changes: Any) -> None:
         )
 
 
+@audited
 def mark_advertising_enabled(row: Mapping[str, Any], campaign_id: Any = "") -> None:
     identity = _identity(row)
     if identity:
         _mark(identity, advertising_enabled=True, ad_campaign_id=campaign_id)
 
 
+@audited
 def mark_video_uploaded(row: Mapping[str, Any], clip_uuid: Any = "") -> None:
     identity = _identity(row)
     if identity:
         _mark(identity, video_uploaded=True, video_clip_uuid=clip_uuid)
 
 
+@audited
 def mark_advertising_status(
     *, token_id: Any, site_id: Any, item_ids: Iterable[Any], enabled: bool, campaign_id: Any = ""
 ) -> None:

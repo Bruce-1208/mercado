@@ -42,7 +42,9 @@ function decorateAiOriginalWorkbench() {
     const status = ["pending", "processing", "completed", "failed"].includes(row.ai_status) ? row.ai_status : "pending";
     const header = document.createElement("header");
     header.className = "ai-original-card-head";
-    header.innerHTML = `<label><span>1688 · ${aiOriginalEscape(row.original_1688?.source_1688_item_id || row.source_item_id)}</span></label><span class="ai-original-badge ${status}">${ready ? "已审核 · 待上架校验" : status === "completed" ? "AI 已生成 · 待完善审核" : aiOriginalStateLabel(status)}</span>`;
+    const reviewStatus = String(row.review_status || "unreviewed");
+    const reviewLabel = {unreviewed: "待审核", approved: "审核通过", suspected: "疑似风险", infringing: "侵权", risk: "待复核"}[reviewStatus] || reviewStatus;
+    header.innerHTML = `<label><span>1688 · ${aiOriginalEscape(row.original_1688?.source_1688_item_id || row.source_item_id)}</span></label><span class="ai-original-badge ${status}">${ready ? "已审核 · 待上架校验" : status === "completed" ? `AI 已生成 · ${aiOriginalEscape(reviewLabel)}` : aiOriginalStateLabel(status)}</span>`;
     header.querySelector("label").prepend(checkbox);
     card.prepend(header);
     const fields = card.querySelector(".ai-original-fields");
@@ -80,16 +82,17 @@ function syncAiOriginalWorkbenchSelection() {
   const all = document.getElementById("ai-original-select-all");
   if (all) { all.checked = cards.length > 0 && cards.length === selected.length; all.indeterminate = selected.length > 0 && selected.length < cards.length; }
   const count = typeof aiOriginalSelected !== "undefined" ? aiOriginalSelected.size : 0;
-  const selectedRows = aiOriginalRows.filter(row => aiOriginalSelected.has(Number(row.id)));
+  const readyCount = aiOriginalPublishableSelection().length;
+  const skippedCount = count - readyCount;
   const publish = document.getElementById("ai-original-publish");
   if (publish) {
-    publish.disabled = !count || !selectedRows.every(aiOriginalListingReady);
-    publish.title = count && !selectedRows.every(aiOriginalListingReady) ? "所选产品仍有缺失资料或尚未审核" : "";
+    publish.disabled = !readyCount;
+    publish.title = count ? `可上架 ${readyCount} 件，将自动忽略 ${skippedCount} 件资料不完整或未审核的产品` : "";
   }
   const process = document.getElementById("ai-original-process");
   if (process && aiOriginalWorkbenchRunning) process.disabled = true;
   const hint = document.getElementById("ai-original-selection-hint");
-  if (hint) hint.textContent = count ? `所选 ${count} 件 · ${selectedRows.filter(aiOriginalListingReady).length} 件已完善并审核` : "选择商品后，批量生成刊登内容";
+  if (hint) hint.textContent = count ? `所选 ${count} 件 · 可上架 ${readyCount} 件 · 将忽略 ${skippedCount} 件` : "选择商品后，批量生成刊登内容";
 }
 
 document.addEventListener("DOMContentLoaded", () => {

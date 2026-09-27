@@ -76,6 +76,8 @@ python -m erp.mercadolibre_source_store --show MLM3016972321
 - `erp_mercadolibre_products`：人工多选后加入的产品列表；
 - `erp_mercadolibre_publish_records`：每个产品的历次上架记录，包含批次、目标店铺、
   目标站点、成功商品编号、失败原因和接口返回明细。
+- `erp_mercadolibre_publish_schedules`：定时上架队列，保存触发时间、产品编号和
+  账号站点配置；中心服务启动时会恢复已领取但未完成的任务，到期后继续执行。
 
 固定 Cainiao 运费按站点、本地售价区间和智赢实际重量在采集入库时立即匹配，
 不使用体积重或计泡重；长宽高和计泡重只保留为展示参考。美元售价在采集入库时
@@ -125,3 +127,25 @@ $env:MERCADO_PLAYWRIGHT_CDP_URL="http://127.0.0.1:9222"
 $env:MERCADO_PLAYWRIGHT_PROFILE_DIR="cache/mercado_playwright_profile"
 $env:MERCADO_PLAYWRIGHT_HEADLESS="0"
 ```
+
+### 店铺链接操作记录
+
+店铺链接接口请求（含查询、校验失败、权限拒绝）、同步、后台逐链接修改、
+广告、视频和本地写入都会追加持久化操作记录。批量修改及删除保留写入前快照；
+异步线程沿用发起人的追踪编号，使用内部共享凭据的客户端转发也保留操作人。
+系统调度标记为 system。开始记录写入失败时不会执行后续操作；只有开始记录而没有
+结束记录表示执行曾中断或结果记录失败，不应视为成功，也不能据此自动重试。
+
+默认日志数据库为 `runtime_logs/store_link_operations.sqlite3`，可通过
+`MERCADO_STORE_LINK_AUDIT_PATH` 指向持久化磁盘。各执行节点独立保存，无自动清理；
+备份请使用 SQLite 在线备份或停服后连同 WAL 文件处理。日志数据库与业务 MySQL
+不属于同一个事务，结束记录写入失败不能撤销已经提交的远程操作。
+凭据字段脱敏，视频只记录文件名和类型，不记录文件内容。
+
+平台管理员可在“店铺管理 → 店铺操作记录”查询当前节点记录，或请求
+`GET /api/store-links/operation-logs?limit=100&before_id=123&trace_id=...`；
+`before_id` 和 `trace_id` 可省略。客户端与服务器可按同一 trace_id 分别追溯。
+历史上未记录的操作无法补录。
+
+店铺操作记录为独立模块，支持 `operation_type` 查询参数：`sync`、`update`、`delete`、`advertising`、`video`、`query`、`other`。省略或留空显示全部类型；筛选在分页前执行，兼容已有记录。
+也支持 `salesperson` 按操作人姓名或账号包含匹配，以及带时区的 `created_after`、`created_before` ISO 时间范围（开始包含、结束不包含）；所有筛选都在分页前执行。

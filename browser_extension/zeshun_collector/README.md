@@ -258,3 +258,7 @@ node --check .\browser_extension\zeshun_collector\background.js
 node --check .\browser_extension\zeshun_collector\popup.js
 node --check .\browser_extension\zeshun_collector\options.js
 ```
+
+### 1.8.24 跟卖采集 AI 核重核价
+
+插件每分钟领取同账号在美客多跟卖采集列表启动的 AI 核查任务，直接搜1688，无需读取智赢商品。重量尺寸由泽顺服务器事务回写，列表分别显示核查和修改状态。服务器与插件需一起升级。

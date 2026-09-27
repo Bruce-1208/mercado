@@ -1,3 +1,4 @@
+import json
 import os
 import time
 import requests
@@ -57,6 +58,9 @@ def _request(method, path, **kwargs):
     url = f"{DB_API_BASE_URL}{path}"
     timeout = kwargs.pop("timeout", 60)
     headers = _headers()
+    if path.startswith("/api/db/store-links"):
+        from erp.store_link_audit import forwarding_headers
+        headers.update(forwarding_headers())
     if "files" in kwargs:
         headers.pop("Content-Type", None)
     # Only reads can be replayed safely. A timed-out POST may already have
@@ -136,14 +140,43 @@ def create_ai_video_job(uploads, form):
     )
 
 
-def list_ai_video_jobs(limit=30, user_id=None):
+def list_ai_video_jobs(
+    limit=30,
+    user_id=None,
+    *,
+    page=None,
+    allowed_user_ids=None,
+    creator_id=None,
+    created_from=None,
+    created_before=None,
+):
+    filters = {}
+    if page is not None:
+        filters["page"] = int(page or 1)
+    if allowed_user_ids is not None:
+        filters["allowed_user_ids"] = list(allowed_user_ids)
+    if creator_id not in (None, ""):
+        filters["creator_id"] = creator_id
+    if created_from:
+        filters["created_from"] = created_from
+    if created_before:
+        filters["created_before"] = created_before
     if DB_MODE == "mysql":
         from bit.bit_ai_video import list_jobs
 
-        return list_jobs(limit=limit, user_id=user_id)
-    return _request(
-        "GET", "/api/db/ai-videos/jobs", params={"limit": int(limit or 30), "user_id": user_id or ""}, timeout=60
-    )
+        return list_jobs(limit=limit, user_id=user_id, **filters)
+    params = {"limit": int(limit or 30), "user_id": user_id or ""}
+    if page is not None:
+        params["page"] = int(page or 1)
+    if allowed_user_ids is not None:
+        params["user_ids"] = ",".join(str(int(value)) for value in allowed_user_ids)
+    if creator_id not in (None, ""):
+        params["creator_id"] = creator_id
+    if created_from:
+        params["created_from"] = created_from
+    if created_before:
+        params["created_before"] = created_before
+    return _request("GET", "/api/db/ai-videos/jobs", params=params, timeout=60)
 
 
 def get_ai_video_job(job_id):
@@ -294,6 +327,13 @@ def get_mercado_ad_analysis(
     if refresh_token_ids is not None and not remote_params.get("refresh_token_ids"):
         remote_params["refresh_token_ids"] = [""]
     return _request("GET", "/api/db/ad-analysis", params=remote_params, timeout=240)
+
+
+def save_mercado_ad_profit(row, value):
+    if DB_MODE == "mysql":
+        from bit.ad_profit import save_profit
+        return save_profit(row, value)
+    return _request("POST", "/api/db/ad-analysis/profit", json={"row": row, "unit_profit": value})
 
 
 def update_mercado_ad_groups(rows, *, status):
@@ -586,10 +626,10 @@ def insert_zying_product_info(product_list):
     return (data or {}).get("count", 0)
 
 
-def save_weight_dimensions_records(rows):
+def save_weight_dimensions_records(rows, refresh=False):
     if DB_MODE == "mysql":
-        return _local_call("save_weight_dimensions_records", rows)
-    return _request("POST", "/api/db/weight-dimensions-records", json={"rows": rows or []})
+        return _local_call("save_weight_dimensions_records", rows, refresh=refresh)
+    return _request("POST", "/api/db/weight-dimensions-records", json={"rows": rows or [], "refresh": refresh})
 
 
 def get_weight_dimensions_record_order_numbers(order_numbers):
@@ -605,10 +645,12 @@ def get_weight_dimensions_record_order_numbers(order_numbers):
     return (data or {}).get("order_numbers", [])
 
 
-def list_weight_dimensions_records():
+def list_weight_dimensions_records(order_numbers=None, filters=None):
+    if order_numbers is not None and not order_numbers:
+        return []
     if DB_MODE == "mysql":
-        return _local_call("list_weight_dimensions_records")
-    return _request("GET", "/api/db/weight-dimensions-records")
+        return _local_call("list_weight_dimensions_records", order_numbers, filters=filters)
+    return _request("GET", "/api/db/weight-dimensions-records", params={**({"order_number": order_numbers} if order_numbers is not None else {}), **({"filters": json.dumps(filters)} if filters is not None else {})})
 
 
 def list_weight_dimensions_changed_orders(filters=None):
@@ -950,9 +992,11 @@ def list_orders(
         return _local_call("list_orders", **local_params)
 
 
-def list_store_analysis(start_date, end_date, *, metric="orders", salesperson="", group_name="", token_id=None, allowed_token_ids=None):
+def list_store_analysis(start_date, end_date, *, metric="orders", salesperson="", group_name="",
+                        token_id=None, allowed_token_ids=None, category_level=2):
     params = {"start_date": start_date, "end_date": end_date, "metric": metric,
-              "salesperson": salesperson, "group_name": group_name}
+              "salesperson": salesperson, "group_name": group_name,
+              "category_level": category_level}
     if token_id is not None:
         params["token_id"] = token_id
     if allowed_token_ids is not None:
@@ -962,7 +1006,8 @@ def list_store_analysis(start_date, end_date, *, metric="orders", salesperson=""
         from bit.store_analysis import list_store_analysis as local_list
         return local_list(start_date, end_date, metric=metric, salesperson=salesperson,
                           group_name=group_name, token_id=token_id,
-                          allowed_token_ids=allowed_token_ids)
+                          allowed_token_ids=allowed_token_ids,
+                          category_level=category_level)
     return _request("GET", "/api/db/store-analysis", params=params)
 
 
@@ -2233,12 +2278,41 @@ def list_mercado_collection_items(
         return _collection_store_call("list_collection_items", **params)
 
 
+def get_mercado_collection_items_by_ids(collection_item_ids):
+    item_ids = [int(value) for value in collection_item_ids or []]
+    if DB_MODE == "mysql":
+        return _collection_store_call("get_collection_items_by_ids", item_ids)
+    path = "/api/db/mercado-collection/items/by-ids"
+    try:
+        data = _request("POST", path, json={"collection_item_ids": item_ids})
+        return list(data.get("rows") or [])
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("get_collection_items_by_ids", item_ids)
+
+
+def save_mercado_collection_item_ai_copy(collection_item_id, expected, generated):
+    item_id = int(collection_item_id)
+    payload = {"expected": dict(expected or {}), "generated": dict(generated or {})}
+    if DB_MODE == "mysql":
+        return _collection_store_call("save_collection_item_ai_copy", item_id, **payload)
+    path = f"/api/db/mercado-collection/items/{item_id}/ai-copy"
+    try:
+        return _request("PATCH", path, json=payload)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("save_collection_item_ai_copy", item_id, **payload)
+
+
 def list_mercado_product_items(
     search="", limit=500, offset=0, source_type="", ai_status="", review_status="",
     publish_status="", weight_min=None, weight_max=None, price_min=None,
     price_max=None, net_proceeds_min=None, net_proceeds_max=None,
     date_from="", date_to="", management_category_id=None,
     mercado_category="", zying_category="", product_developer_id="", token_ids=None,
+    collector_salesperson="", generator_salesperson="",
 ):
     params = {
         "search": search,
@@ -2261,6 +2335,10 @@ def list_mercado_product_items(
         "zying_category": str(zying_category or "").strip(),
         "product_developer_id": str(product_developer_id or "").strip(),
     }
+    if collector_salesperson:
+        params["collector_salesperson"] = str(collector_salesperson).strip()
+    if generator_salesperson:
+        params["generator_salesperson"] = str(generator_salesperson).strip()
     if token_ids is not None:
         params["token_ids"] = [
             int(value) for value in token_ids or [] if int(value or 0) > 0
@@ -2566,6 +2644,61 @@ def get_mercado_product_items_by_ids(product_item_ids):
         return _collection_store_call("get_product_items_by_ids", item_ids)
 
 
+def create_mercado_product_publish_schedule(
+    scheduled_at, payload, *, metadata=None, batch_id, created_by="",
+):
+    schedule_payload = {
+        "scheduled_at": str(scheduled_at or ""),
+        "payload": dict(payload or {}),
+        "metadata": dict(metadata or {}),
+        "batch_id": str(batch_id or ""),
+        "created_by": str(created_by or ""),
+    }
+    if DB_MODE == "mysql":
+        return _collection_store_call(
+            "create_product_publish_schedule",
+            schedule_payload["scheduled_at"],
+            schedule_payload["payload"],
+            metadata=schedule_payload["metadata"],
+            batch_id=schedule_payload["batch_id"],
+            created_by=schedule_payload["created_by"],
+        )
+    path = "/api/db/mercado-products/publish-schedules"
+    data = _request("POST", path, timeout=120, json=schedule_payload)
+    return int(data.get("schedule_id") or 0)
+
+
+def get_latest_mercado_product_publish_schedule():
+    if DB_MODE == "mysql":
+        return _collection_store_call("get_latest_product_publish_schedule")
+    path = "/api/db/mercado-products/publish-schedules/latest"
+    return _request("GET", path)
+
+
+def claim_due_mercado_product_publish_schedule(now):
+    if DB_MODE == "mysql":
+        return _collection_store_call("claim_due_product_publish_schedule", str(now))
+    path = "/api/db/mercado-products/publish-schedules/claim"
+    return _request("POST", path, json={"now": str(now)})
+
+
+def recover_interrupted_mercado_product_publish_schedules():
+    if DB_MODE == "mysql":
+        return _collection_store_call("recover_interrupted_product_publish_schedules")
+    path = "/api/db/mercado-products/publish-schedules/recover"
+    data = _request("POST", path, json={})
+    return int(data.get("recovered") or 0)
+
+
+def update_mercado_product_publish_schedule(schedule_id, **changes):
+    if DB_MODE == "mysql":
+        return _collection_store_call(
+            "update_product_publish_schedule", int(schedule_id), **changes
+        )
+    path = f"/api/db/mercado-products/publish-schedules/{int(schedule_id)}"
+    return _request("PATCH", path, json=changes)
+
+
 def update_mercado_product_publish_state(product_item_id, **changes):
     if DB_MODE == "mysql":
         return _collection_store_call(
@@ -2852,6 +2985,9 @@ def _mercado_action_center_local(operation, payload=None):
     from bit import bit_mysql
 
     data = dict(payload or {})
+    if operation == "employee_tasks":
+        from bit.employee_tasks import employee_tasks_local
+        return employee_tasks_local(data)
     if operation == "receive_notification":
         return bit_mysql.receive_mercado_notification(data)
     if operation == "claim_event":
@@ -2901,6 +3037,8 @@ def _mercado_action_center_local(operation, payload=None):
         )
     if operation == "upsert_task":
         return bit_mysql.upsert_mercado_operator_task(data.get("task") or {})
+    if operation == "resolve_tasks_by_keys":
+        return bit_mysql.resolve_mercado_operator_tasks_by_keys(data.get("task_keys"), data.get("reason"))
     if operation == "initialize":
         return bit_mysql.initialize_mercado_action_center_tables()
     raise ValueError("美客多运营待办数据库操作无效")
@@ -2985,6 +3123,9 @@ def list_mercado_action_center_orders(*, token_ids=None, limit=500):
 def upsert_mercado_operator_task(task):
     return _mercado_action_center_call("upsert_task", {"task": dict(task or {})})
 
+def resolve_mercado_operator_tasks_by_keys(task_keys, reason):
+    return _mercado_action_center_call("resolve_tasks_by_keys", {"task_keys": list(task_keys or ()), "reason": reason})
+
 
 def initialize_mercado_action_center_tables():
     return _mercado_action_center_call("initialize", timeout=30)
@@ -3006,6 +3147,53 @@ def create_workbench_user(data):
     if DB_MODE == "mysql":
         return _local_interface_call("create_workbench_user_local", data)
     return _request("POST", "/api/db/workbench/users", json=data, timeout=15)
+
+
+def issue_workbench_registration_code(email, code, request_ip=""):
+    if DB_MODE == "mysql":
+        return _local_interface_call(
+            "issue_workbench_registration_code_local", email, code, request_ip
+        )
+    try:
+        return _request(
+            "POST",
+            "/api/db/workbench/registration-code",
+            json={"email": email, "code": code, "request_ip": request_ip},
+            timeout=15,
+        )
+    except RuntimeError as exc:
+        if str(exc).startswith(("验证码", "请求过于频繁")):
+            raise ValueError(str(exc)) from exc
+        raise
+
+
+def invalidate_workbench_registration_code(email, code):
+    if DB_MODE == "mysql":
+        return _local_interface_call(
+            "invalidate_workbench_registration_code_local", email, code
+        )
+    return _request(
+        "DELETE",
+        "/api/db/workbench/registration-code",
+        json={"email": email, "code": code},
+        timeout=15,
+    )
+
+
+def register_workbench_user(data):
+    if DB_MODE == "mysql":
+        return _local_interface_call("register_workbench_user_local", data)
+    try:
+        return _request(
+            "POST", "/api/db/workbench/register", json=data, timeout=30
+        )
+    except RuntimeError as exc:
+        if str(exc).startswith((
+            "账号", "密码", "邮箱", "验证码", "姓名", "微信号", "手机号",
+            "该邮箱", "客户标识", "所选角色",
+        )):
+            raise ValueError(str(exc)) from exc
+        raise
 
 
 def update_workbench_user(user_id, data):
@@ -3030,3 +3218,18 @@ def reset_workbench_user_password(user_id, password):
         json={"password": password},
         timeout=15,
     )
+
+
+def publish_workers(value=None):
+    """Read/write the central publishing capacity, including client deployments."""
+    if DB_MODE == "mysql":
+        from erp.publish_concurrency import publish_workers as central_publish_workers
+        return central_publish_workers(value)
+    return _request(
+        "GET" if value is None else "PUT", "/api/db/publish-concurrency",
+        **({} if value is None else {"json": {"worker_count": value}}),
+    )["worker_count"]
+
+
+def employee_tasks(payload):
+    return _mercado_action_center_call("employee_tasks", payload)

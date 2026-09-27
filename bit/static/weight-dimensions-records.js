@@ -14,6 +14,15 @@
         ["query_status", "查询状态"], ["query_error", "查询说明"],
         ["execution_status", "执行状态"], ["execution_error", "执行说明"], ["execution_logs", "更新记录"]
     ];
+    let recordTotal = 0;
+    let pageRequest = 0;
+    let renderSignature = "";
+    let initialized = false;
+    let pageLoading = false;
+    const selectedRecords = new Map();
+    let page = 1;
+    let pageSize = 50;
+    let appliedFilters = "";
     let taskId = "";
     let currentRecords = [];
     let taskReady = false;
@@ -45,7 +54,7 @@
     }
     function canAction(row, action) { return Boolean(row[`can_execute_${action}`]); }
     function selectedRows(action = "") {
-        return currentRecords.filter((row) => selectedOrderNumbers.has(String(row.order_number || "").trim()) && (action ? canAction(row, action) : row.can_execute_zeshun || row.can_execute_zying));
+        return Array.from(selectedRecords.values()).filter((row) => selectedOrderNumbers.has(String(row.order_number || "").trim()) && (action ? canAction(row, action) : row.can_execute_zeshun || row.can_execute_zying));
     }
     function displayText(row, key) {
         const value = cellValue(row, key);
@@ -59,22 +68,28 @@
     }
     function render(records) {
         currentRecords = Array.isArray(records) ? records : [];
+        const pageCount = Math.max(1, Math.ceil(recordTotal / pageSize));
+        page = Math.min(page, pageCount);
+        const pageRecords = currentRecords;
+        $("wdr-page-summary").textContent = `共 ${recordTotal} 条 · 第 ${page} / ${pageCount} 页`;
+        $("wdr-page-prev").disabled = page <= 1;
+        $("wdr-page-next").disabled = page >= pageCount;
         const head = $("wdr-table").querySelector("thead");
         const body = $("wdr-table").querySelector("tbody");
         head.replaceChildren(); body.replaceChildren();
         const header = document.createElement("tr");
         const selectHead = document.createElement("th");
         const selectAll = document.createElement("input");
-        selectAll.type = "checkbox"; selectAll.id = "wdr-select-all"; selectAll.title = "全选可执行记录";
-        const selectableRecords = currentRecords.filter((row) => row.can_execute_zeshun || row.can_execute_zying);
+        selectAll.type = "checkbox"; selectAll.id = "wdr-select-all"; selectAll.title = "全选本页可执行记录";
+        const selectableRecords = pageRecords.filter((row) => row.can_execute_zeshun || row.can_execute_zying);
         selectAll.disabled = selectableRecords.length === 0;
         selectAll.checked = selectableRecords.length > 0 && selectableRecords.every((row) => selectedOrderNumbers.has(String(row.order_number || "").trim()));
         selectAll.indeterminate = !selectAll.checked && selectableRecords.some((row) => selectedOrderNumbers.has(String(row.order_number || "").trim()));
         selectAll.addEventListener("change", () => {
-            currentRecords.forEach((row) => {
+            pageRecords.forEach((row) => {
                 const orderNumber = String(row.order_number || "").trim();
-                if (selectAll.checked && (row.can_execute_zeshun || row.can_execute_zying)) selectedOrderNumbers.add(orderNumber);
-                else selectedOrderNumbers.delete(orderNumber);
+                if (selectAll.checked && (row.can_execute_zeshun || row.can_execute_zying)) { selectedOrderNumbers.add(orderNumber); selectedRecords.set(orderNumber, row); }
+                else { selectedOrderNumbers.delete(orderNumber); selectedRecords.delete(orderNumber); }
             });
             render(currentRecords);
         });
@@ -86,7 +101,7 @@
             td.colSpan = columns.length + 1; td.className = "wdr-empty"; td.textContent = "没有符合条件的运费变更订单";
             tr.appendChild(td); body.appendChild(tr); updateButtons(); return;
         }
-        currentRecords.forEach((row) => {
+        pageRecords.forEach((row) => {
             const tr = document.createElement("tr");
             const selectCell = document.createElement("td"); const checkbox = document.createElement("input");
             checkbox.type = "checkbox"; checkbox.checked = selectedOrderNumbers.has(String(row.order_number || "").trim());
@@ -94,7 +109,7 @@
             checkbox.title = checkbox.disabled ? "缺少实际重量尺寸或商品关联信息" : "选择此订单";
             checkbox.addEventListener("change", () => {
                 const orderNumber = String(row.order_number || "").trim();
-                if (checkbox.checked) selectedOrderNumbers.add(orderNumber); else selectedOrderNumbers.delete(orderNumber);
+                if (checkbox.checked) { selectedOrderNumbers.add(orderNumber); selectedRecords.set(orderNumber, row); } else { selectedOrderNumbers.delete(orderNumber); selectedRecords.delete(orderNumber); }
                 updateButtons();
             });
             selectCell.appendChild(checkbox); tr.appendChild(selectCell);
@@ -128,12 +143,47 @@
         if (store) params.set("store", store);
         return params;
     }
-    async function poll(mode, generation = ++pollGeneration) {
+    function acceptPage(data) {
+        recordTotal = data.record_total || 0;
+        page = data.page || 1;
+        currentRecords = Array.isArray(data.records) ? data.records : [];
+        currentRecords.forEach(row => {
+            const key = String(row.order_number || "").trim();
+            if (selectedOrderNumbers.has(key)) selectedRecords.set(key, row);
+        });
+        const signature = JSON.stringify([page, pageSize, recordTotal, currentRecords]);
+        if (signature !== renderSignature) { renderSignature = signature; renderSelected(); }
+        else updateButtons();
+    }
+    async function loadPage() {
+        if (!taskId) return;
+        const request = ++pageRequest;
+        const generation = pollGeneration;
+        const id = taskId;
+        pageLoading = true; updateButtons();
+        try {
+            const data = await api(`/api/weight-dimensions-records/${encodeURIComponent(id)}?page=${page}&page_size=${pageSize}`);
+            if (request !== pageRequest || generation !== pollGeneration || id !== taskId) return;
+            acceptPage(data);
+        } catch (error) {
+            if (request === pageRequest && generation === pollGeneration) status(`读取页面失败：${errorMessage(error)}`);
+        } finally {
+            if (request === pageRequest) { pageLoading = false; updateButtons(); }
+        }
+    }
+    async function poll(mode, generation = ++pollGeneration, background = false) {
         while (busy && taskId && generation === pollGeneration) {
-            const data = await api(`/api/weight-dimensions-records/${encodeURIComponent(taskId)}`);
+            if (document.hidden || !$("tab-weight-dimensions-records")?.classList.contains("active")) {
+                await new Promise((resolve) => window.setTimeout(resolve, 3000));
+                continue;
+            }
+            const data = await api(`/api/weight-dimensions-records/${encodeURIComponent(taskId)}?include_records=0`);
             if (generation !== pollGeneration) return;
-            currentRecords = Array.isArray(data.records) ? data.records : [];
-            taskReady = data.status === "ready"; renderSelected();
+            taskReady = data.status === "ready";
+            if (data.total > 0 || taskReady) {
+                await loadPage();
+                if (generation !== pollGeneration) return;
+            }
             if (mode === "query") {
                 status(`${data.message || "正在读取"}（${data.processed || 0}/${data.total || 0}）`);
                 if (data.status === "ready") { busy = false; status(data.message); updateButtons(); break; }
@@ -142,11 +192,14 @@
                 status(`${data.execute_message || "正在执行"}（${data.execute_processed || 0}/${data.execute_total || 0}）`);
                 if (data.execute_status === "completed") { busy = false; status(data.execute_message); updateButtons(); break; }
             }
-            await new Promise((resolve) => window.setTimeout(resolve, 1200));
+            await new Promise((resolve) => window.setTimeout(resolve, 3000));
         }
     }
     function updateButtons() {
-        const hasRows = taskReady && currentRecords.length > 0;
+        const hasRows = taskReady && recordTotal > 0;
+        $("wdr-page-prev").disabled = pageLoading || page <= 1;
+        $("wdr-page-next").disabled = pageLoading || page >= Math.max(1, Math.ceil(recordTotal / pageSize));
+        $("wdr-page-size").disabled = pageLoading;
         const selected = selectedRows();
         const permission = typeof window.hasWorkbenchPermission !== "function" || window.hasWorkbenchPermission("order_analysis.execute");
         $("wdr-export").disabled = !hasRows || !taskId;
@@ -158,16 +211,20 @@
         $("wdr-filter-apply").disabled = $("wdr-refresh-changed").disabled;
         $("wdr-selection-summary").textContent = `已选择 ${selected.length} 条`;
     }
-    async function refreshChanged() {
+    async function refreshChanged(background = false) {
         if (refreshPending || (busy && busyMode !== "query")) return;
+        if (background && busy) return;
+        if (!background) { renderSignature = ""; appliedFilters = filterParams().toString(); page = 1; selectedOrderNumbers.clear(); selectedRecords.clear(); }
         const generation = ++pollGeneration;
         refreshPending = true; busyMode = "query";
-        busy = true; taskReady = false; taskId = ""; currentRecords = []; selectedOrderNumbers.clear();
-        renderSelected(); updateButtons(); status("正在读取运费变更订单…");
+        busy = true; taskReady = false; taskId = "";
+        if (!background) { currentRecords = []; recordTotal = 0; }
+        if (!background) renderSelected();
+        updateButtons(); status("正在查询美客多官方重量尺寸…");
         try {
-            const data = await api(`/api/weight-dimensions-records/changed?${filterParams().toString()}`);
+            const data = await api(`/api/weight-dimensions-records/changed?${appliedFilters}`);
             taskId = data.task_id; refreshPending = false; updateButtons();
-            await poll("query", generation);
+            await poll("query", generation, background);
         } catch (error) {
             if (generation !== pollGeneration) return;
             refreshPending = false; busy = false; status(`读取失败：${errorMessage(error)}`); updateButtons();
@@ -176,8 +233,9 @@
     async function upload() {
         if (busy) return;
         const file = $("wdr-file").files[0]; if (!file) { status("请选择订单文件"); return; }
+        page = 1; renderSignature = "";
         busyMode = "upload";
-        busy = true; taskId = ""; taskReady = false; currentRecords = []; selectedOrderNumbers.clear();
+        busy = true; taskId = ""; taskReady = false; currentRecords = []; recordTotal = 0; selectedOrderNumbers.clear(); selectedRecords.clear();
         renderSelected(); updateButtons(); status("正在读取订单文件…");
         try {
             const form = new FormData(); form.append("file", file);
@@ -210,7 +268,12 @@
     }
     document.addEventListener("DOMContentLoaded", () => {
         if (!($("wdr-upload") && $("wdr-table"))) return;
-        $("wdr-upload").addEventListener("click", upload); $("wdr-refresh-changed").addEventListener("click", refreshChanged);
+        const start = new Date();
+        start.setDate(start.getDate() - 6);
+        start.setHours(0, 0, 0, 0);
+        const localDateTime = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}T00:00`;
+        if (!$("wdr-filter-date-from").value) $("wdr-filter-date-from").value = localDateTime(start);
+        $("wdr-upload").addEventListener("click", upload); $("wdr-refresh-changed").addEventListener("click", () => refreshChanged());
         $("wdr-zeshun-execute").addEventListener("click", () => execute("zeshun")); $("wdr-zying-execute").addEventListener("click", () => execute("zying"));
         $("wdr-agent-refresh").addEventListener("click", loadAgents);
         $("wdr-export").addEventListener("click", () => { if (taskId) window.location.assign(`/api/weight-dimensions-records/${encodeURIComponent(taskId)}/export`); });
@@ -219,11 +282,18 @@
         ["dragleave", "drop"].forEach((eventName) => zone.addEventListener(eventName, (event) => { event.preventDefault(); zone.classList.remove("wdr-drag-active"); }));
         zone.addEventListener("drop", (event) => { const file = event.dataTransfer?.files?.[0]; if (!file) return; const transfer = new DataTransfer(); transfer.items.add(file); $("wdr-file").files = transfer.files; $("wdr-file-name").textContent = file.name; });
         $("wdr-file").addEventListener("change", () => { const file = $("wdr-file").files[0]; if (file) $("wdr-file-name").textContent = file.name; });
-        $("wdr-filter-apply").addEventListener("click", refreshChanged);
+        $("wdr-filter-apply").addEventListener("click", () => refreshChanged());
         ["wdr-filter-date-from", "wdr-filter-date-to", "wdr-filter-source", "wdr-filter-salesperson", "wdr-filter-store", "wdr-filter-category", "wdr-filter-region", "wdr-filter-freight-min", "wdr-filter-freight-max"].forEach((id) => $(id)?.addEventListener("keydown", (event) => { if (event.key === "Enter") refreshChanged(); }));
-        const year = new Date().getFullYear();
-        $("wdr-filter-date-from").value = `${year}-08-01T00:00`;
-        $("wdr-filter-date-to").value = `${year}-09-30T23:59`;
-        updateButtons(); loadAgents(); refreshChanged();
+        $("wdr-page-prev").addEventListener("click", () => { page = Math.max(1, page - 1); loadPage(); });
+        $("wdr-page-next").addEventListener("click", () => { page++; loadPage(); });
+        $("wdr-page-size").addEventListener("change", () => { pageSize = Number($("wdr-page-size").value) || 50; page = 1; loadPage(); });
+        function activate() {
+            if (!initialized && !document.hidden && $("tab-weight-dimensions-records")?.classList.contains("active")) {
+                initialized = true; loadAgents(); refreshChanged();
+            }
+        }
+        new MutationObserver(activate).observe($("tab-weight-dimensions-records"), {attributes: true, attributeFilter: ["class"]});
+        document.addEventListener("visibilitychange", activate);
+        updateButtons(); activate();
     });
 })();

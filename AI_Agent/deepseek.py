@@ -94,6 +94,8 @@ def chat_deepseek(
     api_key: str | None = None,
     base_url: str | None = None,
     thinking: bool | None = None,
+    timeout: float | None = None,
+    max_retries: int | None = None,
 ) -> str:
     kwargs = {
         "model": model or DEEPSEEK_MODEL,
@@ -108,10 +110,18 @@ def chat_deepseek(
     if thinking is not None:
         kwargs["extra_body"] = {"thinking": {"type": "enabled" if thinking else "disabled"}}
 
-    response = _get_client(
+    client = _get_client(
         api_key=api_key,
         base_url=base_url,
-    ).chat.completions.create(**kwargs)
+    )
+    options = {}
+    if timeout is not None:
+        options["timeout"] = timeout
+    if max_retries is not None:
+        options["max_retries"] = max_retries
+    if options:
+        client = client.with_options(**options)
+    response = client.chat.completions.create(**kwargs)
     return response.choices[0].message.content or ""
 
 

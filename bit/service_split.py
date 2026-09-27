@@ -22,7 +22,7 @@ STATEFUL_PREFIXES = (
     "/api/db/store-links/sync/", "/api/prohibited-listings/sync/",
     "/api/db/prohibited-listings/sync/", "/api/official-infractions/sync",
     "/api/db/official-infractions/sync", "/api/mercado-reputation/",
-    "/api/orders/purchase-tracking/", "/api/zying-collection/",
+    "/api/orders/zying-sync/", "/api/orders/purchase-tracking/", "/api/zying-collection/",
     "/api/exports/", "/api/tasks/daily/", "/api/run_shensu",
     "/api/mercado-collection/", "/api/db/mercado-collection/",
     "/api/mercado-products/", "/api/db/mercado-products/",

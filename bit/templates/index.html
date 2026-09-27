@@ -3669,6 +3669,11 @@
             cursor: not-allowed;
         }
 
+        #fund-edit-dialog { max-width: 560px; border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+        #fund-edit-dialog::backdrop { background: rgba(0, 0, 0, .35); }
+        #fund-edit-dialog label { display: block; margin: 16px 0; }
+        #fund-edit-dialog input { padding: 8px; margin-left: 12px; }
+        #fund-edit-error { color: #b42318; }
         .fund-table {
             min-width: 1120px;
         }
@@ -5324,9 +5329,14 @@
             width: 94px;
         }
 
+        .market-publish-field-schedule {
+            width: 180px;
+        }
+
         .market-publish-mode,
         .market-publish-quantity,
-        .market-publish-workers {
+        .market-publish-workers,
+        .market-publish-schedule {
             width: 100%;
             height: 38px;
             border-color: #cbd5e1;
@@ -6137,6 +6147,22 @@
             color: var(--muted);
             font-size: 12px;
             white-space: nowrap;
+        }
+
+        .market-copy-preview-trigger {
+            margin-top: 5px;
+            padding: 3px 7px;
+            border: 1px solid #d6e3f5;
+            border-radius: 6px;
+            background: #f4f8ff;
+            color: #315c98;
+            font-size: 11px;
+        }
+
+        .mercado-copy-language-title {
+            max-width: 280px;
+            white-space: normal;
+            overflow-wrap: anywhere;
         }
 
         .market-net-negative {
@@ -7484,7 +7510,7 @@
 
         .mercado-workbench .market-publish-controls {
             display: grid;
-            grid-template-columns: 108px minmax(250px, 1.6fr) minmax(180px, 0.8fr) 90px 90px;
+            grid-template-columns: 108px minmax(250px, 1.6fr) minmax(180px, 0.8fr) 90px minmax(180px, 1fr) 90px;
             align-items: end;
             gap: 10px;
             padding: 13px 14px;
@@ -7493,7 +7519,8 @@
         .mercado-workbench .market-publish-field-mode,
         .mercado-workbench .market-publish-field-account,
         .mercado-workbench .market-publish-field-site,
-        .mercado-workbench .market-publish-field-number {
+        .mercado-workbench .market-publish-field-number,
+        .mercado-workbench .market-publish-field-schedule {
             width: auto;
             min-width: 0;
         }
@@ -8880,6 +8907,7 @@
             .market-publish-field-mode,
             .market-publish-field-account,
             .market-publish-field-site,
+            .market-publish-field-schedule,
             .market-publish-submit {
                 flex: 1 1 100%;
                 width: 100%;
@@ -9802,17 +9830,17 @@
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='console-ui.css') }}?v=20260921-align1">
     <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-products.css') }}?v=20260923-batch-delete1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-workbench.css') }}?v=20260925-ai-task-errors">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-workbench.css') }}?v=20260927-bulk-review">
     <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20260925-layout-ratio1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='weight-dimensions-records.css') }}?v=20260925-2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='weight-dimensions-records.css') }}?v=20260927-1">
     <link rel="stylesheet" href="{{ url_for('static', filename='inventory-sku.css') }}?v=20260925-1">
     <script src="{{ url_for('static', filename='console-ui.js') }}?v=20260915"></script>
     <script src="{{ url_for('static', filename='copy-anywhere.js') }}?v=20260922"></script>
     <script src="{{ url_for('static', filename='appeal-polling.js') }}?v=20260922"></script>
-    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260925-ai-task-errors"></script>
-    <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20260921"></script>
-    <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260923-batch-delete1"></script>
-    <script defer src="{{ url_for('static', filename='weight-dimensions-records.js') }}?v=20260926-1"></script>
+    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260927-bulk-review"></script>
+    <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20260927-bulk-review"></script>
+    <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260927-owners-net"></script>
+    <script defer src="{{ url_for('static', filename='weight-dimensions-records.js') }}?v=20260927-5"></script>
     <script defer src="{{ url_for('static', filename='inventory-sku.js') }}?v=20260925-1"></script>
     <style>
         .ai-video-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(360px, .9fr); gap: 14px; align-items: start; }
@@ -9866,10 +9894,18 @@
         .ai-video-library-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
         .ai-video-library-head h3 { margin: 0; }
         .ai-video-library-tools { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+        .ai-video-filter-bar { display: flex; flex-wrap: wrap; align-items: end; gap: 9px; margin: 0 0 14px; padding: 10px; border: 1px solid #e5eaf1; border-radius: 11px; background: #f8fafc; }
+        .ai-video-filter-bar label { display: grid; gap: 4px; color: #66758a; font-size: 11px; }
+        .ai-video-filter-bar select, .ai-video-filter-bar input { width: auto; min-width: 145px; height: 34px; box-sizing: border-box; padding: 5px 8px; border: 1px solid #d5deea; border-radius: 7px; background: #fff; color: #344256; font-size: 12px; }
+        .ai-video-filter-summary { margin-left: auto; padding-bottom: 8px; color: #718095; font-size: 12px; }
         .ai-video-bulk-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
         .ai-video-bulk-actions[hidden] { display: none; }
         .ai-video-bulk-actions .hint { color: #718095; font-size: 12px; white-space: nowrap; }
         .ai-video-jobs { display: grid; grid-template-columns: repeat(auto-fill, minmax(245px, 1fr)); gap: 14px; }
+        .ai-video-pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; padding-top: 11px; border-top: 1px solid #e8edf3; }
+        .ai-video-pagination-summary { color: #718095; font-size: 12px; }
+        .ai-video-pagination-actions { display: flex; align-items: center; gap: 8px; }
+        .ai-video-pagination-page { min-width: 75px; color: #59677b; font-size: 12px; text-align: center; }
         .ai-video-job { position: relative; overflow: hidden; border: 1px solid #e0e6ee; border-radius: 14px; background: #fff; cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
         .ai-video-job:hover, .ai-video-job:focus-visible { border-color: #9dbcf4; box-shadow: 0 8px 24px rgba(44,91,185,.12); transform: translateY(-1px); outline: 0; }
         .ai-video-job.selected { border-color: #3478f6; box-shadow: 0 0 0 2px rgba(52,120,246,.16); }
@@ -9922,6 +9958,11 @@
             .ai-video-toolbar .hint { width: 100%; margin-left: 0; }
             .ai-video-library-head { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
             .ai-video-library-tools { align-items: flex-start; justify-content: flex-start; flex-direction: column-reverse; max-width: 100%; }
+            .ai-video-filter-bar { align-items: stretch; }
+            .ai-video-filter-bar label, .ai-video-filter-bar select, .ai-video-filter-bar input { width: 100%; }
+            .ai-video-filter-summary { width: 100%; margin-left: 0; padding: 0; }
+            .ai-video-pagination { align-items: flex-start; flex-direction: column; }
+            .ai-video-pagination-actions { width: 100%; justify-content: space-between; }
             .ai-video-dialog-grid { grid-template-columns: 1fr; }
             .ai-video-picker-item { grid-template-columns: 62px minmax(0, 1fr); }
             .ai-video-picker-cover { width: 62px; height: 62px; }
@@ -9988,8 +10029,12 @@
                 <p class="nav-title">工作台</p>
                 <button class="tab-button active" type="button" data-tab="overview" data-icon="⌂" onclick="switchTab('overview')"><span class="nav-label">总览</span></button>
 
-                <p class="nav-title">订单运营</p>
                 <button class="tab-button" type="button" data-icon="!" data-permission="tasks.view" onclick="window.location.href='/mercado/today'"><span class="nav-label">今日必办</span></button>
+                {% if current_user.role_key in ['super_admin', 'enterprise_admin'] %}
+                <button class="tab-button" type="button" data-icon="✓" onclick="window.location.href='/employee-tasks'"><span class="nav-label">员工任务</span></button>
+                {% endif %}
+
+                <p class="nav-title">订单运营</p>
                 <button class="tab-button" type="button" data-tab="orders" data-icon="▤" onclick="switchTab('orders')"><span class="nav-label">订单管理</span></button>
                 <button class="tab-button" type="button" data-tab="inventory" data-icon="▥" data-permission="inventory.view" onclick="switchTab('inventory')"><span class="nav-label">库存管理</span></button>
                 <button class="tab-button" type="button" data-tab="order-analysis" data-icon="⌁" data-permission="order_analysis.view" onclick="switchTab('order-analysis')"><span class="nav-label">订单分析</span></button>
@@ -10009,6 +10054,9 @@
                 <button class="tab-button" type="button" data-tab="window-anomalies" data-icon="◉" data-permission="shop_status.view" onclick="switchTab('window-anomalies')"><span class="nav-label">店铺状态</span></button>
                 <button class="tab-button" type="button" data-tab="store-tokens" data-icon="⌘" onclick="switchTab('store-tokens')"><span class="nav-label">店铺授权</span></button>
                 <button class="tab-button" type="button" data-tab="store-links" data-icon="↗" onclick="switchTab('store-links')"><span class="nav-label">店铺链接</span></button>
+                {% if current_user.is_platform_admin %}
+                <button class="tab-button" type="button" data-tab="store-operations" data-icon="≡" onclick="switchTab('store-operations')"><span class="nav-label">店铺操作记录</span></button>
+                {% endif %}
                 <button class="tab-button" type="button" data-tab="store-analysis" data-icon="◔" data-permission="order_analysis.view" onclick="switchTab('store-analysis')"><span class="nav-label">店铺分析</span></button>
                 <button class="tab-button" type="button" data-tab="yandex" data-icon="Y" onclick="switchTab('yandex')"><span class="nav-label">Yandex 店铺</span></button>
 
@@ -10122,9 +10170,25 @@
                     <div class="order-heading-tools">
                         <span class="order-auto-state" id="order-auto-state">最近72小时 · 每15分钟；状态与实际运费每天更新</span>
                         <button class="primary" id="order-sync-open-button" type="button" onclick="openOrderSyncDialog()">拉取订单</button>
+                        <button class="secondary" id="order-zying-sync-open" type="button" onclick="openZyingOrderSync()">智赢订单同步</button>
                         <button class="secondary" id="order-refresh-button" type="button" onclick="loadOrders(orderPage)">刷新数据</button>
                     </div>
                 </div>
+
+                <dialog id="order-zying-sync-dialog" class="order-sync-dialog">
+                    <div class="order-sync-body">
+                        <h3>智赢订单同步</h3>
+                        <p>按当前筛选获取全部订单（包含所有分页），从智赢读取已添加采购的订单号、物流号和人民币成本，更新泽顺采购信息。智赢空单号不会清空已有值。</p>
+                        <p>点击同步将自动打开服务器上的 Edge。登录智赢后，点击“确定登录”继续同步。</p>
+                        <p id="order-zying-status" role="status">等待启动</p>
+                        <div id="order-zying-results" class="order-sync-log"></div>
+                        <div class="order-sync-footer-actions">
+                            <button class="primary" id="order-zying-start" onclick="startZyingOrderSync()">按当前筛选同步</button>
+                            <button class="primary" id="order-zying-confirm" onclick="confirmZyingOrderLogin()" hidden>确定登录</button>
+                            <button class="secondary" onclick="document.getElementById('order-zying-sync-dialog').close()">关闭</button>
+                        </div>
+                    </div>
+                </dialog>
 
                 <section class="panel order-board order-density-compact" id="order-board">
                     <div class="order-market-bar" aria-label="国家地区">
@@ -10754,12 +10818,13 @@
                 <section class="panel p1688-toolbar">
                     <div class="p1688-toolbar-row">
                         <label class="p1688-field search"><span>产品搜索</span><input id="products-1688-search" type="search" placeholder="输入 1688 商品标题"></label>
+                        <label class="p1688-field"><span>采集业务员</span><input id="products-1688-salesperson" type="search" placeholder="输入业务员姓名"></label>
                         <label class="p1688-field"><span>AI 状态</span><select id="products-1688-status-filter"><option value="">全部状态</option><option value="pending">待处理</option><option value="processing">AI处理中</option><option value="completed">AI已完成</option><option value="failed">处理失败</option></select></label>
                         <label class="p1688-field"><span>审核状态</span><select id="products-1688-review-filter"><option value="">全部审核状态</option><option value="unreviewed">未审核</option><option value="approved">已审核</option><option value="suspected">疑似风险</option><option value="infringing">侵权</option><option value="risk">待复核</option></select></label>
                         <label class="p1688-field"><span>采购价最低（CNY）</span><input id="products-1688-price-min" type="number" min="0" step="0.01" placeholder="不限"></label>
                         <label class="p1688-field"><span>采购价最高（CNY）</span><input id="products-1688-price-max" type="number" min="0" step="0.01" placeholder="不限"></label>
                         <button class="primary" type="button" onclick="load1688Products()">查询</button>
-                        <button class="secondary" type="button" onclick="document.getElementById('products-1688-search').value='';document.getElementById('products-1688-status-filter').value='';document.getElementById('products-1688-review-filter').value='';document.getElementById('products-1688-price-min').value='';document.getElementById('products-1688-price-max').value='';document.getElementById('products-1688-date-from').value='';document.getElementById('products-1688-date-to').value='';load1688Products()">重置</button>
+                        <button class="secondary" type="button" onclick="document.getElementById('products-1688-search').value='';document.getElementById('products-1688-salesperson').value='';document.getElementById('products-1688-status-filter').value='';document.getElementById('products-1688-review-filter').value='';document.getElementById('products-1688-price-min').value='';document.getElementById('products-1688-price-max').value='';document.getElementById('products-1688-date-from').value='';document.getElementById('products-1688-date-to').value='';load1688Products()">重置</button>
                     </div>
                     <div class="p1688-toolbar-row">
                         <label class="p1688-field"><span>采集开始日期</span><input id="products-1688-date-from" type="date"></label>
@@ -10781,9 +10846,9 @@
                     </div>
                     <div class="p1688-table-wrap">
                         <table class="p1688-table">
-                            <colgroup><col style="width:40px"><col style="min-width:360px"><col style="width:130px"><col style="width:120px"><col style="width:110px"><col style="width:105px"><col style="width:130px"><col style="width:105px"><col style="width:105px"><col style="width:145px"><col style="width:170px"></colgroup>
-                            <thead><tr><th class="p1688-check-cell">选</th><th>商品</th><th>产品分类</th><th>采购价</th><th>净收益</th><th>包装毛重</th><th>包装尺寸</th><th>审核状态</th><th>AI 状态</th><th>采集时间</th><th>操作</th></tr></thead>
-                            <tbody id="products-1688-body"><tr><td class="p1688-empty" colspan="11">打开模块后加载泽顺插件采集的 1688 商品</td></tr></tbody>
+                            <colgroup><col style="width:40px"><col style="min-width:360px"><col style="width:130px"><col style="width:120px"><col style="width:110px"><col style="width:105px"><col style="width:130px"><col style="width:105px"><col style="width:105px"><col style="width:120px"><col style="width:145px"><col style="width:170px"></colgroup>
+                            <thead><tr><th class="p1688-check-cell">选</th><th>商品</th><th>产品分类</th><th>采购价</th><th>净收益</th><th>包装毛重</th><th>包装尺寸</th><th>审核状态</th><th>AI 状态</th><th>采集业务员</th><th>采集时间</th><th>操作</th></tr></thead>
+                            <tbody id="products-1688-body"><tr><td class="p1688-empty" colspan="12">打开模块后加载泽顺插件采集的 1688 商品</td></tr></tbody>
                         </table>
                     </div>
                     <div class="p1688-pagination">
@@ -10823,6 +10888,7 @@
                     </div>
                     <div class="ai-original-controls">
                         <label><span>搜索</span><input id="ai-original-search" type="search" placeholder="1688 编号或标题"></label>
+                        <label><span>生成业务员</span><input id="ai-original-generator-filter" type="search" placeholder="输入业务员姓名"></label>
                         <label><span>状态</span><select id="ai-original-status-filter"><option value="">全部</option><option value="pending">待处理</option><option value="processing">处理中</option><option value="completed">已完成</option><option value="failed">失败</option></select></label>
                         <button class="secondary" type="button" onclick="loadAiOriginalProducts()">刷新</button>
                     </div>
@@ -10844,6 +10910,8 @@
                         <label><input id="ai-original-select-all" type="checkbox" onchange="toggleAllAiOriginalProducts(this.checked)"> 全选当前结果</label>
                         <strong id="ai-original-selection">已选择 0 件</strong>
                         <button class="danger" id="ai-original-delete" type="button" onclick="deleteSelectedAiOriginalProducts()" disabled>删除所选</button>
+                        <label class="ai-original-bulk-review"><span>批量审核状态</span><select id="ai-original-review-status"><option value="">选择状态</option><option value="unreviewed">未审核</option><option value="approved">通过</option><option value="suspected">疑似风险</option><option value="infringing">侵权</option><option value="risk">待复核</option></select></label>
+                        <button class="secondary" id="ai-original-review-submit" type="button" onclick="updateSelectedAiOriginalReviewStatus()" disabled>更新审核状态</button>
                         <span id="ai-original-total">共 0 件</span>
                     </div>
                     <div class="ai-original-bulk-dimensions">
@@ -10925,7 +10993,7 @@
                             <div class="ai-original-publish-step-head"><span>03</span><div><strong>上架设置</strong><small>本次任务使用的刊登参数</small></div></div>
                             <div class="ai-original-publish-settings-grid">
                                 <label><span>每件库存</span><input id="ai-original-quantity" type="number" min="1" max="9999" value="500"></label>
-                                {% if can_change_task_workers %}<label><span>并发任务</span><input id="ai-original-publish-workers" type="number" min="1" max="32" value="8"></label>{% endif %}
+                                {% if can_change_task_workers %}<label><span>并发任务</span><input id="ai-original-publish-workers" type="number" min="1" max="32" value="16"></label>{% endif %}
                                 <label class="ai-original-publish-ratio"><span>AI 原创净收益比例</span><div class="ai-original-percent-input"><input id="ai-original-net-ratio" type="number" min="0.01" max="10000" step="any" value="200"><b>%</b></div></label>
                             </div>
                             <div class="ai-original-publish-formula"><strong>收益计算</strong><span>产品净收益 × AI 比例 × 店铺站点比例</span><small id="ai-original-publish-formula-note">店铺站点比例沿用各店铺设置。</small></div>
@@ -11154,6 +11222,8 @@
                                 <button class="secondary" id="mercado-management-category-assign" type="button" onclick="assignSelectedMercadoCategory()" disabled>设置分类</button>
                             </div>
                             <div class="market-mode-actions" id="mercado-collection-only-actions">
+                                <button class="secondary" type="button" onclick="startMercadoCollectionAiCheck(this)">AI 核重核价</button>
+                                <button class="primary" id="mercado-ai-copy-selected" type="button" onclick="startMercadoCollectionCopy()" disabled>批量修改标题</button>
                                 <button class="primary" id="mercado-add-selected" type="button" onclick="addSelectedMercadoProducts()" disabled>加入产品列表</button>
                             </div>
                             <div class="market-mode-actions market-review-tools" id="mercado-product-review-actions" style="display:none">
@@ -11246,9 +11316,14 @@
                                 <label for="mercado-publish-quantity">库存</label>
                                 <input class="market-publish-quantity" id="mercado-publish-quantity" type="number" min="1" max="9999" value="500">
                             </div>
+                            <div class="market-publish-field market-publish-field-schedule">
+                                <label for="mercado-publish-schedule-at">定时上架时间（留空则立即）</label>
+                                <input class="market-publish-schedule" id="mercado-publish-schedule-at" type="datetime-local" oninput="updateMercadoPublishActionLabel()">
+                            </div>
                             {% if can_change_task_workers %}<div class="market-publish-field market-publish-field-number">
                                 <label for="mercado-publish-workers">并发</label>
-                                <input class="market-publish-workers" id="mercado-publish-workers" type="number" min="1" value="16">
+                                <input class="market-publish-workers" id="mercado-publish-workers" type="number" min="1" value="16" title="全局上架并发，修改后自动保存">
+                                <small>全局设置，自动保存</small>
                             </div>{% endif %}
                         </div>
                         <div class="market-group-publish-options" id="mercado-group-publish-mode-field" style="display:none">
@@ -11386,7 +11461,7 @@
                     <div>
                         <span class="section-kicker">ORDER PACKAGE REVIEW</span>
                         <h2>重量尺寸变更记录</h2>
-                        <p>默认展示 8–9 月 API 记录中运费发生变化的订单，可按时间和业务字段进一步筛选。</p>
+                        <p>读取运费变更订单，并从美客多官方补差 API 获取当前标记与实际重量尺寸；默认展示最近七天，每页 50 条。后台每天 05:00（服务器时间）也会更新记录。</p>
                     </div>
                 </div>
                 <section class="panel wdr-toolbar">
@@ -11396,7 +11471,7 @@
                     </label>
                     <input id="wdr-file" type="file" accept=".xlsx,.xlsm" hidden>
                     <button class="primary" id="wdr-upload" type="button">读取订单文件</button>
-                    <button id="wdr-refresh-changed" type="button">刷新变更订单</button>
+                    <button id="wdr-refresh-changed" type="button">刷新官方重量尺寸</button>
                     <button id="wdr-export" type="button" disabled>导出筛选结果</button>
                     <label class="wdr-agent-picker" for="wdr-agent-id">智赢 Agent
                         <select id="wdr-agent-id" aria-label="智赢 Agent"><option value="">正在读取在线 Agent…</option></select>
@@ -11405,7 +11480,7 @@
                     <button class="primary" id="wdr-zeshun-execute" type="button" data-permission="order_analysis.execute" disabled>更新泽顺数据和链接</button>
                     <button class="danger" id="wdr-zying-execute" type="button" data-permission="order_analysis.execute" disabled>更新智赢产品</button>
                     <span id="wdr-selection-summary" class="wdr-selection-summary">已选择 0 条</span>
-                    <span id="wdr-state" role="status">正在读取运费变更订单…</span>
+                    <span id="wdr-state" role="status">正在查询官方重量尺寸…</span>
                 </section>
                 <section class="panel wdr-filters" aria-label="重量尺寸变更记录筛选器">
                     <label>变更开始时间<input id="wdr-filter-date-from" type="datetime-local" step="60"></label>
@@ -11419,9 +11494,15 @@
                     <label>运费差值最大值<input id="wdr-filter-freight-max" type="number" step="0.01" placeholder="USD"></label>
                     <button class="primary" id="wdr-filter-apply" type="button">筛选变更订单</button>
                 </section>
-                <p class="wdr-note">默认读取当前年度 8 月 1 日至 9 月 30 日运费检查时间内发生变化的订单；时间筛选针对运费变更时间。产品 id、业务员、来源和分类等缺失信息通过订单导入补全。勾选订单后可分别执行两个更新动作；泽顺先更新关联链接重量尺寸，再重新提交当前净收益；智赢调用已登录的本机 Agent 逐个更新产品重量尺寸并将级别改为“重点”。</p>
+                <p class="wdr-note">首次打开栏目或点击“刷新官方重量尺寸”时，会按筛选条件读取变更订单，并查询官方补差 API：当前标记值来自 declared，实际值来自 validated，均显示重量和长 × 宽 × 高。时间筛选针对运费变更时间，跨页保留勾选，表头全选当前页。产品 id、业务员、来源和分类等缺失信息通过订单导入补全。勾选订单后可分别执行两个更新动作；泽顺先更新关联链接重量尺寸，再重新提交当前净收益；智赢调用已登录的本机 Agent 逐个更新产品重量尺寸并将级别改为“重点”。</p>
                 <section class="panel wdr-table-panel">
                     <div class="wdr-table-wrap"><table id="wdr-table"><thead></thead><tbody><tr><td class="wdr-empty">正在加载运费变更订单</td></tr></tbody></table></div>
+                    <div class="wdr-pagination" aria-label="变更记录分页">
+                        <span id="wdr-page-summary" role="status">共 0 条 · 第 1 / 1 页</span>
+                        <label>每页 <select id="wdr-page-size"><option value="20">20 条</option><option value="50" selected>50 条</option><option value="100">100 条</option></select></label>
+                        <button id="wdr-page-prev" type="button" disabled>上一页</button>
+                        <button id="wdr-page-next" type="button" disabled>下一页</button>
+                    </div>
                 </section>
             </div>
 
@@ -11687,6 +11768,18 @@
                             </div>
                         </div>
                     </form>
+                </dialog>
+
+                <dialog class="order-detail-dialog" id="mercado-copy-preview" onclick="if(event.target === this) this.close()">
+                    <div class="order-detail-header">
+                        <div>
+                            <h3>AI 双语标题与描述</h3>
+                            <p id="mercado-copy-preview-subtitle" style="margin:3px 0 0;color:#667085;font-size:12px"></p>
+                        </div>
+                        <button class="order-detail-close" type="button" aria-label="关闭双语文案" onclick="document.getElementById('mercado-copy-preview').close()">×</button>
+                    </div>
+                    <div id="mercado-copy-preview-content" style="max-height:min(68vh,720px);overflow:auto;padding:18px 20px;white-space:pre-wrap;overflow-wrap:anywhere"></div>
+                    <div class="order-detail-footer"><span>标题 50–60 字符 · 不含品牌名</span><button class="primary" type="button" onclick="document.getElementById('mercado-copy-preview').close()">完成</button></div>
                 </dialog>
 
             </div>
@@ -12120,7 +12213,7 @@
                 <div class="tab-heading">
                     <div>
                         <h2>店铺分析</h2>
-                        <p>按站点查看销售排名及美客多二级分类前五</p>
+                        <p>按站点查看销售排名及所选层级类目前五，类目名称以中文显示</p>
                     </div>
                 </div>
                 <section class="panel store-analysis-board">
@@ -12130,6 +12223,7 @@
                         <div class="order-filter-field"><label for="store-analysis-salesperson">业务员</label><select id="store-analysis-salesperson"><option value="">全部业务员</option></select></div>
                         <div class="order-filter-field"><label for="store-analysis-group">店铺组</label><select id="store-analysis-group"><option value="">全部店铺组</option></select></div>
                         <div class="order-filter-field"><label for="store-analysis-store">店铺</label><select id="store-analysis-store"><option value="">全部店铺</option></select></div>
+                        <div class="order-filter-field"><label for="store-analysis-category-level">美客多类目层级</label><select id="store-analysis-category-level"><option value="1">一级分类</option><option value="2" selected>二级分类</option><option value="3">三级分类</option><option value="4">四级分类</option><option value="5">五级分类</option><option value="6">六级分类</option></select></div>
                         <div class="order-filter-field"><label for="store-analysis-metric">排序指标</label><select id="store-analysis-metric"><option value="orders">销售单量</option><option value="gmv">GMV（USD）</option></select></div>
                         <button class="primary" type="submit" id="store-analysis-submit">查看分析</button>
                     </form>
@@ -12544,8 +12638,23 @@
                             <span class="market-status-tag" id="ai-video-provider-state">检查服务中</span>
                         </div>
                     </div>
+                    <div class="ai-video-filter-bar" role="search" aria-label="AI 视频任务筛选">
+                        <label for="ai-video-creator-filter"><span>生成者</span><select id="ai-video-creator-filter" onchange="applyAiVideoFilters()"><option value="">全部生成者</option></select></label>
+                        <label for="ai-video-date-from"><span>生成时间从</span><input id="ai-video-date-from" type="date" onchange="applyAiVideoFilters()"></label>
+                        <label for="ai-video-date-to"><span>生成时间到</span><input id="ai-video-date-to" type="date" onchange="applyAiVideoFilters()"></label>
+                        <button class="secondary" type="button" onclick="resetAiVideoFilters()">重置筛选</button>
+                        <span class="ai-video-filter-summary" id="ai-video-filter-summary">正在加载任务…</span>
+                    </div>
                     <div class="ai-video-jobs" id="ai-video-jobs">
                         <div class="empty-state">还没有生成任务</div>
+                    </div>
+                    <div class="ai-video-pagination" id="ai-video-pagination" aria-label="AI 视频任务分页">
+                        <span class="ai-video-pagination-summary" id="ai-video-pagination-summary">显示 0 条</span>
+                        <div class="ai-video-pagination-actions">
+                            <button class="secondary" id="ai-video-page-previous" type="button" onclick="goToAiVideoPage(-1)" disabled>上一页</button>
+                            <span class="ai-video-pagination-page" id="ai-video-pagination-page">第 1 / 1 页</span>
+                            <button class="secondary" id="ai-video-page-next" type="button" onclick="goToAiVideoPage(1)" disabled>下一页</button>
+                        </div>
                     </div>
                 </section>
 
@@ -12605,11 +12714,48 @@
                 </dialog>
             </div>
 
+                {% if current_user.is_platform_admin %}
+            <div class="tab-page" id="tab-store-operations">
+                <div class="tab-heading"><div><h2>店铺操作记录</h2><p>按业务员、操作任务和时间查询店铺链接操作历史。</p></div></div>
+                <section class="panel" id="store-link-audit-panel" aria-labelledby="store-link-audit-heading" style="margin-bottom:20px">
+                    <div class="tab-heading">
+                        <div><h3 id="store-link-audit-heading">操作历史</h3>
+                        <p>按时间倒序显示。可查看操作人、执行结果及修改前数据，展开记录查看完整详情。</p></div>
+                        <div class="header-actions"><button class="secondary" id="store-link-audit-refresh" type="button" onclick="loadStoreLinkAudit(false)">刷新操作记录</button></div>
+                    </div>
+                    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+                        <label for="store-link-audit-salesperson">业务员</label>
+                        <input id="store-link-audit-salesperson" type="search" placeholder="输入姓名或账号" style="max-width:180px" onkeydown="if(event.key==='Enter')loadStoreLinkAudit(false)">
+                        <label for="store-link-audit-type">操作任务</label>
+                        <select id="store-link-audit-type">
+                            <option value="">全部任务</option>
+                            <option value="sync">店铺同步</option>
+                            <option value="update">链接修改</option>
+                            <option value="delete">链接删除</option>
+                            <option value="advertising">广告操作</option>
+                            <option value="video">视频上传</option>
+                            <option value="query">查询与状态读取</option>
+                            <option value="other">其他操作</option>
+                        </select>
+                        <label for="store-link-audit-from">开始日期</label>
+                        <input id="store-link-audit-from" type="date">
+                        <label for="store-link-audit-to">结束日期</label>
+                        <input id="store-link-audit-to" type="date">
+                        <button class="secondary" id="store-link-audit-filter" type="button" onclick="loadStoreLinkAudit(false)">筛选</button>
+                        <button class="secondary" id="store-link-audit-reset" type="button" onclick="resetStoreLinkAuditFilters()">重置</button>
+                    </div>
+                    <p id="store-link-audit-message" role="status" aria-live="polite">正在加载操作记录…</p>
+                    <div id="store-link-audit-rows" style="max-height:65vh;overflow:auto"></div>
+                    <button class="secondary" type="button" id="store-link-audit-more" onclick="loadStoreLinkAudit(true)">加载更早记录</button>
+                </section>
+            </div>
+                {% endif %}
+
             <div class="tab-page" id="tab-store-links">
                 <div class="tab-heading">
                     <div>
                         <h2>店铺链接</h2>
-                        <p>新增授权后自动多线程拉取全部链接；每家店铺每 3 天自动同步链接状态。14 天销量按已同步订单统计（取消和无效订单不计）</p>
+                        <p>新增授权后自动{% if can_change_task_workers %}多线程{% endif %}拉取全部链接；每家店铺每 3 天自动同步链接状态。14 天销量按已同步订单统计（取消和无效订单不计）</p>
                     </div>
                     <div class="header-actions">
                         <button class="primary" id="store-link-sync-all-button" type="button" onclick="startStoreLinkSync(true)">同步所有店铺链接</button>
@@ -12617,6 +12763,8 @@
                         <button class="secondary" id="store-link-refresh-button" type="button" onclick="loadStoreLinks(storeLinkPage)">刷新数据</button>
                     </div>
                 </div>
+
+
 
                 <section class="panel store-link-board">
                     <div class="store-link-sync-strip">
@@ -12909,10 +13057,16 @@
                     </div>
 
                     <h3 class="panel-title" style="margin-top:22px">链接效果</h3>
-                    <div class="store-link-table-wrap">
+                    <details class="ad-analysis-metric-guide">
+                        <summary>单件利润口径与预算建议规则</summary>
+                        <p>填写扣除采购、运费及平台费用，尚未扣广告费的每件利润，币种与广告账户一致。广告后利润＝直接成交件数×单件利润−广告开销；间接成交不计入。留空保存可清除。</p>
+                        <p>至少30次点击或5件直接成交后评估：利润覆盖开销则维持；至少5件直接成交且广告后利润达到开销30%时，建议增加10%–20%；轻微亏损建议减少10%–20%；亏损达到开销30%或无直接成交则建议暂停。单件利润不为正时建议先改善利润。</p>
+                        <p>预算属于广告活动，调整前需综合同活动商品，系统仅提供建议。旧数据缺少图片或直接成交件数时，请点击“更新数据”。</p>
+                    </details>
+                        <div class="store-link-table-wrap">
                         <table class="store-link-table" style="min-width:1850px">
-                            <thead><tr><th><input id="ad-analysis-select-all" type="checkbox" onchange="toggleAdAnalysisPageSelection(this.checked)" aria-label="选择本页广告"></th><th>店铺 / 站点</th><th>商品链接</th><th>广告活动</th><th>广告组</th><th>状态</th><th>开销</th><th>广告成交额</th><th>ROAS / ACOS</th><th>曝光 / 点击</th><th>CTR / CPC</th><th>成交件数 / CVR</th><th>直接 / 间接成交额</th></tr></thead>
-                            <tbody id="ad-analysis-link-body"><tr><td class="empty-state" colspan="13">打开模块后读取所有广告链接</td></tr></tbody>
+                            <thead><tr><th><input id="ad-analysis-select-all" type="checkbox" onchange="toggleAdAnalysisPageSelection(this.checked)" aria-label="选择本页广告"></th><th>店铺 / 站点</th><th>商品链接</th><th>广告活动</th><th>广告组</th><th>状态</th><th>开销</th><th>广告成交额</th><th>ROAS / ACOS</th><th>曝光 / 点击</th><th>CTR / CPC</th><th>成交件数 / CVR</th><th>直接 / 间接成交额</th><th>单件广告前利润</th><th>广告后利润 / 建议</th></tr></thead>
+                            <tbody id="ad-analysis-link-body"><tr><td class="empty-state" colspan="15">打开模块后读取所有广告链接</td></tr></tbody>
                         </table>
                     </div>
                     <div class="store-link-pagination">
@@ -13456,9 +13610,10 @@
                         <h2 class="panel-title" style="margin: 0;">店铺资金</h2>
                         <div class="header-actions">
                             <div class="fund-controls">
-                                <select id="fund-owner-filter" aria-label="按店铺归属人筛选" onchange="changeFundOwnerFilter()">
-                                    <option value="">全部归属人</option>
+                                <select id="fund-owner-filter" aria-label="按业务员筛选" onchange="changeFundOwnerFilter()">
+                                    <option value="">全部业务员</option>
                                 </select>
+                                <select id="fund-group-filter" aria-label="按店铺组筛选" onchange="changeFundOwnerFilter()"><option value="">全部店铺组</option></select>
                                 <label class="fund-toggle" for="fund-all-toggle">
                                     <input id="fund-all-toggle" type="checkbox" checked onchange="updateFundScopeControls()">
                                     <span>执行全部店铺</span>
@@ -13472,7 +13627,7 @@
                     </div>
                     <div class="summary-row">
                         <div class="metric">
-                            <div class="metric-label">最近采集时间</div>
+                            <div class="metric-label">最近更新时间</div>
                             <div class="metric-value" id="fund-latest-time">-</div>
                         </div>
                         <div class="metric">
@@ -13502,22 +13657,34 @@
                             <thead>
                                 <tr>
                                     <th><input class="fund-row-select" id="fund-select-all" type="checkbox" aria-label="选择当前筛选下全部店铺" onchange="toggleAllVisibleFundShops(this.checked)"></th>
-                                    <th>店铺归属人</th>
+                                    <th>业务员</th>
+                                    <th>店铺组</th>
                                     <th>店铺名</th>
                                     <th>站点</th>
                                     <th>已释放（USD）</th>
                                     <th>待释放（USD）</th>
-                                    <th>状态</th>
+                                    <th>状态 / 原因</th>
                                     <th>更新时间</th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
                             <tbody id="fund-body">
-                                <tr><td class="empty-state" colspan="9">正在加载资金数据...</td></tr>
+                                <tr><td class="empty-state" colspan="10">正在加载资金数据...</td></tr>
                             </tbody>
                         </table>
                     </div>
                 </section>
+                <dialog id="fund-edit-dialog">
+                    <form onsubmit="saveManualFunds(event)">
+                        <h3 id="fund-edit-title">编辑资金</h3>
+                        <p>金额单位：USD。保存后记录本次更新时间，后续采集会生成新的记录。</p>
+                        <label>已释放 <input id="fund-edit-released" type="number" step="0.01" required></label>
+                        <label>待释放 <input id="fund-edit-pending" type="number" step="0.01" required></label>
+                        <p id="fund-edit-error" role="alert"></p>
+                        <button id="fund-edit-save" class="primary" type="submit">保存</button>
+                        <button type="button" class="secondary" onclick="document.getElementById('fund-edit-dialog').close()">取消</button>
+                    </form>
+                </dialog>
             </div>
 
             <div class="tab-page" id="tab-ai-weight-price">
@@ -13883,7 +14050,9 @@
                     </div>
                     <div class="knowledge-analysis-panel">
                         <div class="knowledge-analysis-copy">
-                            <h3>AI 自动分析侵权记录与活跃链接</h3>
+                            <h3>全球品牌/IP 黑名单与 AI 自动分析</h3>
+                            <p>从 Wikidata 自动获取品牌、媒体系列和虚构角色的中英西葡名称，每类最多 1000 个实体。用于风险拦截，不代表确认侵权或全球完整覆盖。保护人工记录，失败可重新获取。</p>
+                            <button class="primary" id="fetch-global-ip-btn" type="button" onclick="startInfringementKnowledgeAnalysis(true)">获取全球品牌/IP 并加入黑名单</button>
                             <p>侵权记录中提取的品牌/IP进入黑名单；白名单仅取当前 active 且已有销量的链接，并排除所有黑名单命中。黑名单优先，人工新增或修改的记录不会被自动覆盖。</p>
                             <div class="knowledge-analysis-controls">
                                 <div class="field">
@@ -14103,7 +14272,7 @@
             <div class="tab-page" id="tab-reputation">
                 <div class="tab-heading">
                     <h2>声誉数据</h2>
-                    <p>每天北京时间 14:00 自动更新一次；仅七天流量通过浏览器采集，其余数据使用官方 API。勾选表格中的多家店铺后可点击“更新所选店铺”。七天变化率由官方订单 API 自算；数值可能因取消单、退款、时区和平台内部统计口径而与后台略有差异。</p>
+                    <p>每天北京时间 14:00 自动更新 API 数据。“更新所选店铺”仅更新 API 数据；流量趋势和系统告警请勾选店铺后点击“浏览器同步”。账号状态按该站点最新 100 条链接判断：任一活跃则正常，全部不活跃则封禁；无链接或读取不完整时显示未确认，封禁天数未确认。七天变化率由官方订单 API 自算；数值可能因取消单、退款、时区和平台内部统计口径而与后台略有差异。</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -14179,6 +14348,16 @@
                         </div>
                         <span class="reputation-selection-summary" id="reputation-selection-summary">已选择 0 家店铺</span>
                         <button class="primary" id="update-selected-reputation-btn" type="button" onclick="runSelectedReputationUpdate()" disabled>更新所选店铺</button>
+                        <label>同步执行位置
+                            <select id="reputation-browser-target" onchange="document.getElementById('reputation-browser-agent').disabled = this.value !== 'agent'">
+                                <option value="agent">本机 Agent</option>
+                                {% if current_user.role_key == 'super_admin' %}<option value="server">服务器</option>{% endif %}
+                            </select>
+                        </label>
+                        <select id="reputation-browser-agent" aria-label="浏览器同步 Agent" onfocus="if (!this.value) refreshReputationBrowserAgents()"><option value="">请选择在线 Agent</option></select>
+                        <button class="secondary" type="button" onclick="refreshReputationBrowserAgents()">刷新 Agent</button>
+                        <button class="secondary" id="reputation-browser-sync-btn" type="button" onclick="runReputationBrowserSync()" disabled>浏览器同步</button>
+                        <span id="reputation-browser-status" role="status"></span>
                     </div>
                     <div class="table-wrap reputation-table-wrap">
                         <table class="reputation-table reputation-data-table">
@@ -14213,7 +14392,7 @@
             <div class="tab-page" id="tab-api-reputation">
                 <div class="tab-heading">
                     <h2>API 声誉</h2>
-                    <p>每天北京时间 14:00 自动刷新，并发 30；账号状态与声誉数据通过官方 API 获取，仅已开启的七天流量需要浏览器</p>
+                    <p>每天北京时间 14:00 自动刷新{% if can_change_task_workers %}，并发 30{% endif %}；账号状态与声誉数据通过官方 API 获取。流量趋势与系统告警请在声誉数据页点击“浏览器同步”</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -14530,6 +14709,14 @@
                                     <input id="access-email" type="email" maxlength="128">
                                 </div>
                                 <div class="field">
+                                    <label for="access-wechat-id">微信号</label>
+                                    <input id="access-wechat-id" maxlength="64">
+                                </div>
+                                <div class="field">
+                                    <label for="access-phone">手机号</label>
+                                    <input id="access-phone" type="tel" maxlength="32">
+                                </div>
+                                <div class="field">
                                     <label for="access-user-role">角色</label>
                                     <select id="access-user-role" required></select>
                                 </div>
@@ -14575,6 +14762,46 @@
         const isPlatformAdmin = Boolean(currentWorkbenchUser.is_platform_admin);
         const canChangeTaskWorkers = {{ can_change_task_workers | tojson }};
         window.canChangeTaskWorkers = canChangeTaskWorkers;
+        // Both publishing entry points edit the same server-side default.
+        if (canChangeTaskWorkers) {
+            let publishCapacityReady = false;
+            document.addEventListener("click", event => {
+                if (!publishCapacityReady && event.target.closest?.("#mercado-publish-selected, #ai-original-publish")) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    window.alert("上架配置尚未读取或保存成功，请稍后重试或刷新页面");
+                }
+            }, true);
+            document.addEventListener("DOMContentLoaded", async () => {
+                const inputs = ["mercado-publish-workers", "ai-original-publish-workers"]
+                    .map(id => document.getElementById(id)).filter(Boolean);
+                const update = async (value) => {
+                    publishCapacityReady = false;
+                    const response = await fetch("/api/publish-concurrency", value === undefined
+                        ? {cache: "no-store"}
+                        : {method: "PUT", headers: {"Content-Type": "application/json"},
+                           body: JSON.stringify({worker_count: value})});
+                    const payload = await response.json();
+                    if (!response.ok) throw new Error(payload.message || "读取或保存上架并发失败");
+                    inputs.forEach(input => { input.value = String(payload.data.worker_count); });
+                    publishCapacityReady = true;
+                };
+                inputs.forEach(input => {
+                    input.disabled = true;
+                    input.removeAttribute("max");
+                    input.title = "全局上架并发：修改后自动保存，所有角色的后续上架共用此值";
+                    input.addEventListener("change", async () => {
+                        inputs.forEach(item => { item.disabled = true; });
+                        try { await update(Number(input.value)); }
+                        catch (error) { window.alert(error.message); await update().catch(() => {}); }
+                        finally { inputs.forEach(item => { item.disabled = false; }); }
+                    });
+                });
+                try { await update(); } catch (error) { window.alert(error.message); }
+                finally { inputs.forEach(input => { input.disabled = false; }); }
+            });
+        }
+
         let selectedWorkbenchOrganization = "";
         try {
             selectedWorkbenchOrganization = isPlatformAdmin
@@ -15098,6 +15325,7 @@
         const mercadoReviewBulk = document.getElementById("mercado-review-bulk");
         const mercadoReviewSelected = document.getElementById("mercado-review-selected");
         const mercadoBulkEditSelected = document.getElementById("mercado-bulk-edit-selected");
+        const mercadoAiCopySelected = document.getElementById("mercado-ai-copy-selected");
         const mercadoPublishMode = document.getElementById("mercado-publish-mode");
         const mercadoPublishStoreField = document.getElementById("mercado-publish-store-field");
         const mercadoPublishStore = document.getElementById("mercado-publish-store");
@@ -15108,6 +15336,7 @@
         const mercadoGroupPublishModeHint = document.getElementById("mercado-group-publish-mode-hint");
         const mercadoPublishSite = document.getElementById("mercado-publish-site");
         const mercadoPublishQuantity = document.getElementById("mercado-publish-quantity");
+        const mercadoPublishScheduleAt = document.getElementById("mercado-publish-schedule-at");
         const mercadoPublishWorkers = document.getElementById("mercado-publish-workers");
         const mercadoPublishSelected = document.getElementById("mercado-publish-selected");
         const mercadoPublishStatus = document.getElementById("mercado-publish-status");
@@ -15423,6 +15652,7 @@
         let mercadoProductEditSource = {};
         let mercadoProductEditSaving = false;
         let mercadoBulkEditSaving = false;
+        let mercadoAiCopyRunning = false;
         let mercadoCategorySaving = false;
         let mercadoManagementCategories = [];
         let mercadoManagementCategoriesLoaded = false;
@@ -15493,6 +15723,102 @@
             yandexConsoleState.className = `yandex-console-state ${state || ""}`.trim();
         }
 
+        let storeLinkAuditBefore = null;
+        let storeLinkAuditLoading = false;
+        const storeLinkAuditActions = {
+            http_request: "接口请求", replace_store_snapshot: "同步链接数据", finalize_store_snapshot: "完成店铺同步",
+            bulk_update_store_links: "修改链接", delete_store_links: "删除链接", request_store_link_sync: "提交同步",
+            mark_store_link_sync_started: "开始同步", mark_store_link_sync_finished: "结束同步",
+            _update_one_link: "修改美客多链接", remote_update_item: "链接修改结果",
+            run_store_link_remote_update: "批量修改执行", start_store_link_remote_update: "启动批量修改",
+            _sync_store: "同步店铺", run_store_link_sync: "同步任务执行", start_store_link_sync: "启动同步任务",
+            upload_store_link_video: "上传视频", advertise_store_link: "投放广告", advertise_store_links: "批量投放广告",
+            mark_advertising_enabled: "记录广告投放", mark_video_uploaded: "记录视频上传", mark_advertising_status: "更新广告状态"
+        };
+        const storeLinkAuditPhases = {started: "开始执行", completed: "执行结束", failed: "失败", partial: "部分成功", before: "变更前快照", success: "成功", error: "失败"};
+        function storeLinkAuditSummary(row) {
+            const context = row.details?.context || {};
+            const actor = context.actor || {};
+            const operator = actor.display_name || actor.username || (actor.type === 'system' ? '系统自动任务' : '服务请求');
+            const time = new Date(row.created_at);
+            const displayTime = Number.isNaN(time.getTime()) ? row.created_at : time.toLocaleString('zh-CN', {hour12: false});
+            let action = storeLinkAuditActions[row.action] || row.action;
+            if (row.action === 'http_request') {
+                const path = context.path || '';
+                const actions = {'bulk-update': '批量修改', delete: '删除链接', advertise: '投放广告', 'bulk-advertise': '批量投放广告', video: '上传视频', 'category-paths': '查询分类'};
+                action = path.endsWith('/sync/start') ? '启动同步' : path.endsWith('/status') ? '查询任务进度' : actions[path.split('/').pop()] || (context.method === 'GET' ? '查询链接' : '链接操作');
+            }
+            return `${displayTime} · ${operator} · ${action} · ${storeLinkAuditPhases[row.phase] || row.phase}`;
+        }
+        function storeLinkAuditDateBoundary(value, nextDay = false) {
+            if (!value) return '';
+            const [year, month, day] = value.split('-').map(Number);
+            const date = new Date(year, month - 1, day);
+            if (nextDay) date.setDate(date.getDate() + 1);
+            return date.toISOString();
+        }
+        function resetStoreLinkAuditFilters() {
+            document.getElementById('store-link-audit-salesperson').value = '';
+            document.getElementById('store-link-audit-type').value = '';
+            document.getElementById('store-link-audit-from').value = '';
+            document.getElementById('store-link-audit-to').value = '';
+            loadStoreLinkAudit(false);
+        }
+        async function loadStoreLinkAudit(more) {
+            const container = document.getElementById('store-link-audit-rows');
+            if (!container || storeLinkAuditLoading) return;
+            const button = document.getElementById('store-link-audit-more');
+            const refresh = document.getElementById('store-link-audit-refresh');
+            const message = document.getElementById('store-link-audit-message');
+            const typeSelect = document.getElementById('store-link-audit-type');
+            const salespersonInput = document.getElementById('store-link-audit-salesperson');
+            const fromInput = document.getElementById('store-link-audit-from');
+            const toInput = document.getElementById('store-link-audit-to');
+            if (fromInput.value && toInput.value && fromInput.value > toInput.value) {
+                message.textContent = '开始日期不能晚于结束日期。';
+                return;
+            }
+            const filterButton = document.getElementById('store-link-audit-filter');
+            const resetButton = document.getElementById('store-link-audit-reset');
+            storeLinkAuditLoading = true;
+            [button, refresh, typeSelect, salespersonInput, fromInput, toInput, filterButton, resetButton].forEach(control => control.disabled = true);
+            message.textContent = '正在加载操作记录…';
+            if (!more) { container.replaceChildren(); storeLinkAuditBefore = null; button.hidden = true; }
+            try {
+                const params = new URLSearchParams({
+                    limit: '30',
+                    operation_type: typeSelect.value,
+                    salesperson: salespersonInput.value.trim(),
+                    created_after: storeLinkAuditDateBoundary(fromInput.value),
+                    created_before: storeLinkAuditDateBoundary(toInput.value, true)
+                });
+                if (more && storeLinkAuditBefore) params.set('before_id', storeLinkAuditBefore);
+                const response = await fetch('/api/store-links/operation-logs?' + params.toString(), {cache: 'no-store'});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== 'success') throw new Error(payload.message || '记录加载失败');
+                if (!more) container.replaceChildren();
+                for (const row of payload.data) {
+                    const details = document.createElement('details');
+                    details.style.cssText = 'padding:12px 8px;border-bottom:1px solid #e2e8f0';
+                    const summary = document.createElement('summary');
+                    summary.style.cursor = 'pointer';
+                    summary.textContent = storeLinkAuditSummary(row);
+                    const pre = document.createElement('pre');
+                    pre.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;background:#f8fafc;color:#0f172a';
+                    pre.textContent = JSON.stringify(row, null, 2);
+                    details.append(summary, pre); container.append(details);
+                }
+                storeLinkAuditBefore = payload.next_before_id;
+                message.textContent = container.childElementCount ? `已显示 ${container.childElementCount} 条记录，点击任一条可展开详情。` : '当前筛选条件暂无操作记录，请调整筛选条件后重试。';
+                button.hidden = payload.data.length < 30;
+            } catch (error) {
+                message.textContent = `操作记录加载失败：${error.message}。请点击“刷新操作记录”重试。`;
+            } finally {
+                storeLinkAuditLoading = false;
+                [button, refresh, typeSelect, salespersonInput, fromInput, toInput, filterButton, resetButton].forEach(control => control.disabled = false);
+            }
+        }
+
         async function loadYandexConsole(forceReload = false) {
             if (yandexConsoleLoading || (yandexConsoleLoaded && !forceReload)) return;
             yandexConsoleLoading = true;
@@ -15550,15 +15876,15 @@
                 "order_analysis.execute": [
                     "#order-analysis-folder", "#import-order-analysis-btn",
                     "#order-bulk-status", "#order-bulk-status-button", "#order-bulk-purchase-button",
-                    "#order-purchase-tracking-sync-button",
+                    "#order-purchase-tracking-sync-button", "#order-zying-sync-open", "#order-zying-start",
                 ],
                 "shop_status.execute": ["#start-selected-mercado-login-btn", "#start-mercado-login-btn", "#stop-mercado-login-btn", ".header-worker-control"],
                 "funds.execute": ["#collect-funds-btn", "#stop-funds-btn"],
                 "zying_collection.execute": ["#start-zying-collection-btn", "#stop-zying-collection-btn"],
                 "risk_check.execute": ["#start-risk-check-btn"],
-                "infringement_knowledge.manage": ["#add-infringement-knowledge-btn", "#save-infringement-knowledge-btn", "#start-infringement-analysis-btn"],
+                "infringement_knowledge.manage": ["#add-infringement-knowledge-btn", "#save-infringement-knowledge-btn", "#start-infringement-analysis-btn", "#fetch-global-ip-btn"],
                 "infractions.execute": ["#collect-infractions-btn"],
-                "reputation.execute": ["#collect-reputation-btn", "#update-selected-reputation-btn"],
+                "reputation.execute": ["#collect-reputation-btn", "#update-selected-reputation-btn", "#reputation-browser-sync-btn"],
                 "customer_service.manage": [".customer-service-manage-action"],
                 "ad_analysis.execute": ["#ad-analysis-activate-selected", "#ad-analysis-pause-selected"],
             };
@@ -15740,6 +16066,7 @@
                 loadMercadoStoreTokens(mercadoStoreTokensLoaded, mercadoStoreTokensLoaded);
                 startMercadoTokenStatusPolling();
             }
+            if (tabName === "store-operations") loadStoreLinkAudit(false);
             if (tabName === "store-links") {
                 loadMercadoManagementCategories();
                 if (!storeLinksLoaded) loadStoreLinks(1);
@@ -16939,6 +17266,96 @@
             orderNextPage.disabled = orderPage >= orderPages;
         }
 
+        function orderQueryParams(page = 1) {
+            const params = new URLSearchParams({
+                country: orderCountry,
+                status: orderStatus,
+                group_name: orderGroupName,
+                search: String(orderSearchInput?.value || "").trim(),
+                start_date: String(orderStartDate?.value || ""),
+                end_date: String(orderEndDate?.value || ""),
+                origin: orderOrigin,
+                freight_variance: String(orderFreightVarianceFilter?.value || ""),
+                page: String(page),
+                page_size: String(orderPageSize),
+            });
+            mercadoSelectedValues(orderStoreFilter).forEach(value => params.append("store_id", value));
+            mercadoSelectedValues(orderSalespersonFilter).forEach(value => params.append("salesperson", value));
+            return params;
+        }
+
+        async function readZyingOrderResponse(response) {
+            const text = await response.text();
+            let payload;
+            try { payload = JSON.parse(text); } catch (_) {
+                throw new Error(response.redirected || response.status === 401
+                    ? "登录状态已失效，请重新登录工作台"
+                    : `智赢同步接口返回异常（HTTP ${response.status}），请检查 Web 与 worker 服务是否均已更新并重启`);
+            }
+            if (!payload || typeof payload !== "object") throw new Error("智赢同步接口返回格式异常");
+            return payload;
+        }
+        async function confirmZyingOrderLogin() {
+            const button = document.getElementById("order-zying-confirm");
+            button.disabled = true;
+            clearTimeout(zyingOrderPollTimer);
+            try {
+                const response = await fetch("/api/orders/zying-sync/confirm-login", {method: "POST"});
+                const payload = await readZyingOrderResponse(response);
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "确认登录失败");
+                await pollZyingOrderSync();
+            } catch (error) {
+                document.getElementById("order-zying-status").textContent = error.message;
+                zyingOrderPollTimer = setTimeout(pollZyingOrderSync, 5000);
+            } finally { button.disabled = false; }
+        }
+        let zyingOrderPollTimer = null;
+        let zyingOrderWasRunning = false;
+        async function openZyingOrderSync() {
+            document.getElementById("order-zying-sync-dialog").showModal();
+            await pollZyingOrderSync();
+        }
+        async function pollZyingOrderSync() {
+            clearTimeout(zyingOrderPollTimer);
+            try {
+                const response = await fetch("/api/orders/zying-sync/status", {cache: "no-store"});
+                const payload = await readZyingOrderResponse(response);
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "读取状态失败");
+                const data = payload.data || {};
+                document.getElementById("order-zying-confirm").hidden = data.phase !== "waiting_login";
+                document.getElementById("order-zying-start").disabled = Boolean(data.running);
+                document.getElementById("order-zying-status").textContent = `${data.message || "等待启动"} · ${data.completed || 0}/${data.total || 0} · 已同步 ${data.updated || 0} · 跳过 ${data.skipped || 0} · 失败 ${data.failed || 0}`;
+                document.getElementById("order-zying-results").textContent = (data.results || []).map(row => `${row.order_number || row.order_id}：${row.message}${row.purchase_order ? "；采购 " + row.purchase_order : ""}${row.purchase_tracking ? "；物流 " + row.purchase_tracking : ""}${row.purchase_cost !== undefined ? "；成本 ¥" + row.purchase_cost : ""}`).join("\n");
+                if (zyingOrderWasRunning && !data.running) loadOrders(orderPage);
+                zyingOrderWasRunning = Boolean(data.running);
+                if (data.running) zyingOrderPollTimer = setTimeout(pollZyingOrderSync, 2000);
+            } catch (error) {
+                document.getElementById("order-zying-status").textContent = error.message;
+                zyingOrderPollTimer = setTimeout(pollZyingOrderSync, 5000);
+            }
+        }
+        async function startZyingOrderSync() {
+            const button = document.getElementById("order-zying-start");
+            button.disabled = true;
+            clearTimeout(zyingOrderPollTimer);
+            document.getElementById("order-zying-status").textContent = "正在启动同步并打开服务器 Edge…";
+            try {
+                const params = orderQueryParams();
+                if (params.get("start_date") && params.get("end_date") && params.get("start_date") > params.get("end_date")) throw new Error("起始时间不能晚于截止时间");
+                const response = await fetch(`/api/orders/zying-sync/start?${params}`, {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({}),
+                });
+                const payload = await readZyingOrderResponse(response);
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "启动失败");
+                zyingOrderWasRunning = true;
+                await pollZyingOrderSync();
+            } catch (error) {
+                document.getElementById("order-zying-status").textContent = error.message;
+                button.disabled = false;
+            }
+        }
+
         async function loadOrders(targetPage = 1) {
             if (!orderTableBody) return;
             const startDate = String(orderStartDate?.value || "");
@@ -16953,20 +17370,7 @@
             orderRefreshButton.disabled = true;
             orderTableBody.innerHTML = '<tr class="order-loading-row"><td colspan="17"><span class="order-loading-dot"></span>正在读取订单数据</td></tr>';
             const page = Math.max(1, Math.min(Number(targetPage || 1), orderPages || 1));
-            const params = new URLSearchParams({
-                country: orderCountry,
-                status: orderStatus,
-                group_name: orderGroupName,
-                search: String(orderSearchInput?.value || "").trim(),
-                start_date: startDate,
-                end_date: endDate,
-                origin: orderOrigin,
-                freight_variance: String(orderFreightVarianceFilter?.value || ""),
-                page: String(page),
-                page_size: String(orderPageSize),
-            });
-            mercadoSelectedValues(orderStoreFilter).forEach(value => params.append("store_id", value));
-            mercadoSelectedValues(orderSalespersonFilter).forEach(value => params.append("salesperson", value));
+            const params = orderQueryParams(page);
             try {
                 const response = await fetch(`/api/orders?${params.toString()}`, {cache: "no-store"});
                 const payload = await response.json();
@@ -18588,10 +18992,14 @@
             const image = imageUrl
                 ? `<a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener noreferrer"><img class="market-product-image" src="${escapeHtml(imageUrl)}" alt="商品主图" loading="lazy" onerror="this.style.visibility='hidden'"></a>`
                 : `<span class="market-product-image"></span>`;
-            const titleText = String(row.title || "未识别标题");
+            const aiCopy = row.ai_copy && typeof row.ai_copy === "object" ? row.ai_copy : {};
+            const titleText = String(aiCopy.title_es || row.title || "未识别标题");
             const title = sourceUrl
                 ? `<a class="market-collection-title-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(titleText)}</a>`
                 : escapeHtml(titleText);
+            const bilingualTitle = aiCopy.title_pt
+                ? `<small class="market-metric-note mercado-copy-language-title">PT: ${escapeHtml(aiCopy.title_pt)} · ${String(aiCopy.title_pt).length} 字符</small><button class="market-copy-preview-trigger" type="button" onclick="openMercadoCollectionCopy(${rowId})">查看双语描述</button>`
+                : "";
             const dimensions = [row.package_length_cm, row.package_width_cm, row.package_height_cm]
                 .map(value => mercadoMetric(value));
             const dimensionsText = dimensions.includes("-") ? "-" : `${dimensions.join(" × ")} cm`;
@@ -18625,7 +19033,7 @@
                 <td>${image}</td>
                 <td><strong>${escapeHtml(row.salesperson || "未分配")}</strong></td>
                 <td><strong>${escapeHtml(row.source_item_id || "-")}</strong></td>
-                <td><span class="market-product-title" title="${escapeHtml(titleText)}">${title}</span></td>
+                <td><span class="market-product-title" title="${escapeHtml(titleText)}">${title}</span>${aiCopy.title_es ? `<small class="market-metric-note">ES · ${String(aiCopy.title_es).length} 字符</small>` : ""}${bilingualTitle}</td>
                 <td><span class="market-metric-main">${mercadoMetric(row.price)}</span><span class="market-metric-note">${escapeHtml(row.currency_id || "MXN")}</span></td>
                 <td><span class="market-metric-main">${mercadoMetric(salePriceUsd, " USD")}</span></td>
                 <td><span class="market-metric-main">${mercadoMetric(actualWeight, " g")}</span></td>
@@ -18636,6 +19044,69 @@
                 <td><span class="market-workflow-tags"><span class="market-status-tag">${escapeHtml(reviewLabel)}</span><span class="market-status-tag ${publishStatus === "published" ? "ok" : ""}">${escapeHtml(publishLabel)}</span></span><span class="market-status-tag ${statusClass}">${escapeHtml(status)}</span></td>
                 <td>${escapeHtml(timeText)}</td>
             </tr>`;
+        }
+
+        function openMercadoCollectionCopy(rowId) {
+            const row = mercadoListRows.find(item => Number(item.id) === Number(rowId));
+            const copy = row?.ai_copy && typeof row.ai_copy === "object" ? row.ai_copy : null;
+            if (!copy) return;
+            document.getElementById("mercado-copy-preview-subtitle").textContent = `${row.source_item_id || "采集商品"} · 生成于 ${copy.generated_at || "—"}`;
+            document.getElementById("mercado-copy-preview-content").innerHTML = `
+                <section style="margin-bottom:20px"><strong>西班牙语标题（${String(copy.title_es || "").length}/60）</strong><p>${escapeHtml(copy.title_es || "")}</p><strong>西班牙语描述</strong><p>${escapeHtml(copy.description_es || "")}</p></section>
+                <section><strong>葡萄牙语标题（${String(copy.title_pt || "").length}/60）</strong><p>${escapeHtml(copy.title_pt || "")}</p><strong>葡萄牙语描述</strong><p>${escapeHtml(copy.description_pt || "")}</p></section>`;
+            document.getElementById("mercado-copy-preview").showModal();
+        }
+
+        async function startMercadoCollectionCopy() {
+            if (mercadoAiCopyRunning || mercadoListMode !== "collection") return;
+            const itemIds = Array.from(selectedMercadoCollectionIds);
+            if (!itemIds.length) return;
+            if (itemIds.length > 500) {
+                setMercadoListFeedback("每次最多生成 500 件采集商品文案，请减少选择数量后重试", "error");
+                return;
+            }
+            if (!window.confirm(`将为所选 ${itemIds.length} 件商品生成西班牙语和巴西葡萄牙语标题、描述，并把采集列表的标题和描述更新为西班牙语。两个标题均要求 50–60 个字符且不含品牌名。继续吗？`)) return;
+            mercadoAiCopyRunning = true;
+            updateMercadoSelection();
+            const batchSize = 100;
+            const batchCount = Math.ceil(itemIds.length / batchSize);
+            let completed = 0, failed = 0, conflicts = 0;
+            let firstProblem = "";
+            try {
+                for (let offset = 0; offset < itemIds.length; offset += batchSize) {
+                    const batchNumber = Math.floor(offset / batchSize) + 1;
+                    const response = await fetch("/api/mercado-collection/ai-copy", {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({collection_item_ids: itemIds.slice(offset, offset + batchSize)}),
+                    });
+                    const started = await response.json();
+                    if (!response.ok || started.status !== "success") throw new Error(started.message || `启动失败：HTTP ${response.status}`);
+                    let task = started.data || {};
+                    while (task.running) {
+                        const progress = `${task.message || "正在生成双语文案"} · 第 ${batchNumber}/${batchCount} 批`;
+                        setMercadoListFeedback(progress);
+                        await new Promise(resolve => window.setTimeout(resolve, 1400));
+                        const statusResponse = await fetch("/api/mercado-collection/ai-copy/status", {cache: "no-store"});
+                        const statusPayload = await statusResponse.json();
+                        if (!statusResponse.ok || statusPayload.status !== "success") throw new Error(statusPayload.message || "读取文案生成进度失败");
+                        task = statusPayload.data || {};
+                    }
+                    completed += Number(task.completed_count || 0);
+                    failed += Number(task.failed_count || 0);
+                    conflicts += Number(task.conflict_count || 0);
+                    const issue = (task.results || []).find(result => result.status !== "completed");
+                    if (!firstProblem && issue) firstProblem = `${issue.source_item_id || issue.collection_item_id || "商品"}：${issue.message || "生成失败"}`;
+                }
+                const tone = failed || conflicts ? "error" : "success";
+                setMercadoListFeedback(`双语文案生成结束：成功 ${completed} 件，失败 ${failed} 件，资料冲突 ${conflicts} 件${firstProblem ? `；示例：${firstProblem}` : ""}`, tone);
+                await loadMercadoList();
+            } catch (error) {
+                setMercadoListFeedback(`文案生成失败：${error.message || error}`, "error");
+            } finally {
+                mercadoAiCopyRunning = false;
+                updateMercadoSelection();
+            }
         }
 
         function openMercadoProductEditor(rowId) {
@@ -19447,6 +19918,11 @@
                 const aiRiskNote = aiRiskLevel && row.infringement_keywords
                     ? `<span class="market-metric-note" title="${escapeHtml(aiRiskTitle)}">关键词：${escapeHtml(row.infringement_keywords)}</span>`
                     : "";
+                const weightCheck = row.ai_weight_price || {};
+                const weightCheckLabels = {queued: "AI 待核查", checking: "AI 核查中", checked: "AI 已核查", unmatched: "AI 未匹配", missing_evidence: "AI 已核查·数据不足", failed: "AI 核查失败", conflict: "AI 回写冲突", stopped: "AI 已停止"};
+                const weightPriceNote = weightCheck.evidence?.cost_price_cny != null
+                    ? `<span class="market-metric-note">1688 成本 ¥${escapeHtml(String(weightCheck.evidence.cost_price_cny))}</span>` : "";
+                const weightCheckTag = `<span class="market-status-tag" title="${escapeHtml([weightCheck.reason, weightCheck.checked_at].filter(Boolean).join(' · '))}">${escapeHtml(weightCheckLabels[weightCheck.status] || "AI 未核查")}</span><span class="market-status-tag ${weightCheck.modified ? 'ok' : ''}" title="${escapeHtml(weightCheck.modified_at || '')}">${weightCheck.modified ? "AI 曾修改" : "AI 未修改"}</span>`;
                 const reviewControl = mercadoListMode === "products"
                     ? `<select class="market-review-select" aria-label="修改 ${escapeHtml(row.source_item_id || "产品")} 的审核状态" onchange="updateMercadoProductReviewStatus([${rowId}], this.value)">${reviewOptions.map(([value, label]) => `<option value="${value}" ${reviewStatus === value ? "selected" : ""}>${label}</option>`).join("")}</select>`
                     : "";
@@ -19474,7 +19950,7 @@
                     <td title="${profitTitle}"><span class="market-metric-main">${mercadoMetric(row.commission_amount_usd, " USD")}</span><span class="market-metric-note">${escapeHtml(commissionNote)}</span></td>
                     <td title="${profitTitle}"><span class="market-metric-main">${mercadoMetric(usesActualWeightShipping ? row.shipping_fee_usd : null, " USD")}</span><span class="market-metric-note">${escapeHtml(shippingNote)}</span></td>
                     <td title="${profitTitle}"><span class="market-metric-main ${netClass}">${mercadoMetric(netProceeds, " USD")}</span><span class="market-metric-note">${netProceedsNote}</span></td>
-                    <td title="${statusTitle}">${collectionWorkflowTags}${reviewControl}${aiRiskTag}${aiRiskNote}<span class="market-status-tag ${statusClass}">${status}</span>${publishNote}</td>
+                    <td title="${statusTitle}">${collectionWorkflowTags}${reviewControl}${weightCheckTag}${weightPriceNote}${aiRiskTag}${aiRiskNote}<span class="market-status-tag ${statusClass}">${status}</span>${publishNote}</td>
                     <td>${escapeHtml(timeText)}</td>
                 </tr>`;
             }).join("");
@@ -19938,11 +20414,14 @@
             const readinessNotes = [];
             if (blockedCount) readinessNotes.push(`${blockedCount} 件不可上架，将自动移回采集列表`);
             mercadoSelectionSummary.textContent = `已选择 ${selectedMercadoCollectionIds.size} 件${readinessNotes.length ? ` · ${readinessNotes.join(" · ")}` : ""}`;
-            mercadoAddSelected.disabled = !hasSelection || mercadoListMode !== "collection";
+            const exceedsBulkEditLimit = selectedMercadoCollectionIds.size > 500;
+            mercadoAddSelected.disabled = !hasSelection || mercadoListMode !== "collection" || mercadoAiCopyRunning;
+            mercadoAiCopySelected.disabled = !hasSelection || mercadoListMode !== "collection" || mercadoPublishRunning || mercadoAiCopyRunning || exceedsBulkEditLimit;
+            mercadoAiCopySelected.textContent = mercadoAiCopyRunning ? "标题生成中..." : "批量修改标题";
+            mercadoAiCopySelected.title = exceedsBulkEditLimit ? "每次最多选择 500 件商品" : "根据采集商品资料生成西班牙语和葡萄牙语标题、描述";
             mercadoDeleteSelected.disabled = !hasSelection || mercadoPublishRunning;
             mercadoReviewSelected.disabled = !hasSelection || mercadoListMode !== "products" || mercadoPublishRunning;
             mercadoManagementCategoryAssign.disabled = !hasSelection || !mercadoManagementCategoryBulk.value;
-            const exceedsBulkEditLimit = selectedMercadoCollectionIds.size > 500;
             mercadoBulkEditSelected.disabled = !hasSelection || mercadoPublishRunning || mercadoBulkEditSaving || exceedsBulkEditLimit;
             mercadoBulkEditSelected.textContent = mercadoListMode === "collection"
                 ? "批量修改尺寸/重量" : "批量修改所选";
@@ -19989,6 +20468,24 @@
                 mercadoAddSelected.textContent = "加入产品列表";
                 updateMercadoSelection();
             }
+        }
+
+        async function startMercadoCollectionAiCheck(button) {
+            const ids = Array.from(selectedMercadoCollectionIds);
+            if (!ids.length) { setMercadoListFeedback("请先勾选需要核查的商品", "error"); return; }
+            button.disabled = true;
+            try {
+                const response = await fetch("/api/mercado-collection/ai-weight-price", {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({collection_item_ids: ids}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "启动失败");
+                setMercadoListFeedback(`${payload.data.message}。匹配后自动更新泽顺重量尺寸，刷新列表查看状态。`, "success");
+                await loadMercadoList();
+            } catch (error) {
+                setMercadoListFeedback(error.message || String(error), "error");
+            } finally { button.disabled = false; }
         }
 
         async function deleteSelectedMercadoItems() {
@@ -20139,9 +20636,14 @@
                 .filter(([stage, seconds]) => stage !== "total" && Number(seconds || 0) > 0)
                 .sort((left, right) => Number(right[1]) - Number(left[1]))[0];
             if (data?.status && data.status !== "idle") {
-                const message = String(data.message || "批量上架");
+                const scheduledLabel = data?.scheduled_at
+                    ? new Date(data.scheduled_at).toLocaleString()
+                    : "";
+                const message = data.status === "scheduled" && scheduledLabel
+                    ? `已安排定时上架 · ${scheduledLabel}`
+                    : String(data.message || "批量上架");
                 const siteSuffix = siteName && !message.includes(siteName) ? ` · ${siteName}` : "";
-                const workerSuffix = workers ? ` · ${workers} 线程` : "";
+                const workerSuffix = canChangeTaskWorkers && workers ? ` · ${workers} 线程` : "";
                 const targetSuffix = targetCount > 1 && !message.includes("账号-站点组合") ? ` · ${targetCount} 个组合` : "";
                 const elapsedLabel = data?.running ? "已耗时" : "总耗时";
                 const timingSuffix = elapsedSeconds > 0
@@ -20159,8 +20661,15 @@
                     : "";
                 mercadoPublishStatus.textContent = `${message}${siteSuffix}${targetSuffix}${workerSuffix} · ${processed}/${requested} · 成功 ${published} · 失败 ${failed}${skippedSuffix}${skippedOtherAccountSuffix}${timingSuffix}${stageSuffix}`;
             }
-            mercadoPublishSelected.textContent = mercadoPublishRunning ? "正在上架..." : "批量上架";
+            updateMercadoPublishActionLabel();
             updateMercadoSelection();
+        }
+
+        function updateMercadoPublishActionLabel() {
+            if (!mercadoPublishSelected || mercadoPublishRunning) return;
+            mercadoPublishSelected.textContent = mercadoPublishScheduleAt?.value
+                ? "定时上架"
+                : "批量上架";
         }
 
         async function loadMercadoPublishStatus() {
@@ -20178,6 +20687,8 @@
                 renderMercadoPublishStatus(payload.data || {});
                 if (payload.data?.running) {
                     mercadoPublishPollTimer = window.setTimeout(loadMercadoPublishStatus, 1500);
+                } else if (payload.data?.status === "scheduled") {
+                    mercadoPublishPollTimer = window.setTimeout(loadMercadoPublishStatus, 30000);
                 } else if (wasRunning && mercadoListMode === "products") {
                     await loadMercadoList();
                 }
@@ -20198,6 +20709,8 @@
             const siteIds = mercadoSelectedValues(mercadoPublishSite);
             const quantity = Number(mercadoPublishQuantity.value || 0);
             const workerCount = Number(mercadoPublishWorkers?.value || 16);
+            const scheduleValue = mercadoPublishScheduleAt?.value || "";
+            const scheduleDate = scheduleValue ? new Date(scheduleValue) : null;
             if (!itemIds.length) return;
             const selectedRows = mercadoListRows.filter(row => selectedMercadoCollectionIds.has(Number(row.id)));
             const blockedRows = selectedRows.filter(row => mercadoProductPublishIssues(row).length);
@@ -20227,6 +20740,11 @@
                 mercadoPublishWorkers.focus();
                 return;
             }
+            if (scheduleValue && (!scheduleDate || !Number.isFinite(scheduleDate.getTime()) || scheduleDate <= new Date())) {
+                setMercadoListFeedback("定时上架时间必须晚于当前时间", "error");
+                mercadoPublishScheduleAt?.focus();
+                return;
+            }
             const targetPreview = mercadoPublishTargetPreview(selectionMode, tokenIds, groupNames, siteIds);
             if (!targetPreview.length) {
                 setMercadoListFeedback(selectionMode === "groups"
@@ -20246,7 +20764,10 @@
                     ? "按账号顺序每个分配 10 件后切换；产品不跨账号重复，同账号的不同站点允许重复上架"
                     : "随机均匀分配产品；产品不跨账号重复，同账号的不同站点允许重复上架")
                 : `共 ${targetPreview.length} 个兼容组合、${publishableRows.length * targetPreview.length} 次上架尝试`;
-            if (!window.confirm(`确定用 ${workerCount} 个线程把 ${publishableRows.length} 件有效产品上架到 ${targetSummary}、${siteIds.length} 个站点吗？${publishPlan}，每件库存 ${quantity}；最终上架净收益 = 产品净收益 × 对应站点折扣比例，跨站点属性将使用本地规则匹配，不调用翻译模型${blockedNote}。`)) return;
+            const scheduleNote = scheduleDate
+                ? `将在 ${scheduleDate.toLocaleString()} 定时上架`
+                : "现在立即上架";
+            if (!window.confirm(`确定${scheduleNote}吗？${canChangeTaskWorkers ? `使用 ${workerCount} 个线程，` : ""}把 ${publishableRows.length} 件有效产品上架到 ${targetSummary}、${siteIds.length} 个站点。${publishPlan}，每件库存 ${quantity}；最终上架净收益 = 产品净收益 × 对应站点折扣比例，跨站点属性将使用本地规则匹配，不调用翻译模型${blockedNote}。`)) return;
             mercadoPublishSelected.disabled = true;
             mercadoPublishStatus.textContent = "正在创建批量上架任务...";
             try {
@@ -20259,6 +20780,7 @@
                     site_ids: siteIds,
                     quantity,
                 };
+                if (scheduleDate) publishPayload.scheduled_at = scheduleDate.toISOString();
                 if (canChangeTaskWorkers) publishPayload.worker_count = workerCount;
                 const response = await fetch("/api/mercado-products/publish", {
                     method: "POST",
@@ -20270,13 +20792,16 @@
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
                 selectedMercadoCollectionIds.clear();
+                if (scheduleDate && mercadoPublishScheduleAt) mercadoPublishScheduleAt.value = "";
                 renderMercadoPublishStatus(payload.data || {});
                 const movedCount = Number(payload.data?.moved_to_collection_count || 0);
                 if (movedCount) {
                     setMercadoListFeedback(`已忽略 ${movedCount} 件不可上架产品，并自动移回采集列表；其余有效产品继续上架`, "success");
                 }
                 await loadMercadoList();
-                if (payload.data?.running) loadMercadoPublishStatus();
+                if (payload.data?.running || payload.data?.status === "scheduled") {
+                    loadMercadoPublishStatus();
+                }
             } catch (error) {
                 mercadoPublishStatus.textContent = `启动批量上架失败：${error.message || error}`;
                 mercadoPublishRunning = false;
@@ -22365,7 +22890,7 @@
             });
             const payload = await response.json().catch(() => ({}));
             if (!response.ok || payload.status !== "success") {
-                throw new Error(payload.message || `多线程查询失败：${response.status}`);
+                throw new Error(payload.message || `查询失败：${response.status}`);
             }
             return payload.data || {};
         }
@@ -22473,9 +22998,9 @@
             preSaleLoad.disabled = true;
             preSaleLoad.textContent = "查询中...";
             const plannedWorkers = Math.max(1, Math.min(8, stores.length));
-            preSaleList.innerHTML = `<div class="customer-service-empty">正在使用 ${plannedWorkers} 个线程并发读取 ${stores.length} 家店铺的 Mercado Libre 官方售前问题...</div>`;
+            preSaleList.innerHTML = `<div class="customer-service-empty">正在${canChangeTaskWorkers ? `使用 ${plannedWorkers} 个线程并发` : ""}读取 ${stores.length} 家店铺的 Mercado Libre 官方售前问题...</div>`;
             if (preSalePagination) preSalePagination.hidden = true;
-            setPreSaleMessage(`正在用 ${plannedWorkers} 个线程并发查询 ${stores.length} 家店铺...`);
+            setPreSaleMessage(`正在${canChangeTaskWorkers ? `用 ${plannedWorkers} 个线程并发` : ""}查询 ${stores.length} 家店铺...`);
             selectedPreSaleQuestionIds.clear();
             updatePreSaleBulkDelete();
             try {
@@ -22516,7 +23041,7 @@
                 const workerCount = Number(aggregate.workers || plannedWorkers);
                 const elapsed = Number(aggregate.elapsed_seconds || 0);
                 setPreSaleMessage(
-                    `${workerCount} 线程完成查询（${elapsed.toFixed(2)} 秒），已聚合 ${successes.length}/${stores.length} 家店铺，加载 ${preSaleTotal.toLocaleString("zh-CN")} / 官方共 ${preSaleOfficialTotal.toLocaleString("zh-CN")} 条${warnings.length ? `；${warnings.join("；")}` : ""}`,
+                    `${canChangeTaskWorkers ? `${workerCount} 线程` : ""}完成查询（${elapsed.toFixed(2)} 秒），已聚合 ${successes.length}/${stores.length} 家店铺，加载 ${preSaleTotal.toLocaleString("zh-CN")} / 官方共 ${preSaleOfficialTotal.toLocaleString("zh-CN")} 条${warnings.length ? `；${warnings.join("；")}` : ""}`,
                     Boolean(warnings.length),
                 );
                 void refreshPreSaleSummary();
@@ -23306,7 +23831,7 @@
                 });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok || payload.status !== "success") {
-                    throw new Error(payload.message || `并发更新失败：HTTP ${response.status}`);
+                    throw new Error(payload.message || `更新失败：HTTP ${response.status}`);
                 }
                 return payload.data || {};
             }));
@@ -23504,7 +24029,7 @@
                 const failureText = customerServicePartialFailureCount
                     ? `，另有 ${customerServicePartialFailureCount} 个请求失败：${failurePreview}${moreFailures}`
                     : "";
-                const concurrencyText = customerServiceQueryMetrics?.workers
+                const concurrencyText = canChangeTaskWorkers && customerServiceQueryMetrics?.workers
                     ? `；${customerServiceQueryMetrics.batches} 批、服务端 ${customerServiceQueryMetrics.workers} 线程，耗时 ${customerServiceQueryMetrics.elapsed_seconds.toFixed(2)} 秒`
                     : "";
                 recordCustomerServiceUpdatedAt();
@@ -24292,13 +24817,75 @@
             renderAdAnalysisLinks();
         }
 
+        function adProfitKey(row) {
+            return [row.token_id, row.site_id, row.item_id, row.currency_id].join(":");
+        }
+
+        function adProfitAdvice(row) {
+            const advice = row.recommendation || {};
+            return `<strong>${advice.net_profit == null ? "—" : adAnalysisMoney(row.currency_id, advice.net_profit)}</strong>
+                <span class="market-metric-note">${escapeHtml(advice.label || "待填写利润")}</span>
+                <span class="market-metric-note">${escapeHtml(advice.reason || "")}</span>
+                ${advice.break_even_cpc == null ? "" : `<span class="market-metric-note">保本 CPC ${adAnalysisMoney(row.currency_id, advice.break_even_cpc)}</span>`}`;
+        }
+
+        async function saveAdProfit(button) {
+            const cell = button.closest("td");
+            const input = cell.querySelector("input");
+            const note = cell.querySelector(".ad-profit-save-note");
+            const row = (adAnalysisData.links || []).find(item => adProfitKey(item) === button.dataset.profitKey);
+            if (!row) return;
+            const value = input.value.trim() === "" ? null : Number(input.value);
+            if (!input.checkValidity() || (value !== null && !Number.isFinite(value))) {
+                note.textContent = "请输入有效金额";
+                return;
+            }
+            button.disabled = true;
+            input.disabled = true;
+            note.textContent = "保存中…";
+            try {
+                const response = await fetch("/api/ad-analysis/profit", {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({row, unit_profit: value}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "保存失败");
+                row.unit_profit = payload.data.unit_profit;
+                row.recommendation = payload.data.recommendation;
+                cell.parentElement.querySelector(".ad-profit-advice").innerHTML = adProfitAdvice(row);
+                const duplicates = (adAnalysisData.links || []).filter(item => item !== row && adProfitKey(item) === adProfitKey(row));
+                if (duplicates.length) {
+                    const latestResponse = await fetch("/api/ad-analysis", {cache: "no-store"});
+                    const latest = await latestResponse.json();
+                    if (!latestResponse.ok || latest.status !== "success") throw new Error("利润已保存，其他广告组建议请刷新查看");
+                    duplicates.forEach(item => {
+                        const fresh = (latest.data.links || []).find(candidate => adProfitKey(candidate) === adProfitKey(item) && adAnalysisRowKey(candidate) === adAnalysisRowKey(item));
+                        if (fresh) Object.assign(item, {unit_profit: fresh.unit_profit, recommendation: fresh.recommendation});
+                    });
+                    adAnalysisLinkBody.querySelectorAll("button[data-profit-key]").forEach(other => {
+                        if (other === button || other.dataset.profitKey !== adProfitKey(row)) return;
+                        const otherRow = duplicates.find(item => adAnalysisRowKey(item) === other.closest("tr").querySelector("input[data-ad-analysis-key]").dataset.adAnalysisKey);
+                        if (!otherRow) return;
+                        other.closest("td").querySelector("input").value = value == null ? "" : value;
+                        other.closest("tr").querySelector(".ad-profit-advice").innerHTML = adProfitAdvice(otherRow);
+                    });
+                }
+                note.textContent = value === null ? "已清除" : "已保存";
+            } catch (error) {
+                note.textContent = error.message || "保存失败，请重试";
+            } finally {
+                button.disabled = false;
+                input.disabled = false;
+            }
+        }
+
         function renderAdAnalysisLinks() {
             const rows = filteredAdAnalysisLinks();
             const pages = Math.max(1, Math.ceil(rows.length / adAnalysisPageSize));
             adAnalysisPage = Math.max(1, Math.min(adAnalysisPage, pages));
             const pageRows = currentAdAnalysisPageRows();
             if (!pageRows.length) {
-                adAnalysisLinkBody.innerHTML = '<tr><td class="empty-state" colspan="13">当前筛选没有广告链接数据</td></tr>';
+                adAnalysisLinkBody.innerHTML = '<tr><td class="empty-state" colspan="15">当前筛选没有广告链接数据</td></tr>';
             } else {
                 adAnalysisLinkBody.innerHTML = pageRows.map(row => {
                     const metrics = row.metrics || {};
@@ -24310,7 +24897,7 @@
                     return `<tr>
                         <td><input type="checkbox" data-ad-analysis-key="${escapeHtml(rowKey)}" onchange="toggleAdAnalysisRowSelection(this.dataset.adAnalysisKey, this.checked)" ${adAnalysisSelectedRows.has(rowKey) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.item_id || "广告")}"></td>
                         <td><strong>${escapeHtml(row.store_name || "-")}</strong><span class="market-metric-note">${escapeHtml([row.salesperson || "未分配", row.group_name || "未分组"].join(" · "))}</span><span class="market-metric-note">${escapeHtml(row.site_id || "-")} · ${escapeHtml(row.account_name || row.advertiser_name || "-")}</span></td>
-                        <td>${product}<span class="market-metric-note">${escapeHtml(row.item_id || "-")}</span></td>
+                        <td><div style="display:flex;gap:10px;align-items:center">${/^https:\/\//i.test(row.thumbnail_url || "") ? `<img src="${escapeHtml(row.thumbnail_url)}" alt="商品图片" loading="lazy" style="width:64px;height:64px;object-fit:contain;border-radius:6px" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span hidden>暂无图片</span>` : '<span>暂无图片</span>'}<div>${product}<span class="market-metric-note">${escapeHtml(row.item_id || "-")}</span></div></div></td>
                         <td><strong>${escapeHtml(row.campaign_name || `活动 ${row.campaign_id || "-"}`)}</strong><span class="market-metric-note">日预算 ${adAnalysisMoney(row.currency_id, row.campaign_budget)}</span></td>
                         <td>${escapeHtml(row.ad_group_type || "-")} #${escapeHtml(row.ad_group_id || "-")}</td>
                         <td>${adAnalysisStatusTag(row.ad_group_status || row.status)}</td>
@@ -24321,6 +24908,8 @@
                         <td>${storeLinkNumber(metrics.ctr, 2)}% / ${adAnalysisMoney(row.currency_id, metrics.cpc)}</td>
                         <td>${storeLinkNumber(metrics.units_quantity, 0)} / ${storeLinkNumber(metrics.cvr, 2)}%</td>
                         <td>${adAnalysisMoney(row.currency_id, metrics.direct_amount)}<span class="market-metric-note">间接 ${adAnalysisMoney(row.currency_id, metrics.indirect_amount)}</span></td>
+                        <td><label>${escapeHtml(row.currency_id || "未标明币种")} / 件 <input type="number" step="0.01" min="-1000000000000" max="1000000000000" aria-label="${escapeHtml(row.item_id)} 单件广告前利润" value="${row.unit_profit == null ? "" : escapeHtml(row.unit_profit)}" placeholder="未填写" style="width:115px"></label><button type="button" data-profit-key="${escapeHtml(adProfitKey(row))}" onclick="saveAdProfit(this)">保存</button><span class="market-metric-note ad-profit-save-note">留空保存可清除</span></td>
+                        <td class="ad-profit-advice" style="min-width:220px">${adProfitAdvice(row)}</td>
                     </tr>`;
                 }).join("");
             }
@@ -24439,12 +25028,19 @@
                 const errorText = errors.length
                     ? `；${errors.length} 个账户读取失败：${errors.slice(0, 3).map(row => `${row.store_name || row.site_id || "账户"}（${row.message || "未知错误"}）`).join("、")}`
                     : "";
+                const skipped = Array.isArray(adAnalysisData.skipped) ? adAnalysisData.skipped : [];
+                const skippedPermissionCount = skipped.filter(row => row.reason === "no_advertising_permissions").length;
+                const skippedNotEnabledCount = skipped.filter(row => row.reason === "product_ads_not_enabled").length;
+                const skippedParts = [];
+                if (skippedPermissionCount) skippedParts.push(`已跳过 ${skippedPermissionCount} 个无 Product Ads 权限的店铺`);
+                if (skippedNotEnabledCount) skippedParts.push(`已跳过 ${skippedNotEnabledCount} 个未开通 Product Ads 的店铺`);
+                const skippedText = skippedParts.length ? `；${skippedParts.join("；")}` : "";
                 if (!adAnalysisData.snapshot_available) {
                     adAnalysisMessage.textContent = "还没有广告分析数据，请选择更新日期和范围后点击“更新数据”。";
                 } else {
                     const sourceLabel = force ? "已刷新" : "已展示上次更新的";
                     const partialLabel = adAnalysisData.partial_snapshot ? "（本次日期与全量快照不同，仅展示本次刷新范围）" : "";
-                    adAnalysisMessage.textContent = `${sourceLabel} ${Number(adAnalysisData.summary?.account_count || 0).toLocaleString("zh-CN")} 个广告账户、${Number(adAnalysisData.summary?.link_count || 0).toLocaleString("zh-CN")} 条广告链接；更新时间 ${adAnalysisData.generated_at || "-"}${partialLabel}${errorText}`;
+                    adAnalysisMessage.textContent = `${sourceLabel} ${Number(adAnalysisData.summary?.account_count || 0).toLocaleString("zh-CN")} 个广告账户、${Number(adAnalysisData.summary?.link_count || 0).toLocaleString("zh-CN")} 条广告链接；更新时间 ${adAnalysisData.generated_at || "-"}${partialLabel}${skippedText}${errorText}`;
                 }
             } catch (error) {
                 adAnalysisMessage.textContent = `广告分析加载失败：${error.message || error}`;
@@ -24686,6 +25282,10 @@
         let aiVideoJobs = [];
         let aiVideoJobsLoaded = false;
         let aiVideoJobsLoading = false;
+        let aiVideoLoadController = null;
+        let aiVideoCurrentPage = 1;
+        let aiVideoTotalPages = 1;
+        let aiVideoTotalJobs = 0;
         let aiVideoBulkDeleting = false;
         const aiVideoSelectedFailedJobIds = new Set();
         let aiVideoProviderConfigured = false;
@@ -25125,8 +25725,13 @@
                     if (xhr.status < 200 || xhr.status >= 300 || payload.status !== "success") throw new Error(payload.message || `创建失败（${xhr.status}）`);
                     aiVideoSetMessage(payload.message || (aiVideoLocalTranscodeEnabled() ? "本地视频转换任务已创建。" : "AI 视频任务已创建。"), "success");
                     clearAiVideoAssets();
+                    document.getElementById("ai-video-creator-filter").value = "";
+                    document.getElementById("ai-video-date-from").value = "";
+                    document.getElementById("ai-video-date-to").value = "";
+                    aiVideoSelectedFailedJobIds.clear();
+                    aiVideoCurrentPage = 1;
                     aiVideoJobsLoaded = false;
-                    loadAiVideoJobs(true);
+                    loadAiVideoJobs(true, 1);
                 } catch (error) {
                     aiVideoSetMessage(error.message || String(error), "error");
                 }
@@ -25138,6 +25743,68 @@
 
         function aiVideoJobState(status) {
             return {queued: "排队中", submitting: "提交中", generating: "生成中", succeeded: "已完成", failed: "失败", canceled: "已取消"}[status] || status || "未知";
+        }
+
+        function aiVideoDateBoundary(value, nextDay = false) {
+            if (!value) return "";
+            const parts = value.split("-").map(Number);
+            if (parts.length !== 3 || parts.some(part => !Number.isFinite(part))) return "";
+            const date = new Date(parts[0], parts[1] - 1, parts[2]);
+            if (nextDay) date.setDate(date.getDate() + 1);
+            return date.toISOString();
+        }
+
+        function updateAiVideoCreatorOptions(creators) {
+            const select = document.getElementById("ai-video-creator-filter");
+            if (!select || !Array.isArray(creators)) return;
+            const selected = select.value;
+            select.innerHTML = '<option value="">全部生成者</option>' + creators.map(creator =>
+                `<option value="${Number(creator.id) || 0}">${escapeHtml(creator.label || creator.name || "历史任务 / 未知生成者")}</option>`
+            ).join("");
+            if ([...select.options].some(option => option.value === selected)) select.value = selected;
+        }
+
+        function renderAiVideoPagination() {
+            const start = aiVideoTotalJobs ? (aiVideoCurrentPage - 1) * 30 + 1 : 0;
+            const end = Math.min(aiVideoCurrentPage * 30, aiVideoTotalJobs);
+            const summary = document.getElementById("ai-video-pagination-summary");
+            const pageLabel = document.getElementById("ai-video-pagination-page");
+            const previous = document.getElementById("ai-video-page-previous");
+            const next = document.getElementById("ai-video-page-next");
+            if (summary) summary.textContent = `显示 ${start}–${end} 条，共 ${aiVideoTotalJobs} 条`;
+            if (pageLabel) pageLabel.textContent = `第 ${aiVideoCurrentPage} / ${aiVideoTotalPages} 页`;
+            if (previous) previous.disabled = aiVideoJobsLoading || aiVideoCurrentPage <= 1;
+            if (next) next.disabled = aiVideoJobsLoading || aiVideoCurrentPage >= aiVideoTotalPages;
+            const filterSummary = document.getElementById("ai-video-filter-summary");
+            if (filterSummary) filterSummary.textContent = `共 ${aiVideoTotalJobs} 条任务`;
+        }
+
+        function goToAiVideoPage(delta) {
+            const page = Math.min(aiVideoTotalPages, Math.max(1, aiVideoCurrentPage + Number(delta || 0)));
+            if (page === aiVideoCurrentPage) return;
+            aiVideoSelectedFailedJobIds.clear();
+            aiVideoCurrentPage = page;
+            loadAiVideoJobs(true, page);
+        }
+
+        function applyAiVideoFilters() {
+            aiVideoSelectedFailedJobIds.clear();
+            aiVideoCurrentPage = 1;
+            loadAiVideoJobs(true, 1);
+        }
+
+        function resetAiVideoFilters() {
+            document.getElementById("ai-video-creator-filter").value = "";
+            document.getElementById("ai-video-date-from").value = "";
+            document.getElementById("ai-video-date-to").value = "";
+            applyAiVideoFilters();
+        }
+
+        function formatAiVideoCreatedAt(value) {
+            const date = value ? new Date(value) : null;
+            return date && !Number.isNaN(date.getTime())
+                ? date.toLocaleString()
+                : "时间未知";
         }
 
         function aiVideoEditSetMessage(text, state = "") {
@@ -25347,10 +26014,13 @@
             const container = document.getElementById("ai-video-jobs");
             if (!container) return;
             renderAiVideoBulkActions();
+            renderAiVideoPagination();
             if (!aiVideoJobs.length) {
                 aiVideoSelectedFailedJobIds.clear();
                 renderAiVideoBulkActions();
-                container.innerHTML = '<div class="empty-state">还没有生成任务。把素材拖到上方即可开始。</div>';
+                container.innerHTML = aiVideoTotalJobs
+                    ? '<div class="empty-state">当前页没有任务，请返回上一页。</div>'
+                    : '<div class="empty-state">没有符合条件的任务。把素材拖到上方即可开始生成。</div>';
                 return;
             }
             container.innerHTML = aiVideoJobs.map(job => {
@@ -25370,12 +26040,13 @@
                     <button class="primary" type="button" onclick="publishAiVideoJob('${escapeHtml(job.id)}', ${linkId}, this)" ${linkId ? "" : "disabled title=\"该任务未关联店铺链接\""}>上传到关联链接</button>` : "");
                 const latestPublish = Array.isArray(job.publish_attempts) ? job.publish_attempts.at(-1) : null;
                 const publishLog = latestPublish ? `<span class="ai-video-publish-log ${escapeHtml(latestPublish.status || "")}">最近上传：${escapeHtml(latestPublish.message || latestPublish.status || "未知结果")}${latestPublish.clip_uuid ? ` · ${escapeHtml(latestPublish.clip_uuid)}` : ""}</span>` : "";
+                const creatorMeta = job.creator_name ? `${escapeHtml(job.creator_name)} · ` : "";
                 return `<article class="ai-video-job ${isFailedSelected ? "selected" : ""}" data-job-id="${escapeHtml(jobId)}" role="group" tabindex="0" title="点击查看历史素材和文案，并修改后重试" onclick="openAiVideoJobEditor('${escapeHtml(job.id)}', event)" onkeydown="if(event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')){event.preventDefault();openAiVideoJobEditor('${escapeHtml(job.id)}', event)}">
                     ${selectControl}
                     <div class="ai-video-job-media">${media}</div>
                     <div class="ai-video-job-copy">
                         <div class="ai-video-job-title"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong><span class="ai-video-job-state ${escapeHtml(status)}">${escapeHtml(aiVideoJobState(status))}</span></div>
-                        <p>${escapeHtml(target.item_id || "未关联商品")} · ${escapeHtml(job.message || "")}<br>${Number(job.duration || 10)} 秒 · 720P · 9:16 · ${Number(job.assets?.length || 0)} 个素材${publishLog ? `<br>${publishLog}` : ""}</p>
+                        <p>${creatorMeta}${escapeHtml(formatAiVideoCreatedAt(job.created_at))}<br>${escapeHtml(target.item_id || "未关联商品")} · ${escapeHtml(job.message || "")}<br>${Number(job.duration || 10)} 秒 · 720P · 9:16 · ${Number(job.assets?.length || 0)} 个素材${publishLog ? `<br>${publishLog}` : ""}</p>
                         <div class="ai-video-job-actions">${actions}</div>
                     </div>
                 </article>`;
@@ -25450,25 +26121,45 @@
                 aiVideoSetMessage(error.message || String(error), "error");
             } finally {
                 aiVideoBulkDeleting = false;
-                renderAiVideoJobs();
+                aiVideoJobsLoaded = false;
+                await loadAiVideoJobs(true);
             }
         }
 
-        async function loadAiVideoJobs(force = false) {
-            if (aiVideoJobsLoading || (aiVideoJobsLoaded && !force)) return;
+        async function loadAiVideoJobs(force = false, requestedPage = aiVideoCurrentPage) {
+            if (aiVideoJobsLoading && !force) return;
+            if (aiVideoJobsLoaded && !force && requestedPage === aiVideoCurrentPage) return;
+            if (aiVideoLoadController) aiVideoLoadController.abort();
+            const controller = new AbortController();
+            aiVideoLoadController = controller;
             aiVideoJobsLoading = true;
+            aiVideoCurrentPage = Math.max(1, Number(requestedPage) || 1);
+            renderAiVideoPagination();
             try {
-                const response = await fetch("/api/ai-videos/jobs?limit=30");
+                const params = new URLSearchParams({limit: "30", page: String(aiVideoCurrentPage)});
+                const creator = document.getElementById("ai-video-creator-filter")?.value || "";
+                const from = document.getElementById("ai-video-date-from")?.value || "";
+                const to = document.getElementById("ai-video-date-to")?.value || "";
+                if (creator) params.set("creator_id", creator);
+                if (from) params.set("created_from", aiVideoDateBoundary(from));
+                if (to) params.set("created_before", aiVideoDateBoundary(to, true));
+                const response = await fetch(`/api/ai-videos/jobs?${params.toString()}`, {signal: controller.signal});
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") throw new Error(payload.message || "成品库加载失败");
-                aiVideoJobs = Array.isArray(payload.data?.rows) ? payload.data.rows : [];
-                aiVideoSettings = payload.data?.settings || {};
-                aiVideoProviderConfigured = Boolean(payload.data?.settings?.configured);
-                aiVideoPublicBaseConfigured = Boolean(payload.data?.settings?.public_base_configured);
+                if (controller !== aiVideoLoadController) return;
+                const data = payload.data || {};
+                aiVideoJobs = Array.isArray(data.rows) ? data.rows : [];
+                aiVideoTotalJobs = Math.max(0, Number(data.total) || 0);
+                aiVideoTotalPages = Math.max(1, Number(data.total_pages) || 1);
+                aiVideoCurrentPage = Math.max(1, Number(data.page) || aiVideoCurrentPage);
+                updateAiVideoCreatorOptions(data.creators);
+                aiVideoSettings = data.settings || {};
+                aiVideoProviderConfigured = Boolean(data.settings?.configured);
+                aiVideoPublicBaseConfigured = Boolean(data.settings?.public_base_configured);
                 const state = document.getElementById("ai-video-provider-state");
-                const availableProviders = Array.isArray(payload.data.settings.available_providers) ? payload.data.settings.available_providers : [];
-                state.textContent = availableProviders.length ? `${availableProviders.join(" / ")} · 可用` : (payload.data.settings.local_transcode_available ? "本地格式转换可用 · 模型待配置" : "待配置视频模型凭证");
-                state.className = `market-status-tag ${(aiVideoProviderConfigured || payload.data.settings.local_transcode_available) ? "ok" : "failed"}`;
+                const availableProviders = Array.isArray(data.settings?.available_providers) ? data.settings.available_providers : [];
+                state.textContent = availableProviders.length ? `${availableProviders.join(" / ")} · 可用` : (data.settings?.local_transcode_available ? "本地格式转换可用 · 模型待配置" : "待配置视频模型凭证");
+                state.className = `market-status-tag ${(aiVideoProviderConfigured || data.settings?.local_transcode_available) ? "ok" : "failed"}`;
                 if (!aiVideoProviderConfigured && !aiVideoLocalTranscodeEnabled()) aiVideoSetMessage("配置 Seedance 或 Wan 任意一个模型即可生成；本地格式转换无需 Token。", "error");
                 else if (!aiVideoAssets.length) aiVideoSetMessage("服务已就绪，请添加原始素材。", "success");
                 aiVideoJobsLoaded = true;
@@ -25479,9 +26170,13 @@
                     aiVideoPollTimer = window.setTimeout(() => { aiVideoJobsLoaded = false; loadAiVideoJobs(true); }, 10000);
                 }
             } catch (error) {
-                aiVideoSetMessage(error.message || String(error), "error");
+                if (error.name !== "AbortError") aiVideoSetMessage(error.message || String(error), "error");
             } finally {
-                aiVideoJobsLoading = false;
+                if (controller === aiVideoLoadController) {
+                    aiVideoLoadController = null;
+                    aiVideoJobsLoading = false;
+                    renderAiVideoPagination();
+                }
             }
         }
 
@@ -25581,6 +26276,8 @@
                 aiVideoJobs = aiVideoJobs.filter(item => item.id !== jobId);
                 renderAiVideoJobs();
                 aiVideoSetMessage("视频已从成品库删除。", "success");
+                aiVideoJobsLoaded = false;
+                await loadAiVideoJobs(true);
             } catch (error) {
                 aiVideoSetMessage(error.message || String(error), "error");
             }
@@ -25589,8 +26286,19 @@
         async function openAiVideoLibraryForLink(linkId) {
             const row = storeLinkRows.find(item => Number(item.id) === Number(linkId));
             if (!row) return;
-            await loadAiVideoJobs(true);
-            const completed = aiVideoJobs.filter(job => job.status === "succeeded");
+            let completed = [];
+            try {
+                const response = await fetch("/api/ai-videos/jobs?limit=30");
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || "AI 视频成品库加载失败");
+                }
+                completed = (Array.isArray(payload.data?.rows) ? payload.data.rows : [])
+                    .filter(job => job.status === "succeeded");
+            } catch (error) {
+                aiVideoSetMessage(error.message || String(error), "error");
+                return;
+            }
             let dialog = document.getElementById("store-link-ai-video-library-dialog");
             if (!dialog) {
                 dialog = document.createElement("dialog");
@@ -26336,7 +27044,7 @@
             const products = Number(data?.product_count || 0);
             const storeWorkers = Math.max(1, Number(data?.store_workers || 1));
             const detailWorkers = Math.max(1, Number(data?.detail_workers_per_store || 1));
-            const concurrency = `并发 ${storeWorkers} 家店铺 × ${detailWorkers} 详情线程`;
+            const concurrency = canChangeTaskWorkers ? `并发 ${storeWorkers} 家店铺 × ${detailWorkers} 详情线程` : "";
             const logs = Array.isArray(data?.logs) ? data.logs : [];
             if (storeLinkSyncLog) {
                 const stickToBottom = (
@@ -26349,8 +27057,8 @@
                 if (stickToBottom) storeLinkSyncLog.scrollTop = storeLinkSyncLog.scrollHeight;
             }
             storeLinkSyncState.textContent = data?.status === "idle"
-                ? `自动同步已开启 · 每 ${Number(data?.auto_sync_days || 3)} 天检查一次 · ${concurrency}`
-                : `${data?.message || "正在同步"}${total ? ` · 店铺 ${processed}/${total}` : ""} · ${concurrency} · 发现 ${discovered} · 详情 ${details} · 产品 ${products} · 详情失败 ${detailFailed} · 新增 ${inserted} · 更新 ${updated}`;
+                ? `自动同步已开启 · 每 ${Number(data?.auto_sync_days || 3)} 天检查一次${concurrency ? ` · ${concurrency}` : ""}`
+                : `${data?.message || "正在同步"}${total ? ` · 店铺 ${processed}/${total}` : ""}${concurrency ? ` · ${concurrency}` : ""} · 发现 ${discovered} · 详情 ${details} · 产品 ${products} · 详情失败 ${detailFailed} · 新增 ${inserted} · 更新 ${updated}`;
             storeLinkSyncAllButton.disabled = storeLinkSyncRunning;
             storeLinkSyncButton.disabled = storeLinkSyncRunning;
             storeLinkSyncAllButton.textContent = storeLinkSyncRunning ? "正在同步所有店铺..." : "同步所有店铺链接";
@@ -26629,7 +27337,7 @@
             prohibitedSyncState.textContent = prohibitedSyncRunning
                 ? `${data?.message || "正在同步禁售"}${total ? ` · 店铺 ${processed}/${total}` : ""} · 当前禁售 ${Number(data?.prohibited_count || 0)}；${rightsState?.message || "正在同步权利人案件"} · 待回复 ${Number(rightsState?.rights_holder_count || 0)}`
                 : (autoEnabled
-                    ? `每 ${Number(data?.auto_sync_hours || 12)} 小时自动全量更新 · ${Number(data?.store_workers || 0)} 个店铺线程 · 官方 API`
+                    ? `每 ${Number(data?.auto_sync_hours || 12)} 小时自动全量更新${canChangeTaskWorkers ? ` · ${Number(data?.store_workers || 0)} 个店铺线程` : ""} · 官方 API`
                     : "自动全量更新已关闭，可继续手动同步");
             const logs = Array.isArray(data?.logs) ? data.logs : [];
             const rightsLogs = Array.isArray(rightsState?.logs)
@@ -26946,6 +27654,8 @@
 
         function renderInfringementKnowledgeAnalysisStatus(data) {
             const running = Boolean(data?.running);
+            const globalIpButton = document.getElementById("fetch-global-ip-btn");
+            if (globalIpButton) globalIpButton.disabled = running;
             infringementAnalysisStatus.textContent = data?.message || "等待启动";
             infringementAnalysisLog.textContent = Array.isArray(data?.logs) && data.logs.length
                 ? data.logs.join("\n")
@@ -26994,15 +27704,16 @@
             }
         }
 
-        async function startInfringementKnowledgeAnalysis() {
+        async function startInfringementKnowledgeAnalysis(globalIp = false) {
             if (!hasWorkbenchPermission("infringement_knowledge.manage")) return;
-            if (!window.confirm("自动分析会调用 AI，并把分析结果写入知识库。人工记录不会被覆盖，是否继续？")) return;
+            if (!globalIp && !window.confirm("自动分析会调用 AI，并把分析结果写入知识库。人工记录不会被覆盖，是否继续？")) return;
             startInfringementAnalysisBtn.disabled = true;
             try {
                 const response = await fetch("/api/infringement-knowledge/analysis/start", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({
+                        global_ip: globalIp,
                         infraction_limit: Number(document.getElementById("infringement-analysis-infraction-limit").value || 10000),
                         active_limit: Number(document.getElementById("infringement-analysis-active-limit").value || 5000),
                         batch_size: 300,
@@ -28001,7 +28712,7 @@
 
         function renderFundStatus(value) {
             const status = String(value || "无数据");
-            const className = status === "无数据" ? "empty" : (status.includes("成功") ? "" : "fail");
+            const className = status === "无数据" ? "empty" : ((status.includes("成功") || status === "手动更新") ? "" : "fail");
             return `<span class="status-tag ${className}">${escapeHtml(status)}</span>`;
         }
 
@@ -28011,10 +28722,15 @@
             const owners = Array.from(new Set(
                 fundRows.map(row => String(row["店铺归属人"] || "未分配").trim() || "未分配")
             )).sort((a, b) => a.localeCompare(b, "zh-CN"));
-            fundOwnerFilter.innerHTML = '<option value="">全部归属人</option>' + owners.map(owner => (
+            fundOwnerFilter.innerHTML = '<option value="">全部业务员</option>' + owners.map(owner => (
                 `<option value="${escapeHtml(owner)}">${escapeHtml(owner)}</option>`
             )).join("");
             if (owners.includes(selectedOwner)) fundOwnerFilter.value = selectedOwner;
+            const groupFilter = document.getElementById("fund-group-filter");
+            const selectedGroup = groupFilter.value;
+            const groups = [...new Set(fundRows.map(row => row["店铺组"] || "未分组"))].sort();
+            groupFilter.innerHTML = '<option value="">全部店铺组</option>' + groups.map(group => `<option value="${escapeHtml(group)}">${escapeHtml(group)}</option>`).join("");
+            if (groups.includes(selectedGroup)) groupFilter.value = selectedGroup;
         }
 
         function fundRowOwner(row) {
@@ -28023,7 +28739,8 @@
 
         function visibleFundRows() {
             const owner = String(fundOwnerFilter?.value || "");
-            return fundRows.filter(row => !owner || fundRowOwner(row) === owner);
+            const group = document.getElementById("fund-group-filter").value;
+            return fundRows.filter(row => (!owner || fundRowOwner(row) === owner) && (!group || (row["店铺组"] || "未分组") === group));
         }
 
         function visibleFundShops() {
@@ -28070,11 +28787,11 @@
             const visibleIds = visibleShops.map(shop => shop.windowId).filter(Boolean);
             const selectedVisibleCount = visibleIds.filter(windowId => selectedFundWindowIds.has(windowId)).length;
             const owner = String(fundOwnerFilter?.value || "");
-            collectFundsBtn.disabled = fundCollectionRunning || (!allShops && selectedFundWindowIds.size === 0);
+            collectFundsBtn.disabled = fundCollectionRunning || (!allShops && selectedFundWindowIds.size === 0) || !hasWorkbenchPermission("funds.execute");
             collectFundsBtn.textContent = fundCollectionRunning
                 ? "资金采集中..."
                 : (allShops
-                    ? (owner ? `运行${owner}全部店铺` : "运行全部店铺任务")
+                    ? ((owner || document.getElementById("fund-group-filter").value) ? "运行筛选店铺任务" : "运行全部店铺任务")
                     : `执行所选 ${selectedFundWindowIds.size} 家`);
             if (fundSelectionSummary) {
                 fundSelectionSummary.textContent = allShops
@@ -28096,7 +28813,7 @@
                 }
             });
             document.querySelectorAll(".fund-refresh-action").forEach(button => {
-                button.disabled = fundCollectionRunning;
+                button.disabled = fundCollectionRunning || !hasWorkbenchPermission("funds.execute");
                 button.textContent = fundCollectionRunning ? "采集中" : "刷新店铺";
             });
         }
@@ -28104,7 +28821,7 @@
         function renderFundsTable() {
             if (!fundBody) return;
             const rows = visibleFundRows();
-            fundLatestTime.textContent = fundLatestSubmitTime || "-";
+            fundLatestTime.textContent = rows.map(row => row["更新时间"] || row["提交时间"] || "").sort().at(-1) || "-";
             fundShopTotal.textContent = new Set(rows.map(row => row["店铺名"]).filter(Boolean)).size;
             fundReleasedTotal.textContent = formatFundTotal(
                 rows.reduce((sum, row) => sum + parseFundAmount(row["已释放美元"]), 0)
@@ -28114,7 +28831,7 @@
             );
 
             if (!rows.length) {
-                fundBody.innerHTML = '<tr><td class="empty-state" colspan="9">当前筛选条件下暂无资金数据</td></tr>';
+                fundBody.innerHTML = '<tr><td class="empty-state" colspan="10">当前筛选条件下暂无资金数据</td></tr>';
                 updateFundScopeControls();
                 return;
             }
@@ -28128,13 +28845,14 @@
                     <tr>
                         <td><input class="fund-row-select" type="checkbox" value="${escapeHtml(windowId)}" aria-label="选择店铺 ${escapeHtml(shopName)}" onchange="toggleFundShop('${encodeURIComponent(windowId)}', this.checked)" ${checked ? "checked" : ""} ${windowId ? "" : "disabled"}></td>
                         <td title="${escapeHtml(row["店铺归属人"] || "未分配")}">${escapeHtml(row["店铺归属人"] || "未分配")}</td>
+                        <td>${escapeHtml(row["店铺组"] || "未分组")}</td>
                         <td title="${escapeHtml(shopName)}">${escapeHtml(shopName)}</td>
                         <td>${escapeHtml(row["站点"] || "未配置站点")}</td>
                         <td class="fund-amount" title="${escapeHtml(released)}">${escapeHtml(released)}</td>
                         <td class="fund-amount pending" title="${escapeHtml(pending)}">${escapeHtml(pending)}</td>
-                        <td>${renderFundStatus(row["状态"])}</td>
+                        <td>${renderFundStatus(row["状态"])}${row["原因"] ? `<div style="white-space:normal;max-width:320px">${escapeHtml(row["原因"])}</div>` : ""}</td>
                         <td title="${escapeHtml(row["更新时间"] || row["提交时间"] || "")}">${escapeHtml(row["更新时间"] || row["提交时间"] || "-")}</td>
-                        <td><button class="secondary fund-refresh-action" type="button" onclick="runFundCollection('${encodeURIComponent(shopName)}', '${encodeURIComponent(windowId)}', this)">刷新店铺</button></td>
+                        <td><button class="secondary fund-refresh-action" type="button" onclick="runFundCollection('${encodeURIComponent(shopName)}', '${encodeURIComponent(windowId)}', this)">刷新店铺</button> ${hasWorkbenchPermission("funds.execute") ? `<button class="secondary" type="button" onclick="editManualFunds(${fundRows.indexOf(row)})">填写 / 修改</button>` : ""}</td>
                     </tr>
                 `;
             }).join("");
@@ -28143,7 +28861,7 @@
 
         async function loadLatestFunds() {
             if (!fundBody) return;
-            fundBody.innerHTML = '<tr><td class="empty-state" colspan="9">正在加载资金数据...</td></tr>';
+            fundBody.innerHTML = '<tr><td class="empty-state" colspan="10">正在加载资金数据...</td></tr>';
             try {
                 const response = await fetch("/api/funds/latest", {cache: "no-store"});
                 const payload = await response.json();
@@ -28158,8 +28876,41 @@
                 renderFundsTable();
             } catch (err) {
                 fundsLoaded = false;
-                fundBody.innerHTML = `<tr><td class="empty-state" colspan="9">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+                fundBody.innerHTML = `<tr><td class="empty-state" colspan="10">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
             }
+        }
+
+        let editingFundRow = null;
+        function editManualFunds(index) {
+            editingFundRow = fundRows[index];
+            if (!editingFundRow) return;
+            document.getElementById("fund-edit-title").textContent = `${editingFundRow["店铺名"]} · ${editingFundRow["站点"]} 资金`;
+            for (const [id, field] of [["released", "已释放美元"], ["pending", "未释放美元"]]) {
+                const value = editingFundRow[field];
+                document.getElementById(`fund-edit-${id}`).value = value === "" || value == null ? "" : parseFundAmount(value).toFixed(2);
+            }
+            document.getElementById("fund-edit-error").textContent = "";
+            document.getElementById("fund-edit-dialog").showModal();
+        }
+        async function saveManualFunds(event) {
+            event.preventDefault();
+            const button = document.getElementById("fund-edit-save");
+            if (button.disabled || !editingFundRow) return;
+            button.disabled = true;
+            try {
+                const response = await fetch("/api/funds/manual", {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({shop_name: editingFundRow["店铺名"], site: editingFundRow["站点"],
+                        released: document.getElementById("fund-edit-released").value,
+                        pending: document.getElementById("fund-edit-pending").value}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "保存失败");
+                document.getElementById("fund-edit-dialog").close();
+                await loadLatestFunds();
+            } catch (error) {
+                document.getElementById("fund-edit-error").textContent = error.message;
+            } finally { button.disabled = false; }
         }
 
         function renderFundCollectionStatus(state) {
@@ -28188,6 +28939,7 @@
                 }
                 renderFundCollectionStatus(payload.data || {});
                 if (fundCollectionRunning) {
+                    await loadLatestFunds();
                     fundStatusPollTimer = window.setTimeout(loadFundCollectionStatus, 2000);
                 } else if (wasRunning) {
                     await loadLatestFunds();
@@ -28208,7 +28960,7 @@
             const rowRefresh = Boolean(rowShopName || rowWindowId);
             const allShops = rowRefresh ? false : Boolean(fundAllToggle?.checked);
             const windowIds = rowRefresh ? [rowWindowId] : Array.from(selectedFundWindowIds);
-            if (!allShops && !windowIds.filter(Boolean).length) {
+            if (!allShops && !rowRefresh && !windowIds.filter(Boolean).length) {
                 alert("请至少勾选一家店铺");
                 return;
             }
@@ -28222,6 +28974,8 @@
                     all_shops: allShops,
                     salesperson: String(fundOwnerFilter?.value || ""),
                     window_ids: windowIds.filter(Boolean),
+                    shop_name: rowShopName,
+                    group_name: String(document.getElementById("fund-group-filter").value || ""),
                 };
                 if (canChangeTaskWorkers) fundPayload.max_workers = 3;
                 const response = await fetch("/api/funds/collect", {
@@ -28765,7 +29519,7 @@
                 elements.summary.textContent = !shopOptions.length
                     ? "当前没有失败店铺，无需补跑"
                     : shops.length
-                    ? `将补跑 ${shops.length} 家失败店铺，并发 ${workers}`
+                    ? `将补跑 ${shops.length} 家失败店铺${canChangeTaskWorkers ? `，并发 ${workers}` : ""}`
                     : "请至少选择一个店铺";
                 return;
             }
@@ -28926,6 +29680,70 @@
             }
         }
 
+        let reputationBrowserTaskId = "";
+        async function refreshReputationBrowserAgents() {
+            const select = document.getElementById("reputation-browser-agent");
+            const previous = select.value;
+            try {
+                const response = await fetch("/api/execution-agents?capability=daily_task", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "读取 Agent 失败");
+                select.replaceChildren();
+                for (const agent of payload.data?.agents || []) {
+                    if (agent.online) select.add(new Option(agent.name || agent.agent_id, agent.agent_id));
+                }
+                if (!select.options.length) select.add(new Option("暂无在线 Agent", ""));
+                if (Array.from(select.options).some(option => option.value === previous)) select.value = previous;
+            } catch (error) {
+                document.getElementById("reputation-browser-status").textContent = error.message;
+            }
+        }
+
+        async function pollReputationBrowserSync() {
+            if (!reputationBrowserTaskId) return;
+            const status = document.getElementById("reputation-browser-status");
+            try {
+                const response = await fetch(`/api/reputation/browser-sync/${encodeURIComponent(reputationBrowserTaskId)}`, {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "读取同步状态失败");
+                status.textContent = payload.data.message || "同步中...";
+                if (!payload.data.running) {
+                    reputationBrowserTaskId = "";
+                    updateReputationTableSelection();
+                    await loadLatestReputation();
+                    return;
+                }
+            } catch (error) {
+                status.textContent = `${error.message}，正在重试...`;
+            }
+            setTimeout(pollReputationBrowserSync, 2000);
+        }
+
+        async function runReputationBrowserSync() {
+            if (reputationBrowserTaskId || !selectedReputationShops.size) return;
+            const button = document.getElementById("reputation-browser-sync-btn");
+            const status = document.getElementById("reputation-browser-status");
+            button.disabled = true;
+            try {
+                const execution_target = document.getElementById("reputation-browser-target").value;
+                const agent_id = document.getElementById("reputation-browser-agent").value;
+                if (execution_target === "agent" && !agent_id) throw new Error("请刷新并选择在线 Agent");
+                const response = await fetch("/api/reputation/browser-sync", {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({shops: Array.from(selectedReputationShops), execution_target, agent_id}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "同步启动失败");
+                reputationBrowserTaskId = payload.data.task_id;
+                status.textContent = payload.message;
+                setTimeout(pollReputationBrowserSync, 1000);
+            } catch (error) {
+                status.textContent = error.message;
+            } finally {
+                updateReputationTableSelection();
+            }
+        }
+
         function reputationRowCheckboxes() {
             return Array.from(document.querySelectorAll(".reputation-row-select"));
         }
@@ -28936,6 +29754,9 @@
             selectedReputationShops.forEach(shopName => {
                 if (!availableShops.has(shopName)) selectedReputationShops.delete(shopName);
             });
+            const browserSyncButton = document.getElementById("reputation-browser-sync-btn");
+            if (browserSyncButton) browserSyncButton.disabled = Boolean(reputationBrowserTaskId)
+                || selectedReputationShops.size === 0 || !hasWorkbenchPermission("reputation.execute");
             checkboxes.forEach(checkbox => {
                 checkbox.checked = selectedReputationShops.has(checkbox.value);
                 checkbox.disabled = selectedReputationUpdateRunning;
@@ -31398,7 +32219,7 @@
 
         async function stopMercadoLoginTask() {
             if (!activeMercadoLoginTaskId || mercadoLoginStopRequested) return;
-            if (!window.confirm("确定停止当前店铺自动登录任务吗？该任务创建的并发进程和浏览器窗口会一起关闭。")) {
+            if (!window.confirm("确定停止当前店铺自动登录任务吗？相关任务和浏览器窗口会一起关闭。")) {
                 return;
             }
 
@@ -31670,7 +32491,7 @@
                 <tr>
                     <td>
                         <strong>${escapeHtml(user.display_name || user.username)}</strong>
-                        <span class="access-role-summary">${escapeHtml(user.username)}${user.email ? ` · ${escapeHtml(user.email)}` : ""}</span>
+                        <span class="access-role-summary">${escapeHtml(user.username)}${user.email ? ` · ${escapeHtml(user.email)}` : ""}${user.wechat_id ? ` · 微信号 ${escapeHtml(user.wechat_id)}` : ""}${user.phone ? ` · 手机 ${escapeHtml(user.phone)}` : ""}</span>
                     </td>
                     <td>${escapeHtml(user.department || "-")}</td>
                     <td>${escapeHtml(organizationNames.get(user.organization_key) || (user.organization_key === "wuhan-zeshun" ? "武汉泽顺" : user.organization_key || "武汉泽顺"))}</td>
@@ -31795,6 +32616,8 @@
             document.getElementById("access-display-name").value = user?.display_name || "";
             document.getElementById("access-department").value = user?.department || "";
             document.getElementById("access-email").value = user?.email || "";
+            document.getElementById("access-wechat-id").value = user?.wechat_id || "";
+            document.getElementById("access-phone").value = user?.phone || "";
             renderAccessOrganizationOptions(
                 user?.organization_key || selectedWorkbenchOrganization || "wuhan-zeshun",
             );
@@ -31852,6 +32675,8 @@
                 display_name: document.getElementById("access-display-name").value.trim(),
                 department: document.getElementById("access-department").value.trim(),
                 email: document.getElementById("access-email").value.trim(),
+                wechat_id: document.getElementById("access-wechat-id").value.trim(),
+                phone: document.getElementById("access-phone").value.trim(),
                 organization_key: document.getElementById("access-user-organization")?.value
                     || currentWorkbenchUser.organization_key
                     || "wuhan-zeshun",

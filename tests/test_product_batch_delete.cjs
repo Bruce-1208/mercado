@@ -19,7 +19,7 @@ function setup() {
       return {ok: true, json: async () => ({status: 'success', data: {deleted: 2}})};
     }, requests: [],
   });
-  for (const file of ['ai-original-products.js', '1688-products.js']) {
+  for (const file of ['ai-original-products.js', 'ai-original-workbench.js', '1688-products.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../bit/static', file), 'utf8'), context);
   }
   vm.runInContext(`

@@ -128,6 +128,16 @@ def _argos_batch_translate(
     # access avoids oversubscribing a macOS CPU when several publish jobs run.
     with _ARGOS_TRANSLATION_LOCK:
         try:
+            if target_code == "zh" and source_code in {"es", "pt"}:
+                # The supported Argos catalog exposes Spanish/Portuguese →
+                # English and English → Chinese models, so use that offline
+                # route for Mercado Libre's localized category names.
+                first_leg = _get_argos_translation(source_code, "en")
+                second_leg = _get_argos_translation("en", target_code)
+                return [
+                    str(second_leg.translate(first_leg.translate(text)) or "").strip()
+                    for text in texts
+                ]
             translation = _get_argos_translation(source_code, target_code)
             return [str(translation.translate(text) or "").strip() for text in texts]
         except ListingTranslationError:

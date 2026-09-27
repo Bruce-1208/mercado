@@ -12,6 +12,9 @@ REQUIRED_PAIRS = (
     # These models keep category selection deterministic and offline.
     ("es", "en"),
     ("pt", "en"),
+    # Store analysis displays official Spanish/Portuguese category labels in
+    # Simplified Chinese using the English pivot already installed above.
+    ("en", "zh"),
 )
 
 
@@ -66,6 +69,7 @@ def main() -> int:
         ("Olá, temos estoque.", "pt", "es"),
         ("Pulsera de cuarzo natural.", "es", "en"),
         ("Pulseira de quartzo natural.", "pt", "en"),
+        ("Home and Kitchen", "en", "zh"),
     )
     for text, source, target in checks:
         result = str(translate.translate(text, source, target) or "").strip()

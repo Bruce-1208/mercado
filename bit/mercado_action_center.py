@@ -372,7 +372,8 @@ def _upsert_watch_task(storage, *, organization_key, token_id, topic, resource, 
 def _refresh_order_watch_tasks(storage, token_ids: Iterable[int], organization_by_token: Mapping[int, str], *, now=None):
     """Convert stale local fulfillment/procurement signals into persistent tasks."""
     now = now or datetime.now()
-    rows = storage.list_mercado_action_center_orders(token_ids=token_ids, limit=600)
+    rows = storage.list_mercado_action_center_orders(token_ids=token_ids, limit=1000)
+    completed_age_watch_keys = []
     for row in rows or ():
         token_id = int(row.get("token_id") or 0)
         order_id = str(row.get("order_id") or "")
@@ -382,6 +383,8 @@ def _refresh_order_watch_tasks(storage, token_ids: Iterable[int], organization_b
         updated = _parse_datetime(row.get("last_updated") or row.get("date_created"))
         if updated is None:
             continue
+        created = _parse_datetime(row.get("date_created")) or updated
+        order_age = now - created
         age = now - updated
         raw = row.get("raw") if isinstance(row.get("raw"), dict) else {}
         shipment_status = str(
@@ -389,7 +392,39 @@ def _refresh_order_watch_tasks(storage, token_ids: Iterable[int], organization_b
             or (raw.get("shipping") or {}).get("status")
             or ""
         ).lower()
-        if str(row.get("status") or "") == "ready_to_ship" and age >= timedelta(hours=12):
+        order_status = str(row.get("status") or "").strip().lower()
+        workflow_status = str(row.get("workflow_status") or "").strip()
+        in_transit = (
+            shipment_status in {"shipped", "in_transit", "on_route", "transporting"}
+            or order_status in {"shipped", "in_transit", "on_route", "transporting"}
+            or workflow_status in {"转运", "运输中", "已发", "已发货"}
+        )
+        stale_task_key = _task_key(
+            "order_age_watch", organization_key, token_id,
+            "order_not_in_transit_7d", order_id,
+        )
+        terminal = order_status in {"delivered", "not_delivered", "cancelled", "canceled", "invalid", "expired", "refunded", "partially_refunded"} or workflow_status in {"已签收", "完成", "已取消", "已入库"}
+        if order_age > timedelta(days=7) and (in_transit or terminal):
+            completed_age_watch_keys.append(stale_task_key)
+        elif order_age > timedelta(days=7) and not in_transit:
+            _upsert_watch_task(
+                storage,
+                organization_key=organization_key,
+                token_id=token_id,
+                topic="order_not_in_transit_7d",
+                resource=order_id,
+                title="订单已创建超过 7 天，仍未进入运输中，请检查发货状态",
+                details=(
+                    f"店铺 {row.get('shop_name') or ''}；订单 {order_id}；"
+                    f"订单状态 {order_status or '未知'}；本地流程 {workflow_status or '未设置'}；"
+                    f"最近更新时间 {row.get('last_updated') or row.get('date_created') or ''}。"
+                ),
+                due_at=created + timedelta(days=7),
+                priority="high",
+                entry_url="/?tab=orders",
+                source="order_age_watch",
+            )
+        if order_status == "ready_to_ship" and age >= timedelta(hours=12):
             _upsert_watch_task(
                 storage,
                 organization_key=organization_key,
@@ -423,59 +458,29 @@ def _refresh_order_watch_tasks(storage, token_ids: Iterable[int], organization_b
                 due_at=checked + timedelta(hours=48),
                 priority="high",
             )
-
-
-def _refresh_promotion_tasks(storage, token_ids: Iterable[int], organization_by_token: Mapping[int, str], *, now=None):
-    """Persist near-deadline promotions and completed jobs with unknown outcomes."""
-    from erp.mercadolibre_promotion_store import PromotionStore
-
-    now = now or datetime.now()
-    promotion_store = PromotionStore()
-    allowed = {int(value) for value in token_ids if int(value or 0) > 0}
-    for promotion in promotion_store.list_promotions(token_ids=allowed):
-        if int(promotion.get("token_id") or 0) not in allowed:
-            continue
-        if str(promotion.get("status_raw") or "").lower() == "finished":
-            continue
-        deadline = _parse_datetime(promotion.get("deadline_date"))
-        if deadline is None:
-            continue
-        deadline = deadline.replace(hour=23, minute=59, second=0, microsecond=0)
-        if now - timedelta(days=7) <= deadline <= now + timedelta(hours=48):
-            _upsert_watch_task(
-                storage,
-                organization_key=organization_by_token.get(int(promotion.get("token_id") or 0)) or "wuhan-zeshun",
-                token_id=int(promotion.get("token_id") or 0),
-                topic="promotion_deadline",
-                resource=str(promotion.get("promotion_id") or promotion.get("id") or ""),
-                title="促销活动即将截止，请确认商品和活动状态",
-                details=f"{promotion.get('name') or '促销活动'}；状态 {promotion.get('status_raw') or '未知'}；截止日期 {promotion.get('deadline_date') or ''}。",
-                due_at=deadline,
-                priority="high",
-                entry_url="/?tab=promotions",
-                source="promotion_watch",
-            )
-    for job in promotion_store.list_jobs(limit=200):
-        if int(job.get("unknown_count") or 0) <= 0:
-            continue
-        preview = promotion_store.get_preview(str(job.get("preview_id") or "")) or {}
-        promotion = promotion_store.get_promotion(int(preview.get("promotion_fk") or 0)) or {}
-        token_id = int(promotion.get("token_id") or 0)
-        if not token_id or token_id not in allowed:
-            continue
-        _upsert_watch_task(
-            storage,
-            organization_key=organization_by_token.get(token_id) or "wuhan-zeshun",
-            token_id=token_id,
-            topic="promotion_result_unknown",
-            resource=str(job.get("job_id") or ""),
-            title="促销操作结果待核实",
-            details=f"任务 {job.get('job_id') or ''} 有 {int(job.get('unknown_count') or 0)} 项结果未知；请查询美客多活动和商品状态后记录处理结果。",
-            due_at=now + timedelta(hours=2),
-            priority="urgent",
-            entry_url="/?tab=promotions",
-            source="promotion_job",
+    if completed_age_watch_keys and hasattr(storage, "resolve_mercado_operator_tasks_by_keys"):
+        storage.resolve_mercado_operator_tasks_by_keys(
+            completed_age_watch_keys,
+            "订单已进入运输中或已结束，无需继续跟进。",
         )
+
+
+def _rights_holder_replies(store, token_ids):
+    """Read current waiting cases only within the caller's store scope."""
+    if not token_ids:
+        return []
+    rows = []
+    page = 1
+    while True:
+        data = store.list_mercado_prohibited_listings(
+            token_ids=token_ids, risk_type="rights_holder_reply", page=page, page_size=500,
+        )
+        batch = data.get("rows") or []
+        rows.extend(batch)
+        if not batch or len(rows) >= int(data.get("total") or 0):
+            break
+        page += 1
+    return sorted(rows, key=lambda row: str(row.get("due_at") or "9999"))
 
 
 def create_action_center_blueprint(*, login_required, current_user, authorized_token_ids, storage=None, has_permission=None):
@@ -528,29 +533,25 @@ def create_action_center_blueprint(*, login_required, current_user, authorized_t
                     for row in token_rows if int(row.get("id") or 0) > 0
                 }
                 _refresh_order_watch_tasks(store, token_ids, organization_by_token)
-                _refresh_promotion_tasks(store, token_ids, organization_by_token)
             data = store.list_mercado_operator_tasks(
                 token_ids=token_ids,
                 organization_key=organization,
                 include_closed=str(request.args.get("include_closed") or "0") == "1",
                 limit=500,
             )
-            token_issues = []
-            for token in token_rows:
-                if not token.get("enabled") or token.get("status") in {"expired", "expiring", "warning", "unknown"}:
-                    token_issues.append({
-                        "id": token.get("id"),
-                        "store_name": token.get("display_name") or token.get("nickname"),
-                        "status": token.get("status_text") or "需检查",
-                        "reason": token.get("last_error") or "店铺授权已停用或需要重新授权",
-                        "entry_url": "/?tab=store-tokens",
-                    })
             events = store.list_mercado_notification_events(
                 token_ids=token_ids,
                 organization_key=organization,
                 limit=100,
             )
-            data["authorization_issues"] = token_issues
+            data["rows"] = [
+                row for row in (data.get("rows") or [])
+                if str(row.get("topic") or "") not in {"promotion_deadline", "promotion_result_unknown"}
+            ]
+            data["total"] = len(data["rows"])
+            data["open"] = sum(row.get("status") != "resolved" for row in data["rows"])
+            data["overdue"] = sum(bool(row.get("overdue")) for row in data["rows"])
+            data["rights_holder_replies"] = _rights_holder_replies(store, token_ids)
             data["events"] = events.get("rows") or []
             data["generated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             return jsonify(status="success", data=data)

@@ -212,10 +212,11 @@ function products1688RenderRows() {
       <td>${products1688Escape(products1688Dimensions(row))}</td>
       <td><select class="p1688-review-select" aria-label="修改 ${products1688Escape(title)} 的审核状态" onchange="products1688UpdateReviewStatus([${Number(row.id)}], this.value, this)">${products1688ReviewOptions().map(([value, label]) => `<option value="${value}" ${String(row.review_status || "unreviewed") === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>
       <td>${products1688Status(row) ? `<span class="p1688-status ${products1688Escape(status)}">${products1688Escape(products1688Status(row))}</span>` : "—"}</td>
+      <td>${products1688Escape(row.collector_salesperson || "未记录")}</td>
       <td>${products1688Escape(products1688Date(original.collected_at || row.added_at))}</td>
       <td><div class="p1688-row-actions"><button class="secondary" type="button" onclick="products1688OpenDetail(${Number(row.id)})">查看详情</button><button class="secondary" type="button" onclick="products1688OpenAiEditor(${Number(row.id)})">编辑刊登内容</button>${sourceUrl ? `<a href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">打开1688</a>` : ""}</div></td>
     </tr>`;
-  }).join("") : '<tr><td class="p1688-empty" colspan="11">暂无 1688 商品；请先在 1688 商品页使用泽顺插件采集。</td></tr>';
+  }).join("") : '<tr><td class="p1688-empty" colspan="12">暂无 1688 商品；请先在 1688 商品页使用泽顺插件采集。</td></tr>';
   const total = Number(document.getElementById("products-1688-total-value")?.dataset.total || products1688Rows.length);
   const totalPages = Math.max(1, Math.ceil(total / products1688PageSize));
   const indicator = document.getElementById("products-1688-page-indicator");
@@ -255,6 +256,7 @@ function products1688Query() {
   const params = new URLSearchParams({limit: String(products1688PageSize), offset: String((products1688Page - 1) * products1688PageSize)});
   const fields = {
     search: "products-1688-search",
+    collector_salesperson: "products-1688-salesperson",
     ai_status: "products-1688-status-filter",
     review_status: "products-1688-review-filter",
     price_min: "products-1688-price-min",
@@ -308,7 +310,7 @@ async function load1688Products(resetPage = true) {
   if (resetPage) products1688Page = 1;
   products1688SetStatus("正在读取泽顺插件采集的 1688 商品…");
   const body = document.getElementById("products-1688-body");
-  if (body && !products1688Rows.length) body.innerHTML = '<tr><td class="p1688-empty" colspan="11">正在加载…</td></tr>';
+  if (body && !products1688Rows.length) body.innerHTML = '<tr><td class="p1688-empty" colspan="12">正在加载…</td></tr>';
   try {
     const response = await fetch(`/api/1688-products?${products1688Query().toString()}`, {cache: "no-store"});
     const payload = await response.json();
@@ -443,7 +445,7 @@ document.addEventListener("DOMContentLoaded", () => {
       load1688Products(false);
     });
   }
-  ["products-1688-search", "products-1688-price-min", "products-1688-price-max", "products-1688-date-from", "products-1688-date-to"].forEach(id => {
+  ["products-1688-search", "products-1688-salesperson", "products-1688-price-min", "products-1688-price-max", "products-1688-date-from", "products-1688-date-to"].forEach(id => {
     document.getElementById(id)?.addEventListener("keydown", event => { if (event.key === "Enter") load1688Products(); });
   });
   document.getElementById("products-1688-status-filter")?.addEventListener("change", () => load1688Products());

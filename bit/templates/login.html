@@ -189,6 +189,20 @@
             text-align: center;
         }
 
+        .register-entry {
+            border-top: 1px solid #eef0f4;
+            padding: 0 20px 18px;
+            color: var(--muted);
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .register-entry a {
+            color: var(--primary-dark);
+            font-weight: 700;
+            text-decoration: none;
+        }
+
         button {
             width: 100%;
             border: 0;
@@ -255,6 +269,7 @@
             <button id="login-btn" type="submit">登录</button>
             <p class="security-note">密码不会以明文保存在页面中，登录状态由安全 Cookie 维持。</p>
         </form>
+        <div class="register-entry">还没有账号？<a href="/register">创建账号</a></div>
     </section>
 
     <script>

@@ -4,13 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>今日必办 · 泽顺运营中心</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='employee-tasks.css') }}">
   <style>
     :root{font-family:Inter,"Microsoft YaHei",system-ui,sans-serif;color:#172033;background:#f3f6fb;font-synthesis:none}
     *{box-sizing:border-box}body{margin:0}.shell{max-width:1440px;margin:auto;padding:28px 24px 60px}
     .top{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:22px}.eyebrow{font-size:11px;letter-spacing:.13em;color:#64748b;font-weight:800}
     h1{font-size:28px;margin:6px 0 4px}.subtitle{color:#64748b;font-size:14px}.user{color:#667085;font-size:13px;white-space:nowrap}
     .button{border:1px solid #d0d5dd;background:#fff;border-radius:9px;padding:9px 13px;font-weight:700;color:#344054;cursor:pointer}.button.primary{background:#175cd3;color:#fff;border-color:#175cd3}.button:disabled{opacity:.5;cursor:default}
-    .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}.metric,.panel,.task{background:#fff;border:1px solid #e4e9f0;border-radius:14px;box-shadow:0 2px 7px #10182808}
+    .metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}.metric,.panel,.task{background:#fff;border:1px solid #e4e9f0;border-radius:14px;box-shadow:0 2px 7px #10182808}
     .metric{padding:16px 18px}.metric span{display:block;color:#667085;font-size:12px}.metric strong{font-size:25px;display:block;margin-top:7px}.metric.danger strong{color:#b42318}.metric.warning strong{color:#b54708}
     .panel{padding:18px;margin-bottom:18px}.heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.heading h2{margin:0;font-size:17px}.hint{font-size:12px;color:#667085}
     .toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.toolbar select,.task input,.task select,.task textarea{font:inherit;border:1px solid #d0d5dd;border-radius:8px;padding:9px;background:#fff;color:#344054}.toolbar select{font-size:13px}
@@ -26,19 +27,19 @@
 <body>
   <main class="shell">
     <header class="top">
-      <div><div class="eyebrow">MERCADO LIBRE · DAILY OPERATIONS</div><h1>今日必须处理</h1><div class="subtitle">把需要跟进的订单、物流、消息、索赔、商品和促销集中到一处。</div></div>
-      <div class="toolbar"><span class="user">{{ current_user.display_name or current_user.username }}</span><button class="button" type="button" onclick="location.href='/'">返回工作台</button><button class="button primary" type="button" id="refresh">刷新待办</button></div>
+      <div><div class="eyebrow">MERCADO LIBRE · DAILY OPERATIONS</div><h1>今日必须处理</h1><div class="subtitle">集中查看需要跟进的订单、物流、消息、索赔和商品。</div></div>
+      <div class="toolbar"><span class="user">{{ current_user.display_name or current_user.username }}</span>{% if current_user.role_key in ['super_admin', 'enterprise_admin'] %}<button class="button" type="button" onclick="location.href='/employee-tasks'">管理员工任务</button>{% endif %}<button class="button" type="button" onclick="location.href='/'">返回工作台</button><button class="button primary" type="button" id="refresh">刷新待办</button></div>
     </header>
     <div class="error" id="error"></div>
+    {% include '_employee_tasks_panel.html' %}
     <section class="metrics">
       <div class="metric"><span>待处理</span><strong id="count-open">—</strong></div>
       <div class="metric danger"><span>已逾期</span><strong id="count-overdue">—</strong></div>
       <div class="metric warning"><span>高优先级 / 紧急</span><strong id="count-urgent">—</strong></div>
-      <div class="metric"><span>授权异常店铺</span><strong id="count-auth">—</strong></div>
     </section>
-    <section class="panel" id="issues-panel" style="display:none">
-      <div class="heading"><h2>店铺授权需要检查</h2><span class="hint">授权失效会导致通知和同步无法继续</span></div>
-      <div id="issues"></div>
+    <section class="panel">
+      <div class="heading"><h2>待回复权利人（<span id="rights-count">—</span>）</h2><span class="hint">按回复截止时间排序；请使用对应店铺账号回复。</span></div>
+      <div class="task-list" id="rights-cases"><div class="empty">正在读取待回复案件…</div></div>
     </section>
     <section class="panel">
       <div class="heading"><h2>运营待办</h2><div class="toolbar"><select id="filter"><option value="active">未完成</option><option value="all">全部状态</option><option value="overdue">已逾期</option><option value="urgent">高优先级 / 紧急</option></select><span class="hint" id="generated-at"></span></div></div>
@@ -50,9 +51,10 @@
     </section>
   </main>
   <div class="toast" id="toast"></div>
+  <script src="{{ url_for('static', filename='employee-tasks.js') }}" defer></script>
   <script>
     const canExecute = {{ can_execute | tojson }};
-    let actionData = {rows: [], events: [], authorization_issues: []};
+    let actionData = {rows: [], events: []};
     const $ = id => document.getElementById(id);
     function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
     function safeHref(value) { const path = String(value || '/'); return path.startsWith('/') && !path.startsWith('//') ? path : '/'; }
@@ -72,6 +74,13 @@
       </article>`;
     }
     function renderTasks() {
+      const rights=actionData.rights_holder_replies||[];
+      $('rights-count').textContent=rights.length;
+      $('rights-cases').innerHTML=rights.length?rights.map(row=>`<article class="task urgent">
+        <div class="task-head"><div><div class="task-title">${escapeHtml(row.rights_holder||'权利人待回复')}</div>
+        <div class="task-meta"><span class="tag">${escapeHtml(row.store_name||'')} · ${escapeHtml(row.site_id||'')}</span><span class="tag amber">回复截止：${escapeHtml(dateLabel(row.due_at))}</span></div></div><a class="button" href="https://global-selling.mercadolibre.com/noindex/pppi/infractions?tab=denounces&amp;offset=0" target="_blank" rel="noopener noreferrer">去回复权利人 ↗</a></div>
+        <div class="task-details">${escapeHtml(row.title||row.item_id||'')}\n商品：${escapeHtml(row.item_id||'—')} · 案件：${escapeHtml(row.infraction_id||'—')}\n${escapeHtml(row.infraction_reason||'')}\n最近同步：${escapeHtml(dateLabel(row.last_checked_at))}</div>
+      </article>`).join(''):'<div class="empty">当前店铺范围内没有待回复的权利人案件。</div>';
       const filter=$('filter').value; let rows=actionData.rows||[];
       if(filter==='active') rows=rows.filter(row=>row.status!=='resolved');
       if(filter==='overdue') rows=rows.filter(row=>row.overdue&&row.status!=='resolved');
@@ -81,10 +90,6 @@
       $('count-open').textContent=open.length;
       $('count-overdue').textContent=open.filter(row=>row.overdue).length;
       $('count-urgent').textContent=open.filter(row=>['urgent','high'].includes(row.priority)).length;
-      const issues=actionData.authorization_issues||[];
-      $('count-auth').textContent=issues.length;
-      $('issues-panel').style.display=issues.length?'block':'none';
-      $('issues').innerHTML=issues.map(issue=>`<div class="issue"><strong>${escapeHtml(issue.store_name||`店铺 #${issue.id}`)} · ${escapeHtml(issue.status||'授权异常')}</strong>${escapeHtml(issue.reason||'请重新授权或检查凭证')}　<a href="${escapeHtml(safeHref(issue.entry_url))}">查看店铺授权 →</a></div>`).join('');
       $('generated-at').textContent=actionData.generated_at?`更新于 ${actionData.generated_at}`:'';
     }
     function renderEvents() {
@@ -98,8 +103,8 @@
         const includeClosed=$('filter').value==='all';
         const response=await fetch(`/api/mercado/today/tasks${includeClosed?'?include_closed=1':''}`,{credentials:'same-origin'}); const payload=await response.json();
         if(!response.ok||payload.status!=='success') throw new Error(payload.message||`请求失败 (${response.status})`);
-        actionData=payload.data||{rows:[],events:[],authorization_issues:[]}; renderTasks(); renderEvents();
-      } catch(error) { $('error').textContent=`加载失败：${error.message||error}`; $('error').style.display='block'; $('tasks').innerHTML='<div class="empty">暂时无法读取待办，请稍后重试。</div>'; }
+        actionData=payload.data||{rows:[],events:[]}; renderTasks(); renderEvents();
+      } catch(error) { $('error').textContent=`加载失败：${error.message||error}`; $('error').style.display='block'; $('tasks').innerHTML='<div class="empty">暂时无法读取待办，请稍后重试。</div>'; $('rights-count').textContent='—'; $('rights-cases').innerHTML='<div class="empty">暂时无法读取待回复案件，请稍后重试。</div>'; }
       finally {$('refresh').disabled=false;}
     }
     async function saveTask(id,button) {

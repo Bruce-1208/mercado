@@ -8,7 +8,7 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Mapping
 
@@ -473,25 +473,12 @@ def _run_read(task_id: str, file_bytes: bytes, filename: str, store_rows, allowe
 
     progress_lock = threading.Lock()
     progress = sum(row.get("query_status") == "查询失败" for row in records)
-    pending_save = []
-
-    def save_completed(force=False):
-        nonlocal pending_save
-        with progress_lock:
-            if not force and len(pending_save) < 100:
-                return
-            batch, pending_save = pending_save, []
-        if batch:
-            bit_db_api.save_weight_dimensions_records(batch)
-
     def query_and_count(record):
         nonlocal progress
         if record.get("query_status") != "查询失败":
             read_one(record)
         with progress_lock:
             progress += 1
-            if record.get("query_status") == "已读取":
-                pending_save.append(record)
             with _lock:
                 task = _tasks.get(task_id)
                 if task:
@@ -593,6 +580,19 @@ def start_upload(file_bytes: bytes, filename: str, owner: str,
 def _run_changed_read(task_id: str, owner: str, filters, store_rows, allowed_token_ids):
     """Load freight-change orders and fill package fields in the background."""
     try:
+        _read_changed_records(task_id, owner, filters, store_rows, allowed_token_ids)
+    except Exception as exc:
+        with _lock:
+            task = _tasks.get(task_id)
+            if task:
+                task.update(
+                    status="failed", finished_at=datetime.now().isoformat(timespec="seconds"),
+                    message=f"运费变更记录更新失败：{str(exc)[:250]}",
+                )
+
+
+def _read_changed_records(task_id, owner, filters, store_rows, allowed_token_ids):
+    try:
         records = [dict(row or {}) for row in bit_db_api.list_weight_dimensions_changed_orders(filters) or []]
     except Exception as exc:
         with _lock:
@@ -604,12 +604,14 @@ def _run_changed_read(task_id: str, owner: str, filters, store_rows, allowed_tok
                 )
         return
 
+    # Keep page boundaries stable while background enrichment is running.
+    records.sort(key=lambda row: str(row.get("freight_changed_at") or row.get("time") or ""), reverse=True)
     with _lock:
         task = _tasks.get(task_id)
         if not task:
             return
         task.update(
-            status="querying", message="正在补全运费变更订单的包裹重量尺寸",
+            status="querying", message="正在从美客多官方补差 API 读取当前标记与实际重量尺寸",
             records=records, total=len(records), processed=0,
         )
     if not records:
@@ -621,7 +623,11 @@ def _run_changed_read(task_id: str, owner: str, filters, store_rows, allowed_tok
         return
 
     try:
-        saved_records = bit_db_api.list_weight_dimensions_records() or []
+        saved_records = []
+        for start in range(0, len(records), 500):
+            saved_records.extend(bit_db_api.list_weight_dimensions_records(
+                [row.get("order_number") for row in records[start:start + 500]]
+            ) or [])
     except Exception:
         saved_records = []
     saved_by_order = {
@@ -677,7 +683,6 @@ def _run_changed_read(task_id: str, owner: str, filters, store_rows, allowed_tok
                 if task:
                     task["processed"] = progress
                     task["message"] = f"已补全运费变更订单 {progress}/{len(records)} 条"
-        save_completed()
 
     query_records = [row for row in records if row.get("query_status") != "查询失败"]
     if query_records:
@@ -690,9 +695,9 @@ def _run_changed_read(task_id: str, owner: str, filters, store_rows, allowed_tok
             for future in as_completed(futures):
                 future.result()
 
-    save_completed(force=True)
-
-    successful = [row for row in records if row.get("query_status") == "已读取"]
+    # Persist failed lookups too, so database-only readers can see and diagnose them.
+    for start in range(0, len(records), 100):
+        bit_db_api.save_weight_dimensions_records(records[start:start + 100], refresh=True)
 
     records.sort(
         key=lambda row: str(row.get("freight_changed_at") or row.get("time") or ""),
@@ -703,7 +708,7 @@ def _run_changed_read(task_id: str, owner: str, filters, store_rows, allowed_tok
         task = _tasks.get(task_id)
         if task:
             task.update(
-                records=records, status="ready",
+                records=records, status="ready", processed=len(records),
                 finished_at=datetime.now().isoformat(timespec="seconds"),
                 message=f"运费变更订单读取完成，共 {len(records)} 条，失败 {failed_count} 条",
             )
@@ -712,6 +717,8 @@ def _run_changed_read(task_id: str, owner: str, filters, store_rows, allowed_tok
 def start_changed_refresh(owner: str, filters, store_rows, allowed_token_ids=None):
     task_id = uuid.uuid4().hex
     filters = dict(filters or {})
+    if not filters.get("date_from") and not filters.get("date_to"):
+        filters["date_from"] = (datetime.now() - timedelta(days=6)).strftime("%Y-%m-%d 00:00")
     authorized_ids = sorted(allowed_token_ids) if allowed_token_ids is not None else None
     with _lock:
         # Repeated refreshes should follow the running read, not start another
@@ -744,6 +751,34 @@ def start_changed_refresh(owner: str, filters, store_rows, allowed_token_ids=Non
     )
     thread.start()
     return {"task_id": task_id, "status": "preparing", "total": 0}
+
+
+def load_saved_changes(owner: str, filters, allowed_token_ids=None):
+    """Build an executable view from persisted records; never query marketplaces."""
+    filters = dict(filters or {})
+    if not filters.get("date_from") and not filters.get("date_to"):
+        filters["date_from"] = (datetime.now() - timedelta(days=6)).strftime("%Y-%m-%d 00:00")
+    if allowed_token_ids is not None:
+        requested = filters.get("store_ids", allowed_token_ids)
+        filters["store_ids"] = sorted(set(requested) & set(allowed_token_ids))
+    rows = bit_db_api.list_weight_dimensions_records(filters=filters) or []
+    task_id = uuid.uuid4().hex
+    now = datetime.now().isoformat(timespec="seconds")
+    with _lock:
+        for old_id, task in list(_tasks.items()):
+            if (task.get("owner") == owner and task.get("source") == "saved_changes"
+                    and task.get("execute_status", "idle") not in {"running", "queued"}):
+                del _tasks[old_id]
+        _tasks[task_id] = {
+            "task_id": task_id, "owner": owner, "source": "saved_changes",
+            "status": "ready", "records": rows, "total": len(rows), "processed": len(rows),
+            "message": f"已从数据库读取 {len(rows)} 条记录；后台每天 05:00 更新",
+            "execute_status": "idle", "execute_message": "", "execute_processed": 0,
+            "execute_total": 0, "created_at": now, "finished_at": now,
+            "filters": filters, "agent_job_id": "",
+        }
+        _latest_task_by_owner[owner] = task_id
+    return {"task_id": task_id, "status": "ready", "total": len(rows)}
 
 
 def start_full_refresh(owner: str, store_rows, allowed_token_ids=None):
@@ -853,7 +888,7 @@ def _apply_agent_job(task, job):
     task["execute_message"] = f"智赢 Agent 执行结束，成功 {succeeded} 条"
 
 
-def task_status(task_id: str, owner: str, agent_job_provider=None) -> dict[str, Any]:
+def task_status(task_id: str, owner: str, agent_job_provider=None, *, page=None, page_size=50, include_records=True) -> dict[str, Any]:
     task = _get_owned_task(task_id, owner)
     agent_job_id = str(task.get("agent_job_id") or "").strip()
     if agent_job_id and agent_job_provider:
@@ -866,10 +901,19 @@ def task_status(task_id: str, owner: str, agent_job_provider=None) -> dict[str, 
             with _lock:
                 task["execute_message"] = f"读取 Agent 状态失败：{str(exc)[:250]}"
     with _lock:
+        rows = task["records"]
+        pagination = {}
+        if page is not None:
+            page_size = max(1, min(100, int(page_size)))
+            page_count = max(1, (len(rows) + page_size - 1) // page_size)
+            page = max(1, min(int(page), page_count))
+            pagination = {"page": page, "page_size": page_size, "record_total": len(rows)}
+            rows = rows[(page - 1) * page_size:page * page_size]
         return {
+            **pagination,
             "task_id": task["task_id"], "status": task["status"],
             "message": task.get("message", ""), "total": task.get("total", 0),
-            "processed": task.get("processed", 0), "records": [_public_record(row) for row in task["records"]],
+            "processed": task.get("processed", 0), "records": [_public_record(row) for row in rows] if include_records else [],
             "created_at": task.get("created_at", ""), "finished_at": task.get("finished_at", ""),
             "execute_status": task.get("execute_status", "idle"),
             "execute_message": task.get("execute_message", ""),

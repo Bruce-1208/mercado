@@ -1,5 +1,6 @@
 """Validate and submit a video to one store listing's Mercado Libre site."""
 
+from erp.store_link_audit import audited
 import re
 from pathlib import Path
 
@@ -21,6 +22,7 @@ def validate_video(upload):
     return "video" + extension
 
 
+@audited
 def upload_store_link_video(link_id, upload):
     from bit import bit_mysql
     from bit.bit_store_link_sync import _client_and_token

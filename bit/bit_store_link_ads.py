@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from erp.store_link_audit import audited
 from decimal import Decimal, InvalidOperation
 
 
@@ -35,6 +36,7 @@ def _find_campaign(client, site_id, advertiser_id, name):
     return None
 
 
+@audited
 def advertise_store_link(link_id, *, budget, roas_target, campaign_name=""):
     from bit import bit_mysql
     from bit.bit_store_link_sync import _client_and_token
@@ -125,6 +127,7 @@ def advertise_store_link(link_id, *, budget, roas_target, campaign_name=""):
     }
 
 
+@audited
 def advertise_store_links(link_ids, *, budget, roas_target, campaign_name=""):
     """Put multiple store links into Product Ads campaigns grouped by account/site.
 

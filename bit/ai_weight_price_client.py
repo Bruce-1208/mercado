@@ -160,6 +160,10 @@ def _next_action(service):
         service.store.save_run(run)
         return {"action": "done", "data": _snapshot(service)}
     key = task_ids[cursor]
+    current_task = _task(service, key)
+    if current_task.get("source_type") == "mercado_collection":
+        from erp.collection_ai_check import save_result
+        save_result(current_task, "checking", "正在1688以图搜货")
     run["current_task_id"] = key
     run["current_item_index"] = cursor + 1
     run["message"] = f"第 {cursor + 1}/{run.get('max_items')} 件：正在1688以图搜货"
@@ -170,19 +174,23 @@ def _next_action(service):
     return {"action": "search", "task": _task(service, key), "data": _snapshot(service)}
 
 
-def start(service, payload):
+def start(service, payload, *, collection_products=None):
     if not isinstance(payload, dict):
         raise ValueError("启动参数无效")
-    if service.store.state("login", {}).get("confirmed") is not True:
+    if _run(service).get("outcome") in {"running", "blocked"}:
+        raise ValueError("已有核重核价任务，请先完成或停止")
+    if collection_products is None and service.store.state("login", {}).get("confirmed") is not True:
         raise ValueError("请先在插件中登录智赢并确认登录")
     config = _config(service, payload.get("runtime_api_key"))
-    selection = selection_params(payload.get("selection"), config)
+    selection = {} if collection_products is not None else selection_params(payload.get("selection"), config)
     max_items = payload.get("max_items", 10)
     if type(max_items) is not int or not 1 <= max_items <= 10000:
         raise ValueError("本次商品数量必须是1–10000的整数")
-    products = payload.get("products")
+    products = collection_products if collection_products is not None else payload.get("products")
     if not isinstance(products, list) or not products:
         raise ValueError("插件没有读取到智赢商品，请先打开商品列表并重试")
+    if collection_products is not None:
+        selection = {}
     if selection.get("start_product_id"):
         wanted = str(selection["start_product_id"])
         positions = [i for i, item in enumerate(products)
@@ -208,6 +216,7 @@ def start(service, payload):
                 source_index = index
             record = {
                 **item,
+                "source_type": "mercado_collection" if collection_products is not None else "zying",
                 "erp_goods_id": key,
                 "title": title,
                 "main_image_url": image,
@@ -220,6 +229,9 @@ def start(service, payload):
                 "product_developer_id": item.get("product_developer_id") or selection.get("product_developer_id", ""),
                 "product_developer_name": item.get("product_developer_name") or selection.get("product_developer_name", ""),
             }
+            if collection_products is not None:
+                key = f"collection:{item['collection_item_id']}:{run_id}"
+                record["erp_goods_id"] = key
             if not service.store.add(record):
                 service.store.update(key, **record)
             task_ids.append(key)
@@ -322,6 +334,12 @@ def collect(service, payload):
 
 def _advance(service, status, reason):
     run = _run(service)
+    task = _task(service, run.get("current_task_id"))
+    if task and task.get("source_type") == "mercado_collection" and not task.get("collection_result_saved"):
+        from erp.collection_ai_check import save_result
+        save_result(task, "unmatched" if status == "blocked" else "failed", reason)
+    if task:
+        service.store.record_run_item(run.get("run_id"), task["erp_goods_id"], execution_result=status, execution_reason=reason)
     if status == "success":
         run["success_items"] = int(run.get("success_items") or 0) + 1
     elif status == "blocked":
@@ -374,6 +392,8 @@ def detail(service, payload):
     detail_data = payload.get("detail")
     if not isinstance(detail_data, dict):
         raise ValueError("插件没有读取到1688商品详情")
+    if task.get("source_type") == "mercado_collection" and not task.get("best_match_approved"):
+        raise ValueError("商品尚未通过AI同款匹配，不能回写")
     selected = highest_priced_variant(detail_data.get("skus") or [])
     if not selected:
         reason = "1688详情没有可确认的最终变体价格"
@@ -411,7 +431,23 @@ def detail(service, payload):
     reason = "图片匹配成功，已读取1688最高最终变体价格"
     task = service.store.update(key, net_income_usd=pricing["net_income_usd"], pricing=pricing,
                                 decision_status="success", decision_reason=reason,
-                                planned_changes={**changes, "review_status": "通过"})
+                                planned_changes={} if task.get("source_type") == "mercado_collection" else {**changes, "review_status": "通过"})
+    if task.get("source_type") == "mercado_collection":
+        from erp.collection_ai_check import measurements, save_result
+        metrics = measurements(detail_data, selected)
+        if weight is not None and "weight_g" not in metrics:
+            metrics["weight_g"] = weight
+        audit = save_result(task, "checked" if metrics else "missing_evidence",
+                            reason if metrics else "已核价，但1688缺少有效重量尺寸，保留原值",
+                            metrics, {"supplier_url": task.get("supplier_url"),
+                                      "cost_price_cny": selected["price"], "pricing": pricing,
+                                      "sku": selected, "image_match": task.get("image_match_evidence")})
+        service.store.update(key, collection_result_saved=True, collection_audit=audit,
+                             status="success" if audit["status"] == "checked" else "risk", stage="done",
+                             decision_status="success" if audit["status"] == "checked" else "risk",
+                             decision_reason=audit["reason"], planned_changes=metrics,
+                             write_verified=audit["status"] == "checked", saved_at=time.time())
+        return _advance(service, "success" if audit["status"] == "checked" else "risk", audit["reason"])
     if not config.get("writeback_enabled"):
         dry = reason + "；测试模式未启用ERP回写，仅保留插件核重核价结论"
         service.store.update(key, status="risk", stage="done", decision_status="risk", decision_reason=dry,
@@ -484,13 +520,32 @@ def fail(service, payload):
     service.store.set_state("run_error", message)
     service.store.save_run(run)
     if task_id and _task(service, task_id):
+        task = _task(service, task_id)
+        if task.get("source_type") == "mercado_collection":
+            from erp.collection_ai_check import save_result
+            save_result(task, "failed", message)
         service.store.exception(task_id, "插件浏览器步骤执行失败", f"{action}：{message}")
     service.store.log(f"插件核重核价已停止：{action}：{message}", task_id or None, "ERROR")
     return {"action": "done", "data": _snapshot(service)}
 
 
 def stop(service):
+    from erp.collection_ai_check import products, save_result
+    pending = service.store.state("collection_pending", None)
+    if pending:
+        for task in products(pending):
+            save_result(task, "stopped", "任务已取消")
+    run = _run(service)
+    for key in (run.get("task_ids") or [])[int(run.get("cursor") or 0):]:
+        task = _task(service, key)
+        if task and task.get("source_type") == "mercado_collection":
+            save_result(task, "stopped", "任务已停止，保留已完成结果")
+    service.store.set_state("collection_pending", None)
     service.store.set_state("stop_requested", True)
+    if run:
+        run.update(outcome="stopped", finished_at=time.time())
+        service.store.set_state("run", run)
+        service.store.save_run(run)
     service.store.log("插件已请求停止核重核价，保留当前进度")
     return {"data": _snapshot(service), "message": "已发送停止指令"}
 
@@ -501,7 +556,7 @@ def continue_run(service, payload):
     service.store.set_state("stop_requested", False)
     service.store.set_state("circuit", None)
     run = _run(service)
-    if run.get("outcome") == "blocked":
+    if run.get("outcome") in {"blocked", "failed", "stopped"}:
         run["outcome"] = "running"
         run["message"] = "插件继续执行浏览器操作"
         service.store.set_state("run", run)
@@ -510,6 +565,15 @@ def continue_run(service, payload):
 
 
 def dispatch(service, action, payload):
+    if action in {"search", "detail", "writeback"}:
+        run = _run(service)
+        if run.get("outcome") != "running" or service.store.state("stop_requested", False):
+            raise ValueError("当前任务已停止，请重新启动或继续")
+        if str(payload.get("task_id") or "") != str(run.get("current_task_id") or ""):
+            raise ValueError("返回商品与当前任务不一致")
+    if action == "collection/claim":
+        from bit.collection_ai_workflow import claim
+        return claim(service, payload)
     actions = {
         "login/open": lambda: login_open(service),
         "login/confirm": lambda: login_confirm(service, payload.get("context")),

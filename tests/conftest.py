@@ -13,3 +13,8 @@ def isolated_legacy_console_user(monkeypatch):
         return {'permissions':['*'], 'access_version':1, 'is_platform_admin':True,
                 'organization_key':'default', **user}
     monkeypatch.setattr(bit_interface, 'get_current_workbench_user', current_user)
+
+
+@pytest.fixture(autouse=True)
+def isolated_store_link_audit(tmp_path, monkeypatch):
+    monkeypatch.setenv("MERCADO_STORE_LINK_AUDIT_PATH", str(tmp_path / "store-link-audit.sqlite3"))

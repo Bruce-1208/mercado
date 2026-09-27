@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from erp.store_link_audit import audited, contextual_target
 import os
 import threading
 import uuid
@@ -323,6 +324,7 @@ def _enrich_marketplace_items(
     return enriched, failures
 
 
+@audited
 def _sync_store(record: dict) -> dict:
     token_id = int(record["id"])
     store_name = str(record.get("display_name") or record.get("nickname") or token_id)
@@ -444,6 +446,7 @@ def _sync_store(record: dict) -> dict:
             _append_log(f"{store_name} Token 已刷新，继续同步")
 
 
+@audited
 def run_store_link_sync(token_ids=None) -> dict:
     records = _token_records(token_ids)
     _state_update(
@@ -508,7 +511,7 @@ def run_store_link_sync(token_ids=None) -> dict:
         max_workers=worker_count,
         thread_name_prefix="mercado-store-sync",
     ) as executor:
-        futures = [executor.submit(run_capacity_store, "links", record["id"], sync_one_store, record) for record in records]
+        futures = [executor.submit(contextual_target(run_capacity_store), "links", record["id"], sync_one_store, record) for record in records]
         for future in as_completed(futures):
             result = future.result()
             results.append(result)
@@ -569,6 +572,7 @@ def _run_background(token_ids) -> None:
         task_lock.release()
 
 
+@audited
 def start_store_link_sync(token_ids=None) -> tuple[bool, dict]:
     selected_ids = _token_ids(token_ids)
     if selected_ids:
@@ -607,7 +611,7 @@ def start_store_link_sync(token_ids=None) -> tuple[bool, dict]:
             logs=[],
         )
     thread = threading.Thread(
-        target=_run_background,
+        target=contextual_target(_run_background),
         args=(selected_ids,),
         name="mercado-store-link-sync",
         daemon=True,

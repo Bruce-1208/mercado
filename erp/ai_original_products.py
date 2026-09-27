@@ -170,7 +170,7 @@ def _normalize_1688_variations(value: Any) -> list[dict[str, Any]]:
 def suggested_ai_original_net_proceeds(variations: Any) -> tuple[float | None, int | None]:
     """Suggest USD net proceeds from the highest captured 1688 SKU price.
 
-    The business rule is ``ceil(max_sku_price_cny / 6.7)``. Prices are read
+    The business rule is ``ceil((max_sku_price_cny + 5) / 6.7)``. Prices are read
     from each SKU's price fields only; the product-level 1688 price is often a
     starting price for the cheapest SKU and must not stand in for the highest
     variant value.
@@ -208,7 +208,7 @@ def suggested_ai_original_net_proceeds(variations: Any) -> tuple[float | None, i
         return None, None
     highest = max(prices)
     suggested_net = int(
-        (highest / Decimal("6.7")).to_integral_value(rounding=ROUND_CEILING)
+        ((highest + Decimal("5")) / Decimal("6.7")).to_integral_value(rounding=ROUND_CEILING)
     )
     return float(highest), suggested_net
 

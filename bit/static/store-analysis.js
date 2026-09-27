@@ -1,4 +1,4 @@
-/* Site sales and official second-level Mercado Libre category mix. */
+/* Site sales and selected-level Mercado Libre category mix. */
 let storeAnalysisReady = false;
 let storeAnalysisScope = [];
 let storeAnalysisRequest = 0;
@@ -67,6 +67,7 @@ async function initStoreAnalysis() {
 function renderStoreAnalysis(data) {
     const container = document.getElementById("store-analysis-sites");
     const metric = data.metric === "gmv" ? "gmv_usd" : "orders";
+    const categoryLevel = Number(data.category_level || 2);
     const money = value => `$${Number(value || 0).toLocaleString("en-US", {maximumFractionDigits: 2})}`;
     const count = value => Number(value || 0).toLocaleString("zh-CN");
     const colors = ["#2563eb", "#00a6a0", "#f59e0b", "#8b5cf6", "#ef6386", "#cbd5e1"];
@@ -89,8 +90,10 @@ function renderStoreAnalysis(data) {
         const rows = site.top_categories.map((item, i) => {
             const value = Number(item[metric] || 0);
             const share = total ? value / total * 100 : 0;
+            const categoryName = item.name_zh || (/[㐀-鿿]/.test(String(item.name || ""))
+                ? item.name : "分类名称暂不可用");
             return `<li><span class="store-analysis-dot" style="background:${colors[i]}"></span>
-                <span class="store-analysis-category">${storeAnalysisEscape(item.name)}</span>
+                <span class="store-analysis-category">${storeAnalysisEscape(categoryName)}</span>
                 <strong>${metric === "gmv_usd" ? money(value) : count(value) + " 单"}</strong>
                 <small>${share.toFixed(1)}%</small></li>`;
         }).join("");
@@ -102,8 +105,8 @@ function renderStoreAnalysis(data) {
             <header><div><span class="store-analysis-rank">#${index + 1}</span><h3>${storeAnalysisEscape(site.site_name)} <small>${storeAnalysisEscape(site.site_id)}</small></h3></div>
                 <strong>${metric === "gmv_usd" ? money(site.gmv_usd) : count(site.orders) + " 单"}</strong></header>
             <p>销售单量 ${count(site.orders)} 单 · GMV ${money(site.gmv_usd)}${site.unconverted_orders ? ` · ${count(site.unconverted_orders)} 单缺少汇率` : ""}</p>
-            <div class="store-analysis-chart"><div class="store-analysis-pie" role="img" aria-label="${storeAnalysisEscape(site.site_name)}二级分类前五占比" style="background:${pie}"><span>TOP 5</span></div>
-                <ol class="store-analysis-legend">${rows || '<li>暂无可识别的二级分类</li>'}${other}</ol></div>
+            <div class="store-analysis-chart"><div class="store-analysis-pie" role="img" aria-label="${storeAnalysisEscape(site.site_name)}${categoryLevel}级分类前五占比" style="background:${pie}"><span>TOP 5</span></div>
+                <ol class="store-analysis-legend">${rows || `<li>暂无可识别的${categoryLevel}级分类</li>`}${other}</ol></div>
         </article>`;
     }).join("");
 }
@@ -118,18 +121,20 @@ async function loadStoreAnalysis() {
             start_date: document.getElementById("store-analysis-start").value,
             end_date: document.getElementById("store-analysis-end").value,
             metric: document.getElementById("store-analysis-metric").value,
+            category_level: document.getElementById("store-analysis-category-level").value,
             salesperson: document.getElementById("store-analysis-salesperson").value,
             group_name: document.getElementById("store-analysis-group").value,
             token_id: document.getElementById("store-analysis-store").value,
         });
         if (!params.get("start_date") || !params.get("end_date")) throw new Error("请选择统计时间段");
-        message.textContent = "正在统计订单和二级分类…";
+        message.textContent = `正在统计订单和${params.get("category_level")}级分类…`;
         const response = await fetch(enterpriseScopedUrl(`/api/store-analysis?${params}`), {cache: "no-store"});
         const payload = await response.json();
         if (!response.ok || payload.status !== "success") throw new Error(payload.message || "分析失败");
         if (requestId !== storeAnalysisRequest) return;
         renderStoreAnalysis(payload.data || {});
-        message.textContent = "按北京时间统计订单创建日期，排除取消及无效订单；一单含多个分类时，每个分类各计一单，饼图按分类关联订单数占比。GMV 统一折算为 USD。";
+        const warning = payload.data?.category_translation_warning;
+        message.textContent = `${warning ? `${warning} ` : ""}按北京时间统计订单创建日期，排除取消及无效订单；一单含多个分类时，每个分类各计一单，饼图按分类关联订单数占比。GMV 统一折算为 USD。`;
     } catch (error) {
         if (requestId !== storeAnalysisRequest) return;
         message.textContent = `店铺分析失败：${error.message || error}`;

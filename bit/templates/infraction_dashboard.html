@@ -1067,7 +1067,7 @@
                     elements.syncDetail.textContent = active ? `当前：${active}` : (sync.message || "正在准备账户数据");
                 } else {
                     elements.syncDetail.textContent = autoEnabled
-                        ? `每 ${sync.auto_sync_hours || 12} 小时自动全量更新 · ${sync.store_workers || 0} 个店铺线程`
+                        ? `每 ${sync.auto_sync_hours || 12} 小时自动全量更新{% if current_user.role_key == 'super_admin' %} · ${sync.store_workers || 0} 个店铺线程{% endif %}`
                         : "自动全量更新已关闭，可继续手动刷新";
                     if (!state.latestReadAt && sync.finished_at) {
                         elements.syncTitle.textContent = `最近任务结束：${sync.finished_at}`;

@@ -1,19 +1,88 @@
-"""Sales by Mercado Libre site and second-level official category."""
+"""Sales by Mercado Libre site and selected official category level."""
 
 from __future__ import annotations
 
+import threading
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from bit.bit_mysql import config, pymysql
 from erp.mercadolibre_category_tree import category_paths_for_ids
+from erp.mercadolibre_translation import translate_texts
 
 
 SITE_NAMES = {
     "MLM": "墨西哥", "MLB": "巴西", "MLA": "阿根廷",
     "MLC": "智利", "MCO": "哥伦比亚", "MLU": "乌拉圭",
 }
+_CATEGORY_LEVELS = range(1, 7)
+_CATEGORY_TRANSLATION_LOCK = threading.Lock()
+_CATEGORY_TRANSLATION_CACHE: dict[tuple[str, str], str] = {}
+
+
+def _normalize_category_level(category_level=2):
+    if category_level in (None, ""):
+        category_level = 2
+    try:
+        level = int(category_level)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("类目层级请选择 1 至 6 级") from exc
+    if level not in _CATEGORY_LEVELS:
+        raise ValueError("类目层级请选择 1 至 6 级")
+    return level
+
+
+def _category_source_language(category_id):
+    site_id = str(category_id or "").strip().upper()[:3]
+    if site_id == "MLB":
+        return "pt-BR"
+    if site_id == "CBT":
+        return "en"
+    return "es"
+
+
+def _translate_category_names(paths, category_level):
+    """Translate the selected category names once and reuse them across requests."""
+    labels_by_id = {}
+    names_by_language = defaultdict(set)
+    for item_category_id, path in paths.items():
+        if len(path) < category_level:
+            continue
+        node = path[category_level - 1]
+        category_id = str(node.get("id") or "").strip().upper()
+        name = str(node.get("name") or "").strip()
+        if not category_id or not name:
+            continue
+        language = _category_source_language(item_category_id)
+        labels_by_id[category_id] = (language, name)
+        names_by_language[language].add(name)
+
+    translated_by_label = {}
+    for language, names in names_by_language.items():
+        pending = []
+        with _CATEGORY_TRANSLATION_LOCK:
+            for name in sorted(names):
+                cached = _CATEGORY_TRANSLATION_CACHE.get((language, name))
+                if cached:
+                    translated_by_label[(language, name)] = cached
+                else:
+                    pending.append(name)
+        for offset in range(0, len(pending), 100):
+            batch = pending[offset:offset + 100]
+            translated = translate_texts(batch, language, "zh-CN")
+            with _CATEGORY_TRANSLATION_LOCK:
+                for source_name, chinese_name in zip(batch, translated):
+                    _CATEGORY_TRANSLATION_CACHE[(language, source_name)] = chinese_name
+                    translated_by_label[(language, source_name)] = chinese_name
+                if len(_CATEGORY_TRANSLATION_CACHE) > 10000:
+                    _CATEGORY_TRANSLATION_CACHE.clear()
+                    _CATEGORY_TRANSLATION_CACHE.update(translated_by_label)
+
+    return {
+        category_id: translated_by_label.get((language, name), "")
+        for category_id, (language, name) in labels_by_id.items()
+    }
 
 
 def _dates(start_date: str, end_date: str):
@@ -29,8 +98,11 @@ def _dates(start_date: str, end_date: str):
             datetime.combine(end + timedelta(days=1), datetime.min.time()) - timedelta(hours=8))
 
 
-def summarize_store_analysis(rows, paths, *, metric="orders"):
+def summarize_store_analysis(rows, paths, *, metric="orders", category_level=2,
+                              category_names_zh=None):
     """Aggregate order lines without counting a multi-item order twice per site."""
+    category_level = _normalize_category_level(category_level)
+    category_names_zh = category_names_zh or {}
     sites = {}
     for row in rows:
         site_id = str(row.get("site_id") or "").upper()
@@ -55,20 +127,34 @@ def summarize_store_analysis(rows, paths, *, metric="orders"):
         site["gmv_usd"] += usd_gmv
         category_id = str(row.get("category_id") or "").strip().upper()
         path = paths.get(category_id) or []
-        second = path[1] if len(path) > 1 else None
-        category_key = str(second.get("id") or "") if second else "__unknown__"
+        selected = path[category_level - 1] if len(path) >= category_level else None
+        category_key = str(selected.get("id") or "").strip().upper() if selected else "__unknown__"
         category = site["categories"][category_key]
-        category["name"] = str(second.get("name") or category_key) if second else "未识别分类"
+        category["original_name"] = str(selected.get("name") or category_key) if selected else "未识别分类"
+        category["name_zh"] = category_names_zh.get(category_key, "") if selected else ""
         category["order_ids"].add(order_id)
         category["gmv_usd"] += usd_gmv
 
     result = []
     for site in sites.values():
-        categories = [{
-            "category_id": key, "name": value["name"],
-            "orders": len(value["order_ids"]),
-            "gmv_usd": round(float(value["gmv_usd"]), 2),
-        } for key, value in site["categories"].items() if key != "__unknown__"]
+        categories = []
+        for key, value in site["categories"].items():
+            if key == "__unknown__":
+                continue
+            category = {
+                "category_id": key,
+                "name": value["name_zh"] or (
+                    value["original_name"]
+                    if any("\u3400" <= character <= "\u9fff" for character in value["original_name"])
+                    else "分类名称暂不可用"
+                ),
+                "orders": len(value["order_ids"]),
+                "gmv_usd": round(float(value["gmv_usd"]), 2),
+            }
+            if value["name_zh"]:
+                category["name_zh"] = value["name_zh"]
+                category["original_name"] = value["original_name"]
+            categories.append(category)
         categories.sort(key=lambda item: (-item["gmv_usd"] if metric == "gmv" else -item["orders"], item["name"]))
         known_top = categories[:5]
         total_metric = float(site["gmv_usd"]) if metric == "gmv" else len(site["order_ids"])
@@ -90,12 +176,15 @@ def summarize_store_analysis(rows, paths, *, metric="orders"):
     return result
 
 
-def list_store_analysis(start_date, end_date, *, metric="orders", salesperson="", group_name="", token_id=None, allowed_token_ids=None):
+def list_store_analysis(start_date, end_date, *, metric="orders", salesperson="", group_name="",
+                        token_id=None, allowed_token_ids=None, category_level=2):
     if metric not in {"orders", "gmv"}:
         raise ValueError("排序指标无效")
+    category_level = _normalize_category_level(category_level)
     start_utc, end_utc = _dates(start_date, end_date)
     if allowed_token_ids is not None and not allowed_token_ids:
-        return {"sites": [], "start_date": start_date, "end_date": end_date, "metric": metric}
+        return {"sites": [], "start_date": start_date, "end_date": end_date,
+                "metric": metric, "category_level": category_level}
     if token_id is not None:
         token_id = int(token_id)
         if token_id <= 0:
@@ -189,5 +278,16 @@ def list_store_analysis(start_date, end_date, *, metric="orders", salesperson=""
         connection.close()
     category_ids = sorted({str(row.get("category_id") or "").strip().upper() for row in rows if row.get("category_id")})
     paths = category_paths_for_ids(category_ids) if category_ids else {}
-    return {"sites": summarize_store_analysis(rows, paths, metric=metric),
-            "start_date": start_date, "end_date": end_date, "metric": metric}
+    translation_warning = ""
+    try:
+        category_names_zh = _translate_category_names(paths, category_level)
+    except Exception:
+        category_names_zh = {}
+        translation_warning = "中文类目名称暂不可用，请运行 python3 scripts/install_argos_translation_models.py 安装本地翻译模型。"
+    return {"sites": summarize_store_analysis(
+                rows, paths, metric=metric, category_level=category_level,
+                category_names_zh=category_names_zh,
+            ),
+            "start_date": start_date, "end_date": end_date, "metric": metric,
+            "category_level": category_level,
+            "category_translation_warning": translation_warning}

@@ -1,5 +1,9 @@
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user")
+
 from bit import bit_interface, bit_mercado_login, bit_mysql, bit_pago_info
 
 
@@ -266,8 +270,8 @@ def test_funds_all_shops_is_limited_to_selected_salesperson(monkeypatch):
             bit_interface._fund_collect_stop_event = previous_event
 
     assert response.status_code == 200
-    assert started[0]["kwargs"]["all_shops"] is True
-    assert started[0]["kwargs"]["selected_window_ids"] == ()
+    assert started[0]["kwargs"]["all_shops"] is False
+    assert started[0]["kwargs"]["selected_window_ids"] == ("window-1",)
     assert started[0]["kwargs"]["salesperson"] == "张三"
     assert response.get_json()["data"]["target_count"] == 1
 
@@ -346,3 +350,97 @@ def test_funds_ui_contains_row_multi_select_owner_scope_stop_and_single_refresh(
     assert 'class="secondary fund-refresh-action"' in template
     assert 'fetch("/api/funds/collect"' in template
     assert 'fetch("/api/funds/collect/stop"' in template
+
+
+def test_manual_funds_validates_amounts_and_uses_server_time():
+    from bit.funds import manual_funds_row
+    visible = [{"店铺名": "春风得意", "站点": "墨西哥"}]
+    data = {"shop_name": "春风得意", "site": "墨西哥", "released": "0", "pending": "12.34", "updated_at": "old"}
+    row = manual_funds_row(data, visible)
+    assert row[2:5] == ["0.00", "12.34", "手动更新"]
+    assert row[5] != "old"
+    for value in ("", "NaN", "Infinity", "1.234", "1,234", "1e3"):
+        with pytest.raises(ValueError):
+            manual_funds_row({**data, "pending": value}, visible)
+    with pytest.raises(ValueError):
+        manual_funds_row({**data, "site": "巴西"}, visible)
+
+
+def test_manual_funds_api_saves_snapshot(monkeypatch):
+    monkeypatch.setattr(bit_interface, "db_get_latest_pago_info", lambda owner="": {
+        "rows": [{"店铺名": "春风得意", "站点": "墨西哥"}],
+    })
+    saved = []
+    monkeypatch.setattr(bit_interface, "db_inset_pago_info", saved.extend)
+    client = bit_interface.app.test_client()
+    with client.session_transaction() as session:
+        session["workbench_user"] = {"username": "tester"}
+    response = client.post('/api/funds/manual', json={
+        "shop_name": "春风得意", "site": "墨西哥", "released": "12.30", "pending": "0",
+    })
+    assert response.status_code == 200
+    assert saved[0][2:5] == ["12.30", "0.00", "手动更新"]
+    assert response.json["data"]["updated_at"] == saved[0][5]
+    response = client.post('/api/funds/manual', json={
+        "shop_name": "其他店铺", "site": "墨西哥", "released": "12.30", "pending": "0",
+    })
+    assert response.status_code == 400
+    assert len(saved) == 1
+
+
+def test_group_funds_totals_only_include_visible_rows():
+    from bit.funds import summarize_funds
+    data = summarize_funds({"released_total": "9999", "rows": [
+        {"店铺名": "甲", "店铺组": "A组", "已释放美元": "12.00", "未释放美元": "0", "提交时间": "2026-09-27"},
+        {"店铺名": "乙", "店铺组": "B组", "已释放美元": "500", "未释放美元": "100"},
+    ]}, "A组")
+    assert data["shop_total"] == 1
+    assert data["released_total"] == "12.00"
+    assert data["pending_total"] == "0.00"
+    assert data["latest_submit_time"] == "2026-09-27"
+
+
+def test_pago_entry_uses_current_official_navigation(monkeypatch):
+    monkeypatch.delenv("BIT_PAGO_HOME_URL", raising=False)
+    class Driver:
+        def execute_script(self, script):
+            return [
+                {"text": "Payments", "href": "https://example.com/funds"},
+                {"text": "Global Payments", "href": "https://global-selling.mercadolibre.com/new-funds"},
+            ]
+    driver = Driver()
+    assert bit_pago_info._resolve_pago_entry(driver) == 'https://global-selling.mercadolibre.com/new-funds'
+    monkeypatch.setenv("BIT_PAGO_HOME_URL", "https://example.com/funds")
+    with pytest.raises(ValueError):
+        bit_pago_info._resolve_pago_entry(driver)
+
+
+def test_pago_rate_limit_does_not_retry_navigation(monkeypatch):
+    visits = []
+    class Driver:
+        def get(self, url):
+            visits.append(url)
+    monkeypatch.setattr(bit_pago_info, "_wait_for_pago_batch_resume", lambda *a: None)
+    monkeypatch.setattr(bit_pago_info, "_resolve_pago_entry", lambda d: bit_pago_info.PAGO_HOME_URL)
+    monkeypatch.setattr(bit_pago_info, "_wait_pago_home_ready", lambda *a, **k: True)
+    monkeypatch.setattr(bit_pago_info, "_is_pago_rate_limited_page", lambda d: True)
+    monkeypatch.setattr(bit_pago_info, "_pago_page_text", lambda d: "Too many requests")
+    monkeypatch.setattr(bit_pago_info, "trip_batch_rate_limit", lambda *a: None)
+    with pytest.raises(bit_pago_info.PagoRateLimitError, match="限频"):
+        bit_pago_info._open_pago_home_with_retry(Driver())
+    assert len(visits) == 1
+
+
+def test_funds_group_filter_api(monkeypatch):
+    monkeypatch.setattr(bit_interface, 'db_get_latest_pago_info', lambda owner='': {'rows': [
+        {'店铺名': '甲', '站点': '墨西哥', '店铺组': 'A组', '已释放美元': '10'},
+        {'店铺名': '乙', '站点': '墨西哥', '店铺组': 'B组', '已释放美元': '20'},
+    ]})
+    client = bit_interface.app.test_client()
+    with client.session_transaction() as session:
+        session['workbench_user'] = {'username': 'tester'}
+    response = client.get('/api/funds/latest', query_string={'group_name': 'B组'})
+    assert response.status_code == 200
+    assert response.json['data']['released_total'] == '20.00'
+    assert [row['店铺名'] for row in response.json['data']['rows']] == ['乙']
+    assert bit_interface._required_workbench_permissions('/api/funds/manual', 'POST') == ('funds.execute',)

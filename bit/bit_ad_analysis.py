@@ -62,9 +62,19 @@ def _empty_snapshot() -> dict[str, Any]:
         "accounts": [],
         "links": [],
         "errors": [],
+        "skipped": [],
         "cached": True,
         "snapshot_available": False,
     }
+
+
+def _no_product_ads_permission_error(message: Any) -> bool:
+    normalized = str(message or "").replace("\\_", "_").lower()
+    return (
+        "/advertising/advertisers" in normalized
+        and "404" in normalized
+        and "no permissions found for user_id" in normalized
+    )
 
 
 def _load_snapshot(state_path=None) -> dict[str, Any]:
@@ -77,10 +87,31 @@ def _load_snapshot(state_path=None) -> dict[str, Any]:
         return _empty_snapshot()
     result = _empty_snapshot()
     result.update(payload)
-    for name in ("accounts", "links", "errors"):
+    for name in ("accounts", "links", "errors", "skipped"):
         result[name] = [
             dict(row) for row in (result.get(name) or []) if isinstance(row, dict)
         ]
+    # Snapshots generated before permission misses were treated as expected
+    # exclusions may already contain these rows under `errors`.
+    legacy_skipped = []
+    retained_errors = []
+    for row in result["errors"]:
+        if _no_product_ads_permission_error(row.get("message")):
+            legacy_skipped.append({
+                **row,
+                "reason": "no_advertising_permissions",
+                "message": "无 Product Ads 权限，已跳过",
+            })
+        elif str(row.get("message") or "").strip() == "未开通 Product Ads":
+            legacy_skipped.append({
+                **row,
+                "reason": "product_ads_not_enabled",
+                "message": "未开通 Product Ads，已跳过",
+            })
+        else:
+            retained_errors.append(row)
+    result["errors"] = retained_errors
+    result["skipped"].extend(legacy_skipped)
     result["snapshot_available"] = bool(result.get("generated_at"))
     result["cached"] = True
     return result
@@ -311,6 +342,31 @@ def _campaign_groups(
     )
 
 
+def _product_image(item):
+    pictures = item.get("pictures") or []
+    picture = pictures[0] if pictures and isinstance(pictures[0], dict) else {}
+    url = str(item.get("thumbnail_url") or item.get("secure_thumbnail") or
+              picture.get("secure_url") or picture.get("url") or item.get("thumbnail") or "")
+    if url.startswith("http://"):
+        url = "https://" + url[7:]
+    return url if url.startswith("https://") else ""
+
+
+def _enrich_images(client, links):
+    missing = sorted({row["item_id"] for row in links if not row.get("thumbnail_url")})
+    if not missing or not hasattr(client, "get_listings"):
+        return
+    images = {}
+    for offset in range(0, len(missing), 20):
+        try:
+            items = _api_call(lambda: list(client.get_listings(missing[offset:offset + 20])))
+            images.update({item["id"]: _product_image(item) for item in items})
+        except Exception as exc:
+            logging.warning("广告商品图片读取失败：%s", exc)
+    for row in links:
+        row["thumbnail_url"] = row.get("thumbnail_url") or images.get(row["item_id"], "")
+
+
 def _group_items(client, site_id: str, group: dict, date_from: str, date_to: str) -> list[dict]:
     group_type = str(group.get("ad_group_type") or "ITEM").upper()
     if group_type == "ITEM":
@@ -321,6 +377,7 @@ def _group_items(client, site_id: str, group: dict, date_from: str, date_to: str
             "status": group.get("status") or "",
             "metrics": group.get("metrics") or {},
             "catalog_listing": bool(group.get("catalog_listing")),
+            "thumbnail_url": _product_image(group),
         }] if item_id else []
     rows, _ = _pages(
         lambda offset: _api_call(
@@ -442,6 +499,8 @@ def _advertiser_analysis(client, token: dict, advertiser: dict, date_from: str, 
                 "item_id": item_id,
                 "title": str(item.get("title") or group.get("title") or ""),
                 "permalink": _public_item_url(item_id),
+                "thumbnail_url": _product_image(item),
+                "direct_units_available": "direct_units_quantity" in (item.get("metrics") or {}),
                 "status": str(item.get("status") or group.get("status") or "").upper(),
                 "catalog_listing": bool(item.get("catalog_listing", group.get("catalog_listing"))),
                 "campaign_id": campaign_id,
@@ -454,6 +513,8 @@ def _advertiser_analysis(client, token: dict, advertiser: dict, date_from: str, 
                 "ad_group_status": str(group.get("status") or "").upper(),
                 "metrics": _derived_metrics(item.get("metrics") or group.get("metrics") or {}),
             })
+
+    _enrich_images(client, links)
 
     currency_id = next(
         (str(row.get("currency_id") or "") for row in campaigns.values() if row.get("currency_id")),
@@ -482,7 +543,10 @@ def _advertiser_analysis(client, token: dict, advertiser: dict, date_from: str, 
     return {"account": account, "links": links, "errors": expansion_errors}
 
 
-def _summary(accounts: list[dict], links: list[dict], errors: list[dict]) -> dict:
+def _summary(
+    accounts: list[dict], links: list[dict], errors: list[dict],
+    skipped: list[dict] | None = None,
+) -> dict:
     currencies: dict[str, list[dict]] = {}
     for account in accounts:
         currencies.setdefault(str(account.get("currency_id") or "未标明币种"), []).append(account)
@@ -496,6 +560,7 @@ def _summary(accounts: list[dict], links: list[dict], errors: list[dict]) -> dic
         "link_count": len(links),
         "store_count": len({row.get("token_id") for row in accounts}),
         "error_count": len(errors),
+        "skipped_count": len(skipped or []),
         "currencies": money,
     })
     return additive
@@ -504,22 +569,27 @@ def _summary(accounts: list[dict], links: list[dict], errors: list[dict]) -> dic
 def _filtered_snapshot(
     snapshot: dict[str, Any], token_ids: Iterable[int] | None
 ) -> dict[str, Any]:
+    from bit.ad_profit import enrich
+
     result = copy.deepcopy(snapshot)
     if token_ids is None:
         result["summary"] = _summary(
             result.get("accounts") or [],
             result.get("links") or [],
             result.get("errors") or [],
+            result.get("skipped") or [],
         )
-        return result
+        return enrich(result)
     selected = {int(value) for value in token_ids or () if int(value or 0) > 0}
-    for name in ("accounts", "links", "errors"):
+    for name in ("accounts", "links", "errors", "skipped"):
         result[name] = [
             row for row in (result.get(name) or [])
             if _integer(row.get("token_id")) in selected
         ]
-    result["summary"] = _summary(result["accounts"], result["links"], result["errors"])
-    return result
+    result["summary"] = _summary(
+        result["accounts"], result["links"], result["errors"], result["skipped"]
+    )
+    return enrich(result)
 
 
 def _merge_snapshot(
@@ -535,7 +605,7 @@ def _merge_snapshot(
         result["partial_snapshot"] = True
         return result
     result = copy.deepcopy(previous)
-    for name in ("accounts", "links", "errors"):
+    for name in ("accounts", "links", "errors", "skipped"):
         result[name] = [
             row for row in (result.get(name) or [])
             if _integer(row.get("token_id")) not in selected
@@ -557,7 +627,9 @@ def _merge_snapshot(
         key=lambda row: (_float((row.get("metrics") or {}).get("cost")), row.get("item_id", "")),
         reverse=True,
     )
-    result["summary"] = _summary(result["accounts"], result["links"], result["errors"])
+    result["summary"] = _summary(
+        result["accounts"], result["links"], result["errors"], result["skipped"]
+    )
     return result
 
 
@@ -744,6 +816,7 @@ def collect_ad_analysis(
     accounts: list[dict] = []
     links: list[dict] = []
     errors: list[dict] = []
+    skipped: list[dict] = []
 
     def discover_advertisers(token: dict):
         store_name = str(token.get("display_name") or token.get("nickname") or token.get("id") or "")
@@ -751,26 +824,35 @@ def collect_ad_analysis(
             client, token = _client_and_token(token)
             advertisers = _api_call(client.get_product_ads_advertisers)
         except Exception as exc:
+            if _no_product_ads_permission_error(exc):
+                return None, token, [], [], [{
+                    "token_id": _integer(token.get("id")),
+                    "store_name": store_name,
+                    "reason": "no_advertising_permissions",
+                    "message": "无 Product Ads 权限，已跳过",
+                }]
             return None, token, [], [{
                 "token_id": _integer(token.get("id")),
                 "store_name": store_name,
                 "message": str(exc),
-            }]
+            }], []
         if not advertisers:
-            return client, token, [], [{
+            return client, token, [], [], [{
                 "token_id": _integer(token.get("id")),
                 "store_name": store_name,
-                "message": "未开通 Product Ads",
+                "reason": "product_ads_not_enabled",
+                "message": "未开通 Product Ads，已跳过",
             }]
-        return client, token, [dict(row) for row in advertisers], []
+        return client, token, [dict(row) for row in advertisers], [], []
 
     advertiser_jobs: list[tuple[Any, dict, dict]] = []
     if tokens:
         with ThreadPoolExecutor(max_workers=min(TOKEN_WORKERS, len(tokens))) as executor:
             futures = [executor.submit(discover_advertisers, token) for token in tokens]
             for future in as_completed(futures):
-                client, token, advertisers, discovery_errors = future.result()
+                client, token, advertisers, discovery_errors, discovery_skipped = future.result()
                 errors.extend(discovery_errors)
+                skipped.extend(discovery_skipped)
                 advertiser_jobs.extend(
                     (client, token, advertiser) for advertiser in advertisers
                 )
@@ -815,10 +897,11 @@ def collect_ad_analysis(
         "date_from": start,
         "date_to": end,
         "generated_at": now.replace(microsecond=0).isoformat(sep=" "),
-        "summary": _summary(accounts, links, errors),
+        "summary": _summary(accounts, links, errors, skipped),
         "accounts": accounts,
         "links": links,
         "errors": errors,
+        "skipped": skipped,
         "cached": False,
         "snapshot_available": True,
         "partial_snapshot": False,

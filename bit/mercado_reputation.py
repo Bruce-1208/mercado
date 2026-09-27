@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import random
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Mapping
@@ -14,17 +13,7 @@ API_BASE_URL = "https://api.mercadolibre.com"
 REPUTATION_PATH = "/global/users/seller_reputation"
 ORDERS_SEARCH_PATH = "/marketplace/orders/search"
 RIGHTS_HOLDER_CASES_PATH = "/moderations/pppi/cases"
-LISTING_SAMPLE_SIZE = 10
-LISTING_SAMPLE_SEARCH_MAX_OFFSET = 1000
-LISTING_SAMPLE_STATUSES = (
-    "active",
-    "paused",
-    "pending",
-    "not_yet_active",
-    "programmed",
-    "closed",
-    "deleted",
-)
+LISTING_SAMPLE_SIZE = 100
 OFFICIAL_INFRACTION_DAYS = 100
 SEVEN_DAY_RATE_DISCLAIMER = (
     "七天变化率按单站点由官方订单 API 自算；数值可能因取消单、退款、时区和"
@@ -405,79 +394,35 @@ def _sample_site_listing_status(
     timeout: int,
     sample_size: int = LISTING_SAMPLE_SIZE,
 ) -> dict[str, Any]:
-    """Randomly inspect listings for a site's active/inactive status signal."""
-
+    """Inspect the latest site listings, never a random or status-filtered page."""
     seller = str(seller_id or "").strip()
-    size = min(20, max(1, int(sample_size)))
+    size = min(100, max(1, int(sample_size)))
     if not seller:
-        raise MercadoReputationError("缺少站点 seller_id，无法抽样刊登")
-
-    search_path = f"/marketplace/users/{seller}/items/search"
-    search_params = {
-        "status": ",".join(LISTING_SAMPLE_STATUSES),
-        "limit": size,
-        "offset": 0,
-        "orders": random.choice((
-            "start_time_asc",
-            "start_time_desc",
-            "stop_time_asc",
-            "stop_time_desc",
-        )),
-    }
-    payload = _fetch_json(
-        access_token,
-        search_path,
-        params=search_params,
-        http=http,
-        timeout=timeout,
-        label="站点刊登抽样接口",
-    )
-    if not isinstance(payload, Mapping):
-        raise MercadoReputationError("站点刊登抽样接口返回格式错误")
-    first_page_ids = payload.get("results") or []
-    if not isinstance(first_page_ids, list):
-        raise MercadoReputationError("站点刊登抽样接口的 results 不是列表")
-    paging = _mapping(payload.get("paging"))
-    try:
-        total = max(0, int(paging.get("total") or len(first_page_ids)))
-    except (TypeError, ValueError):
-        total = len(first_page_ids)
-
-    # The regular search endpoint supports offsets through 1000. Pick a random
-    # page within that range, then randomly choose IDs from the returned page.
-    max_random_offset = min(
-        max(0, total - size),
-        max(0, LISTING_SAMPLE_SEARCH_MAX_OFFSET - size),
-    )
-    if max_random_offset:
-        offset = random.randint(0, max_random_offset)
-        if offset:
-            search_params["offset"] = offset
-            payload = _fetch_json(
-                access_token,
-                search_path,
-                params=search_params,
-                http=http,
-                timeout=timeout,
-                label="站点刊登抽样接口",
-            )
-            if not isinstance(payload, Mapping):
-                raise MercadoReputationError("站点刊登抽样接口返回格式错误")
-            page_ids = payload.get("results") or []
-            if not isinstance(page_ids, list):
-                raise MercadoReputationError("站点刊登抽样接口的 results 不是列表")
-        else:
-            page_ids = first_page_ids
-    else:
-        page_ids = first_page_ids
-
-    candidate_ids = list(dict.fromkeys(
-        str(item_id).strip() for item_id in page_ids if str(item_id or "").strip()
-    ))
-    if len(candidate_ids) > size:
-        sampled_ids = random.sample(candidate_ids, size)
-    else:
-        sampled_ids = candidate_ids
+        raise MercadoReputationError("缺少站点 seller_id，无法读取刊登")
+    sampled_ids = []
+    expected_count = None
+    for offset in range(0, size, 50):
+        payload = _fetch_json(
+            access_token, f"/marketplace/users/{seller}/items/search",
+            params={"limit": min(50, size - offset), "offset": offset,
+                    "orders": "start_time_desc"},
+            http=http, timeout=timeout, label="站点最新刊登接口",
+        )
+        if not isinstance(payload, Mapping) or not isinstance(payload.get("results"), list):
+            raise MercadoReputationError("站点最新刊登接口返回格式错误")
+        ids = [str(value).strip() for value in payload["results"] if str(value or "").strip()]
+        if expected_count is None:
+            total = _mapping(payload.get("paging")).get("total")
+            try:
+                expected_count = min(size, max(0, int(total))) if total is not None else size
+            except (TypeError, ValueError) as exc:
+                raise MercadoReputationError("站点最新刊登总数无效") from exc
+        sampled_ids.extend(value for value in ids if value not in sampled_ids)
+        if len(sampled_ids) >= expected_count:
+            break
+        if not ids:
+            break
+    sampled_ids = sampled_ids[:size]
 
     sample = {
         "listing_sample_source": "official_listing_api",
@@ -490,20 +435,27 @@ def _sample_site_listing_status(
     if not sampled_ids:
         return sample
 
-    details = _fetch_json(
-        access_token,
-        "/items/bulk",
-        params={"ids": ",".join(sampled_ids)},
-        http=http,
-        timeout=timeout,
-        label="站点刊登状态接口",
-    )
-    if isinstance(details, Mapping):
-        detail_rows = details.get("items") or details.get("results") or []
-    else:
-        detail_rows = details
-    if not isinstance(detail_rows, list):
-        raise MercadoReputationError("站点刊登状态接口返回格式错误")
+    detail_rows = []
+    for offset in range(0, len(sampled_ids), 20):
+        try:
+            details = _fetch_json(
+                access_token, "/items/bulk",
+                params={"ids": ",".join(sampled_ids[offset:offset + 20])},
+                http=http, timeout=timeout, label="站点刊登状态接口",
+            )
+        except MercadoReputationError as exc:
+            if exc.status_code == 401:
+                raise
+            # Other batches may already prove an active listing. Missing data
+            # can never prove a ban, but must not erase positive evidence.
+            sample["listing_sample_error"] = str(exc)
+            continue
+        if isinstance(details, Mapping):
+            details = details.get("items") or details.get("results") or []
+        if not isinstance(details, list):
+            sample["listing_sample_error"] = "站点刊登状态接口返回格式错误"
+            continue
+        detail_rows.extend(details)
 
     sampled_statuses: dict[str, str] = {}
     for entry in detail_rows:
@@ -530,7 +482,7 @@ def _sample_site_listing_status(
     })
     if active_count:
         sample["listing_sample_status"] = "active"
-    elif len(sampled_statuses) == len(sampled_ids):
+    elif len(sampled_statuses) == len(sampled_ids) == expected_count:
         sample["listing_sample_status"] = "inactive"
     return sample
 
@@ -542,7 +494,11 @@ def _apply_listing_sample_status(
 
     row.update(dict(sample))
     sample_status = sample.get("listing_sample_status")
+    row.update({"suspension_until": "", "suspension_days": None,
+                "suspension_remaining_days": None, "suspension_total_days": None})
     if sample_status not in ("active", "inactive"):
+        row.update({"account_status": "unknown", "site_status_display": "状态未确认（刊登状态不完整或无链接）",
+                    "site_status_source": "official_listing_api"})
         return
 
     row.setdefault("site_status_official_display", row.get("site_status_display"))
@@ -556,7 +512,7 @@ def _apply_listing_sample_status(
     elif sample_status == "inactive":
         row.update({
             "account_status": "restricted",
-            "site_status_display": "封禁（抽样刊登均未激活）",
+            "site_status_display": "封禁（最新刊登均不活跃，封禁天数未确认）",
             "site_status_source": "official_listing_api",
         })
 
@@ -753,7 +709,8 @@ def enrich_reputation_with_official_data(
             except MercadoReputationError as exc:
                 if exc.status_code == 401:
                     raise
-                errors.append(f"站点刊登抽样：{exc}")
+                _apply_listing_sample_status(row, {})
+                errors.append(f"站点最新刊登：{exc}")
 
         try:
             previous_orders = _order_total(

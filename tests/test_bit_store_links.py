@@ -578,6 +578,9 @@ def test_bulk_update_store_links_updates_only_allowed_numeric_fields():
         def fetchone(self):
             return {"total": 2}
 
+        def fetchall(self):
+            return [{"id": 4, "price": "10.00"}, {"id": 5, "price": "11.00"}]
+
     class Connection:
         def cursor(self):
             return Cursor()
@@ -623,6 +626,9 @@ def test_delete_store_links_deletes_unique_selected_ids(monkeypatch):
 
         def execute(self, sql, params=None):
             calls.append((sql, params))
+
+        def fetchall(self):
+            return [{"id": 4, "price": "10.00"}, {"id": 5, "price": "11.00"}]
 
     class Connection:
         committed = False

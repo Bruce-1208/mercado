@@ -371,6 +371,12 @@ def main(argv=None):
             job_file.with_name("result.json").write_text(
                 json.dumps(result, ensure_ascii=False), encoding="utf-8",
             )
+        elif job_type == "reputation_browser_sync":
+            from bit.reputation_browser_sync import collect
+            result = collect((job.get("payload") or {}).get("configs") or [], stop_event)
+            Path(args.job_file).with_name("result.json").write_text(
+                json.dumps(result, ensure_ascii=False), encoding="utf-8",
+            )
         elif job_type == "ai_weight_price":
             job_file = Path(args.job_file)
             result = run_ai_weight_price(job, stop_event, job_file)

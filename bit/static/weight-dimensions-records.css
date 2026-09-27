@@ -39,3 +39,7 @@
   .wdr-toolbar #wdr-state { flex-basis: 100%; }
   .wdr-filters { grid-template-columns: 1fr; }
 }
+
+.wdr-pagination { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; padding: 12px 16px; color: #56677a; font-size: 13px; }
+.wdr-pagination select, .wdr-pagination button { min-height: 34px; }
+.wdr-pagination button:disabled { opacity: .48; cursor: not-allowed; }

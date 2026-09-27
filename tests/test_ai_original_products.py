@@ -356,15 +356,15 @@ def test_ai_original_publish_accepts_free_local_white_background():
     assert product_publish_issues(row) == []
 
 
-def test_ai_original_publish_requires_completed_safe_infringement_check():
+def test_ai_original_publish_does_not_require_infringement_check():
     row = _ai_row()
     row["infringement_risk_level"] = None
     row["infringement_checked_at"] = None
-    assert "AI 原创商品尚未完成侵权检测" in product_publish_issues(row)
+    assert product_publish_issues(row) == []
 
     row["infringement_risk_level"] = 1
     row["infringement_checked_at"] = "2026-09-22 12:00:00"
-    assert "AI 原创商品侵权检测未通过：疑似侵权" in product_publish_issues(row)
+    assert product_publish_issues(row) == []
 
 
 def test_workbench_exposes_ai_original_module_and_batch_actions():
@@ -474,11 +474,13 @@ def test_batch_continues_after_one_product_initial_save_fails(monkeypatch):
                 if isinstance(n, ast.FunctionDef) and n.name == '_run_ai_original_task')
     state = {}
     saved_ids = []
+    saved_changes = []
 
     def save(product_id, changes):
         if product_id == 1:
             raise RuntimeError('database unavailable for first record')
         saved_ids.append(product_id)
+        saved_changes.append(changes)
         return {}
 
     monkeypatch.setattr(original, 'prepare_ai_original_product', lambda *a, **kw: {
@@ -493,11 +495,12 @@ def test_batch_continues_after_one_product_initial_save_fails(monkeypatch):
                      _ai_original_task_state=state,
                      db_update_ai_original_product=save)
     exec(compile(ast.Module(body=[node], type_ignores=[]), '<worker>', 'exec'), namespace)
-    namespace['_run_ai_original_task']([{'id': 1}, {'id': 2}], workers=1)
+    namespace['_run_ai_original_task']([{'id': 1}, {'id': 2}], workers=1, generated_by='李四')
     assert state['status'] == 'partial'
     assert state['processed_count'] == 2
     assert state['failed_count'] == state['completed_count'] == 1
     assert saved_ids == [2, 2]
+    assert all(change["source_snapshot_json"]["ai_original"]["generated_by"] == "李四" for change in saved_changes)
 
 
 @pytest.mark.parametrize('base_url,model,disabled', [
@@ -537,3 +540,59 @@ def test_chat_forwards_explicit_thinking_without_changing_default(monkeypatch):
     deepseek.chat_deepseek([])
     assert calls[0]['extra_body'] == {'thinking': {'type': 'disabled'}}
     assert 'extra_body' not in calls[1]
+
+
+@pytest.mark.parametrize("variations, expected", [
+    ([{"price": "1"}, {"price": "8.40"}], (8.4, 2)),
+    ([{"price": "8.41"}, {"price": "2"}], (8.41, 3)),
+    ([{"price_text": "¥10.00-20.00"}], (20.0, 4)),
+    ([{"price": ""}], (None, None)),
+])
+def test_source_net_includes_domestic_shipping(variations, expected):
+    from erp.ai_original_products import suggested_ai_original_net_proceeds
+    assert suggested_ai_original_net_proceeds(variations) == expected
+
+
+def test_source_and_generator_owners_are_independent():
+    from erp.mercadolibre_collection_store import _mirror_zying_snapshot_fields
+    row = _mirror_zying_snapshot_fields({
+        "source_type": "ai_original",
+        "source_snapshot_json": json.dumps({
+            "plugin_snapshot": {"created_by": "浏览器插件：张三"},
+            "ai_original": {"generated_by": "李四"},
+        }),
+    })
+    assert row["collector_salesperson"] == "张三"
+    assert row["generator_salesperson"] == "李四"
+    historical = _mirror_zying_snapshot_fields({
+        "source_type": "ai_original", "source_snapshot_json": "{}",
+    })
+    assert historical["generator_salesperson"] == ""
+
+
+@pytest.mark.parametrize("endpoint, owner_field", [
+    ("api_1688_products", "collector_salesperson"),
+    ("api_ai_original_products", "generator_salesperson"),
+])
+def test_product_routes_forward_owner_filter_and_source_net(endpoint, owner_field):
+    import ast
+    import logging
+    from flask import Flask, request, jsonify
+
+    node = next(n for n in ast.parse(Path('bit/bit_interface.py').read_text()).body
+                if isinstance(n, ast.FunctionDef) and n.name == endpoint)
+    node.decorator_list = []
+    calls = []
+    def list_rows(**kwargs):
+        calls.append(kwargs)
+        return {"total": 1, "rows": [{"net_proceeds_usd": 99, "suggested_net_proceeds_usd": 3}]}
+    namespace = dict(request=request, jsonify=jsonify, logging=logging,
+                     db_list_mercado_product_items=list_rows,
+                     _parse_int_param=lambda args, key, default, low, high: int(args.get(key, default)))
+    exec(compile(ast.Module(body=[node], type_ignores=[]), '<route>', 'exec'), namespace)
+    with Flask(__name__).test_request_context('/?' + owner_field + '=张三'):
+        response = namespace[endpoint]()
+        assert response.status_code == 200
+        assert calls[0][owner_field] == '张三'
+        expected_net = 3 if endpoint == 'api_1688_products' else 99
+        assert response.get_json()['data']['rows'][0]['net_proceeds_usd'] == expected_net

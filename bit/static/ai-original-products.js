@@ -3,6 +3,7 @@
 let aiOriginalRows = [];
 let aiOriginalSelected = new Set();
 let aiOriginalDeleteRunning = false;
+let aiOriginalReviewRunning = false;
 let aiOriginalTaskTimer = null;
 let aiOriginalPublishTimer = null;
 let aiOriginalEditorState = null;
@@ -442,7 +443,7 @@ function renderAiOriginalProducts() {
     const maxVariantPrice = Number(row.source_variation_max_price_cny || 0);
     const netProceedsValue = row.net_proceeds_usd || (suggestedNet > 0 ? suggestedNet : "");
     const netProceedsHint = suggestedNet > 0
-      ? `1688最高变体价 ¥${maxVariantPrice.toFixed(2)} ÷ 6.7 向上取整 = USD ${suggestedNet}`
+      ? `（1688最高变体价 ¥${maxVariantPrice.toFixed(2)} + 国内运费 ¥5）÷ 6.7 向上取整 = USD ${suggestedNet}`
       : "未读取到变体价格，请手动填写 USD 净收益";
     return `<article class="ai-original-card">
       <input type="checkbox" value="${Number(row.id)}" ${aiOriginalSelected.has(Number(row.id)) ? "checked" : ""} onchange="toggleAiOriginalProduct(${Number(row.id)}, this.checked)">
@@ -451,7 +452,7 @@ function renderAiOriginalProducts() {
         <figure>${aiImage ? `<img src="${aiOriginalEscape(aiImage)}" alt="AI 美客多白底主图" loading="lazy" referrerpolicy="no-referrer" onerror="aiOriginalImageError(this)">` : '<span class="ai-original-image-placeholder">待生成</span>'}<figcaption>AI 白底主图</figcaption></figure>
       </div>
       <div class="ai-original-source"><span class="ai-original-section-label source">1688 原始资料</span><h4>${aiOriginalEscape(original.title || row.title)}</h4><p>1688 编号：${aiOriginalEscape(original.source_1688_item_id || row.source_item_id)}</p><p>采购价：${aiOriginalEscape(original.price ?? row.price ?? "-")} CNY</p><p>包装尺寸：${aiOriginalEscape([row.package_length_cm, row.package_width_cm, row.package_height_cm].some(value => value) ? `${row.package_length_cm || "-"} × ${row.package_width_cm || "-"} × ${row.package_height_cm || "-"} cm` : "未设置")}</p><a href="${aiOriginalEscape(original.source_url || row.source_url || "#")}" target="_blank" rel="noopener">打开 1688 详情页 ↗</a>${row.ai_error ? `<p class="bad">${aiOriginalEscape(row.ai_error)}</p>` : ""}</div>
-      <div class="ai-original-copy"><span class="ai-original-section-label generated">AI 美客多刊登稿</span><strong>西语标题 ${titleEs.length}/60</strong><p class="${titleEs.length > 60 ? "bad" : ""}">${aiOriginalEscape(titleEs)}</p><strong>葡语标题 ${titlePt.length}/60</strong><p class="${titlePt.length > 60 ? "bad" : ""}">${aiOriginalEscape(titlePt)}</p><strong>AI 商品属性（${aiAttributes.length}）</strong>${renderAiOriginalAttributes(row.ai_original?.attributes)}${missingRequired.length ? `<p class="bad">必填属性待补充：${aiOriginalEscape(missingRequired.map(item => item.name || item.id).join("、"))}</p>` : ""}<details><summary>查看 AI 双语详情</summary><p>${aiOriginalEscape(row.description_es || "待生成西语详情")}</p><p>${aiOriginalEscape(row.description_pt || "待生成葡萄牙语详情")}</p></details><div class="ai-original-readiness"><span class="${ready ? "ok" : "pending"}">${ready ? "✓" : "!"} AI 属性</span><span class="${aiImageReady ? "ok" : "pending"}">${aiImageReady ? "✓" : "!"} AI 白底主图</span><span class="${row.category_id ? "ok" : "pending"}">${row.category_id ? "✓" : "!"} CBT 类目</span></div><button class="secondary ai-original-edit-button" type="button" onclick="openAiOriginalEditor(${Number(row.id)})">编辑分类、字段、详情与变体</button></div>
+      <div class="ai-original-copy"><span class="ai-original-section-label generated">AI 美客多刊登稿</span><p>生成业务员：${aiOriginalEscape(row.generator_salesperson || "未记录")}</p><strong>西语标题 ${titleEs.length}/60</strong><p class="${titleEs.length > 60 ? "bad" : ""}">${aiOriginalEscape(titleEs)}</p><strong>葡语标题 ${titlePt.length}/60</strong><p class="${titlePt.length > 60 ? "bad" : ""}">${aiOriginalEscape(titlePt)}</p><strong>AI 商品属性（${aiAttributes.length}）</strong>${renderAiOriginalAttributes(row.ai_original?.attributes)}${missingRequired.length ? `<p class="bad">必填属性待补充：${aiOriginalEscape(missingRequired.map(item => item.name || item.id).join("、"))}</p>` : ""}<details><summary>查看 AI 双语详情</summary><p>${aiOriginalEscape(row.description_es || "待生成西语详情")}</p><p>${aiOriginalEscape(row.description_pt || "待生成葡萄牙语详情")}</p></details><div class="ai-original-readiness"><span class="${ready ? "ok" : "pending"}">${ready ? "✓" : "!"} AI 属性</span><span class="${aiImageReady ? "ok" : "pending"}">${aiImageReady ? "✓" : "!"} AI 白底主图</span><span class="${row.category_id ? "ok" : "pending"}">${row.category_id ? "✓" : "!"} CBT 类目</span></div><button class="secondary ai-original-edit-button" type="button" onclick="openAiOriginalEditor(${Number(row.id)})">编辑分类、字段、详情与变体</button></div>
       <div class="ai-original-fields">
         <label>实重(g)<input id="ai-original-weight-${Number(row.id)}" type="number" min="1" step="1" value="${aiOriginalEscape(row.weight_g || "")}"></label>
         <label>净收益 USD<input id="ai-original-net-${Number(row.id)}" type="number" min="0.01" step="0.01" value="${aiOriginalEscape(netProceedsValue)}"><small class="ai-original-net-hint">${aiOriginalEscape(netProceedsHint)}</small></label>
@@ -623,7 +624,7 @@ async function loadAiOriginalProducts({preserveTaskStatus = false} = {}) {
   const search = document.getElementById("ai-original-search")?.value?.trim() || "";
   if (!preserveTaskStatus) aiOriginalStatus("正在读取 1688 产品...");
   try {
-    const response = await fetch(`/api/ai-original-products?limit=500&search=${encodeURIComponent(search)}`, {cache: "no-store"});
+    const response = await fetch(`/api/ai-original-products?limit=500&search=${encodeURIComponent(search)}&generator_salesperson=${encodeURIComponent(document.getElementById("ai-original-generator-filter")?.value?.trim() || "")}`, {cache: "no-store"});
     const payload = await response.json();
     if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
     aiOriginalRows = payload.data?.rows || [];
@@ -668,6 +669,8 @@ function updateAiOriginalSelection() {
   if (publishSelection) publishSelection.textContent = `${count} 件`;
   const deleteButton = document.getElementById("ai-original-delete");
   if (deleteButton) deleteButton.disabled = !count || aiOriginalDeleteRunning;
+  const reviewButton = document.getElementById("ai-original-review-submit");
+  if (reviewButton) reviewButton.disabled = !count || aiOriginalReviewRunning || !document.getElementById("ai-original-review-status")?.value;
   const filter = document.getElementById("ai-original-status-filter")?.value || "";
   const visible = aiOriginalRows.filter(row => !filter || row.ai_status === filter);
   const selectedCount = visible.filter(row => aiOriginalSelected.has(Number(row.id))).length;
@@ -679,7 +682,42 @@ function updateAiOriginalSelection() {
   const process = document.getElementById("ai-original-process");
   const publish = document.getElementById("ai-original-publish");
   if (process) process.disabled = !count;
-  if (publish) publish.disabled = !count;
+  if (publish) publish.disabled = !aiOriginalPublishableSelection().length;
+}
+
+async function updateSelectedAiOriginalReviewStatus() {
+  const ids = [...aiOriginalSelected];
+  const reviewStatus = document.getElementById("ai-original-review-status")?.value || "";
+  if (!ids.length) { aiOriginalStatus("请先选择要审核的 AI 原创产品", "error"); return; }
+  if (!reviewStatus) { aiOriginalStatus("请选择批量审核状态", "error"); return; }
+  if (reviewStatus === "approved") {
+    const incomplete = aiOriginalRows.filter(row => ids.includes(Number(row.id)) && (
+      row.ai_status !== "completed" || !(Number(row.weight_g) > 0) || !(Number(row.net_proceeds_usd) > 0)
+    ));
+    if (incomplete.length) {
+      const examples = incomplete.slice(0, 5).map(row => row.original_1688?.source_1688_item_id || row.source_item_id || row.id);
+      aiOriginalStatus(`审核通过前需完成 AI 生成并填写实重、净收益；未满足的产品：${examples.join("、")}${incomplete.length > examples.length ? ` 等 ${incomplete.length} 件` : ""}`, "error");
+      return;
+    }
+  }
+  const button = document.getElementById("ai-original-review-submit");
+  aiOriginalReviewRunning = true;
+  updateAiOriginalSelection();
+  try {
+    const response = await fetch("/api/mercado-products/review-status", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({product_item_ids: ids, review_status: reviewStatus}),
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
+    await loadAiOriginalProducts();
+    aiOriginalStatus(`已更新 ${Number(payload.data?.changed || 0)} 件产品的审核状态`, "success");
+  } catch (error) {
+    aiOriginalStatus(`批量审核失败：${error.message || error}`, "error");
+  } finally {
+    aiOriginalReviewRunning = false;
+    updateAiOriginalSelection();
+  }
 }
 
 async function deleteSelectedAiOriginalProducts() {
@@ -914,15 +952,21 @@ function renderAiOriginalPublishFormula() {
   if (node) node.textContent = `当前 AI 比例：${Number.isFinite(value) ? value : 0}%；店铺站点比例沿用各店铺设置。`;
 }
 
+function aiOriginalPublishableSelection() {
+  return aiOriginalRows.filter(row => aiOriginalSelected.has(Number(row.id)) && aiOriginalListingReady(row));
+}
+
 async function publishSelectedAiOriginalProducts() {
-  const ids = [...aiOriginalSelected];
+  const ids = aiOriginalPublishableSelection().map(row => Number(row.id));
+  const skippedCount = aiOriginalSelected.size - ids.length;
   const tokenIds = [...(document.getElementById("ai-original-stores")?.selectedOptions || [])].map(option => Number(option.value)).filter(Boolean);
   const siteIds = aiOriginalSelectedSiteIds();
   const status = document.getElementById("ai-original-publish-status");
-  if (!ids.length || !tokenIds.length || !siteIds.length) { status.textContent = "请选择产品、对应店铺和至少一个目标站点"; status.className = "ai-original-status error"; return; }
+  if (!ids.length) { status.textContent = "所选产品暂无可上架产品，请先补齐资料并审核通过"; status.className = "ai-original-status error"; return; }
+  if (!tokenIds.length || !siteIds.length) { status.textContent = "请选择对应店铺和至少一个目标站点"; status.className = "ai-original-status error"; return; }
   const netProceedsRatio = Number(document.getElementById("ai-original-net-ratio")?.value || 200);
   if (!(netProceedsRatio > 0) || netProceedsRatio > 10000) { status.textContent = "AI 原创比例必须大于 0 且不超过 10000%"; status.className = "ai-original-status error"; return; }
-  if (!window.confirm(`确定把 ${ids.length} 件产品上架到 ${tokenIds.length} 个店铺、${siteIds.length} 个站点吗？AI 原创比例 ${netProceedsRatio}% 将再乘以每个店铺的站点比例。`)) return;
+  if (!window.confirm(`已自动忽略 ${skippedCount} 件资料不完整或未审核的产品。确定把 ${ids.length} 件产品上架到 ${tokenIds.length} 个店铺、${siteIds.length} 个站点吗？AI 原创比例 ${netProceedsRatio}% 将再乘以每个店铺的站点比例。`)) return;
   try {
     const publishPayload = {
       product_item_ids: ids, selection_mode: "accounts", token_ids: tokenIds, site_ids: siteIds,
@@ -991,8 +1035,10 @@ async function loadAiOriginalPublishStatus() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("ai-original-generator-filter")?.addEventListener("keydown", event => { if (event.key === "Enter") loadAiOriginalProducts(); });
   document.getElementById("ai-original-search")?.addEventListener("keydown", event => { if (event.key === "Enter") loadAiOriginalProducts(); });
   document.getElementById("ai-original-status-filter")?.addEventListener("change", renderAiOriginalProducts);
+  document.getElementById("ai-original-review-status")?.addEventListener("change", updateAiOriginalSelection);
   document.getElementById("ai-original-salesperson")?.addEventListener("change", renderAiOriginalStoreFilters);
   document.getElementById("ai-original-store-group")?.addEventListener("change", renderAiOriginalStoreFilters);
   document.getElementById("ai-original-stores")?.addEventListener("change", renderAiOriginalStoreRatioSummary);

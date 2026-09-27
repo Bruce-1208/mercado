@@ -5,9 +5,12 @@ HTTP 429、``Too Many Requests``、``Access denied`` 等其他文案都不在
 这里做限频推断，避免把登录、验证码或普通网络异常误判为限频。
 """
 
+import json
+from html.parser import HTMLParser
 import re
 import time
 import unicodedata
+from urllib.parse import urlsplit
 
 from bit.bit_utils import get_now_time
 
@@ -139,9 +142,57 @@ def is_mercado_rate_limited_page(driver=None, state=None):
     return is_mercado_rate_limited_text(page_source)
 
 
+class _HelpRenderingContext(HTMLParser):
+    """Read only Nordic's rendering script, not article text or translations."""
+
+    def __init__(self):
+        super().__init__()
+        self.active = False
+        self.parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script":
+            self.active = dict(attrs).get("id") == "__NORDIC_RENDERING_CTX__"
+
+    def handle_endtag(self, tag):
+        if tag == "script":
+            self.active = False
+
+    def handle_data(self, data):
+        if self.active:
+            self.parts.append(data)
+
+
+def is_mercado_guest_help_state(state):
+    """The public Help page can render successfully while the user is logged out."""
+    try:
+        url = urlsplit(str(state.get("current_url") or ""))
+        if url.hostname != "global-selling.mercadolibre.com":
+            return False
+        if url.path.rstrip("/") not in {"/help", "/help/v2"}:
+            return False
+        parser = _HelpRenderingContext()
+        parser.feed(str(state.get("page_source") or ""))
+        script = "".join(parser.parts)
+        assignment = re.search(r"\b_n\.ctx\.r\s*=\s*", script)
+        if not assignment:
+            return False
+        context, _ = json.JSONDecoder().raw_decode(script[assignment.end():])
+        props = context.get("appProps", {}).get("pageProps", {})
+        return (
+            props.get("isGuest") is True
+            and str(props.get("userId")) == "-1"
+            and props.get("siteId") == "CBT"
+        )
+    except (ValueError, TypeError, AttributeError):
+        return False
+
+
 def is_mercado_logged_out_state(state):
     """识别 Mercado 后台是否已跳转到登录页。"""
     state = dict(state or {})
+    if is_mercado_guest_help_state(state):
+        return True
     current_url = _normalize_visible_text(state.get("current_url"))
     visible_text = _normalize_visible_text(
         f"{state.get('page_text') or ''}\n{state.get('title') or ''}"

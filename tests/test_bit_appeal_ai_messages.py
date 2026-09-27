@@ -519,3 +519,33 @@ def test_open_ai_contact_window_does_not_toggle_visible_panel(monkeypatch):
 
     assert mode == bit_appeal_ai.AI_CHAT_MODE_IFRAME
     assert calls["entry"] == 0
+
+
+def test_generation_failure_records_group_without_sending(monkeypatch):
+    import pytest
+
+    records = []
+    monkeypatch.setattr(bit_appeal_ai, 'open_ai_contact_window', lambda *a: None)
+    monkeypatch.setattr(bit_appeal_ai, 'get_appeal_log_records', lambda: [])
+    monkeypatch.setattr(bit_appeal_ai, 'save_ai_appeal_group_record',
+                        lambda *a, **kw: records.append((a, kw)))
+
+    def fail(*a, **kw):
+        raise RuntimeError('商品描述读取失败')
+
+    monkeypatch.setattr(bit_appeal_ai, 'generate_ai_appeal_copy', fail)
+    monkeypatch.setattr(bit_appeal_ai, 'send_infraction_message_with_retry',
+                        lambda *a, **kw: pytest.fail('must not send'))
+    for handler, id_key in [(bit_appeal_ai.handle_infraction, 'infraction_ids'),
+                            (bit_appeal_ai.handle_prohibited, 'prohibited_ids')]:
+        with pytest.raises(RuntimeError, match='商品描述读取失败'):
+            handler('window', object(), '测试店铺', '墨西哥', '', 'seller',
+                    **{id_key: ['MLM1'], 'ai_script_mode': True,
+                       'deepseek_api_key': 'manual-secret',
+                       'appeal_copy_mode': 'AI话术模式'})
+    assert len(records) == 2
+    for args, kwargs in records:
+        assert args[5] == 'MLM1'
+        assert args[6] == ''
+        assert kwargs['error'] == '商品描述读取失败'
+        assert kwargs['appeal_copy_mode'] == 'AI话术模式'

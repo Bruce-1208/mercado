@@ -404,7 +404,8 @@ def test_workbench_schema_ready_fast_path_avoids_startup_writes(monkeypatch):
         bit_interface,
         "_workbench_schema_state",
         lambda cursor: (
-            {"workbench_roles", "workbench_users"},
+            {"workbench_roles", "workbench_users", "workbench_organizations"},
+            set(bit_interface._WORKBENCH_ROLE_REQUIRED_COLUMNS),
             set(bit_interface._WORKBENCH_USER_REQUIRED_COLUMNS),
         ),
     )
@@ -418,6 +419,8 @@ def test_workbench_schema_ready_fast_path_avoids_startup_writes(monkeypatch):
         "_workbench_users_are_current",
         lambda cursor: True,
     )
+
+    monkeypatch.setattr(bit_interface, "_workbench_organizations_are_current", lambda cursor: True)
 
     assert bit_interface.ensure_workbench_user_table() is False
     assert events == ["close"]
@@ -540,3 +543,88 @@ def test_member_cannot_address_another_store_token(monkeypatch):
 
     assert response.status_code == 403
     assert "其他成员" in response.get_json()["message"]
+
+
+@pytest.mark.parametrize("seed,pending,expected", [
+    (None, 0, False), ({"is_active": 0}, 0, False),
+    ({"is_active": 1}, 0, True), ({"is_active": 1}, 2, False),
+])
+def test_organization_readiness_is_read_only(seed, pending, expected):
+    class Cursor:
+        def __init__(self):
+            self.results = iter([seed, {"pending_count": pending}])
+            self.queries = []
+
+        def execute(self, sql):
+            self.queries.append(sql)
+            assert sql.lstrip().startswith("SELECT")
+
+        def fetchone(self):
+            return next(self.results)
+
+    cursor = Cursor()
+    assert bit_interface._workbench_organizations_are_current(cursor) is expected
+    if seed and seed['is_active']:
+        query = cursor.queries[-1]
+        assert "IS NULL" in query and "= ''" in query and "= 'default'" in query
+        assert 'LEFT JOIN `workbench_organizations`' in query
+
+
+@pytest.mark.parametrize("missing", ["none", "user_organization_column", "organization_table", "pending_organization", "stale_roles", "missing_user_role"])
+def test_account_initialization_only_writes_when_upgrade_needed(monkeypatch, missing):
+    events = []
+    # The real role schema has no organization_key column; customer ownership
+    # belongs to users, so do not derive this fixture from required constants.
+    role_columns = {'role_key', 'role_name', 'description', 'permissions_json',
+                    'own_store_only', 'is_system', 'created_at', 'updated_at'}
+    user_columns = {'id', 'username', 'password_hash', 'display_name', 'email',
+                    'department', 'organization_key', 'role_key', 'is_active',
+                    'created_at', 'updated_at'}
+    tables = {'workbench_roles', 'workbench_users', 'workbench_organizations'}
+    if missing == 'user_organization_column':
+        user_columns.remove('organization_key')
+    if missing == 'organization_table':
+        tables.remove('workbench_organizations')
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def execute(self, sql, params=None):
+            events.append(sql.strip())
+
+        def fetchone(self):
+            return {'total': 1}
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            events.append('commit')
+
+        def rollback(self):
+            events.append('rollback')
+
+        def close(self):
+            events.append('close')
+
+    monkeypatch.setattr(bit_interface.pymysql, 'connect', lambda **kwargs: Connection())
+    monkeypatch.setattr(bit_interface, '_workbench_schema_state', lambda cursor: (tables, role_columns, user_columns))
+    monkeypatch.setattr(bit_interface, '_workbench_default_roles_are_current', lambda cursor: missing != 'stale_roles')
+    monkeypatch.setattr(bit_interface, '_workbench_users_are_current', lambda cursor: missing != 'missing_user_role')
+    monkeypatch.setattr(bit_interface, '_workbench_organizations_are_current', lambda cursor: missing != 'pending_organization')
+    assert bit_interface.ensure_workbench_user_table() is (missing != 'none')
+    if missing == 'none':
+        assert events == ['close']
+    else:
+        assert events[-2:] == ['commit', 'close']
+        assert any('CREATE TABLE IF NOT EXISTS `workbench_organizations`' in event for event in events)
+        if missing == 'user_organization_column':
+            assert any('ALTER TABLE `workbench_users` ADD COLUMN `organization_key`' in event for event in events)
+        normalize = next(i for i, event in enumerate(events) if "SET `organization_key` = 'wuhan-zeshun'" in event)
+        backfill = next(i for i, event in enumerate(events) if 'SELECT DISTINCT u.`organization_key`' in event)
+        assert normalize < backfill

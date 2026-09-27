@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "泽顺插件",
-  "version": "1.8.23",
+  "version": "1.8.24",
   "description": "采集 Mercado Libre、Yandex 国外商品、1688 与智赢商品，更新订单实测重量尺寸，检查智赢产品侵权风险，启动 AI 核重核价，并同步采购订单物流号。",
   "permissions": [
     "alarms",

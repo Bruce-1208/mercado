@@ -45,3 +45,6 @@ cache/mercado_playwright_profile/
 *.log
 bit/logs/*_history.json
 .data/store_link_markers.sqlite3
+
+# Persistent store-link audit journal (contains operational data).
+runtime_logs/store_link_operations.sqlite3*
