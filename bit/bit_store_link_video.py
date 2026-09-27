@@ -39,11 +39,26 @@ def upload_store_link_video(link_id, upload):
         raise ValueError("只有在售商品可以上传视频")
     cbt_item_id = str(item.get("cbt_item_id") or "").strip().upper()
     site_id = str(item.get("site_id") or "").strip().upper()
-    logistic_type = str((item.get("shipping") or {}).get("logistic_type") or "").strip()
     if not re.fullmatch(r"CBT\d+", cbt_item_id):
         raise ValueError("未找到商品对应的 CBT 编号，无法上传视频")
-    if not site_id or site_id == "CBT" or site_id != str(row.get("site_id") or "").upper() or not logistic_type:
+    if not site_id or site_id == "CBT" or site_id != str(row.get("site_id") or "").upper():
         raise ValueError("商品站点或物流类型不完整，无法确定视频发布范围")
+    # Item shipping describes delivery (e.g. cross_docking), whereas Clips
+    # requires the seller's marketplace operation (remote or fulfillment).
+    identity = client.request("GET", "/users/me")
+    profile = client.request("GET", f"/marketplace/users/{identity['id']}")
+    marketplaces = [
+        account for account in profile.get("marketplaces") or []
+        if str(account.get("site_id") or "").upper() == site_id
+        and str(account.get("user_id") or "") == str(item.get("seller_id") or "")
+        and account.get("logistic_type") in {"remote", "fulfillment"}
+    ]
+    if len(marketplaces) != 1:
+        raise ValueError(
+            f"无法确认商品 {row['item_id']} 的卖家 {item.get('seller_id')} "
+            f"在当前授权下的 {site_id} 站点物流类型，已停止上传，请核对店铺授权"
+        )
+    logistic_type = marketplaces[0]["logistic_type"]
     result = client.upload_item_clip(
         cbt_item_id, upload.stream, filename,
         [{"site_id": site_id, "logistic_type": logistic_type}],

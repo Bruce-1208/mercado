@@ -208,13 +208,24 @@ def run_ai_weight_price(job, stop_event, job_file):
     if action not in {
         "login/open", "login/confirm", "login/supplier", "categories/refresh",
         "start", "continue", "stop", "terminate", "skip-current", "retry",
-        "manual-execute", "probe", "weight-dimensions-update",
+        "manual-execute", "probe", "weight-dimensions-update", "collection-check",
     }:
         raise ValueError("AI核重核价 Agent 操作无效")
 
     if action == "login/open":
         service.open_login()
         return {"status": "success", "message": "已在 Agent 本机打开智赢和1688登录页面"}
+    if action == "collection-check":
+        from bit.bit_db_api import _request
+        from erp.ai_weight_price.collection_runner import run
+
+        def collection_step(action, data):
+            return _request(
+                "POST", f"/api/local-agents/jobs/{job['job_id']}/collection-check",
+                json={"action": action, "payload": data}, timeout=180,
+            )
+
+        return run(service, collection_step, stop_event)
     if action == "login/supplier":
         service.open_supplier_login()
         return {"status": "success", "message": "已在 Agent 本机打开1688登录页面"}
@@ -269,8 +280,10 @@ def run_ai_weight_price(job, stop_event, job_file):
                         "status": "success",
                         "message": (
                             f"重量 {result.get('weight_g', item.get('actual_weight_g'))}g、"
-                            f"尺寸 {result.get('dimensions_cm', item.get('actual_dimensions_cm'))}cm、"
-                            "产品级别“重点”已保存并回读确认"
+                            +
+                            (f"尺寸 {result.get('dimensions_cm', item.get('actual_dimensions_cm'))}cm、"
+                             if item.get("actual_dimensions_cm") else "沿用原尺寸、")
+                            + "产品级别“重点”已保存并回读确认"
                         ),
                     })
                 except Exception as exc:
@@ -369,6 +382,12 @@ def main(argv=None):
             job_file = Path(args.job_file)
             result = run_daily_task(job.get("payload") or {}, stop_event, job_file)
             job_file.with_name("result.json").write_text(
+                json.dumps(result, ensure_ascii=False), encoding="utf-8",
+            )
+        elif job_type == "zying_order_sync":
+            from bit.zying_order_sync import run_agent_sync
+            result = run_agent_sync(job, stop_event)
+            job_path.with_name("result.json").write_text(
                 json.dumps(result, ensure_ascii=False), encoding="utf-8",
             )
         elif job_type == "reputation_browser_sync":

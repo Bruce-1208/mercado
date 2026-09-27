@@ -722,7 +722,7 @@ class LocalAgentStore:
             ).fetchone()
         return self._job_row(row)
 
-    def list_jobs(self, *, agent_id="", job_type="", limit=100):
+    def list_jobs(self, *, agent_id="", job_type="", created_by_id=None, limit=100):
         clauses = []
         params = []
         if agent_id:
@@ -731,6 +731,9 @@ class LocalAgentStore:
         if job_type:
             clauses.append("job_type = ?")
             params.append(str(job_type))
+        if created_by_id is not None:
+            clauses.append("created_by_id = ?")
+            params.append(created_by_id)
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         params.append(max(1, min(int(limit), 500)))
         with self._connect() as connection:

@@ -2,6 +2,10 @@
 let storeAnalysisReady = false;
 let storeAnalysisScope = [];
 let storeAnalysisRequest = 0;
+let storeAnalysisScopePromise = null;
+const storeAnalysisResults = new Map();
+const storeAnalysisPending = new Map();
+const storeAnalysisCacheMs = 60000;
 
 function storeAnalysisEscape(value) {
     return String(value ?? "").replace(/[&<>"']/g, character => ({
@@ -43,25 +47,55 @@ function refreshStoreAnalysisFilters(changed = "") {
     storeAnalysisOptions(store, [...stores].map(([value, label]) => ({value, label})), "全部店铺", shop);
 }
 
-async function initStoreAnalysis() {
-    if (storeAnalysisReady) return;
-    const now = new Date(Date.now() + 8 * 3600000);
-    const end = now.toISOString().slice(0, 10);
-    const start = new Date(now.getTime() - 29 * 86400000).toISOString().slice(0, 10);
-    document.getElementById("store-analysis-start").value = start;
-    document.getElementById("store-analysis-end").value = end;
-    const response = await fetch(enterpriseScopedUrl("/api/mercado-tokens"), {cache: "no-store"});
-    const payload = await response.json();
-    if (!response.ok || payload.status !== "success") throw new Error(payload.message || "店铺列表读取失败");
-    storeAnalysisScope = (payload.data?.rows || []).flatMap(token => {
-        const id = String(token.id || "");
-        const name = String(token.display_name || token.nickname || `店铺 ${id}`);
-        return (token.site_settings || []).map(setting => ({
-            id, name, salesperson: String(setting.salesperson || ""), group: String(setting.group_name || ""),
-        }));
+function initStoreAnalysis() {
+    if (!storeAnalysisReady) {
+        const now = new Date(Date.now() + 8 * 3600000);
+        document.getElementById("store-analysis-start").value = new Date(now.getTime() - 6 * 86400000).toISOString().slice(0, 10);
+        document.getElementById("store-analysis-end").value = now.toISOString().slice(0, 10);
+        document.getElementById("store-analysis-category-level").value = "2";
+        storeAnalysisReady = true;
+    }
+    if (storeAnalysisScopePromise) return storeAnalysisScopePromise;
+    storeAnalysisScopePromise = (async () => {
+        const response = await fetch(enterpriseScopedUrl("/api/mercado-tokens"), {cache: "no-store"});
+        const payload = await response.json();
+        if (!response.ok || payload.status !== "success") throw new Error(payload.message || "店铺列表读取失败");
+        storeAnalysisScope = (payload.data?.rows || []).flatMap(token => {
+            const id = String(token.id || "");
+            const name = String(token.display_name || token.nickname || `店铺 ${id}`);
+            const settings = token.site_settings?.length ? token.site_settings : [{}];
+            return settings.map(setting => ({
+                id, name, salesperson: String(setting.salesperson || ""), group: String(setting.group_name || ""),
+            }));
+        });
+        refreshStoreAnalysisFilters();
+    })().catch(error => {
+        storeAnalysisScopePromise = null;
+        document.getElementById("store-analysis-filter-message").textContent = `店铺筛选项加载失败：${error.message || error}；全部店铺统计仍可查看，点击查看分析可重试。`;
     });
-    refreshStoreAnalysisFilters();
-    storeAnalysisReady = true;
+    document.getElementById("store-analysis-filter-message").textContent = "";
+    return storeAnalysisScopePromise;
+}
+
+async function fetchStoreAnalysis(url, force) {
+    const cached = storeAnalysisResults.get(url);
+    if (!force && cached && Date.now() - cached.time < storeAnalysisCacheMs) return cached.data;
+    if (storeAnalysisPending.has(url)) return storeAnalysisPending.get(url);
+    const pending = (async () => {
+        const response = await fetch(url, {cache: "no-store"});
+        const payload = await response.json();
+        if (!response.ok || payload.status !== "success") throw new Error(payload.message || "分析失败");
+        const data = payload.data || {};
+        storeAnalysisResults.set(url, {time: Date.now(), data});
+        if (storeAnalysisResults.size > 20) storeAnalysisResults.delete(storeAnalysisResults.keys().next().value);
+        return data;
+    })();
+    storeAnalysisPending.set(url, pending);
+    try {
+        return await pending;
+    } finally {
+        storeAnalysisPending.delete(url);
+    }
 }
 
 function renderStoreAnalysis(data) {
@@ -111,12 +145,12 @@ function renderStoreAnalysis(data) {
     }).join("");
 }
 
-async function loadStoreAnalysis() {
+async function loadStoreAnalysis(force = false) {
     const message = document.getElementById("store-analysis-message");
     const container = document.getElementById("store-analysis-sites");
     const requestId = ++storeAnalysisRequest;
     try {
-        await initStoreAnalysis();
+        void initStoreAnalysis();
         const params = new URLSearchParams({
             start_date: document.getElementById("store-analysis-start").value,
             end_date: document.getElementById("store-analysis-end").value,
@@ -128,12 +162,10 @@ async function loadStoreAnalysis() {
         });
         if (!params.get("start_date") || !params.get("end_date")) throw new Error("请选择统计时间段");
         message.textContent = `正在统计订单和${params.get("category_level")}级分类…`;
-        const response = await fetch(enterpriseScopedUrl(`/api/store-analysis?${params}`), {cache: "no-store"});
-        const payload = await response.json();
-        if (!response.ok || payload.status !== "success") throw new Error(payload.message || "分析失败");
+        const data = await fetchStoreAnalysis(enterpriseScopedUrl(`/api/store-analysis?${params}`), force);
         if (requestId !== storeAnalysisRequest) return;
-        renderStoreAnalysis(payload.data || {});
-        const warning = payload.data?.category_translation_warning;
+        renderStoreAnalysis(data);
+        const warning = data.category_translation_warning;
         message.textContent = `${warning ? `${warning} ` : ""}按北京时间统计订单创建日期，排除取消及无效订单；一单含多个分类时，每个分类各计一单，饼图按分类关联订单数占比。GMV 统一折算为 USD。`;
     } catch (error) {
         if (requestId !== storeAnalysisRequest) return;
@@ -144,7 +176,7 @@ async function loadStoreAnalysis() {
 
 document.getElementById("store-analysis-form")?.addEventListener("submit", event => {
     event.preventDefault();
-    loadStoreAnalysis();
+    loadStoreAnalysis(true);
 });
 ["salesperson", "group", "store"].forEach(field => {
     document.getElementById(`store-analysis-${field}`)?.addEventListener("change", () => refreshStoreAnalysisFilters(field));

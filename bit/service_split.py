@@ -18,6 +18,7 @@ HOP_HEADER = "X-Workbench-Worker-Auth"
 HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
               "te", "trailer", "transfer-encoding", "upgrade", "host", "content-length"}
 STATEFUL_PREFIXES = (
+    "/api/local-agents/zying-sync/",
     "/api/order-sync/", "/api/db/order-sync/", "/api/store-links/sync/",
     "/api/db/store-links/sync/", "/api/prohibited-listings/sync/",
     "/api/db/prohibited-listings/sync/", "/api/official-infractions/sync",
@@ -43,6 +44,7 @@ STATEFUL_PATHS = {
     "/api/exports", "/api/mercado-tokens/exchange",
     "/api/store-links/bulk-update", "/api/store-links/bulk-update/status",
     "/api/db/store-links/bulk-update", "/api/db/store-links/bulk-update/status",
+    "/api/store-links/delete", "/api/db/store-links/delete",
     "/api/mercado/notifications", "/api/mercado/today/tasks",
     "/api/db/mercado-action-center",
 }

@@ -47,7 +47,7 @@ STORE_LINK_AUTO_CHECK_SECONDS = max(
 )
 STORE_LINK_DETAIL_ATTRIBUTES = (
     "id", "site_id", "title", "permalink", "secure_thumbnail", "thumbnail",
-    "pictures", "status", "price", "currency_id", "available_quantity",
+    "pictures", "status", "sub_status", "deleted", "price", "currency_id", "available_quantity",
     "sold_quantity", "seller_custom_field", "category_id", "listing_type_id",
     "shipping", "attributes", "variations", "seller_id", "cbt_item_id",
     "net_proceeds",

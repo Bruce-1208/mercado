@@ -183,7 +183,11 @@ class MercadoLibreClient:
         except requests.RequestException as exc:
             raise MercadoAPIError("视频上传连接中断，结果未知，请先在美客多后台确认后再重试") from exc
         if not response.ok:
-            raise MercadoAPIError(f"美客多视频上传失败 ({response.status_code}): {response.text[:1000]}")
+            detail = response.text[:1000]
+            explanation = ""
+            if "Invalid sites for this seller" in detail:
+                explanation = "平台拒绝了当前卖家的上传站点，请核对店铺授权与目标站点；"
+            raise MercadoAPIError(f"美客多视频上传失败 ({response.status_code}): {explanation}{detail}")
         result = response.json()
         if not isinstance(result, dict) or result.get("status") != "accepted" or not result.get("clip_uuid"):
             raise MercadoAPIError("美客多返回了未确认的上传结果，请到后台核实")

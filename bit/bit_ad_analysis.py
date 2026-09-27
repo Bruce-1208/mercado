@@ -344,15 +344,25 @@ def _campaign_groups(
 
 def _product_image(item):
     pictures = item.get("pictures") or []
-    picture = pictures[0] if pictures and isinstance(pictures[0], dict) else {}
-    url = str(item.get("thumbnail_url") or item.get("secure_thumbnail") or
-              picture.get("secure_url") or picture.get("url") or item.get("thumbnail") or "")
-    if url.startswith("http://"):
-        url = "https://" + url[7:]
-    return url if url.startswith("https://") else ""
+    candidates = [item.get("thumbnail_url"), item.get("secure_thumbnail")]
+    if isinstance(pictures, list):
+        for picture in pictures:
+            if isinstance(picture, dict):
+                candidates.extend([picture.get("secure_url"), picture.get("url")])
+    candidates.append(item.get("thumbnail"))
+    for candidate in candidates:
+        url = str(candidate or "").strip()
+        if url.startswith("http://"):
+            url = "https://" + url[7:]
+        if url.startswith("https://"):
+            return url
+    return ""
 
 
 def _enrich_images(client, links):
+    from bit.ad_images import enrich
+
+    enrich(links)
     missing = sorted({row["item_id"] for row in links if not row.get("thumbnail_url")})
     if not missing or not hasattr(client, "get_listings"):
         return
@@ -572,6 +582,14 @@ def _filtered_snapshot(
     from bit.ad_profit import enrich
 
     result = copy.deepcopy(snapshot)
+    from bit.ad_images import enrich as enrich_images
+
+    if token_ids is not None:
+        selected_images = {int(value) for value in token_ids or () if int(value or 0) > 0}
+        enrich_images([row for row in result.get("links") or []
+                       if _integer(row.get("token_id")) in selected_images])
+    else:
+        enrich_images(result.get("links") or [])
     if token_ids is None:
         result["summary"] = _summary(
             result.get("accounts") or [],

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -182,6 +183,13 @@ def product_publish_issues(product_row: Mapping[str, Any]) -> list[str]:
         ]
         if not ai_attributes:
             issues.append("AI 商品属性尚未生成")
+        if any(
+            re.fullmatch(r"规格\s*\d+", str(attribute.get("name") or "").strip())
+            and not attribute.get("id")
+            for variation in prepared.get("variations") or [] if isinstance(variation, Mapping)
+            for attribute in variation.get("attribute_combinations") or [] if isinstance(attribute, Mapping)
+        ):
+            issues.append("1688 变体规格尚未转换为美客多属性，请重新执行 AI 任务或编辑变体属性")
         image_url = str(row.get("main_image_url") or "")
         if (
             prepared.get("image_generation_method") not in WHITE_BACKGROUND_METHODS
@@ -815,7 +823,10 @@ def publish_product_batch(
                 record_id,
                 status="failed",
                 failure_reason=message,
-                result={"net_proceeds_calculation": pricing_metadata},
+                result={
+                    "net_proceeds_calculation": pricing_metadata,
+                    "result": getattr(exc, "publication_result", None),
+                },
                 finished=True,
             )
             item_result = {

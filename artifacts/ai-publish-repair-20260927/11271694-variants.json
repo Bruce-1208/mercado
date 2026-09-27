@@ -1,0 +1,22 @@
+[
+  {
+    "id": "5339001435790",
+    "sku_id": "5339001435790",
+    "seller_sku": "",
+    "label": "电次",
+    "attribute_combinations": [
+      {
+        "id": "CHARACTER",
+        "name": "Character",
+        "value_name": "Denji"
+      }
+    ],
+    "price": 15.34,
+    "price_text": "¥15.34",
+    "available_quantity": 64788,
+    "image_url": "",
+    "raw_weight": "250g",
+    "raw_text": "电次",
+    "weight_g": 250
+  }
+]

@@ -5,9 +5,12 @@ importScripts("1688-page.js");
 importScripts("product-batch.js");
 
 const DEFAULT_SETTINGS = {
-  consoleUrl: "http://127.0.0.1:5000",
+  consoleUrl: "https://wuhanzeshun.com",
   openConsoleAfterCollect: false
 };
+const LEGACY_DEFAULT_CONSOLE_URL = "http://127.0.0.1:5000";
+const CONSOLE_URL_DEFAULT_MIGRATION_KEY = "consoleUrlDefaultMigration";
+const CONSOLE_URL_DEFAULT_MIGRATION_VERSION = 1;
 const AUTH_KEY = "browserExtensionAuth";
 const QUEUE_KEY = "pendingProducts";
 const YANDEX_SEARCH_RUN_KEY = "yandexSearchRunId";
@@ -107,8 +110,29 @@ function normalizeConsoleUrl(value) {
 }
 
 async function settings() {
-  const synced = await storageGet("sync", ["consoleUrl", "openConsoleAfterCollect"]);
-  return {...DEFAULT_SETTINGS, ...synced};
+  let synced = await storageGet("sync", [
+    "consoleUrl", "openConsoleAfterCollect", CONSOLE_URL_DEFAULT_MIGRATION_KEY
+  ]);
+  synced = await migrateConsoleUrlDefault(synced);
+  return {
+    consoleUrl: synced.consoleUrl || DEFAULT_SETTINGS.consoleUrl,
+    openConsoleAfterCollect: Boolean(synced.openConsoleAfterCollect)
+  };
+}
+
+async function migrateConsoleUrlDefault(synced) {
+  if (Number(synced[CONSOLE_URL_DEFAULT_MIGRATION_KEY] || 0) >= CONSOLE_URL_DEFAULT_MIGRATION_VERSION) {
+    return synced;
+  }
+  const updates = {
+    [CONSOLE_URL_DEFAULT_MIGRATION_KEY]: CONSOLE_URL_DEFAULT_MIGRATION_VERSION
+  };
+  if (!synced.consoleUrl || synced.consoleUrl === LEGACY_DEFAULT_CONSOLE_URL) {
+    updates.consoleUrl = DEFAULT_SETTINGS.consoleUrl;
+    if (synced.consoleUrl === LEGACY_DEFAULT_CONSOLE_URL) await clearAuth();
+  }
+  await storageSet("sync", updates);
+  return {...synced, ...updates};
 }
 
 async function authSession() {
@@ -1401,10 +1425,13 @@ async function state() {
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
-  const current = await storageGet("sync", ["consoleUrl", "openConsoleAfterCollect"]);
+  const current = await storageGet("sync", [
+    "consoleUrl", "openConsoleAfterCollect", CONSOLE_URL_DEFAULT_MIGRATION_KEY
+  ]);
+  const migrated = await migrateConsoleUrlDefault(current);
   await storageSet("sync", {
-    consoleUrl: current.consoleUrl || DEFAULT_SETTINGS.consoleUrl,
-    openConsoleAfterCollect: Boolean(current.openConsoleAfterCollect)
+    consoleUrl: migrated.consoleUrl || DEFAULT_SETTINGS.consoleUrl,
+    openConsoleAfterCollect: Boolean(migrated.openConsoleAfterCollect)
   });
   chrome.alarms.create(RETRY_ALARM, {periodInMinutes: 1});
   chrome.alarms.create(PURCHASE_TRACKING_RESUME_ALARM, {periodInMinutes: 0.5});

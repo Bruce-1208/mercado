@@ -524,3 +524,30 @@ def test_500_item_publish_orchestration_has_low_local_overhead():
     # This guards only local scheduling/snapshot overhead; network API latency
     # is surfaced separately by the production stage timings.
     assert local_elapsed < 5
+
+
+def test_family_partial_failure_preserves_remote_results_in_publish_record():
+    remote_result = {"user_products": [{"siteless_user_product_id": "U1"}, {"error": "quota"}]}
+    error = batch_publish.MercadoLibreError("family 部分失败")
+    error.publication_result = remote_result
+    records = []
+    with patch.object(batch_publish, "_token_record", return_value={
+        "display_name": "测试店铺", "access_token": "test",
+    }), patch.object(batch_publish, "follow_sell", side_effect=error):
+        result = batch_publish.publish_product_batch(
+            _rows()[:1], token_id=7, site_id="MLB", client=object(),
+            update_state=lambda *args, **kwargs: None,
+            create_records=lambda *args, **kwargs: {11: 101},
+            update_record=lambda record_id, **changes: records.append(changes),
+        )
+    assert result["failed_count"] == 1
+    failed = next(record for record in records if record["status"] == "failed")
+    assert failed["result"]["result"] == remote_result
+
+
+def test_family_result_does_not_expose_one_variants_up_id_for_reuse():
+    publication = {"result": {
+        "user_products": [{"siteless_user_product_id": "U1"}, {"siteless_user_product_id": "U2"}],
+        "site_items": [{"site_id": "MLM", "item_id": "MLM1"}, {"site_id": "MLM", "item_id": "MLM2"}],
+    }}
+    assert batch_publish._published_item_id(publication) == "MLM1"

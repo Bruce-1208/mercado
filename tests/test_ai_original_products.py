@@ -380,7 +380,8 @@ def test_workbench_exposes_ai_original_module_and_batch_actions():
     assert "rembg / isnet-general-use" in template
     assert 'id="ai-original-image-model"' not in template
     assert "执行所选 AI 任务" in template
-    assert "上架所选到对应店铺" in template
+    assert 'id="ai-original-publish"' in template
+    assert "publishSelectedAiOriginalProducts()" in template
     assert 'fetch("/api/ai-original-products/process"' in script
     assert 'fetch("/api/mercado-products/publish"' in script
     assert "aiOriginalDisplayImageUrl" in script
@@ -461,7 +462,8 @@ def test_original_product_update_uses_client_api(monkeypatch):
                       {'timeout': 120, 'json': changes})]
 
 
-def test_batch_continues_after_one_product_initial_save_fails(monkeypatch):
+@pytest.mark.parametrize('serialized_snapshot', [False, True])
+def test_batch_continues_after_one_product_initial_save_fails(monkeypatch, serialized_snapshot):
     import ast
     import concurrent.futures
     import logging
@@ -485,7 +487,7 @@ def test_batch_continues_after_one_product_initial_save_fails(monkeypatch):
 
     monkeypatch.setattr(original, 'prepare_ai_original_product', lambda *a, **kw: {
         'title': 'Organizador', 'description_text': 'Description',
-        'main_image_url': '/image.jpg', 'source_snapshot_json': {},
+        'main_image_url': '/image.jpg', 'source_snapshot_json': '{}' if serialized_snapshot else {},
         'ai_original': {'title_es': 'Organizador', 'title_pt': 'Organizador'},
     })
     namespace = dict(json=json, logging=logging,
@@ -596,3 +598,127 @@ def test_product_routes_forward_owner_filter_and_source_net(endpoint, owner_fiel
         assert calls[0][owner_field] == '张三'
         expected_net = 3 if endpoint == 'api_1688_products' else 99
         assert response.get_json()['data']['rows'][0]['net_proceeds_usd'] == expected_net
+
+
+def test_marketplace_variations_map_options_without_rewriting_sku_facts():
+    from copy import deepcopy
+    from erp.ai_original_products import normalize_marketplace_variations
+    original = {'title': '披风', 'variations': [
+        {'id': 'sku-1', 'price': 33, 'available_quantity': 0, 'image_url': 'a.jpg',
+         'attribute_combinations': [{'name': '规格1', 'value_name': '橙色'}]},
+        {'id': 'sku-2', 'price': 36, 'available_quantity': 7, 'seller_sku': 'CUSTOM',
+         'attribute_combinations': [{'name': '规格1', 'value_name': '黑色'}]},
+    ]}
+    before = deepcopy(original)
+    schema = [{'id': 'COLOR', 'name': 'Color', 'value_type': 'string'}]
+    response = {'options': [
+        {'option_id': 1, 'attributes': [{'id': 'COLOR', 'value_name': 'Black'}]},
+        {'option_id': 0, 'attributes': [{'id': 'COLOR', 'value_name': 'Orange'}]},
+    ]}
+    result = normalize_marketplace_variations(original, schema, chat=lambda *a, **k: json.dumps(response))
+    assert original == before
+    assert [v['attribute_combinations'][0]['value_name'] for v in result] == ['Orange', 'Black']
+    for old, new in zip(original['variations'], result):
+        assert {k: v for k, v in old.items() if k != 'attribute_combinations'} == {
+            k: v for k, v in new.items() if k != 'attribute_combinations'}
+
+
+@pytest.mark.parametrize('options', [
+    [],
+    [{'option_id': 0, 'attributes': []}],
+    [{'option_id': 0, 'attributes': [{'id': 'INVENTED', 'value_name': 'Red'}]}],
+    [{'option_id': 0, 'attributes': [{'id': 'COLOR', 'value_name': '红色'}]}],
+    [{'option_id': 0, 'attributes': [{'id': 'COLOR', 'value_name': 'Red', 'value_id': 'fake'}]}],
+    [{'option_id': 99, 'attributes': [{'id': 'COLOR', 'value_name': 'Red'}]}],
+])
+def test_marketplace_variations_reject_incomplete_or_invalid_mapping(options):
+    from erp.ai_original_products import normalize_marketplace_variations
+    with pytest.raises(ValueError):
+        normalize_marketplace_variations(
+            {'variations': [{'attribute_combinations': [{'name': '规格1', 'value_name': '红色'}]}]},
+            [{'id': 'COLOR', 'name': 'Color'}],
+            chat=lambda *a, **k: json.dumps({'options': options}),
+        )
+
+
+def test_marketplace_variations_reject_collapsed_variants():
+    from erp.ai_original_products import normalize_marketplace_variations
+    original = {'variations': [
+        {'attribute_combinations': [{'name': '规格1', 'value_name': v}]} for v in ['黑色尖发', '黑色卷发']
+    ]}
+    with pytest.raises(ValueError, match='无法区分'):
+        normalize_marketplace_variations(original, [{'id': 'COLOR'}], chat=lambda *a, **k: json.dumps({
+            'options': [{'option_id': i, 'attributes': [{'id': 'COLOR', 'value_name': 'Black'}]} for i in (0, 1)]
+        }))
+
+
+def test_ai_original_publish_preflight_rejects_legacy_placeholder_specs():
+    row = _ai_row()
+    snapshot = json.loads(row['source_snapshot_json'])
+    snapshot['ai_original']['variations'] = [
+        {'attribute_combinations': [{'name': '规格1', 'value_name': '红色'}]},
+    ]
+    row['source_snapshot_json'] = snapshot
+    assert any('变体规格尚未转换' in issue for issue in product_publish_issues(row))
+    snapshot['ai_original']['variations'][0]['attribute_combinations'] = [
+        {'id': 'COLOR', 'name': 'Color', 'value_name': 'Red'},
+    ]
+    assert product_publish_issues(row) == []
+
+
+def test_category_completion_keeps_mapped_variations_and_variant_required_fields():
+    from erp.ai_original_products import complete_marketplace_category
+    class Client:
+        def request(self, method, path, **kwargs):
+            if 'domain_discovery' in path:
+                return [{'category_id': 'CBT999', 'category_name': 'Clothing'}]
+            return [{'id': 'SIZE', 'name': 'Size', 'tags': {'required': True}, 'value_type': 'string'}]
+    responses = iter([
+        {'attributes': []},
+        {'options': [{'option_id': 0, 'attributes': [{'id': 'SIZE', 'value_name': '90 cm'}]}]},
+    ])
+    result = complete_marketplace_category(
+        {'variations': [{'id': 'v1', 'available_quantity': 7,
+                         'attribute_combinations': [{'name': '规格2', 'value_name': '90CM'}]}]},
+        {'product_type_en': 'Clothing'}, Client(),
+        chat=lambda *a, **k: json.dumps(next(responses)),
+    )
+    assert result['missing_required_attributes'] == []
+    assert result['variations'][0]['id'] == 'v1'
+    assert result['variations'][0]['attribute_combinations'][0]['id'] == 'SIZE'
+
+
+def test_variation_mapping_retries_with_feedback_and_preserves_source():
+    from copy import deepcopy
+    from erp.ai_original_products import normalize_marketplace_variations
+    original = {'variations': [{'id': 'sku1', 'available_quantity': 4,
+                'attribute_combinations': [{'name': '规格1', 'value_name': '电次'}]}]}
+    before = deepcopy(original)
+    calls = []
+
+    def chat(messages, **kwargs):
+        calls.append(messages)
+        attrs = [] if len(calls) == 1 else [{'id': 'STYLE', 'value_name': 'Denji'}]
+        return json.dumps({'options': [{'option_id': 0, 'attributes': attrs}]})
+
+    result = normalize_marketplace_variations(original, [{'id': 'STYLE'}], chat=chat)
+    assert len(calls) == 2
+    assert '规格无法映射' in calls[1][-1]['content']
+    assert result[0]['attribute_combinations'][0]['value_name'] == 'Denji'
+    assert result[0]['available_quantity'] == 4
+    assert original == before
+
+
+def test_variation_mapping_retry_is_bounded():
+    from erp.ai_original_products import normalize_marketplace_variations
+    calls = []
+
+    def chat(messages, **kwargs):
+        calls.append(messages)
+        return json.dumps({'options': [{'option_id': 0, 'attributes': []}]})
+
+    with pytest.raises(ValueError, match='已尝试 3 次'):
+        normalize_marketplace_variations(
+            {'variations': [{'attribute_combinations': [{'name': '规格1', 'value_name': '电次'}]}]},
+            [{'id': 'COLOR'}], chat=chat)
+    assert len(calls) == 3

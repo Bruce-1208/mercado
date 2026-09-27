@@ -135,8 +135,7 @@ function products1688Weight(row) {
 function products1688Dimensions(row) {
   const original = products1688Original(row);
   const values = ["package_length_cm", "package_width_cm", "package_height_cm"].map(key => products1688SourceValue(row, key));
-  const present = values.map(value => Number(value)).filter(value => Number.isFinite(value) && value > 0);
-  return present.length === 3 ? `${present.map(value => value.toLocaleString("zh-CN")).join(" × ")} cm` : "—";
+  return values.map((value, index) => `${["长", "宽", "高"][index]}：${Number.isFinite(Number(value)) && Number(value) > 0 ? `${Number(value).toLocaleString("zh-CN")} cm` : "未填写"}`).join(" · ");
 }
 
 function products1688SetStatus(message, kind = "") {

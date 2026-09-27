@@ -1,0 +1,392 @@
+[
+  {
+    "id": "6284595970520",
+    "sku_id": "6284595970520",
+    "seller_sku": "",
+    "label": "蓝色鱼宝宝 / 90CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Blue",
+        "value_id": "52028"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "90CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16762,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "蓝色鱼宝宝 / 90CM",
+    "weight_g": 270
+  },
+  {
+    "id": "6284595970521",
+    "sku_id": "6284595970521",
+    "seller_sku": "",
+    "label": "蓝色鱼宝宝 / 100CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Blue",
+        "value_id": "52028"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "100CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16711,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "蓝色鱼宝宝 / 100CM",
+    "weight_g": 270
+  },
+  {
+    "id": "6284595970522",
+    "sku_id": "6284595970522",
+    "seller_sku": "",
+    "label": "蓝色鱼宝宝 / 110CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Blue",
+        "value_id": "52028"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "110CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16714,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "蓝色鱼宝宝 / 110CM",
+    "weight_g": 270
+  },
+  {
+    "id": "6284595970523",
+    "sku_id": "6284595970523",
+    "seller_sku": "",
+    "label": "蓝色鱼宝宝 / 120CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Blue",
+        "value_id": "52028"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "120CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16752,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "蓝色鱼宝宝 / 120CM",
+    "weight_g": 270
+  },
+  {
+    "id": "6284595970524",
+    "sku_id": "6284595970524",
+    "seller_sku": "",
+    "label": "蓝色鱼宝宝 / 130CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Blue",
+        "value_id": "52028"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "130CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16796,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "蓝色鱼宝宝 / 130CM",
+    "weight_g": 270
+  },
+  {
+    "id": "6284595970525",
+    "sku_id": "6284595970525",
+    "seller_sku": "",
+    "label": "黄色鱼宝宝 / 90CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Yellow",
+        "value_id": "52007"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "90CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16733,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "黄色鱼宝宝 / 90CM",
+    "weight_g": 270
+  },
+  {
+    "id": "6284595970526",
+    "sku_id": "6284595970526",
+    "seller_sku": "",
+    "label": "黄色鱼宝宝 / 100CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Yellow",
+        "value_id": "52007"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "100CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16698,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "黄色鱼宝宝 / 100CM",
+    "weight_g": 270
+  },
+  {
+    "id": "6284595970527",
+    "sku_id": "6284595970527",
+    "seller_sku": "",
+    "label": "黄色鱼宝宝 / 110CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Yellow",
+        "value_id": "52007"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "110CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16705,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "黄色鱼宝宝 / 110CM",
+    "weight_g": 270
+  },
+  {
+    "id": "6284595970528",
+    "sku_id": "6284595970528",
+    "seller_sku": "",
+    "label": "黄色鱼宝宝 / 120CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Yellow",
+        "value_id": "52007"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "120CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16751,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "黄色鱼宝宝 / 120CM",
+    "weight_g": 270
+  },
+  {
+    "id": "6284595970529",
+    "sku_id": "6284595970529",
+    "seller_sku": "",
+    "label": "黄色鱼宝宝 / 130CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Yellow",
+        "value_id": "52007"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "130CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16810,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "黄色鱼宝宝 / 130CM",
+    "weight_g": 270
+  },
+  {
+    "id": "6284595970530",
+    "sku_id": "6284595970530",
+    "seller_sku": "",
+    "label": "粉色鱼宝宝 / 90CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Pink",
+        "value_id": "51994"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "90CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16782,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "粉色鱼宝宝 / 90CM",
+    "weight_g": 270
+  },
+  {
+    "id": "6284595970531",
+    "sku_id": "6284595970531",
+    "seller_sku": "",
+    "label": "粉色鱼宝宝 / 100CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Pink",
+        "value_id": "51994"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "100CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16750,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "粉色鱼宝宝 / 100CM",
+    "weight_g": 270
+  },
+  {
+    "id": "6284595970532",
+    "sku_id": "6284595970532",
+    "seller_sku": "",
+    "label": "粉色鱼宝宝 / 110CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Pink",
+        "value_id": "51994"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "110CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16751,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "粉色鱼宝宝 / 110CM",
+    "weight_g": 270
+  },
+  {
+    "id": "6284595970533",
+    "sku_id": "6284595970533",
+    "seller_sku": "",
+    "label": "粉色鱼宝宝 / 120CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Pink",
+        "value_id": "51994"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "120CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16771,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "粉色鱼宝宝 / 120CM",
+    "weight_g": 270
+  },
+  {
+    "id": "6284595970534",
+    "sku_id": "6284595970534",
+    "seller_sku": "",
+    "label": "粉色鱼宝宝 / 130CM",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Pink",
+        "value_id": "51994"
+      },
+      {
+        "id": "SIZE",
+        "name": "Size",
+        "value_name": "130CM"
+      }
+    ],
+    "price": null,
+    "price_text": "",
+    "available_quantity": 16812,
+    "image_url": "",
+    "raw_weight": "270g",
+    "raw_text": "粉色鱼宝宝 / 130CM",
+    "weight_g": 270
+  }
+]

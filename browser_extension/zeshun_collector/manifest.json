@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "泽顺插件",
-  "version": "1.8.24",
+  "version": "1.8.25",
   "description": "采集 Mercado Libre、Yandex 国外商品、1688 与智赢商品，更新订单实测重量尺寸，检查智赢产品侵权风险，启动 AI 核重核价，并同步采购订单物流号。",
   "permissions": [
     "alarms",
@@ -14,6 +14,7 @@
     "webNavigation"
   ],
   "host_permissions": [
+    "https://wuhanzeshun.com/*",
     "http://127.0.0.1/*",
     "http://localhost/*",
     "https://*.1688.com/*",

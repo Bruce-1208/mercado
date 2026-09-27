@@ -52,6 +52,7 @@ class MercadoLibreError(RuntimeError):
     def __init__(self, message: str, *, status_code: int | None = None) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.publication_result: dict[str, Any] | None = None
 
 
 def extract_item_id(value: str) -> str:
@@ -197,7 +198,7 @@ class MercadoLibreClient:
         path: str,
         *,
         params: Mapping[str, Any] | None = None,
-        json_body: Mapping[str, Any] | None = None,
+        json_body: Mapping[str, Any] | list[dict[str, Any]] | None = None,
         authenticated: bool = True,
     ) -> Any:
         url = path if path.startswith("http") else f"{API_BASE_URL}{path}"
@@ -213,7 +214,7 @@ class MercadoLibreClient:
                     method_name,
                     url,
                     params=dict(params or {}),
-                    json=dict(json_body) if json_body is not None else None,
+                    json=(dict(json_body) if isinstance(json_body, Mapping) else json_body),
                     headers=headers,
                     timeout=self.timeout,
                 )
@@ -1596,8 +1597,7 @@ def build_user_product_payload(
     """Build a single-variant CBT User Products payload."""
     if source.get("variations"):
         raise MercadoLibreError(
-            "源商品包含变体，而目标店铺使用 User Products 模式；"
-            "需要按每个变体分别创建并组成 family，当前不会自动合并以免错配库存"
+            "单个 User Product 不能包含 variations，请使用 family 构建器逐变体创建"
         )
     if quantity <= 0:
         raise ValueError("quantity 必须大于 0")
@@ -1649,6 +1649,142 @@ def build_user_product_payload(
     if sale_terms:
         payload["sale_terms"] = sale_terms
     return payload
+
+
+
+def _user_product_family_name(source: Mapping[str, Any]) -> str:
+    """Remove variation values from the shared name so Mercado can group UPs."""
+    title = str(source.get("title") or "").strip()
+    family_name = title
+    values = {
+        str(attribute.get("value_name") or "").strip()
+        for variation in source.get("variations") or []
+        if isinstance(variation, Mapping)
+        for attribute in variation.get("attribute_combinations") or []
+        if isinstance(attribute, Mapping)
+    }
+    # Longer values first avoids leaving fragments when one value contains another.
+    for value in sorted((value for value in values if len(value) >= 2), key=len, reverse=True):
+        family_name = re.sub(re.escape(value), " ", family_name, flags=re.IGNORECASE)
+    family_name = re.sub(r"[\s,，;；|/\-–—]+", " ", family_name).strip()
+    if not family_name:
+        raise MercadoLibreError("无法从标题生成通用 family_name，请先整理源商品标题")
+    return family_name[:60]
+
+
+def build_user_product_family_payload(
+    client: MercadoLibreClient,
+    source: Mapping[str, Any],
+    description: Mapping[str, Any],
+    *,
+    site_id: str = "MLM",
+    quantity: int = 1,
+    net_proceeds: float | None = None,
+) -> list[dict[str, Any]]:
+    """Create one independent UP per variation for the family array endpoint."""
+    if quantity <= 0:
+        raise ValueError("quantity 必须大于 0")
+    item_id = extract_item_id(str(source.get("id") or ""))
+    pictures, ids_to_urls = _picture_sources(source)
+    category_id, inferred = _infer_cbt_listing(client, source)
+    source = _source_with_inferred_attributes(source, inferred)
+    schema = _required_category_attribute_schema(client, category_id)
+    source_schema = _source_category_attribute_schema(client, source, category_id, schema)
+    allowed_ids = _category_attribute_ids(schema) or set()
+    for index, variation in enumerate(source.get("variations") or [], 1):
+        for attribute in variation.get("attribute_combinations") or []:
+            if resolve_schema_attribute_id(attribute, schema) not in allowed_ids:
+                raise MercadoLibreError(f"变体 {index} 的区分属性无法映射到目标类目：{attribute}")
+    variations = _copy_variations(
+        source, ids_to_urls, quantity=quantity, sku_prefix=f"FOLLOW-{item_id}",
+        schema=schema, source_schema=source_schema,
+        allowed_ids=_category_attribute_ids(schema),
+    )
+    common_attributes = _copy_attributes(
+        source.get("attributes") or [], schema=schema, source_schema=source_schema,
+        allowed_ids=_category_attribute_ids(schema),
+    )
+    payloads = []
+    signatures = set()
+    family_name = _user_product_family_name(source)
+    for index, variation in enumerate(variations, 1):
+        child = dict(source)
+        child.pop("variations", None)
+        # Child attributes override common values, including color, GTIN and
+        # size-chart row. Never copy another child's stock or pictures.
+        attributes = {
+            str(attribute.get("id") or attribute.get("name") or "").upper(): dict(attribute)
+            for attribute in common_attributes
+        }
+        for attribute in variation["attributes"] + variation["attribute_combinations"]:
+            attributes[str(attribute.get("id") or attribute.get("name") or "").upper()] = attribute
+        child["attributes"] = list(attributes.values())
+        raw_variation = source["variations"][index - 1]
+        if (any(raw_variation.get(key) for key in ("picture_ids", "images", "image", "image_url"))
+                and not variation.get("picture_ids")):
+            raise MercadoLibreError(f"变体 {index} 的图片无法解析，请重新采集变体图片")
+        if raw_variation.get("price") is not None:
+            child["price"] = raw_variation["price"]
+        child["pictures"] = [
+            {"source": url} for url in variation.get("picture_ids") or []
+        ] or pictures
+        payload = build_user_product_payload(
+            client, child, description, site_id=site_id,
+            quantity=quantity, net_proceeds=net_proceeds,
+        )
+        # The single-UP builder generates a source-level SKU. Replace it with
+        # the variant SKU retained by the existing variation normalization.
+        sku = next(a for a in variation["attributes"] if a.get("id") == "SELLER_SKU")
+        payload["attributes"] = [
+            a for a in payload["attributes"] if a.get("id") != "SELLER_SKU"
+        ] + [sku]
+        payload["available_quantity"] = variation["available_quantity"]
+        payload["family_name"] = family_name
+        if payload["category_id"] != category_id:
+            raise MercadoLibreError(f"变体 {index} 的目标类目与 family 不一致")
+        signature = json.dumps(sorted(
+            (a for a in payload["attributes"] if a.get("id") != "SELLER_SKU"),
+            key=lambda a: a.get("id", ""),
+        ), sort_keys=True, ensure_ascii=False)
+        if signature in signatures:
+            raise MercadoLibreError(f"变体 {index} 缺少可区分属性，不能合并库存创建 User Product")
+        signatures.add(signature)
+        payloads.append(payload)
+    return payloads
+
+
+def _user_product_family_result(raw: Any, expected: int, site_id: str) -> dict[str, Any]:
+    """Retain all outcomes, and reject partial/ambiguous HTTP-200 responses."""
+    rows = raw if isinstance(raw, list) else []
+    result = {
+        "user_products": rows,
+        "raw_response": raw,
+        "site_items": [
+            dict(item) for row in rows if isinstance(row, Mapping)
+            for item in row.get("site_items") or [] if isinstance(item, Mapping)
+        ],
+    }
+    errors = []
+    if len(rows) != expected:
+        errors.append(f"预期 {expected} 个变体结果，收到 {len(rows)} 个")
+    for index, row in enumerate(rows, 1):
+        site = _mapped_user_product_site_item(row, site_id)
+        if (not isinstance(row, Mapping) or row.get("error")
+                or not site or site.get("error") or not site.get("item_id")):
+            errors.append(f"变体 {index}: {json.dumps(row, ensure_ascii=False)}")
+    family_ids = {
+        str(row["siteless_family_id"]) for row in rows
+        if isinstance(row, Mapping) and row.get("siteless_family_id")
+    }
+    if len(family_ids) > 1:
+        errors.append("平台返回了多个 family，请检查变体的公共属性")
+    if errors:
+        exc = MercadoLibreError("User Products family 刊登未全部成功：" + "; ".join(errors))
+        # Batch workers save the complete response, including products already
+        # created, so a partial failure never disappears behind a success flag.
+        exc.publication_result = result
+        raise exc
+    return result
 
 
 def build_local_payload(
@@ -1792,7 +1928,7 @@ def follow_sell(
     is_user_product = is_global and "user_product_seller" in set(user.get("tags") or [])
     reusable_user_product_id = (
         _normalized_existing_user_product_id(existing_user_product_id)
-        if is_user_product
+        if is_user_product and not source.get("variations")
         else ""
     )
     translation = {
@@ -1832,46 +1968,43 @@ def follow_sell(
         endpoint = f"/global/user-products/{reusable_user_product_id}"
         publication_action = "add_marketplace"
     elif is_user_product:
-        if source.get("variations"):
-            raise MercadoLibreError(
-                "源商品包含变体，而目标店铺使用 User Products 模式；"
-                "需要按每个变体分别创建并组成 family，当前不会自动合并以免错配库存"
-            )
-        payload = build_user_product_payload(
-            client,
-            source,
-            description,
-            site_id=destination_site_id,
-            quantity=quantity,
-            net_proceeds=net_proceeds,
-            picture_ids=None,
+        is_family = bool(source.get("variations"))
+        builder = build_user_product_family_payload if is_family else build_user_product_payload
+        payload = builder(
+            client, source, description, site_id=destination_site_id,
+            quantity=quantity, net_proceeds=net_proceeds,
         )
         timings["payload"] = time.perf_counter() - stage_started
         timings["pictures"] = 0.0
         if publish:
             image_started = time.perf_counter()
-            source_pictures, _ = _picture_sources(source)
-            picture_ids = []
-            for picture in source_pictures:
-                try:
-                    picture_id = _upload_validated_picture(
-                        client, picture["source"]
+            uploaded: dict[str, str] = {}
+            for variant_payload in payload if is_family else [payload]:
+                picture_ids = []
+                for picture in variant_payload["pictures"]:
+                    url = picture["source"]
+                    try:
+                        if url not in uploaded:
+                            uploaded[url] = _upload_validated_picture(client, url)
+                        picture_ids.append(uploaded[url])
+                    except MercadoLibreError as exc:
+                        picture_upload_errors.append(str(exc))
+                if not picture_ids:
+                    details = "; ".join(picture_upload_errors[:3])
+                    raise MercadoLibreError(
+                        "源商品没有符合要求且上传成功的图片"
+                        + (f"：{details}" if details else "")
                     )
-                    picture_ids.append(picture_id)
-                except MercadoLibreError as exc:
-                    picture_upload_errors.append(str(exc))
-            if not picture_ids:
-                details = "; ".join(picture_upload_errors[:3])
-                raise MercadoLibreError(
-                    "源商品没有符合要求且上传成功的图片"
-                    + (f"：{details}" if details else "")
-                )
-            payload["pictures"] = [{"id": picture_id} for picture_id in picture_ids]
+                variant_payload["pictures"] = [{"id": pid} for pid in picture_ids]
             timings["pictures"] = time.perf_counter() - image_started
-        endpoint = str(
-            os.environ.get("MERCADO_USER_PRODUCTS_CREATE_ENDPOINT")
-            or "/global/user-products"
-        ).strip()
+        endpoint = (
+            "/global/user-products/families" if is_family else str(
+                os.environ.get("MERCADO_USER_PRODUCTS_CREATE_ENDPOINT")
+                or "/global/user-products"
+            ).strip()
+        )
+        if is_family:
+            publication_action = "create_family"
     elif is_global:
         payload = build_global_payload(
             client,
@@ -1980,6 +2113,8 @@ def follow_sell(
                     )
             else:
                 raise
+        if publication_action == "create_family":
+            result = _user_product_family_result(result, len(payload), destination_site_id)
         embedded_error = _site_item_error(result, destination_site_id)
         if embedded_error is not None:
             status = embedded_error.get("status")

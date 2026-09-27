@@ -1431,3 +1431,165 @@ def test_follow_sell_uses_rules_without_calling_translator_for_brazil_destinatio
     assert result["translation"]["translated"] is False
     assert result["translation"]["strategy"] == "deterministic_attribute_rules"
     assert client.discovery_query == "Producto de prueba"
+
+
+class FamilyClient(CategoryClient):
+    def __init__(self, response=None):
+        self.posts = []
+        self.uploads = []
+        self.response = response
+
+    def request(self, method, path, **kwargs):
+        if path == "/users/me":
+            return {"id": 77, "site_id": "CBT", "tags": ["user_product_seller"]}
+        if path == "/categories/CBT301/attributes":
+            return super().request(method, path, **kwargs) + [
+                {"id": "COLOR"}, {"id": "GTIN"}, {"id": "SIZE_GRID_ROW_ID"},
+            ]
+        if method == "POST":
+            assert path == "/global/user-products/families"
+            self.posts.append(kwargs["json_body"])
+            return self.response if self.response is not None else [
+                {"siteless_user_product_id": f"U{i}", "siteless_family_id": 99,
+                 "site_items": [{"site_id": "MLM", "item_id": f"MLM{i}"}]}
+                for i in (1, 2)
+            ]
+        if path.startswith("/pictures/"):
+            return {"max_size": "800x800"}
+        return super().request(method, path, **kwargs)
+
+    def upload_picture_from_url(self, url):
+        self.uploads.append(url)
+        return f"uploaded-{len(self.uploads)}"
+
+
+def family_source():
+    source = sample_source()
+    source["pictures"].append({"id": "blue", "source": "https://http2.mlstatic.com/D_456.jpg"})
+    source["attributes"].append({"id": "COLOR", "value_name": "common"})
+    source["variations"] = [
+        {"id": 11, "available_quantity": 0, "seller_sku": "RED-SKU",
+         "attribute_combinations": [{"id": "COLOR", "value_name": "Red"}],
+         "attributes": [{"id": "GTIN", "value_name": "1234567890123"}],
+         "picture_ids": ["123-MLM"]},
+        {"id": 22, "stock": 7,
+         "attribute_combinations": [{"id": "COLOR", "value_name": "Blue"}],
+         "attributes": [{"id": "SIZE_GRID_ROW_ID", "value_name": "chart:2"}],
+         "picture_ids": ["blue"]},
+    ]
+    return source
+
+
+def test_family_payload_preserves_variant_attributes_stock_sku_and_images():
+    source = family_source()
+    original = json.dumps(source, sort_keys=True)
+    output = follow_sell(FamilyClient(), source["id"], prepared_listing=(source, {}), net_proceeds=20)
+    payload = output["payload"]
+    assert output["endpoint"] == "/global/user-products/families"
+    assert output["result"] is None
+    assert len(payload) == 2
+    assert [p["available_quantity"] for p in payload] == [0, 7]
+    attrs = [{a["id"]: a.get("value_name") for a in p["attributes"]} for p in payload]
+    assert [a["COLOR"] for a in attrs] == ["Red", "Blue"]
+    assert [a["SELLER_SKU"] for a in attrs] == ["RED-SKU", "FOLLOW-MLM3016972321-V2"]
+    assert attrs[0]["GTIN"] == "1234567890123"
+    assert attrs[1]["SIZE_GRID_ROW_ID"] == "chart:2"
+    assert payload[0]["pictures"] != payload[1]["pictures"]
+    assert payload[0]["family_name"] == payload[1]["family_name"]
+    assert all("variations" not in p for p in payload)
+    assert json.dumps(source, sort_keys=True) == original
+
+
+def test_family_publish_records_all_products_and_ignores_single_up_reuse():
+    source = family_source()
+    client = FamilyClient()
+    with patch("erp.mercadolibre_source_store.record_publish_result") as record:
+        output = follow_sell(
+            client, source["id"], prepared_listing=(source, {}), net_proceeds=20,
+            publish=True, source_from_database=True, existing_user_product_id="U999",
+        )
+    assert len(client.posts) == 1
+    assert len(client.uploads) == 2
+    assert [p["pictures"] for p in client.posts[0]] == [
+        [{"id": "uploaded-1"}], [{"id": "uploaded-2"}],
+    ]
+    assert len(output["result"]["user_products"]) == 2
+    assert len(output["result"]["site_items"]) == 2
+    assert "siteless_user_product_id" not in output["result"]
+    record.assert_called_once_with(source["id"], output["result"], target_user_id=77)
+
+
+@pytest.mark.parametrize("response", [
+    [],
+    [{"error": "invalid"}, {"site_items": []}],
+    [{"site_items": [{"site_id": "MLM", "item_id": "MLM1"}]},
+     {"site_items": [{"site_id": "MLM", "error": {"message": "quota"}}]}],
+    [{"site_items": [{"site_id": "MLB", "item_id": "MLB1"}]}] * 2,
+])
+def test_family_partial_or_missing_results_are_not_success(response):
+    source = family_source()
+    with pytest.raises(MercadoLibreError, match="未全部成功") as error:
+        follow_sell(FamilyClient(response), source["id"], prepared_listing=(source, {}),
+                    publish=True, net_proceeds=20)
+    assert error.value.publication_result["raw_response"] == response
+
+
+def test_family_shares_uploads_but_never_substitutes_another_variants_failed_image():
+    source = family_source()
+    source["variations"][1]["picture_ids"] = ["123-MLM"]
+    client = FamilyClient()
+    follow_sell(client, source["id"], prepared_listing=(source, {}), publish=True, net_proceeds=20)
+    assert len(client.uploads) == 1
+    source["variations"][1]["picture_ids"] = ["blue"]
+    client = FamilyClient()
+    with patch.object(client, "upload_picture_from_url", side_effect=["ok", MercadoLibreError("bad picture")]):
+        with pytest.raises(MercadoLibreError, match="bad picture"):
+            follow_sell(client, source["id"], prepared_listing=(source, {}), publish=True, net_proceeds=20)
+    assert client.posts == []
+
+
+def test_family_rejects_variants_whose_attributes_would_be_lost():
+    source = family_source()
+    with pytest.raises(MercadoLibreError, match="无法映射"):
+        follow_sell_module.build_user_product_family_payload(CategoryClient(), source, {}, net_proceeds=20)
+
+
+def test_family_rejects_indistinguishable_variants():
+    source = family_source()
+    source["variations"][1] = dict(source["variations"][0], seller_sku="different-sku")
+    with pytest.raises(MercadoLibreError, match="缺少可区分属性"):
+        follow_sell_module.build_user_product_family_payload(FamilyClient(), source, {}, net_proceeds=20)
+
+
+def test_client_sends_family_payload_as_json_array(tmp_path):
+    class Session:
+        def request(self, method, url, **kwargs):
+            assert kwargs["json"] == [{"family_name": "Family"}, {"family_name": "Family"}]
+            response = FakeResponse(200, [])
+            response.content = b"[]"
+            response.headers = {}
+            return response
+    token_file = tmp_path / "tokens.json"
+    token_file.write_text(json.dumps({"access_token": "test"}))
+    client = MercadoLibreClient(token_file, client_id="client", client_secret="secret", session=Session())
+    assert client.request("POST", "/global/user-products/families", json_body=[
+        {"family_name": "Family"}, {"family_name": "Family"},
+    ]) == []
+
+
+def test_family_missing_stock_uses_quantity_and_unresolved_images_fail_before_post():
+    source = family_source()
+    del source["variations"][1]["stock"]
+    client = FamilyClient()
+    output = follow_sell(client, source["id"], prepared_listing=(source, {}), quantity=3, net_proceeds=20)
+    assert output["payload"][1]["available_quantity"] == 3
+    source["variations"][1]["picture_ids"] = ["missing-picture"]
+    with pytest.raises(MercadoLibreError, match="图片无法解析"):
+        follow_sell(client, source["id"], prepared_listing=(source, {}), publish=True, net_proceeds=20)
+    assert client.posts == []
+
+
+def test_family_different_returned_family_ids_are_reported():
+    rows = [{"siteless_family_id": i, "site_items": [{"site_id": "MLM", "item_id": f"MLM{i}"}]} for i in (1, 2)]
+    with pytest.raises(MercadoLibreError, match="多个 family"):
+        follow_sell_module._user_product_family_result(rows, 2, "MLM")

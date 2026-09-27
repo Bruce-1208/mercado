@@ -20,6 +20,8 @@
     let initialized = false;
     let pageLoading = false;
     const selectedRecords = new Map();
+    let allMatchingSelected = false;
+    const excludedOrderNumbers = new Set();
     let page = 1;
     let pageSize = 50;
     let appliedFilters = "";
@@ -53,12 +55,18 @@
         return row[key] == null ? "" : String(row[key]);
     }
     function canAction(row, action) { return Boolean(row[`can_execute_${action}`]); }
+    function isSelected(orderNumber) {
+        return allMatchingSelected
+            ? !excludedOrderNumbers.has(String(orderNumber || "").trim())
+            : selectedOrderNumbers.has(String(orderNumber || "").trim());
+    }
     function selectedRows(action = "") {
         return Array.from(selectedRecords.values()).filter((row) => selectedOrderNumbers.has(String(row.order_number || "").trim()) && (action ? canAction(row, action) : row.can_execute_zeshun || row.can_execute_zying));
     }
     function displayText(row, key) {
         const value = cellValue(row, key);
         if (value) return value;
+        if (row.measurement_notes?.[key]) return row.measurement_notes[key];
         if ([
             "product_id", "category", "tracking_number", "marketplace_item_id",
             "declared_weight_g", "declared_dimensions_cm", "declared_freight",
@@ -83,13 +91,20 @@
         selectAll.type = "checkbox"; selectAll.id = "wdr-select-all"; selectAll.title = "全选本页可执行记录";
         const selectableRecords = pageRecords.filter((row) => row.can_execute_zeshun || row.can_execute_zying);
         selectAll.disabled = selectableRecords.length === 0;
-        selectAll.checked = selectableRecords.length > 0 && selectableRecords.every((row) => selectedOrderNumbers.has(String(row.order_number || "").trim()));
-        selectAll.indeterminate = !selectAll.checked && selectableRecords.some((row) => selectedOrderNumbers.has(String(row.order_number || "").trim()));
+        selectAll.checked = selectableRecords.length > 0 && selectableRecords.every((row) => isSelected(row.order_number));
+        selectAll.indeterminate = !selectAll.checked && selectableRecords.some((row) => isSelected(row.order_number));
         selectAll.addEventListener("change", () => {
             pageRecords.forEach((row) => {
                 const orderNumber = String(row.order_number || "").trim();
-                if (selectAll.checked && (row.can_execute_zeshun || row.can_execute_zying)) { selectedOrderNumbers.add(orderNumber); selectedRecords.set(orderNumber, row); }
-                else { selectedOrderNumbers.delete(orderNumber); selectedRecords.delete(orderNumber); }
+                if (!(row.can_execute_zeshun || row.can_execute_zying)) return;
+                if (allMatchingSelected) {
+                    if (selectAll.checked) excludedOrderNumbers.delete(orderNumber);
+                    else excludedOrderNumbers.add(orderNumber);
+                } else if (selectAll.checked) {
+                    selectedOrderNumbers.add(orderNumber); selectedRecords.set(orderNumber, row);
+                } else {
+                    selectedOrderNumbers.delete(orderNumber); selectedRecords.delete(orderNumber);
+                }
             });
             render(currentRecords);
         });
@@ -104,13 +119,19 @@
         pageRecords.forEach((row) => {
             const tr = document.createElement("tr");
             const selectCell = document.createElement("td"); const checkbox = document.createElement("input");
-            checkbox.type = "checkbox"; checkbox.checked = selectedOrderNumbers.has(String(row.order_number || "").trim());
+            checkbox.type = "checkbox"; checkbox.checked = isSelected(row.order_number);
             checkbox.disabled = !row.can_execute_zeshun && !row.can_execute_zying;
-            checkbox.title = checkbox.disabled ? "缺少实际重量尺寸或商品关联信息" : "选择此订单";
+            checkbox.title = checkbox.disabled ? "缺少实际重量或商品关联信息" : (row.measurement_notes?.actual_dimensions_cm ? "官方未提供尺寸；执行时只更新重量并保留原尺寸" : "选择此订单");
             checkbox.addEventListener("change", () => {
                 const orderNumber = String(row.order_number || "").trim();
-                if (checkbox.checked) { selectedOrderNumbers.add(orderNumber); selectedRecords.set(orderNumber, row); } else { selectedOrderNumbers.delete(orderNumber); selectedRecords.delete(orderNumber); }
-                updateButtons();
+                if (allMatchingSelected) {
+                    if (checkbox.checked) excludedOrderNumbers.delete(orderNumber);
+                    else excludedOrderNumbers.add(orderNumber);
+                    render(currentRecords);
+                } else {
+                    if (checkbox.checked) { selectedOrderNumbers.add(orderNumber); selectedRecords.set(orderNumber, row); } else { selectedOrderNumbers.delete(orderNumber); selectedRecords.delete(orderNumber); }
+                    updateButtons();
+                }
             });
             selectCell.appendChild(checkbox); tr.appendChild(selectCell);
             columns.forEach(([key]) => {
@@ -204,27 +225,53 @@
         const permission = typeof window.hasWorkbenchPermission !== "function" || window.hasWorkbenchPermission("order_analysis.execute");
         $("wdr-export").disabled = !hasRows || !taskId;
         $("wdr-export").textContent = "导出筛选结果";
-        $("wdr-zeshun-execute").disabled = !permission || busy || !hasRows || !selected.some((row) => canAction(row, "zeshun"));
-        $("wdr-zying-execute").disabled = !permission || busy || !hasRows || !selected.some((row) => canAction(row, "zying"));
+        $("wdr-select-all-matching").disabled = busy || !hasRows;
+        $("wdr-select-all-matching").textContent = allMatchingSelected ? "取消全选" : "全选筛选结果";
+        $("wdr-zeshun-execute").disabled = !permission || busy || !hasRows || (allMatchingSelected ? !recordTotal : !selected.some((row) => canAction(row, "zeshun")));
+        $("wdr-zying-execute").disabled = !permission || busy || !hasRows || (allMatchingSelected ? !recordTotal : !selected.some((row) => canAction(row, "zying")));
         $("wdr-upload").disabled = busy;
         $("wdr-refresh-changed").disabled = refreshPending || (busy && busyMode !== "query");
-        $("wdr-filter-apply").disabled = $("wdr-refresh-changed").disabled;
-        $("wdr-selection-summary").textContent = `已选择 ${selected.length} 条`;
+        $("wdr-filter-apply").disabled = refreshPending || busy;
+        $("wdr-selection-summary").textContent = allMatchingSelected
+            ? `已全选筛选结果 ${recordTotal} 条${excludedOrderNumbers.size ? `（取消 ${excludedOrderNumbers.size} 条）` : ""}`
+            : `已选择 ${selected.length} 条`;
+    }
+    async function loadSavedChanges() {
+        if (refreshPending || busy) return;
+        renderSignature = ""; appliedFilters = filterParams().toString(); page = 1;
+        selectedOrderNumbers.clear(); selectedRecords.clear(); allMatchingSelected = false; excludedOrderNumbers.clear();
+        const generation = ++pollGeneration;
+        refreshPending = true; busyMode = "saved"; busy = true;
+        taskReady = false; taskId = ""; currentRecords = []; recordTotal = 0;
+        renderSelected(); updateButtons(); status("正在读取数据库已保存记录…");
+        try {
+            const data = await api(`/api/weight-dimensions-records/saved?${appliedFilters}&page_size=${pageSize}`);
+            if (generation !== pollGeneration) return;
+            taskId = data.task_id; taskReady = data.status === "ready";
+            busy = false; refreshPending = false; updateButtons();
+            status(data.message || `已读取 ${data.total || 0} 条已保存记录`);
+            acceptPage(data);
+        } catch (error) {
+            if (generation !== pollGeneration) return;
+            refreshPending = false; busy = false;
+            status(`读取已保存记录失败：${errorMessage(error)}`); updateButtons();
+        }
     }
     async function refreshChanged(background = false) {
         if (refreshPending || (busy && busyMode !== "query")) return;
         if (background && busy) return;
-        if (!background) { renderSignature = ""; appliedFilters = filterParams().toString(); page = 1; selectedOrderNumbers.clear(); selectedRecords.clear(); }
+        if (!background) { renderSignature = ""; appliedFilters = filterParams().toString(); page = 1; selectedOrderNumbers.clear(); selectedRecords.clear(); allMatchingSelected = false; excludedOrderNumbers.clear(); }
         const generation = ++pollGeneration;
         refreshPending = true; busyMode = "query";
         busy = true; taskReady = false; taskId = "";
         if (!background) { currentRecords = []; recordTotal = 0; }
         if (!background) renderSelected();
-        updateButtons(); status("正在查询美客多官方重量尺寸…");
+        updateButtons(); status("正在全量同步重量尺寸并存入数据库…");
         try {
-            const data = await api(`/api/weight-dimensions-records/changed?${appliedFilters}`);
+            const data = await api("/api/weight-dimensions-records/changed?");
             taskId = data.task_id; refreshPending = false; updateButtons();
             await poll("query", generation, background);
+            if (generation === pollGeneration && taskReady) await loadSavedChanges();
         } catch (error) {
             if (generation !== pollGeneration) return;
             refreshPending = false; busy = false; status(`读取失败：${errorMessage(error)}`); updateButtons();
@@ -235,7 +282,7 @@
         const file = $("wdr-file").files[0]; if (!file) { status("请选择订单文件"); return; }
         page = 1; renderSignature = "";
         busyMode = "upload";
-        busy = true; taskId = ""; taskReady = false; currentRecords = []; recordTotal = 0; selectedOrderNumbers.clear(); selectedRecords.clear();
+        busy = true; taskId = ""; taskReady = false; currentRecords = []; recordTotal = 0; selectedOrderNumbers.clear(); selectedRecords.clear(); allMatchingSelected = false; excludedOrderNumbers.clear();
         renderSelected(); updateButtons(); status("正在读取订单文件…");
         try {
             const form = new FormData(); form.append("file", file);
@@ -246,13 +293,16 @@
     async function execute(action) {
         if (!taskId || busy) return;
         const rows = selectedRows(action);
-        if (!rows.length) { alert(`请先选择可${action === "zeshun" ? "更新泽顺数据和链接" : "更新智赢产品"}的订单`); return; }
+        if (!allMatchingSelected && !rows.length) { alert(`请先选择可${action === "zeshun" ? "更新泽顺数据和链接" : "更新智赢产品"}的订单`); return; }
         if (action === "zying" && !$("wdr-agent-id")?.value) { alert("请先选择在线的本机 Agent"); return; }
         const label = action === "zeshun" ? "泽顺数据和链接" : "智赢产品";
-        if (!window.confirm(`确认更新已选 ${rows.length} 条订单的${label}吗？`)) return;
+        const selectionDescription = allMatchingSelected
+            ? `筛选结果 ${recordTotal} 条（执行时自动跳过缺少商品关联、实际重量或已完成该操作的记录）`
+            : `已选 ${rows.length} 条订单`;
+        if (!window.confirm(`确认更新${selectionDescription}的${label}吗？`)) return;
         busyMode = "execute"; busy = true; updateButtons(); status(`正在提交${label}更新…`);
         try {
-            await api(`/api/weight-dimensions-records/${encodeURIComponent(taskId)}/execute`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({action, order_numbers: rows.map((row) => row.order_number), agent_id: $("wdr-agent-id")?.value || ""}) });
+            await api(`/api/weight-dimensions-records/${encodeURIComponent(taskId)}/execute`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({action, select_all_matching: allMatchingSelected, excluded_order_numbers: allMatchingSelected ? Array.from(excludedOrderNumbers) : [], order_numbers: allMatchingSelected ? [] : rows.map((row) => row.order_number), agent_id: $("wdr-agent-id")?.value || ""}) });
             await poll("execute");
         } catch (error) { busy = false; status(`执行失败：${errorMessage(error)}`); updateButtons(); }
     }
@@ -274,6 +324,15 @@
         const localDateTime = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}T00:00`;
         if (!$("wdr-filter-date-from").value) $("wdr-filter-date-from").value = localDateTime(start);
         $("wdr-upload").addEventListener("click", upload); $("wdr-refresh-changed").addEventListener("click", () => refreshChanged());
+        $("wdr-select-all-matching").addEventListener("click", () => {
+            if (allMatchingSelected) {
+                allMatchingSelected = false; excludedOrderNumbers.clear();
+            } else {
+                allMatchingSelected = true; excludedOrderNumbers.clear();
+                selectedOrderNumbers.clear(); selectedRecords.clear();
+            }
+            render(currentRecords);
+        });
         $("wdr-zeshun-execute").addEventListener("click", () => execute("zeshun")); $("wdr-zying-execute").addEventListener("click", () => execute("zying"));
         $("wdr-agent-refresh").addEventListener("click", loadAgents);
         $("wdr-export").addEventListener("click", () => { if (taskId) window.location.assign(`/api/weight-dimensions-records/${encodeURIComponent(taskId)}/export`); });
@@ -282,14 +341,14 @@
         ["dragleave", "drop"].forEach((eventName) => zone.addEventListener(eventName, (event) => { event.preventDefault(); zone.classList.remove("wdr-drag-active"); }));
         zone.addEventListener("drop", (event) => { const file = event.dataTransfer?.files?.[0]; if (!file) return; const transfer = new DataTransfer(); transfer.items.add(file); $("wdr-file").files = transfer.files; $("wdr-file-name").textContent = file.name; });
         $("wdr-file").addEventListener("change", () => { const file = $("wdr-file").files[0]; if (file) $("wdr-file-name").textContent = file.name; });
-        $("wdr-filter-apply").addEventListener("click", () => refreshChanged());
-        ["wdr-filter-date-from", "wdr-filter-date-to", "wdr-filter-source", "wdr-filter-salesperson", "wdr-filter-store", "wdr-filter-category", "wdr-filter-region", "wdr-filter-freight-min", "wdr-filter-freight-max"].forEach((id) => $(id)?.addEventListener("keydown", (event) => { if (event.key === "Enter") refreshChanged(); }));
+        $("wdr-filter-apply").addEventListener("click", loadSavedChanges);
+        ["wdr-filter-date-from", "wdr-filter-date-to", "wdr-filter-source", "wdr-filter-salesperson", "wdr-filter-store", "wdr-filter-category", "wdr-filter-region", "wdr-filter-freight-min", "wdr-filter-freight-max"].forEach((id) => $(id)?.addEventListener("keydown", (event) => { if (event.key === "Enter") loadSavedChanges(); }));
         $("wdr-page-prev").addEventListener("click", () => { page = Math.max(1, page - 1); loadPage(); });
         $("wdr-page-next").addEventListener("click", () => { page++; loadPage(); });
         $("wdr-page-size").addEventListener("change", () => { pageSize = Number($("wdr-page-size").value) || 50; page = 1; loadPage(); });
         function activate() {
             if (!initialized && !document.hidden && $("tab-weight-dimensions-records")?.classList.contains("active")) {
-                initialized = true; loadAgents(); refreshChanged();
+                initialized = true; loadAgents(); loadSavedChanges();
             }
         }
         new MutationObserver(activate).observe($("tab-weight-dimensions-records"), {attributes: true, attributeFilter: ["class"]});

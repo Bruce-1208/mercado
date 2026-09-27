@@ -1,0 +1,74 @@
+[
+  {
+    "sort": "sold_quantity",
+    "direction": "desc",
+    "seconds": 0.618,
+    "rows": 50
+  },
+  {
+    "sort": "sold_quantity",
+    "direction": "asc",
+    "seconds": 0.047,
+    "rows": 50
+  },
+  {
+    "sort": "price",
+    "direction": "desc",
+    "seconds": 0.082,
+    "rows": 50
+  },
+  {
+    "sort": "price",
+    "direction": "asc",
+    "seconds": 0.098,
+    "rows": 50
+  },
+  {
+    "sort": "weight_g",
+    "direction": "desc",
+    "seconds": 0.163,
+    "rows": 50
+  },
+  {
+    "sort": "weight_g",
+    "direction": "asc",
+    "seconds": 0.059,
+    "rows": 50
+  },
+  {
+    "sort": "available_quantity",
+    "direction": "desc",
+    "seconds": 0.081,
+    "rows": 50
+  },
+  {
+    "sort": "available_quantity",
+    "direction": "asc",
+    "seconds": 0.094,
+    "rows": 50
+  },
+  {
+    "sort": "last_synced_at",
+    "direction": "desc",
+    "seconds": 0.042,
+    "rows": 50
+  },
+  {
+    "sort": "last_synced_at",
+    "direction": "asc",
+    "seconds": 0.046,
+    "rows": 50
+  },
+  {
+    "sort": "net_proceeds_usd",
+    "direction": "desc",
+    "seconds": 0.08,
+    "rows": 50
+  },
+  {
+    "sort": "net_proceeds_usd",
+    "direction": "asc",
+    "seconds": 0.089,
+    "rows": 50
+  }
+]

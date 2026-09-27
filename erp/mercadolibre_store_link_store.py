@@ -23,6 +23,12 @@ STORE_LINK_SALES_PAGE_INDEX = "idx_erp_meli_store_link_sales_page"
 STORE_LINK_SITE_PAGE_INDEX = "idx_erp_meli_store_link_site_page"
 STORE_LINK_CATEGORY_PAGE_INDEX = "idx_erp_meli_store_link_category_page"
 STORE_LINK_SEARCH_INDEX = "idx_erp_meli_store_link_search"
+# Cover the page-id lookup so alternative sorts never read remote_json for
+# every listing. Tie breakers follow the direction to permit reverse scans.
+STORE_LINK_SORT_INDEXES = {
+    field: f"idx_erp_meli_link_sort_{field}"
+    for field in ("price", "weight_g", "available_quantity", "last_synced_at", "net_proceeds_usd")
+}
 STORE_LINK_DEFAULT_PAGE_SIZE = 200
 STORE_LINK_MAX_PAGE_SIZE = 1000
 STORE_LINK_METADATA_CACHE_SECONDS = 60
@@ -206,6 +212,11 @@ def ensure_store_link_table(cursor: Any) -> None:
                 "(`title`, `item_id`, `seller_sku`, `store_name`)",
             ),
         }
+        for field, index_name in STORE_LINK_SORT_INDEXES.items():
+            order_fields = list(dict.fromkeys((field, "sold_quantity", "last_synced_at", "id")))
+            required_indexes[index_name] = (
+                "INDEX", "(`is_current`, " + ", ".join(f"`{name}`" for name in order_fields) + ")"
+            )
         for index_name, (index_type, columns_sql) in required_indexes.items():
             cursor.execute(
                 """
@@ -926,7 +937,9 @@ def listing_record(token: Mapping[str, Any], item: Mapping[str, Any], synced_at:
         "title": str(item.get("title") or "")[:512],
         "permalink": str(item.get("permalink") or "")[:1500],
         "thumbnail_url": _thumbnail(item)[:1500],
-        "status": str(item.get("status") or "")[:64],
+        "status": ("deleted" if item.get("deleted") is True
+                   or "deleted" in (item.get("sub_status") or [])
+                   else str(item.get("status") or "")[:64]),
         "price": item.get("price"),
         "currency_id": str(item.get("currency_id") or "")[:16],
         "available_quantity": item.get("available_quantity"),
@@ -986,7 +999,8 @@ def replace_store_snapshot(
                 existing = {str(row["item_id"]) for row in cursor.fetchall()}
             if finalize:
                 cursor.execute(
-                    f"UPDATE `{STORE_LINK_TABLE}` SET `is_current` = 0 WHERE `token_id` = %s",
+                    f"UPDATE `{STORE_LINK_TABLE}` SET `is_current` = 0 WHERE `token_id` = %s "
+                    "AND COALESCE(`status`, '') <> 'deleted'",
                     (token_id,),
                 )
             for start in range(0, len(discovered_ids), 500):
@@ -1013,7 +1027,7 @@ def replace_store_snapshot(
                     `title` = COALESCE(NULLIF(VALUES(`title`), ''), `title`),
                     `permalink` = COALESCE(NULLIF(VALUES(`permalink`), ''), `permalink`),
                     `thumbnail_url` = COALESCE(NULLIF(VALUES(`thumbnail_url`), ''), `thumbnail_url`),
-                    `status` = VALUES(`status`),
+                    `status` = IF(`status` = 'deleted', `status`, VALUES(`status`)),
                     `price` = IF(`price_manual` = 1, `price`, COALESCE(VALUES(`price`), `price`)),
                     `currency_id` = COALESCE(NULLIF(VALUES(`currency_id`), ''), `currency_id`),
                     `available_quantity` = COALESCE(VALUES(`available_quantity`), `available_quantity`),
@@ -1078,7 +1092,8 @@ def finalize_store_snapshot(
             ensure_store_link_table(cursor)
             cursor.execute(
                 f"UPDATE `{STORE_LINK_TABLE}` SET `is_current` = 0 "
-                "WHERE `token_id` = %s AND (`sync_marker` IS NULL OR `sync_marker` <> %s)",
+                "WHERE `token_id` = %s AND (`sync_marker` IS NULL OR `sync_marker` <> %s) "
+                "AND COALESCE(`status`, '') <> 'deleted'",
                 (token_id, marker),
             )
             changed = int(cursor.rowcount or 0)
@@ -1666,7 +1681,31 @@ def list_store_links(
             page = min(page, pages)
             recent_sales_join_sql = ""
             page_recent_sales_sql = "0 AS `sales_14d`"
+            recent_sales_values: list[Any] = []
             if normalized_sort_by == "sales_14d" and synced_orders_available:
+                # Restrict orders before expanding their JSON item lines. The
+                # outer link filters alone cannot prune this grouped subquery.
+                recent_token_ids = (
+                    set(marker_scope_token_ids)
+                    if marker_scope_token_ids is not None else None
+                )
+                if group_name and group_name != "__ungrouped__":
+                    group_token_ids = {
+                        token_value for (token_value, site_value), name in group_map.items()
+                        if name == group_name and (not site_id or site_value == site_id)
+                    }
+                    recent_token_ids = (
+                        group_token_ids if recent_token_ids is None
+                        else recent_token_ids & group_token_ids
+                    )
+                recent_scope_sql = ""
+                if recent_token_ids is not None:
+                    if recent_token_ids:
+                        recent_sales_values = sorted(recent_token_ids)
+                        placeholders = ", ".join(["%s"] * len(recent_sales_values))
+                        recent_scope_sql = f"AND recent_orders.`token_id` IN ({placeholders})"
+                    else:
+                        recent_scope_sql = "AND 1 = 0"
                 recent_sales_join_sql = f"""
                 LEFT JOIN (
                     SELECT recent_orders.`token_id`, order_items.`item_id`,
@@ -1684,6 +1723,7 @@ def list_store_links(
                         )
                     ) AS order_items
                     WHERE recent_orders.`date_created` >= UTC_TIMESTAMP() - INTERVAL 14 DAY
+                      {recent_scope_sql}
                       AND COALESCE(recent_orders.`status`, '') NOT IN ('cancelled', 'invalid')
                       AND COALESCE(order_items.`item_id`, '') <> ''
                     GROUP BY recent_orders.`token_id`, order_items.`item_id`
@@ -1701,16 +1741,26 @@ def list_store_links(
                 outer_primary_order = f"full_links.`{normalized_sort_by}` {sort_direction}"
             page_order_parts = [page_primary_order]
             outer_order_parts = [outer_primary_order]
+            # Match the complete index order in both directions. Mixing an
+            # ascending primary key with descending ties forces a filesort of
+            # every current listing, even when the index covers the query.
+            tie_direction = sort_direction if normalized_sort_by != "sales_14d" else "DESC"
             if normalized_sort_by != "sold_quantity":
-                page_order_parts.append("links.`sold_quantity` DESC")
-                outer_order_parts.append("full_links.`sold_quantity` DESC")
-            page_order_parts.extend(["links.`last_synced_at` DESC", "links.`id` DESC"])
+                page_order_parts.append(f"links.`sold_quantity` {tie_direction}")
+                outer_order_parts.append(f"full_links.`sold_quantity` {tie_direction}")
+            page_order_parts.extend([
+                f"links.`last_synced_at` {tie_direction}", f"links.`id` {tie_direction}",
+            ])
             outer_order_parts.extend([
-                "full_links.`last_synced_at` DESC",
-                "full_links.`id` DESC",
+                f"full_links.`last_synced_at` {tie_direction}",
+                f"full_links.`id` {tie_direction}",
             ])
             page_order_sql = ", ".join(page_order_parts)
             outer_order_sql = ", ".join(outer_order_parts)
+            page_from_sql = links_from_sql
+            if (normalized_sort_by in STORE_LINK_SORT_INDEXES
+                    and filtered_conditions == ["links.`is_current` = 1"]):
+                page_from_sql += f" FORCE INDEX (`{STORE_LINK_SORT_INDEXES[normalized_sort_by]}`)"
             cursor.execute(
                 f"""
                 SELECT full_links.`id`, full_links.`token_id`, full_links.`store_name`,
@@ -1736,12 +1786,12 @@ def list_store_links(
                   ON management_category.`id` = product.`management_category_id`
                 INNER JOIN (
                     SELECT links.`id`, {page_recent_sales_sql}
-                    {links_from_sql}{recent_sales_join_sql}{where_sql}
+                    {page_from_sql}{recent_sales_join_sql}{where_sql}
                     ORDER BY {page_order_sql} LIMIT %s OFFSET %s
                 ) AS page_ids ON page_ids.`id` = full_links.`id`
                 ORDER BY {outer_order_sql}
                 """,
-                tuple(filtered_values + [page_size, (page - 1) * page_size]),
+                tuple(recent_sales_values + filtered_values + [page_size, (page - 1) * page_size]),
             )
             rows = [_json_safe_row(row) for row in cursor.fetchall()]
             if normalized_sort_by != "sales_14d" and synced_orders_available and rows:
@@ -1922,7 +1972,7 @@ def bulk_update_store_links(
 
 
 @audited
-def delete_store_links(
+def mark_store_links_deleted(
     link_ids: Iterable[int],
     *,
     connection_factory: Callable[[], Any] | None = None,
@@ -1950,9 +2000,10 @@ def delete_store_links(
                 f"SELECT * FROM `{STORE_LINK_TABLE}` WHERE `id` IN ({placeholders}) FOR UPDATE",
                 tuple(ids),
             )
-            record("delete_store_links", "before", {"link_ids": ids, "rows": cursor.fetchall()})
+            record("mark_store_links_deleted", "before", {"link_ids": ids, "rows": cursor.fetchall()})
             cursor.execute(
-                f"DELETE FROM `{STORE_LINK_TABLE}` WHERE `id` IN ({placeholders})",
+                f"UPDATE `{STORE_LINK_TABLE}` SET `status` = 'deleted', `is_current` = 1 "
+                f"WHERE `id` IN ({placeholders})",
                 tuple(ids),
             )
             deleted = int(cursor.rowcount or 0)
@@ -1967,11 +2018,20 @@ def delete_store_links(
         connection.close()
 
 
+def delete_store_links(link_ids):
+    """Start verified platform deletion; never physically remove local history."""
+    from bit.bit_store_link_remote_update import start_store_link_remote_delete
+
+    started, state = start_store_link_remote_delete(link_ids)
+    return {"started": started, "state": state}
+
+
 __all__ = [
     "STORE_LINK_TABLE",
     "STORE_LINK_SYNC_STATE_TABLE",
     "bulk_update_store_links",
     "delete_store_links",
+    "mark_store_links_deleted",
     "ensure_store_link_table",
     "ensure_store_link_sync_state_table",
     "finalize_store_snapshot",

@@ -154,6 +154,7 @@ def console_page(console_browser):
     env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
     html = env.get_template("index.html").render(
         current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+        can_change_task_workers=False,
         runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
     )
     page = console_browser.new_page(viewport={"width": 1440, "height": 1000})

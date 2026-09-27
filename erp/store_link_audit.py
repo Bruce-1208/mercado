@@ -61,7 +61,7 @@ def record(action, phase, details, operation_id=None):
 _OPERATION_ACTIONS = {
     "sync": ("replace_store_snapshot", "finalize_store_snapshot", "request_store_link_sync", "mark_store_link_sync_started", "mark_store_link_sync_finished", "_sync_store", "run_store_link_sync", "start_store_link_sync"),
     "update": ("bulk_update_store_links", "_update_one_link", "remote_update_item", "run_store_link_remote_update", "start_store_link_remote_update"),
-    "delete": ("delete_store_links",),
+    "delete": ("delete_store_links", "mark_store_links_deleted", "_delete_one_link"),
     "advertising": ("advertise_store_link", "advertise_store_links", "mark_advertising_enabled", "mark_advertising_status"),
     "video": ("upload_store_link_video", "mark_video_uploaded"),
 }

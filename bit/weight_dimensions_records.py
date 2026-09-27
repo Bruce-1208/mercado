@@ -14,9 +14,11 @@ from typing import Any, Mapping
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 from bit import bit_mysql
 from bit import bit_db_api
+from bit.shipment_compensation import apply_dimension_costs
 from bit.bit_store_link_sync import _client_and_token
 from mercado_api.client import MercadoLibreClient
 
@@ -209,22 +211,22 @@ def _resolve_store(record: Mapping[str, Any], store_map):
 
 
 def _measurement(data: Mapping[str, Any], package_key: str) -> tuple[str, str]:
+    """Keep valid weight and dimensions independently; never substitute billable weight."""
     package = (data.get("package") or {}).get(package_key) or {}
     weight = package.get("weight") or package.get("weights") or {}
     dims = package.get("dimensions") or {}
-    if str(weight.get("unit") or "").lower() != "g" or str(dims.get("unit") or "").lower() != "cm":
-        raise ValueError("运费补差接口没有提供克和厘米单位的重量尺寸")
-    values = [weight.get("net"), dims.get("length"), dims.get("width"), dims.get("height")]
-    numbers = []
-    for raw in values:
+
+    def positive(raw):
         try:
             value = Decimal(str(raw))
-        except (InvalidOperation, TypeError, ValueError) as exc:
-            raise ValueError("运费补差接口缺少有效重量或尺寸") from exc
-        if not value.is_finite() or value <= 0:
-            raise ValueError("运费补差接口返回了非正数重量或尺寸")
-        numbers.append(format(value.normalize(), "f"))
-    return numbers[0], "x".join(numbers[1:])
+        except (InvalidOperation, TypeError, ValueError):
+            return ""
+        return format(value.normalize(), "f") if value.is_finite() and value > 0 else ""
+
+    net = positive(weight.get("net")) if str(weight.get("unit") or "").lower() == "g" else ""
+    sides = [positive(dims.get(key)) for key in ("length", "width", "height")]
+    dimensions = "x".join(sides) if all(sides) and str(dims.get("unit") or "").lower() == "cm" else ""
+    return net, dimensions
 
 
 def _money(costs: Mapping[str, Any], section: str) -> str:
@@ -301,6 +303,52 @@ def _extract_net_proceeds(item: Mapping[str, Any]) -> Decimal | None:
     return None
 
 
+def _read_measurements(record, client, shipment_id):
+    """Read and retain measurements even when other package fields are absent."""
+    record["query_error"] = ""
+    notes = {}
+    try:
+        compensation = client.request(
+            "GET", f"/marketplace/shipments/{shipment_id}/compensation_costs",
+            params={"weight_unit": "g", "dimensions_unit": "cm"},
+        )
+    except Exception as exc:
+        compensation = {}
+        record["query_error"] = f"官方补差数据读取失败：{str(exc)[:200]}"
+    record["_compensation_package"] = compensation.get("package") or {}
+    for section, prefix in (("declared", "declared"), ("validated", "actual")):
+        weight, dimensions = _measurement(compensation, section)
+        record[f"{prefix}_weight_g"] = weight
+        record[f"{prefix}_dimensions_cm"] = dimensions
+        for suffix, value in (("weight_g", weight), ("dimensions_cm", dimensions)):
+            if not value:
+                notes[f"{prefix}_{suffix}"] = "官方未提供" if compensation else "补差数据不可用"
+        freight = _money(compensation.get("costs") or {}, section)
+        if freight and not record.get("_dimension_compensation_confirmed"):
+            record[f"{prefix}_freight"] = freight
+    # Shipment dimensions describe the shipment's declared package. They must
+    # never be presented as the carrier-validated actual measurements.
+    if not record["declared_weight_g"] or not record["declared_dimensions_cm"]:
+        try:
+            shipment_dims = (client.get_shipment(shipment_id) or {}).get("dimensions") or {}
+            record["_shipment_dimensions"] = shipment_dims
+            weight, dimensions = _measurement({"package": {"declared": {
+                "weight": {"net": shipment_dims.get("weight"), "unit": "g"},
+                "dimensions": {**shipment_dims, "unit": "cm"},
+            }}}, "declared")
+            for key, value in (("declared_weight_g", weight), ("declared_dimensions_cm", dimensions)):
+                if not record[key] and value:
+                    record[key] = value
+                    notes[key] = "来自官方运单申报数据"
+        except Exception as exc:
+            record["query_error"] += f"；官方运单尺寸读取失败：{str(exc)[:120]}"
+    record["measurement_notes"] = notes
+    record["_measurement_version"] = 2
+    record["_measurements_checked_at"] = datetime.now().isoformat(timespec="seconds")
+    record["shipment_id"] = shipment_id
+
+
+
 def _read_one_record(record, store_map, token_clients, token_errors, worker_local):
     """Read package compensation and marketplace identifiers for one order."""
     token_id = int(record.get("_token_id") or 0)
@@ -326,19 +374,10 @@ def _read_one_record(record, store_map, token_clients, token_errors, worker_loca
     shipment_id = str((pack.get("shipment") or {}).get("id") or "").strip()
     if not shipment_id:
         raise ValueError("订单包裹没有运单号")
-    compensation = client.request(
-        "GET", f"/marketplace/shipments/{shipment_id}/compensation_costs",
-        params={"weight_unit": "g", "dimensions_unit": "cm"},
-    )
-    declared_weight, declared_dims = _measurement(compensation, "declared")
-    actual_weight, actual_dims = _measurement(compensation, "validated")
-    record["declared_weight_g"] = declared_weight
-    record["declared_dimensions_cm"] = declared_dims
-    record["declared_freight"] = _money(compensation.get("costs") or {}, "declared")
-    record["actual_weight_g"] = actual_weight
-    record["actual_dimensions_cm"] = actual_dims
-    record["actual_freight"] = _money(compensation.get("costs") or {}, "validated")
-    record["shipment_id"] = record.get("shipment_id") or shipment_id
+    # Uploads have no cached official costs; background candidates already do.
+    if "_dimension_compensation_confirmed" not in record:
+        apply_dimension_costs(record, client.get_shipment_costs(shipment_id))
+    _read_measurements(record, client, shipment_id)
 
     item = {}
     match_error = ""
@@ -618,7 +657,7 @@ def _read_changed_records(task_id, owner, filters, store_rows, allowed_token_ids
         with _lock:
             task.update(
                 status="ready", finished_at=datetime.now().isoformat(timespec="seconds"),
-                message="没有找到实际运费与当前运费有差异的订单",
+                message="没有找到官方确认由重量尺寸差异造成运费变动的订单",
             )
         return
 
@@ -684,20 +723,21 @@ def _read_changed_records(task_id, owner, filters, store_rows, allowed_token_ids
                     task["processed"] = progress
                     task["message"] = f"已补全运费变更订单 {progress}/{len(records)} 条"
 
-    query_records = [row for row in records if row.get("query_status") != "查询失败"]
-    if query_records:
-        workers = _configured_workers(
-            len(query_records), READ_MAX_WORKERS, READ_MAX_WORKERS,
-            "WEIGHT_DIMENSIONS_READ_WORKERS",
-        )
-        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="wdr-change") as executor:
-            futures = [executor.submit(read_and_count, row) for row in query_records]
+    # Commit each batch before starting the next so interrupted full syncs
+    # retain their progress and database readers see results immediately.
+    workers = _configured_workers(
+        len(records), READ_MAX_WORKERS, READ_MAX_WORKERS,
+        "WEIGHT_DIMENSIONS_READ_WORKERS",
+    )
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="wdr-change") as executor:
+        for start in range(0, len(records), 100):
+            batch = records[start:start + 100]
+            futures = [executor.submit(read_and_count, row) for row in batch
+                       if row.get("query_status") != "查询失败"]
             for future in as_completed(futures):
                 future.result()
-
-    # Persist failed lookups too, so database-only readers can see and diagnose them.
-    for start in range(0, len(records), 100):
-        bit_db_api.save_weight_dimensions_records(records[start:start + 100], refresh=True)
+            # Persist failures too, for database-only diagnostics.
+            bit_db_api.save_weight_dimensions_records(batch, refresh=True)
 
     records.sort(
         key=lambda row: str(row.get("freight_changed_at") or row.get("time") or ""),
@@ -753,7 +793,7 @@ def start_changed_refresh(owner: str, filters, store_rows, allowed_token_ids=Non
     return {"task_id": task_id, "status": "preparing", "total": 0}
 
 
-def load_saved_changes(owner: str, filters, allowed_token_ids=None):
+def load_saved_changes(owner: str, filters, allowed_token_ids=None, *, page_size=50):
     """Build an executable view from persisted records; never query marketplaces."""
     filters = dict(filters or {})
     if not filters.get("date_from") and not filters.get("date_to"):
@@ -761,7 +801,8 @@ def load_saved_changes(owner: str, filters, allowed_token_ids=None):
     if allowed_token_ids is not None:
         requested = filters.get("store_ids", allowed_token_ids)
         filters["store_ids"] = sorted(set(requested) & set(allowed_token_ids))
-    rows = bit_db_api.list_weight_dimensions_records(filters=filters) or []
+    first_page = bit_db_api.list_weight_dimensions_records(filters=filters, page=1, page_size=page_size)
+    total = first_page["record_total"]
     task_id = uuid.uuid4().hex
     now = datetime.now().isoformat(timespec="seconds")
     with _lock:
@@ -771,14 +812,16 @@ def load_saved_changes(owner: str, filters, allowed_token_ids=None):
                 del _tasks[old_id]
         _tasks[task_id] = {
             "task_id": task_id, "owner": owner, "source": "saved_changes",
-            "status": "ready", "records": rows, "total": len(rows), "processed": len(rows),
-            "message": f"已从数据库读取 {len(rows)} 条记录；后台每天 05:00 更新",
+            "status": "ready", "records": [], "total": total, "processed": total,
+            "database_view": True,
+            "message": f"已从数据库读取 {total} 条记录；后台每天 05:00 更新",
             "execute_status": "idle", "execute_message": "", "execute_processed": 0,
             "execute_total": 0, "created_at": now, "finished_at": now,
             "filters": filters, "agent_job_id": "",
         }
         _latest_task_by_owner[owner] = task_id
-    return {"task_id": task_id, "status": "ready", "total": len(rows)}
+    return {"task_id": task_id, "status": "ready", "total": total,
+            **first_page, "records": [_public_record(row) for row in first_page["records"]]}
 
 
 def start_full_refresh(owner: str, store_rows, allowed_token_ids=None):
@@ -802,6 +845,7 @@ def _get_owned_task(task_id: str, owner: str):
 
 def _public_record(row: Mapping[str, Any]) -> dict[str, Any]:
     result = {key: row.get(key, "") for key, _label in PUBLIC_COLUMNS}
+    result["measurement_notes"] = row.get("measurement_notes", {})
     result["execution_status"] = row.get("execution_status", "")
     result["execution_error"] = row.get("execution_error", "")
     result["execution_logs"] = row.get("execution_logs", [])
@@ -810,15 +854,16 @@ def _public_record(row: Mapping[str, Any]) -> dict[str, Any]:
         net_value = row.get("_net_proceeds_usd")
     result["current_net_proceeds_usd"] = str(net_value) if net_value is not None else ""
     can_zying = bool(
+        row.get("_dimension_compensation_confirmed")
+        and
         str(row.get("product_id") or "").strip()
         and str(row.get("actual_weight_g") or "").strip()
-        and str(row.get("actual_dimensions_cm") or "").strip()
         and row.get("_zying_status") != "成功"
     )
     can_zeshun = bool(
-        row.get("query_status") == "已读取"
+        row.get("_dimension_compensation_confirmed")
+        and row.get("query_status") == "已读取"
         and str(row.get("actual_weight_g") or "").strip()
-        and str(row.get("actual_dimensions_cm") or "").strip()
         and row.get("_token_id")
         and row.get("_global_item_id")
         and row.get("marketplace_item_id")
@@ -900,10 +945,23 @@ def task_status(task_id: str, owner: str, agent_job_provider=None, *, page=None,
         except Exception as exc:
             with _lock:
                 task["execute_message"] = f"读取 Agent 状态失败：{str(exc)[:250]}"
+    database_page = None
+    if task.get("database_view") and include_records:
+        database_page = bit_db_api.list_weight_dimensions_records(
+            filters=task["filters"], page=page or 1, page_size=page_size,
+        )
     with _lock:
         rows = task["records"]
+        if task.get("source") in {"upload", "freight_changes"}:
+            rows = [row for row in rows if row.get("_dimension_compensation_confirmed")]
         pagination = {}
-        if page is not None:
+        if database_page is not None:
+            rows = database_page["records"]
+            pagination = {key: database_page[key] for key in ("page", "page_size", "record_total")}
+            task["total"] = database_page["record_total"]
+            active_rows = {row["order_number"]: row for row in task["records"]}
+            rows = [active_rows.get(row["order_number"], row) for row in rows]
+        elif page is not None:
             page_size = max(1, min(100, int(page_size)))
             page_count = max(1, (len(rows) + page_size - 1) // page_size)
             page = max(1, min(int(page), page_count))
@@ -952,7 +1010,10 @@ def export_xlsx(task_id: str, owner: str) -> bytes:
     task = _get_owned_task(task_id, owner)
     if task.get("status") != "ready":
         raise ValueError("查询完成后才能导出")
-    return export_records_xlsx(task["records"])
+    rows = bit_db_api.list_weight_dimensions_records(filters=task["filters"]) if task.get("database_view") else task["records"]
+    if task.get("source") in {"upload", "freight_changes"}:
+        rows = [row for row in rows if row.get("_dimension_compensation_confirmed")]
+    return export_records_xlsx(rows)
 
 
 def export_records_xlsx(records) -> bytes:
@@ -979,7 +1040,7 @@ def export_records_xlsx(records) -> bytes:
     sheet.auto_filter.ref = sheet.dimensions
     widths = [20, 20, 24, 20, 16, 24, 28, 16, 18, 46, 20, 26, 18, 16, 18, 22, 18, 18, 22, 18, 22, 16, 44, 22, 18, 44, 64, 64]
     for index, width in enumerate(widths, start=1):
-        sheet.column_dimensions[chr(64 + index)].width = width
+        sheet.column_dimensions[get_column_letter(index)].width = width
     for cell in sheet[1]:
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="203E5B")
@@ -992,21 +1053,26 @@ def export_records_xlsx(records) -> bytes:
 
 
 def _package_attributes(client: MercadoLibreClient, global_item_id: str,
-                        weight_g: str, dimensions_cm: str) -> None:
-    pieces = [Decimal(part) for part in str(dimensions_cm).lower().replace("×", "x").split("x")]
-    if len(pieces) != 3:
-        raise ValueError("实际尺寸格式应为 长x宽x高")
-    values = {
-        "PACKAGE_WEIGHT": (Decimal(str(weight_g)), "g"),
-        "PACKAGE_LENGTH": (pieces[0], "cm"),
-        "PACKAGE_WIDTH": (pieces[1], "cm"),
-        "PACKAGE_HEIGHT": (pieces[2], "cm"),
-    }
+                        weight_g: str, dimensions_cm: str = "") -> None:
+    weight = Decimal(str(weight_g))
+    if not weight.is_finite() or weight < 50:
+        raise ValueError("美客多要求包装重量至少 50 克")
+    values = {"PACKAGE_WEIGHT": (weight, "g")}
+    pieces = []
+    if str(dimensions_cm or "").strip():
+        pieces = [Decimal(part) for part in str(dimensions_cm).lower().replace("×", "x").split("x")]
+        if len(pieces) != 3:
+            raise ValueError("实际尺寸格式应为 长x宽x高")
+        values.update({
+            "PACKAGE_LENGTH": (pieces[0], "cm"),
+            "PACKAGE_WIDTH": (pieces[1], "cm"),
+            "PACKAGE_HEIGHT": (pieces[2], "cm"),
+        })
     for number, unit in values.values():
         if not number.is_finite() or number <= 0:
-            raise ValueError("重量和尺寸必须是大于 0 的有效数值")
-    if any(value < 3 for value in pieces) or values["PACKAGE_WEIGHT"][0] < 50:
-        raise ValueError("美客多要求包装长宽高至少 3 厘米、重量至少 50 克")
+            raise ValueError("重量或尺寸必须是大于 0 的有效数值")
+    if any(value < 3 for value in pieces):
+        raise ValueError("美客多要求包装长宽高至少 3 厘米")
     remote = client.request("GET", f"/global/items/{global_item_id}")
     attrs = list(remote.get("attributes") or [])
     updates = {
@@ -1081,9 +1147,9 @@ def _run_execute(
         product_id = str(row.get("product_id") or "").strip()
         weight = str(row.get("actual_weight_g") or "").strip()
         dimensions = str(row.get("actual_dimensions_cm") or "").strip()
-        if (action != "zeshun" and not product_id) or not weight or not dimensions:
+        if (action != "zeshun" and not product_id) or not weight:
             row["execution_status"] = "未执行"
-            row["execution_error"] = "缺少智赢产品编号或实际重量尺寸"
+            row["execution_error"] = "缺少智赢产品编号或经官方核验的实际重量"
             _log_execution(row, "准备", "跳过", row["execution_error"])
             continue
 
@@ -1163,7 +1229,7 @@ def _run_execute(
             item["execution_error"] = ""
             _log_execution(
                 item, "智赢插件", "进行中",
-                f"按产品编号 {product_id} 进入智赢产品页；该编号关联 {len(grouped)} 笔订单，采用最新订单 {chosen_order}（{chosen_time}）的数据：重量 {row['actual_weight_g']}g，尺寸 {row['actual_dimensions_cm']}cm",
+                f"按产品编号 {product_id} 进入智赢产品页；该编号关联 {len(grouped)} 笔订单，采用最新订单 {chosen_order}（{chosen_time}）的数据：重量 {row['actual_weight_g']}g" + (f"，尺寸 {row['actual_dimensions_cm']}cm" if row.get("actual_dimensions_cm") else "；官方未提供尺寸，仅更新重量"),
             )
         try:
             if erp_browser_factory is None:
@@ -1180,7 +1246,7 @@ def _run_execute(
                 )
                 _log_execution(
                     item, "智赢插件", "成功",
-                    f"产品 {product_id} 重量 {row['actual_weight_g']}g、尺寸 {row['actual_dimensions_cm']}cm、级别“重点”已保存并回读确认；采用最新订单 {chosen_order}",
+                    f"产品 {product_id} 重量 {row['actual_weight_g']}g" + (f"、尺寸 {row['actual_dimensions_cm']}cm" if row.get("actual_dimensions_cm") else "（官方未提供尺寸，沿用原值）") + f"、级别“重点”已保存并回读确认；采用最新订单 {chosen_order}",
                 )
         except Exception as exc:
             for item in grouped:
@@ -1220,16 +1286,16 @@ def _run_execute(
             for item in eligible:
                 _log_execution(
                     item, "美客多链接", "进行中",
-                    f"正在更新 Global 商品 {global_id}；采用最新成功订单 {chosen_order}（{chosen_time}）的重量 {row['actual_weight_g']}g、尺寸 {row['actual_dimensions_cm']}cm",
+                    f"正在更新 Global 商品 {global_id}；采用最新成功订单 {chosen_order}（{chosen_time}）的重量 {row['actual_weight_g']}g" + (f"、尺寸 {row['actual_dimensions_cm']}cm" if row.get("actual_dimensions_cm") else "；官方未提供尺寸，仅更新重量"),
                 )
             _package_attributes(
                 api_client(token_id), global_id, row["actual_weight_g"], row["actual_dimensions_cm"]
             )
             for item in eligible:
                 item["_package_status"] = "成功"
-                item["_zeshun_status"] = "尺寸已更新"
-                item["execution_status"] = "重量尺寸已更新，等待更新净收益"
-                _log_execution(item, "美客多链接", "成功", f"关联 Global 商品已更新，采用最新订单 {chosen_order} 的实际重量尺寸")
+                item["_zeshun_status"] = "重量尺寸已更新" if row.get("actual_dimensions_cm") else "重量已更新"
+                item["execution_status"] = "重量已更新，等待更新净收益" if not row.get("actual_dimensions_cm") else "重量尺寸已更新，等待更新净收益"
+                _log_execution(item, "美客多链接", "成功", f"关联 Global 商品已更新，采用最新订单 {chosen_order} 的实际重量" + (f"和尺寸 {row['actual_dimensions_cm']}" if row.get("actual_dimensions_cm") else "；官方未提供尺寸，保留商品原尺寸"))
         except Exception as exc:
             for item in eligible:
                 item["_package_status"] = "失败"
@@ -1333,6 +1399,8 @@ def start_execute(
     *,
     action="zeshun",
     selected_order_numbers=None,
+    select_all_matching=False,
+    excluded_order_numbers=None,
     erp_browser_factory=None,
     agent_dispatch=None,
 ) -> dict[str, Any]:
@@ -1345,16 +1413,30 @@ def start_execute(
         for value in selected_order_numbers or ()
         if str(value or "").strip()
     }
+    excluded = {
+        str(value or "").strip()
+        for value in excluded_order_numbers or ()
+        if str(value or "").strip()
+    } if select_all_matching else set()
+    saved_selection = None
+    if task.get("database_view"):
+        saved_selection = bit_db_api.list_weight_dimensions_records(
+            None if select_all_matching else (sorted(selected) if selected else None),
+            filters=task["filters"],
+        )
     with _lock:
         if task.get("status") != "ready":
             raise ValueError("订单查询完成后才能执行更新")
         if task.get("execute_status") in {"queued", "running"}:
             raise ValueError("当前任务正在执行")
-        if action in {"zeshun", "zying"} and not selected:
+        if action in {"zeshun", "zying"} and not selected and not select_all_matching:
             raise ValueError("请至少勾选一条需要更新的订单")
+        if saved_selection is not None:
+            task["records"] = saved_selection
         candidates = [
             row for row in task["records"]
-            if not selected or str(row.get("order_number") or "").strip() in selected
+            if (select_all_matching or not selected or str(row.get("order_number") or "").strip() in selected)
+            and str(row.get("order_number") or "").strip() not in excluded
         ]
         if action == "zeshun":
             ready_rows = [row for row in candidates if _public_record(row)["can_execute_zeshun"]]
@@ -1365,8 +1447,8 @@ def start_execute(
         ready = len(ready_rows)
         if not ready:
             raise ValueError(
-                "所选记录没有具备可执行数据；智赢更新需要产品id、实际重量和尺寸，"
-                "泽顺更新需要美客多链接关联和实际重量尺寸"
+                "所选记录没有具备可执行数据；智赢更新需要产品id和实际重量，"
+                "泽顺更新需要美客多链接关联和实际重量；尺寸有官方核验值时一并更新"
             )
         selected = {str(row.get("order_number") or "").strip() for row in ready_rows}
         task["execute_status"] = "queued"

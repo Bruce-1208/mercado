@@ -611,7 +611,7 @@ def test_bulk_update_store_links_updates_only_allowed_numeric_fields():
     assert params[-2:] == (4, 5)
 
 
-def test_delete_store_links_deletes_unique_selected_ids(monkeypatch):
+def test_mark_deleted_preserves_unique_selected_records(monkeypatch):
     calls = []
     monkeypatch.setattr(store, "ensure_store_link_table", lambda _cursor: None)
 
@@ -646,15 +646,16 @@ def test_delete_store_links_deletes_unique_selected_ids(monkeypatch):
             pass
 
     connection = Connection()
-    result = store.delete_store_links(
+    result = store.mark_store_links_deleted(
         [5, "4", 5], connection_factory=lambda: connection
     )
 
     assert result == {"requested": 2, "deleted": 2}
     delete_sql, params = next(
-        (sql, params) for sql, params in calls if sql.lstrip().startswith("DELETE")
+        (sql, params) for sql, params in calls if sql.lstrip().startswith("UPDATE")
     )
-    assert f"DELETE FROM `{store.STORE_LINK_TABLE}`" in delete_sql
+    assert "`status` = 'deleted'" in delete_sql
+    assert not any(sql.lstrip().startswith("DELETE") for sql, _ in calls)
     assert params == (4, 5)
     assert connection.committed is True
 
@@ -802,6 +803,7 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
         if f"FROM `{store.STORE_LINK_TABLE}`" in sql and "LIMIT %s OFFSET %s" in sql
     )
     assert "ORDER BY links.`available_quantity` ASC" in inventory_sql
+    assert f"FORCE INDEX (`{store.STORE_LINK_SORT_INDEXES['available_quantity']}`)" in inventory_sql
 
     for sort_by in ("price", "weight_g", "last_synced_at", "net_proceeds_usd"):
         calls.clear()
@@ -816,6 +818,9 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
             if f"FROM `{store.STORE_LINK_TABLE}`" in sql and "LIMIT %s OFFSET %s" in sql
         )
         assert f"ORDER BY links.`{sort_by}` ASC" in sortable_sql
+        assert "links.`sold_quantity` ASC" in sortable_sql
+        assert "links.`id` ASC" in sortable_sql
+        assert f"FORCE INDEX (`{store.STORE_LINK_SORT_INDEXES[sort_by]}`)" in sortable_sql
 
     calls.clear()
     store.list_store_links(
@@ -838,6 +843,80 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
     assert not any(
         sql.lstrip().startswith("SELECT COUNT(*) AS `total`") for sql, _params in calls
     )
+
+
+@pytest.mark.parametrize("filters, expected_tokens", [
+    ({}, None),
+    ({"token_id": 7}, [7]),
+    ({"filter_token_ids": [9, 7, 9]}, [7, 9]),
+    ({"token_ids": [7, 9]}, [7, 9]),
+    ({"token_ids": []}, []),
+    ({"group_name": "团队一"}, [7, 9]),
+    ({"group_name": "团队一", "site_id": "MLM"}, [7]),
+    ({"group_name": "团队一", "token_ids": [9, 11]}, [9]),
+    ({"group_name": "不存在"}, []),
+    ({"group_name": "__ungrouped__", "token_ids": [11]}, [11]),
+])
+def test_recent_sales_sort_prunes_orders_before_json_aggregation(
+    monkeypatch, filters, expected_tokens,
+):
+    calls = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, sql, params=None):
+            calls.append((sql, params))
+
+        def fetchone(self):
+            return {"table_exists": 1, "total": 1}
+
+        def fetchall(self):
+            return []
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(store, "ensure_store_link_table", lambda cursor: None)
+    monkeypatch.setattr(store, "_store_link_metadata", lambda *args, **kwargs: {
+        "group_map": {(7, "MLM"): "团队一", (9, "MLB"): "团队一"},
+        "groups": [], "stores": [], "store_groups": {}, "sites": [],
+        "mercado_categories": [], "summary": {"current_count": 1},
+    })
+    store.list_store_links(
+        **filters, sort_by="sales_14d", sort_order="asc",
+        page_size=25, connection_factory=Connection,
+    )
+    sql, params = next((sql, params) for sql, params in calls if "LIMIT %s OFFSET %s" in sql)
+    aggregate = sql.split("AS recent_orders", 1)[1].split(
+        "GROUP BY recent_orders.`token_id`", 1
+    )[0]
+    if expected_tokens is None:
+        assert "recent_orders.`token_id` IN" not in aggregate
+        assert "AND 1 = 0" not in aggregate
+    elif expected_tokens:
+        placeholders = ", ".join(["%s"] * len(expected_tokens))
+        assert f"recent_orders.`token_id` IN ({placeholders})" in aggregate
+        assert params[:len(expected_tokens)] == tuple(expected_tokens)
+    else:
+        assert "AND 1 = 0" in aggregate
+    # Join parameters precede the existing row-filter parameters.
+    count_params = next(
+        (p for s, p in calls if "COUNT(*) AS `total`" in s),
+        tuple(sorted(set(filters.get("token_ids", [])))),
+    )
+    assert params == tuple(expected_tokens or []) + tuple(count_params) + (25, 0)
+    assert sql.count("%s") == len(params)
+    assert "LEFT JOIN (" in sql  # Links with zero recent sales must remain visible.
+    assert "ORDER BY `sales_14d` ASC" in sql
 
 
 def test_store_link_metadata_is_cached_and_returned_as_an_independent_copy(monkeypatch):
@@ -1107,14 +1186,14 @@ def test_workbench_store_link_ui_and_routes():
     with patch.object(
         workbench.bit_db_api,
         "delete_mercado_store_links",
-        return_value={"requested": 2, "deleted": 2},
+        return_value={"started": True, "state": {"running": True, "total_links": 2}},
     ) as delete:
         response = client.post(
             "/api/store-links/delete",
             json={"link_ids": [1, 2]},
         )
-    assert response.status_code == 200
-    assert response.get_json()["data"] == {"requested": 2, "deleted": 2}
+    assert response.status_code == 202
+    assert response.get_json()["data"] == {"running": True, "total_links": 2}
     delete.assert_called_once_with([1, 2])
 
     with patch.object(

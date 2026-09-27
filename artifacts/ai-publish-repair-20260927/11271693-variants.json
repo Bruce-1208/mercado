@@ -1,0 +1,272 @@
+[
+  {
+    "id": "6285261167568",
+    "sku_id": "6285261167568",
+    "seller_sku": "",
+    "label": "橙色 / 肩到裙摆130cm（单层）",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Orange",
+        "value_id": "52000"
+      },
+      {
+        "id": "LENGTH",
+        "name": "Length",
+        "value_name": "130 cm"
+      }
+    ],
+    "price": 33,
+    "price_text": "¥33.00",
+    "available_quantity": 9999999,
+    "image_url": "",
+    "raw_weight": "200g",
+    "raw_text": "橙色 / 肩到裙摆130cm（单层）",
+    "weight_g": 200,
+    "package_length_cm": 30,
+    "package_width_cm": 25,
+    "package_height_cm": 1,
+    "dimensions_display": "30 × 25 × 1 cm"
+  },
+  {
+    "id": "6285261167569",
+    "sku_id": "6285261167569",
+    "seller_sku": "",
+    "label": "橙色 / 肩到裙摆150cm（单层）",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Orange",
+        "value_id": "52000"
+      },
+      {
+        "id": "LENGTH",
+        "name": "Length",
+        "value_name": "150 cm"
+      }
+    ],
+    "price": 36,
+    "price_text": "¥36.00",
+    "available_quantity": 9999999,
+    "image_url": "",
+    "raw_weight": "200g",
+    "raw_text": "橙色 / 肩到裙摆150cm（单层）",
+    "weight_g": 200,
+    "package_length_cm": 30,
+    "package_width_cm": 25,
+    "package_height_cm": 1,
+    "dimensions_display": "30 × 25 × 1 cm"
+  },
+  {
+    "id": "6285261167570",
+    "sku_id": "6285261167570",
+    "seller_sku": "",
+    "label": "橙色 / 肩到裙摆180cm（单层）",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Orange",
+        "value_id": "52000"
+      },
+      {
+        "id": "LENGTH",
+        "name": "Length",
+        "value_name": "180 cm"
+      }
+    ],
+    "price": 39,
+    "price_text": "¥39.00",
+    "available_quantity": 9999999,
+    "image_url": "",
+    "raw_weight": "200g",
+    "raw_text": "橙色 / 肩到裙摆180cm（单层）",
+    "weight_g": 200,
+    "package_length_cm": 30,
+    "package_width_cm": 25,
+    "package_height_cm": 1,
+    "dimensions_display": "30 × 25 × 1 cm"
+  },
+  {
+    "id": "6285261167571",
+    "sku_id": "6285261167571",
+    "seller_sku": "",
+    "label": "紫色 / 肩到裙摆130cm（单层）",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Violet",
+        "value_id": "52035"
+      },
+      {
+        "id": "LENGTH",
+        "name": "Length",
+        "value_name": "130 cm"
+      }
+    ],
+    "price": 33,
+    "price_text": "¥33.00",
+    "available_quantity": 9999999,
+    "image_url": "",
+    "raw_weight": "200g",
+    "raw_text": "紫色 / 肩到裙摆130cm（单层）",
+    "weight_g": 200,
+    "package_length_cm": 30,
+    "package_width_cm": 25,
+    "package_height_cm": 1,
+    "dimensions_display": "30 × 25 × 1 cm"
+  },
+  {
+    "id": "6285261167572",
+    "sku_id": "6285261167572",
+    "seller_sku": "",
+    "label": "紫色 / 肩到裙摆150cm（单层）",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Violet",
+        "value_id": "52035"
+      },
+      {
+        "id": "LENGTH",
+        "name": "Length",
+        "value_name": "150 cm"
+      }
+    ],
+    "price": 36,
+    "price_text": "¥36.00",
+    "available_quantity": 9999999,
+    "image_url": "",
+    "raw_weight": "200g",
+    "raw_text": "紫色 / 肩到裙摆150cm（单层）",
+    "weight_g": 200,
+    "package_length_cm": 30,
+    "package_width_cm": 25,
+    "package_height_cm": 1,
+    "dimensions_display": "30 × 25 × 1 cm"
+  },
+  {
+    "id": "6285261167573",
+    "sku_id": "6285261167573",
+    "seller_sku": "",
+    "label": "紫色 / 肩到裙摆180cm（单层）",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Violet",
+        "value_id": "52035"
+      },
+      {
+        "id": "LENGTH",
+        "name": "Length",
+        "value_name": "180 cm"
+      }
+    ],
+    "price": 39,
+    "price_text": "¥39.00",
+    "available_quantity": 9999999,
+    "image_url": "",
+    "raw_weight": "200g",
+    "raw_text": "紫色 / 肩到裙摆180cm（单层）",
+    "weight_g": 200,
+    "package_length_cm": 30,
+    "package_width_cm": 25,
+    "package_height_cm": 1,
+    "dimensions_display": "30 × 25 × 1 cm"
+  },
+  {
+    "id": "6285261167574",
+    "sku_id": "6285261167574",
+    "seller_sku": "",
+    "label": "黑色 / 肩到裙摆130cm（单层）",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Black",
+        "value_id": "52049"
+      },
+      {
+        "id": "LENGTH",
+        "name": "Length",
+        "value_name": "130 cm"
+      }
+    ],
+    "price": 33,
+    "price_text": "¥33.00",
+    "available_quantity": 9999999,
+    "image_url": "",
+    "raw_weight": "200g",
+    "raw_text": "黑色 / 肩到裙摆130cm（单层）",
+    "weight_g": 200,
+    "package_length_cm": 30,
+    "package_width_cm": 25,
+    "package_height_cm": 1,
+    "dimensions_display": "30 × 25 × 1 cm"
+  },
+  {
+    "id": "6285261167575",
+    "sku_id": "6285261167575",
+    "seller_sku": "",
+    "label": "黑色 / 肩到裙摆150cm（单层）",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Black",
+        "value_id": "52049"
+      },
+      {
+        "id": "LENGTH",
+        "name": "Length",
+        "value_name": "150 cm"
+      }
+    ],
+    "price": 36,
+    "price_text": "¥36.00",
+    "available_quantity": 9999999,
+    "image_url": "",
+    "raw_weight": "200g",
+    "raw_text": "黑色 / 肩到裙摆150cm（单层）",
+    "weight_g": 200,
+    "package_length_cm": 30,
+    "package_width_cm": 25,
+    "package_height_cm": 1,
+    "dimensions_display": "30 × 25 × 1 cm"
+  },
+  {
+    "id": "6285261167576",
+    "sku_id": "6285261167576",
+    "seller_sku": "",
+    "label": "黑色 / 肩到裙摆180cm（单层）",
+    "attribute_combinations": [
+      {
+        "id": "COLOR",
+        "name": "Color",
+        "value_name": "Black",
+        "value_id": "52049"
+      },
+      {
+        "id": "LENGTH",
+        "name": "Length",
+        "value_name": "180 cm"
+      }
+    ],
+    "price": 39,
+    "price_text": "¥39.00",
+    "available_quantity": 9999999,
+    "image_url": "",
+    "raw_weight": "200g",
+    "raw_text": "黑色 / 肩到裙摆180cm（单层）",
+    "weight_g": 200,
+    "package_length_cm": 30,
+    "package_width_cm": 25,
+    "package_height_cm": 1,
+    "dimensions_display": "30 × 25 × 1 cm"
+  }
+]

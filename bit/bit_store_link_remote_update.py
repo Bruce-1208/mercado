@@ -25,6 +25,7 @@ from erp.mercadolibre_store_link_store import (
     bulk_update_store_links,
     get_store_links_by_ids,
     listing_record,
+    mark_store_links_deleted,
 )
 from mercado_api.client import MercadoLibreClient
 
@@ -191,6 +192,14 @@ def _update_one_link(
     token: Mapping[str, Any],
     changes: Mapping[str, Any],
 ) -> dict[str, Any]:
+    if changes.get("status") == "deleted":
+        return _delete_one_link(row, token)
+    if row.get("status") == "deleted":
+        return {
+            "link_id": int(row["id"]), "item_id": row.get("item_id"),
+            "status": "error", "applied_fields": [],
+            "errors": ["链接已删除，不能重新上架或修改"],
+        }
     item_id = str(row.get("item_id") or "").strip().upper()
     client = MercadoLibreClient(str(token.get("access_token") or ""))
     applied: dict[str, Decimal] = {}
@@ -296,10 +305,11 @@ def run_store_link_remote_update(
     changes: Mapping[str, Any],
 ) -> dict[str, Any]:
     rows = [dict(row) for row in rows]
+    action = "删除" if changes.get("status") == "deleted" else "修改"
     _state_update(
         running=True,
         status="running",
-        message="正在等待并修改美客多后台链接",
+        message=f"正在等待并{action}美客多后台链接",
         total_links=len(rows),
         processed_links=0,
         success_count=0,
@@ -311,17 +321,17 @@ def run_store_link_remote_update(
         results=[],
         logs=[],
     )
-    _append_log(f"任务启动，共 {len(rows)} 条链接；修改将直接写入 Mercado Libre 后台")
+    _append_log(f"任务启动，共 {len(rows)} 条链接；{action}将直接写入 Mercado Libre 后台")
 
     token_records: dict[int, dict[str, Any]] = {}
     token_errors: dict[int, str] = {}
     for token_id in sorted({int(row["token_id"]) for row in rows}):
         try:
-            record = dict(bit_mysql.get_mercado_store_token(token_id) or {})
-            if not record:
+            token_record = dict(bit_mysql.get_mercado_store_token(token_id) or {})
+            if not token_record:
                 raise ValueError("店铺授权不存在")
-            _client, record = _client_and_token(record)
-            token_records[token_id] = record
+            _client, token_record = _client_and_token(token_record)
+            token_records[token_id] = token_record
         except Exception as exc:
             token_errors[token_id] = str(exc)
 
@@ -365,7 +375,7 @@ def run_store_link_remote_update(
             record("remote_update_item", result["status"], {"result": result, "task_id": _update_state.get("task_id")})
             results.append(result)
             if result["status"] == "success":
-                _append_log(f"{item_id} 后台修改成功：{', '.join(result.get('remote_groups') or [])}")
+                _append_log(f"{item_id} 后台{action}成功：{', '.join(result.get('remote_groups') or [])}")
             else:
                 details = list(result.get("errors") or [])
                 if result.get("warning"):
@@ -378,14 +388,14 @@ def run_store_link_remote_update(
                 partial_count=sum(row["status"] == "partial" for row in results),
                 failed_count=sum(row["status"] == "error" for row in results),
                 results=list(results[-200:]),
-                message=f"正在修改美客多后台链接 {processed}/{len(rows)}",
+                message=f"正在{action}美客多后台链接 {processed}/{len(rows)}",
             )
 
     failed = sum(row["status"] == "error" for row in results)
     partial = sum(row["status"] == "partial" for row in results)
     success = sum(row["status"] == "success" for row in results)
     status = "completed" if not failed and not partial else "partial"
-    message = f"后台修改完成：成功 {success}，部分成功 {partial}，失败 {failed}"
+    message = f"后台{action}完成：成功 {success}，部分成功 {partial}，失败 {failed}"
     _state_update(
         running=False,
         status=status,
@@ -431,9 +441,11 @@ def _run_background(rows: list[dict[str, Any]], changes: dict[str, Any]) -> None
 def start_store_link_remote_update(
     link_ids: Iterable[int],
     changes: Mapping[str, Any],
+    *,
+    delete: bool = False,
 ) -> tuple[bool, dict[str, Any]]:
     ids = _link_ids(link_ids)
-    normalized = _normalize_changes(changes)
+    normalized = {"status": "deleted"} if delete else _normalize_changes(changes)
     rows = get_store_links_by_ids(ids)
     with _state_guard:
         if _update_state.get("running"):
@@ -442,7 +454,7 @@ def start_store_link_remote_update(
             running=True,
             task_id=uuid.uuid4().hex,
             status="starting",
-            message="正在启动美客多后台修改任务",
+            message="正在启动美客多后台删除任务" if delete else "正在启动美客多后台修改任务",
             total_links=len(rows),
             processed_links=0,
             success_count=0,
@@ -464,8 +476,64 @@ def start_store_link_remote_update(
         name="mercado-store-link-remote-update",
         daemon=True,
     )
-    thread.start()
+    try:
+        thread.start()
+    except Exception as exc:
+        _state_update(running=False, status="error", message=str(exc), finished_at=_now_text())
+        raise
     return True, store_link_remote_update_status()
+
+
+def start_store_link_remote_delete(link_ids):
+    return start_store_link_remote_update(link_ids, {}, delete=True)
+
+
+@audited
+def _delete_one_link(row, token):
+    """Delete only the selected marketplace item and verify before marking locally."""
+    item_id = str(row.get("item_id") or "").strip().upper()
+    result = {
+        "link_id": int(row["id"]), "item_id": item_id,
+        "store": str(row.get("store_name") or ""), "status": "error",
+        "applied_fields": [], "errors": [], "remote_groups": ["删除链接"],
+    }
+    try:
+        if not item_id.startswith("ML") or not item_id[3:].isdigit():
+            raise ValueError("只能删除所选站点链接，不能通过此操作删除 CBT 父商品")
+        client = MercadoLibreClient(str(token.get("access_token") or ""))
+        def read_item():
+            item = client.get_marketplace_item(item_id)
+            if str(item.get("id") or "").upper() != item_id:
+                raise ValueError("平台返回的链接编号不匹配，无法确认删除")
+            return item
+
+        def is_deleted(item):
+            return (item.get("deleted") is True
+                    or item.get("status") == "deleted"
+                    or "deleted" in (item.get("sub_status") or []))
+
+        item = read_item()
+        if not is_deleted(item):
+            if item.get("status") not in {"paused", "closed"}:
+                client.update_global_item(item_id, {"status": "paused"})
+                item = read_item()
+                if item.get("status") not in {"paused", "closed"}:
+                    raise ValueError("平台未确认链接已暂停，未继续删除")
+            client.update_global_item(item_id, {"deleted": True})
+            item = read_item()
+            if not is_deleted(item):
+                raise ValueError("已提交删除，但平台尚未确认已删除；保留记录，可重试核验")
+        result["applied_fields"] = ["status"]
+        try:
+            mark_store_links_deleted([int(row["id"])])
+        except Exception as exc:
+            result["status"] = "partial"
+            result["errors"] = [f"平台已删除，本地状态回写失败：{exc}"]
+            return result
+        result["status"] = "success"
+    except Exception as exc:
+        result["errors"] = [str(exc)]
+    return result
 
 
 __all__ = [

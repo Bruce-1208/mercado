@@ -43,6 +43,46 @@ def test_insert_orders_rolls_back_and_reraises_database_errors():
     connection.close.assert_called_once_with()
 
 
+def test_freight_quote_is_saved_before_actual_shipment_costs_exist():
+    connection = MagicMock()
+    cursor = connection.cursor.return_value.__enter__.return_value
+    cursor.fetchall.side_effect = [
+        [{"token_id": 7, "shipping_id": "ship-1"}],
+        [{
+            "order_id": "101", "token_id": 7, "shipping_id": "ship-1",
+            "site_id": "MLM", "total_amount": "350", "product_id": "MLM-A",
+            "raw_json": {"order_items": [{
+                "item": {"id": "MLM-A"}, "quantity": 1,
+            }]},
+        }],
+        [{"token_id": 7, "item_id": "MLM-A", "weight_g": "200"}],
+    ]
+    with (
+        patch("bit.bit_mysql.pymysql.connect", return_value=connection),
+        patch("bit.bit_mysql._ensure_mercado_synced_orders_table"),
+        patch("erp.mercadolibre_store_link_store.ensure_store_link_table"),
+        patch(
+            "erp.mercadolibre_shipping_rate_cards.OfficialShippingRateCardStore.list_rates",
+            return_value={"rows": [{
+                "site_id": "MLM", "rate_kind": "above_threshold",
+                "price_min_local": 299, "price_max_local": None,
+                "weight_min_g": 0, "weight_max_g": 300,
+                "shipping_amount_usd": 4.6,
+            }]},
+        ),
+    ):
+        result = bit_mysql.refresh_mercado_order_quoted_freight()
+
+    candidate_sql = cursor.execute.call_args_list[0].args[0]
+    assert "freight_source" not in candidate_sql
+    assert result["quoted_shipments"] == 1
+    sql, updates = cursor.executemany.call_args.args
+    assert float(updates[0][0]) == 4.6
+    assert updates[0][2] == "official_weight_rate_card"
+    assert "`freight` =" not in sql
+    assert "`freight_source` =" not in sql
+
+
 @pytest.mark.parametrize(
     "query_function",
     [

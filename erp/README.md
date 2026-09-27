@@ -29,6 +29,14 @@ python -m erp.mercadolibre_follow_sell `
 并在实际刊登前把源图片上传成该店铺可用的图片 ID。实际创建必须显式加
 `--publish`，避免调试或重复兑换授权码时误建重复商品。
 
+源商品包含变体时，User Products 模式使用 `POST /global/user-products/families`
+提交数组，每个变体对应一个独立 UP，使用相同的 `family_name`。保留各变体的
+属性、SKU、库存（包括零库存）及图片；库存缺失时使用指定的 `quantity`，
+SKU 缺失时生成变体独立 SKU。无法映射区分属性或解析指定图片时会在创建前报错。
+接口返回的每个变体及目标站点结果都会检查；部分失败不会显示整体成功，
+批量上架失败记录保留完整返回结果以供核对。family 不复用单个 UP ID，避免只发布一个变体。
+
+
 ## 网页与智赢插件快照
 
 网页抓取结果由 `erp.mercadolibre_source_store` 保存到 MySQL 表

@@ -20,6 +20,14 @@ def measurements(detail, selected):
         value = positive(selected.get(field)) or positive(detail.get(field))
         if value is not None:
             result[field] = value
+    # Playwright's official-SKU reader returns packaging evidence as text;
+    # the extension returns numeric fields. Accept both without guessing.
+    from erp.ai_weight_price.models import parse_dimensions_evidence
+    dimensions = parse_dimensions_evidence(selected.get('raw_dimensions') or detail.get('raw_dimensions') or '')
+    if dimensions:
+        for field, value in zip(FIELDS[1:], dimensions.split('x')):
+            if field not in result and positive(value) is not None:
+                result[field] = positive(value)
     return result
 
 

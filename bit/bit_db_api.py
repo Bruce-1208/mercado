@@ -645,12 +645,16 @@ def get_weight_dimensions_record_order_numbers(order_numbers):
     return (data or {}).get("order_numbers", [])
 
 
-def list_weight_dimensions_records(order_numbers=None, filters=None):
+def list_weight_dimensions_records(order_numbers=None, filters=None, *, page=None, page_size=50):
     if order_numbers is not None and not order_numbers:
-        return []
+        return [] if page is None else {"records": [], "record_total": 0, "page": 1, "page_size": page_size}
+    pagination = {"page": page, "page_size": page_size} if page is not None else {}
     if DB_MODE == "mysql":
-        return _local_call("list_weight_dimensions_records", order_numbers, filters=filters)
-    return _request("GET", "/api/db/weight-dimensions-records", params={**({"order_number": order_numbers} if order_numbers is not None else {}), **({"filters": json.dumps(filters)} if filters is not None else {})})
+        return _local_call("list_weight_dimensions_records", order_numbers, filters=filters, **pagination)
+    return _request("GET", "/api/db/weight-dimensions-records", params={
+        **({"order_number": order_numbers} if order_numbers is not None else {}),
+        **({"filters": json.dumps(filters)} if filters is not None else {}), **pagination,
+    })
 
 
 def list_weight_dimensions_changed_orders(filters=None):

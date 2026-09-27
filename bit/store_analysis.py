@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import threading
-from collections import defaultdict
+import time
+from collections import OrderedDict, defaultdict
+from copy import deepcopy
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
@@ -17,6 +19,11 @@ SITE_NAMES = {
     "MLC": "智利", "MCO": "哥伦比亚", "MLU": "乌拉圭",
 }
 _CATEGORY_LEVELS = range(1, 7)
+_ANALYSIS_CACHE = OrderedDict()
+_ANALYSIS_CACHE_LOCK = threading.Lock()
+_ANALYSIS_REQUEST_LOCKS = [threading.Lock() for _ in range(16)]
+_ANALYSIS_CACHE_SECONDS = 60
+_ANALYSIS_CACHE_LIMIT = 128
 _CATEGORY_TRANSLATION_LOCK = threading.Lock()
 _CATEGORY_TRANSLATION_CACHE: dict[tuple[str, str], str] = {}
 
@@ -178,6 +185,33 @@ def summarize_store_analysis(rows, paths, *, metric="orders", category_level=2,
 
 def list_store_analysis(start_date, end_date, *, metric="orders", salesperson="", group_name="",
                         token_id=None, allowed_token_ids=None, category_level=2):
+    """Reuse short-lived results, keeping every authorization scope isolated."""
+    category_level = _normalize_category_level(category_level)
+    token_id = int(token_id) if token_id is not None else None
+    scope = tuple(sorted(allowed_token_ids)) if allowed_token_ids is not None else None
+    key = (start_date, end_date, metric, salesperson, group_name, token_id, scope, category_level)
+    # Coalesce concurrent identical requests without serializing all analysis work.
+    with _ANALYSIS_REQUEST_LOCKS[hash(key) % len(_ANALYSIS_REQUEST_LOCKS)]:
+        with _ANALYSIS_CACHE_LOCK:
+            cached = _ANALYSIS_CACHE.get(key)
+            if cached and cached[0] > time.monotonic():
+                _ANALYSIS_CACHE.move_to_end(key)
+                return deepcopy(cached[1])
+        result = _compute_store_analysis(
+            start_date, end_date, metric=metric, salesperson=salesperson,
+            group_name=group_name, token_id=token_id,
+            allowed_token_ids=scope, category_level=category_level,
+        )
+        with _ANALYSIS_CACHE_LOCK:
+            _ANALYSIS_CACHE[key] = (time.monotonic() + _ANALYSIS_CACHE_SECONDS, deepcopy(result))
+            _ANALYSIS_CACHE.move_to_end(key)
+            while len(_ANALYSIS_CACHE) > _ANALYSIS_CACHE_LIMIT:
+                _ANALYSIS_CACHE.popitem(last=False)
+        return result
+
+
+def _compute_store_analysis(start_date, end_date, *, metric="orders", salesperson="", group_name="",
+                        token_id=None, allowed_token_ids=None, category_level=2):
     if metric not in {"orders", "gmv"}:
         raise ValueError("排序指标无效")
     category_level = _normalize_category_level(category_level)
@@ -278,16 +312,32 @@ def list_store_analysis(start_date, end_date, *, metric="orders", salesperson=""
         connection.close()
     category_ids = sorted({str(row.get("category_id") or "").strip().upper() for row in rows if row.get("category_id")})
     paths = category_paths_for_ids(category_ids) if category_ids else {}
+    # Rank before translating so only visible labels incur translation work.
+    # Original names provide a stable tie breaker for equal sales totals.
+    original_names = {
+        str(path[category_level - 1].get("id") or "").strip().upper(): str(path[category_level - 1].get("name") or "")
+        for path in paths.values() if len(path) >= category_level
+    }
+    sites = summarize_store_analysis(rows, paths, metric=metric, category_level=category_level,
+                                     category_names_zh=original_names)
+    visible_ids = {category["category_id"] for site in sites for category in site["top_categories"]}
+    visible_paths = {key: path for key, path in paths.items()
+                     if len(path) >= category_level
+                     and str(path[category_level - 1].get("id") or "").strip().upper() in visible_ids}
     translation_warning = ""
     try:
-        category_names_zh = _translate_category_names(paths, category_level)
+        category_names_zh = _translate_category_names(visible_paths, category_level)
     except Exception:
         category_names_zh = {}
         translation_warning = "中文类目名称暂不可用，请运行 python3 scripts/install_argos_translation_models.py 安装本地翻译模型。"
-    return {"sites": summarize_store_analysis(
-                rows, paths, metric=metric, category_level=category_level,
-                category_names_zh=category_names_zh,
-            ),
+    for site in sites:
+        for category in site["top_categories"]:
+            name = category_names_zh.get(category["category_id"], "")
+            original = category.pop("name_zh", "")
+            category["name"] = name or (original if any("\u3400" <= c <= "\u9fff" for c in original) else "分类名称暂不可用")
+            if name:
+                category["name_zh"] = name
+    return {"sites": sites,
             "start_date": start_date, "end_date": end_date, "metric": metric,
             "category_level": category_level,
             "category_translation_warning": translation_warning}

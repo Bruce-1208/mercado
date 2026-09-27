@@ -13,7 +13,7 @@
     </script>
     <title>武汉泽顺综合服务台</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/zeshun-monogram-gold.png') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='store-analysis.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='store-analysis.css') }}?v=20260927-seven-days">
     <style>
         :root {
             --bg: #f4f7fb;
@@ -9788,10 +9788,80 @@
         .inventory-switch input:checked + i::after { transform: translateX(16px); }
         .inventory-switch em { font-size: 11px; font-style: normal; }
 
+        #store-link-audit-panel { overflow: hidden; padding: 20px; border-color: #e1e7f0; }
+        .store-link-audit-heading,
+        .store-link-audit-title,
+        .store-link-audit-list-heading,
+        .store-link-audit-filter-actions,
+        .store-link-audit-more-wrap { display: flex; align-items: center; }
+        .store-link-audit-heading { justify-content: space-between; gap: 14px; margin-bottom: 17px; }
+        .store-link-audit-title { gap: 11px; min-width: 0; }
+        .store-link-audit-mark { display: grid; flex: 0 0 40px; width: 40px; height: 40px; place-items: center; border: 1px solid #d8e5fb; border-radius: 12px; background: #eff5ff; color: #2861be; font-size: 20px; font-weight: 800; }
+        .store-link-audit-title h3 { margin: 0; color: #202c3e; font-size: 16px; font-weight: 750; }
+        .store-link-audit-title p { margin: 4px 0 0; color: #7b8798; font-size: 12px; }
+        .store-link-audit-heading > button { display: inline-flex; align-items: center; gap: 6px; width: auto; min-height: 36px; padding: 7px 11px; border-radius: 8px; white-space: nowrap; }
+        .store-link-audit-filters { display: grid; grid-template-columns: minmax(190px, 1.2fr) minmax(155px, .9fr) repeat(2, minmax(145px, .8fr)) auto; align-items: end; gap: 12px; margin: 0 0 20px; padding: 15px; border: 1px solid #e4e9f1; border-radius: 12px; background: linear-gradient(135deg, #f8fafc, #f5f8fd); }
+        .store-link-audit-filters label { display: grid; min-width: 0; gap: 6px; color: #5c687a; font-size: 11px; font-weight: 700; }
+        .store-link-audit-filters input,
+        .store-link-audit-filters select { width: 100%; min-width: 0; height: 38px; margin: 0; padding: 7px 10px; border: 1px solid #d8e0eb; border-radius: 8px; outline: 0; background: #fff; color: #253247; font: inherit; font-size: 12px; transition: border-color .15s ease, box-shadow .15s ease; }
+        .store-link-audit-filters input:focus,
+        .store-link-audit-filters select:focus { border-color: #7ea4e7; box-shadow: 0 0 0 3px rgba(47, 105, 201, .12); }
+        .store-link-audit-filter-actions { gap: 7px; }
+        .store-link-audit-filter-actions button { width: auto; min-width: 64px; min-height: 38px; margin: 0; padding: 7px 12px; border-radius: 8px; font-size: 12px; }
+        .store-link-audit-list-heading { justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+        .store-link-audit-list-heading strong { color: #344054; font-size: 13px; }
+        .store-link-audit-list-heading span { color: #98a2b3; font-size: 11px; }
+        .store-link-audit-message { min-height: 18px; margin: 0 0 10px; color: #7b8798; font-size: 12px; }
+        .store-link-audit-list { display: grid; max-height: 65vh; gap: 8px; overflow: auto; padding: 1px 4px 2px 1px; }
+        .store-link-audit-entry { overflow: hidden; border: 1px solid #e6eaf0; border-radius: 11px; background: #fff; transition: border-color .16s ease, box-shadow .16s ease; }
+        .store-link-audit-entry:hover { border-color: #cbd8eb; box-shadow: 0 3px 10px rgba(28, 49, 82, .045); }
+        .store-link-audit-entry[open] { border-color: #c8d7ee; box-shadow: 0 5px 16px rgba(36, 65, 108, .07); }
+        .store-link-audit-summary { display: grid; grid-template-columns: minmax(210px, 1.25fr) minmax(115px, .7fr) minmax(150px, .85fr) auto 18px; align-items: center; gap: 14px; min-height: 72px; padding: 11px 14px; cursor: pointer; list-style: none; }
+        .store-link-audit-summary::-webkit-details-marker { display: none; }
+        .store-link-audit-person { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .store-link-audit-avatar { display: grid; flex: 0 0 36px; width: 36px; height: 36px; place-items: center; border-radius: 11px; background: #eef4ff; color: #3567b4; font-size: 14px; font-weight: 800; }
+        .store-link-audit-person-copy { display: grid; min-width: 0; gap: 4px; }
+        .store-link-audit-person-copy strong { overflow: hidden; color: #283548; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+        .store-link-audit-person-copy small { overflow: hidden; color: #8490a1; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+        .store-link-audit-task { display: grid; gap: 4px; min-width: 0; }
+        .store-link-audit-task-name { overflow: hidden; color: #455266; font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+        .store-link-audit-type { justify-self: start; padding: 3px 8px; border: 1px solid #e0e7f0; border-radius: 999px; background: #f7f9fc; color: #637187; font-size: 10px; font-weight: 700; white-space: nowrap; }
+        .store-link-audit-type.sync { border-color: #d5e4ff; background: #eff5ff; color: #315fa9; }
+        .store-link-audit-type.update { border-color: #d7e9df; background: #eff8f2; color: #35734b; }
+        .store-link-audit-type.delete { border-color: #f1d7d5; background: #fff3f1; color: #a65048; }
+        .store-link-audit-type.advertising { border-color: #eadcf5; background: #f8f2fc; color: #785295; }
+        .store-link-audit-type.video { border-color: #d6e9ec; background: #eff8f9; color: #39717a; }
+        .store-link-audit-time { color: #66758a; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .store-link-audit-phase { justify-self: start; padding: 4px 9px; border-radius: 999px; background: #f1f3f6; color: #667085; font-size: 10px; font-weight: 750; white-space: nowrap; }
+        .store-link-audit-phase.completed, .store-link-audit-phase.success { background: #eaf7ef; color: #28754a; }
+        .store-link-audit-phase.failed, .store-link-audit-phase.error { background: #fff0ef; color: #ae4039; }
+        .store-link-audit-phase.partial { background: #fff6e6; color: #996712; }
+        .store-link-audit-chevron { color: #98a2b3; font-size: 16px; transition: transform .16s ease; }
+        .store-link-audit-entry[open] .store-link-audit-chevron { transform: rotate(180deg); }
+        .store-link-audit-detail { padding: 13px 15px 15px; border-top: 1px solid #edf0f4; background: #fafbfd; }
+        .store-link-audit-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; color: #536176; font-size: 11px; font-weight: 700; }
+        .store-link-audit-identifiers { display: flex; flex-wrap: wrap; gap: 6px; color: #8a94a3; font-size: 10px; font-weight: 500; }
+        .store-link-audit-identifiers span { padding: 3px 7px; border: 1px solid #e7ebf1; border-radius: 5px; background: #fff; }
+        .store-link-audit-json { max-height: 360px; margin: 0; padding: 13px; overflow: auto; border: 1px solid #e7ebf1; border-radius: 8px; background: #fff; color: #455266; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .store-link-audit-empty { display: grid; justify-items: center; gap: 6px; padding: 34px 16px; border: 1px dashed #dce3ec; border-radius: 11px; background: #fafbfd; text-align: center; }
+        .store-link-audit-empty > span { display: grid; width: 38px; height: 38px; place-items: center; margin-bottom: 3px; border-radius: 12px; background: #eff4fb; color: #7184a0; font-size: 23px; }
+        .store-link-audit-empty strong { color: #455266; font-size: 12px; }
+        .store-link-audit-empty small { color: #8b96a6; font-size: 11px; }
+        .store-link-audit-more-wrap { justify-content: center; padding-top: 14px; }
+        .store-link-audit-more-wrap button { display: inline-flex; align-items: center; gap: 6px; width: auto; min-height: 36px; padding: 7px 14px; border-radius: 8px; }
+
         @media (max-width: 900px) {
             .inventory-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .inventory-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .inventory-toolbar-actions { align-self: end; }
+            .store-link-audit-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .store-link-audit-filter-actions { justify-content: flex-end; }
+            .store-link-audit-summary { grid-template-columns: minmax(0, 1fr) auto auto 18px; grid-template-rows: auto auto; }
+            .store-link-audit-person { grid-column: 1; grid-row: 1; }
+            .store-link-audit-task { grid-column: 1; grid-row: 2; padding-left: 46px; }
+            .store-link-audit-time { grid-column: 2; grid-row: 1; }
+            .store-link-audit-phase { grid-column: 3; grid-row: 1; }
+            .store-link-audit-chevron { grid-column: 4; grid-row: 1 / span 2; }
         }
 
         @media (max-width: 640px) {
@@ -9840,7 +9910,7 @@
     <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260927-bulk-review"></script>
     <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20260927-bulk-review"></script>
     <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260927-owners-net"></script>
-    <script defer src="{{ url_for('static', filename='weight-dimensions-records.js') }}?v=20260927-5"></script>
+    <script defer src="{{ url_for('static', filename='weight-dimensions-records.js') }}?v=20260927-10"></script>
     <script defer src="{{ url_for('static', filename='inventory-sku.js') }}?v=20260925-1"></script>
     <style>
         .ai-video-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(360px, .9fr); gap: 14px; align-items: start; }
@@ -9967,6 +10037,20 @@
             .ai-video-picker-item { grid-template-columns: 62px minmax(0, 1fr); }
             .ai-video-picker-cover { width: 62px; height: 62px; }
             .ai-video-picker-item > button { grid-column: 1 / -1; }
+            #store-link-audit-panel { padding: 14px; }
+            .store-link-audit-heading { align-items: flex-start; }
+            .store-link-audit-heading > button { min-height: 34px; padding: 6px 8px; font-size: 11px; }
+            .store-link-audit-mark { flex-basis: 34px; width: 34px; height: 34px; border-radius: 10px; font-size: 17px; }
+            .store-link-audit-filters { grid-template-columns: 1fr; gap: 10px; padding: 12px; }
+            .store-link-audit-filter-actions button { flex: 1; }
+            .store-link-audit-summary { grid-template-columns: minmax(0, 1fr) auto 16px; gap: 8px; padding: 10px; }
+            .store-link-audit-person { grid-column: 1; grid-row: 1; }
+            .store-link-audit-task { grid-column: 1; grid-row: 2; padding-left: 46px; }
+            .store-link-audit-time { grid-column: 2; grid-row: 1; font-size: 10px; }
+            .store-link-audit-phase { grid-column: 2; grid-row: 2; }
+            .store-link-audit-chevron { grid-column: 3; grid-row: 1 / span 2; }
+            .store-link-audit-detail-head { align-items: flex-start; flex-direction: column; }
+            .store-link-audit-more-wrap button { width: 100%; justify-content: center; }
         }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20260925-1">
@@ -10179,12 +10263,18 @@
                     <div class="order-sync-body">
                         <h3>智赢订单同步</h3>
                         <p>按当前筛选获取全部订单（包含所有分页），从智赢读取已添加采购的订单号、物流号和人民币成本，更新泽顺采购信息。智赢空单号不会清空已有值。</p>
-                        <p>点击同步将自动打开服务器上的 Edge。登录智赢后，点击“确定登录”继续同步。</p>
+                        <p>点击同步将在所选 Agent 电脑打开 Edge。登录智赢后，点击“确定登录”继续同步。</p>
+                        <label>执行位置 <select id="order-zying-target" onchange="document.getElementById('order-zying-agent').hidden = this.value === 'server'">
+                            <option value="agent">本机 Agent</option>
+                            {% if current_user.role_key == 'super_admin' %}<option value="server">服务器 Edge</option>{% endif %}
+                        </select></label>
+                        <select id="order-zying-agent" aria-label="选择执行 Agent"><option value="">请选择在线 Agent</option></select>
                         <p id="order-zying-status" role="status">等待启动</p>
                         <div id="order-zying-results" class="order-sync-log"></div>
                         <div class="order-sync-footer-actions">
                             <button class="primary" id="order-zying-start" onclick="startZyingOrderSync()">按当前筛选同步</button>
                             <button class="primary" id="order-zying-confirm" onclick="confirmZyingOrderLogin()" hidden>确定登录</button>
+                            <button class="secondary" id="order-zying-stop" onclick="stopZyingOrderSync()" disabled>结束任务</button>
                             <button class="secondary" onclick="document.getElementById('order-zying-sync-dialog').close()">关闭</button>
                         </div>
                     </div>
@@ -11208,6 +11298,26 @@
                             <button class="secondary" type="button" onclick="resetMercadoProductFilters()">重置</button>
                         </div>
                     </div>
+                    <dialog id="collection-ai-dialog" class="order-sync-dialog">
+                        <div class="order-sync-body">
+                            <h3>跟卖采集 · AI 核重核价</h3>
+                            <p>在所选电脑的 Edge 中搜索1688同款，核对采购价和重量尺寸。请先在该 Edge 会话登录1688；遇到登录或验证提示时，处理后重新启动核查。</p>
+                            <label>执行位置 <select id="collection-ai-target" onchange="syncCollectionAiTarget()">
+                                <option value="agent">本机 Agent（默认）</option>
+                                {% if current_user.is_platform_admin or current_user.role_key == 'super_admin' %}<option value="server">服务器 Edge</option>{% endif %}
+                            </select></label>
+                            <div id="collection-ai-agent-controls">
+                                <select id="collection-ai-agent" aria-label="核查执行电脑"><option value="">正在读取在线 Agent</option></select>
+                                <button class="secondary" type="button" onclick="loadCollectionAiAgents()">刷新电脑</button>
+                            </div>
+                            <p id="collection-ai-status" role="status">等待启动</p>
+                            <div class="order-sync-footer-actions">
+                                <button class="primary" id="collection-ai-start" type="button" onclick="startMercadoCollectionAiCheck(this)">核查所选商品</button>
+                                <button class="secondary" id="collection-ai-stop" type="button" onclick="stopMercadoCollectionAiCheck()" disabled>停止核查</button>
+                                <button class="secondary" type="button" onclick="document.getElementById('collection-ai-dialog').close()">关闭</button>
+                            </div>
+                        </div>
+                    </dialog>
                     <div class="market-list-actions" id="mercado-collection-actions">
                         <div class="market-selection-meta">
                             <label class="market-selection-check"><input class="market-row-select" id="mercado-select-all" type="checkbox" onchange="toggleAllMercadoItems(this.checked)"> 全选本页</label>
@@ -11222,7 +11332,7 @@
                                 <button class="secondary" id="mercado-management-category-assign" type="button" onclick="assignSelectedMercadoCategory()" disabled>设置分类</button>
                             </div>
                             <div class="market-mode-actions" id="mercado-collection-only-actions">
-                                <button class="secondary" type="button" onclick="startMercadoCollectionAiCheck(this)">AI 核重核价</button>
+                                <button class="secondary" type="button" onclick="openMercadoCollectionAiCheck()">AI 核重核价</button>
                                 <button class="primary" id="mercado-ai-copy-selected" type="button" onclick="startMercadoCollectionCopy()" disabled>批量修改标题</button>
                                 <button class="primary" id="mercado-add-selected" type="button" onclick="addSelectedMercadoProducts()" disabled>加入产品列表</button>
                             </div>
@@ -11461,7 +11571,7 @@
                     <div>
                         <span class="section-kicker">ORDER PACKAGE REVIEW</span>
                         <h2>重量尺寸变更记录</h2>
-                        <p>读取运费变更订单，并从美客多官方补差 API 获取当前标记与实际重量尺寸；默认展示最近七天，每页 50 条。后台每天 05:00（服务器时间）也会更新记录。</p>
+                        <p>仅展示美客多确认由重量尺寸不符造成的非零运费补差；默认展示最近七天，每页 50 条；服务启动后立即全量同步入库，此后每天 05:00（服务器时间）更新；浏览和筛选只读取数据库。</p>
                     </div>
                 </div>
                 <section class="panel wdr-toolbar">
@@ -11471,16 +11581,17 @@
                     </label>
                     <input id="wdr-file" type="file" accept=".xlsx,.xlsm" hidden>
                     <button class="primary" id="wdr-upload" type="button">读取订单文件</button>
-                    <button id="wdr-refresh-changed" type="button">刷新官方重量尺寸</button>
+                    <button id="wdr-refresh-changed" type="button">全量同步入库</button>
                     <button id="wdr-export" type="button" disabled>导出筛选结果</button>
                     <label class="wdr-agent-picker" for="wdr-agent-id">智赢 Agent
                         <select id="wdr-agent-id" aria-label="智赢 Agent"><option value="">正在读取在线 Agent…</option></select>
                     </label>
                     <button id="wdr-agent-refresh" type="button">刷新 Agent</button>
+                    <button id="wdr-select-all-matching" type="button" disabled>全选筛选结果</button>
                     <button class="primary" id="wdr-zeshun-execute" type="button" data-permission="order_analysis.execute" disabled>更新泽顺数据和链接</button>
                     <button class="danger" id="wdr-zying-execute" type="button" data-permission="order_analysis.execute" disabled>更新智赢产品</button>
                     <span id="wdr-selection-summary" class="wdr-selection-summary">已选择 0 条</span>
-                    <span id="wdr-state" role="status">正在查询官方重量尺寸…</span>
+                    <span id="wdr-state" role="status">正在读取最近七天已保存记录…</span>
                 </section>
                 <section class="panel wdr-filters" aria-label="重量尺寸变更记录筛选器">
                     <label>变更开始时间<input id="wdr-filter-date-from" type="datetime-local" step="60"></label>
@@ -11492,11 +11603,11 @@
                     <label>地区<input id="wdr-filter-region" type="text" placeholder="地区关键词"></label>
                     <label>运费差值最小值<input id="wdr-filter-freight-min" type="number" step="0.01" placeholder="USD"></label>
                     <label>运费差值最大值<input id="wdr-filter-freight-max" type="number" step="0.01" placeholder="USD"></label>
-                    <button class="primary" id="wdr-filter-apply" type="button">筛选变更订单</button>
+                    <button class="primary" id="wdr-filter-apply" type="button">筛选已保存记录</button>
                 </section>
-                <p class="wdr-note">首次打开栏目或点击“刷新官方重量尺寸”时，会按筛选条件读取变更订单，并查询官方补差 API：当前标记值来自 declared，实际值来自 validated，均显示重量和长 × 宽 × 高。时间筛选针对运费变更时间，跨页保留勾选，表头全选当前页。产品 id、业务员、来源和分类等缺失信息通过订单导入补全。勾选订单后可分别执行两个更新动作；泽顺先更新关联链接重量尺寸，再重新提交当前净收益；智赢调用已登录的本机 Agent 逐个更新产品重量尺寸并将级别改为“重点”。</p>
+                <p class="wdr-note">首次打开栏目和修改筛选条件时，会直接读取数据库中已保存的记录；点击“全量同步入库”会同步全部历史变更订单，分批保存后按当前条件展示；只纳入官方补差原因为重量尺寸不符且金额不为零的订单，排除单纯的预估运费差异。运费差值使用官方重量尺寸补差金额（含退款）；重量尺寸来自官方补差 API：当前标记值来自 declared，实际值来自 validated，未提供的实测项保留提示。时间筛选针对运费变更时间；可用“全选筛选结果”一次选择跨页的全部匹配记录，也可逐页勾选。产品 id、业务员、来源和分类等缺失信息通过订单导入补全。勾选订单后可分别执行两个更新动作；泽顺先更新关联链接重量尺寸，再重新提交当前净收益；智赢调用已登录的本机 Agent 逐个更新产品重量尺寸并将级别改为“重点”。</p>
                 <section class="panel wdr-table-panel">
-                    <div class="wdr-table-wrap"><table id="wdr-table"><thead></thead><tbody><tr><td class="wdr-empty">正在加载运费变更订单</td></tr></tbody></table></div>
+                    <div class="wdr-table-wrap"><table id="wdr-table"><thead></thead><tbody><tr><td class="wdr-empty">正在读取最近七天记录</td></tr></tbody></table></div>
                     <div class="wdr-pagination" aria-label="变更记录分页">
                         <span id="wdr-page-summary" role="status">共 0 条 · 第 1 / 1 页</span>
                         <label>每页 <select id="wdr-page-size"><option value="20">20 条</option><option value="50" selected>50 条</option><option value="100">100 条</option></select></label>
@@ -12227,6 +12338,7 @@
                         <div class="order-filter-field"><label for="store-analysis-metric">排序指标</label><select id="store-analysis-metric"><option value="orders">销售单量</option><option value="gmv">GMV（USD）</option></select></div>
                         <button class="primary" type="submit" id="store-analysis-submit">查看分析</button>
                     </form>
+                    <p class="store-link-bulk-note" id="store-analysis-filter-message" role="status"></p>
                     <p class="store-link-bulk-note" id="store-analysis-message">按北京时间统计订单创建日期；销售单量为去重订单数，取消及无效订单不计入。</p>
                     <div class="store-analysis-sites" id="store-analysis-sites" aria-live="polite"></div>
                 </section>
@@ -12718,15 +12830,18 @@
             <div class="tab-page" id="tab-store-operations">
                 <div class="tab-heading"><div><h2>店铺操作记录</h2><p>按业务员、操作任务和时间查询店铺链接操作历史。</p></div></div>
                 <section class="panel" id="store-link-audit-panel" aria-labelledby="store-link-audit-heading" style="margin-bottom:20px">
-                    <div class="tab-heading">
-                        <div><h3 id="store-link-audit-heading">操作历史</h3>
-                        <p>按时间倒序显示。可查看操作人、执行结果及修改前数据，展开记录查看完整详情。</p></div>
-                        <div class="header-actions"><button class="secondary" id="store-link-audit-refresh" type="button" onclick="loadStoreLinkAudit(false)">刷新操作记录</button></div>
+                    <div class="store-link-audit-heading">
+                        <div class="store-link-audit-title">
+                            <span class="store-link-audit-mark" aria-hidden="true">↗</span>
+                            <div><h3 id="store-link-audit-heading">操作历史</h3>
+                            <p>按时间倒序排列，展开记录可查看完整操作详情。</p></div>
+                        </div>
+                        <button class="secondary" id="store-link-audit-refresh" type="button" onclick="loadStoreLinkAudit(false)"><span aria-hidden="true">↻</span> 刷新记录</button>
                     </div>
-                    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
-                        <label for="store-link-audit-salesperson">业务员</label>
-                        <input id="store-link-audit-salesperson" type="search" placeholder="输入姓名或账号" style="max-width:180px" onkeydown="if(event.key==='Enter')loadStoreLinkAudit(false)">
-                        <label for="store-link-audit-type">操作任务</label>
+                    <form class="store-link-audit-filters" onsubmit="event.preventDefault();loadStoreLinkAudit(false)">
+                        <label for="store-link-audit-salesperson"><span>业务员</span>
+                        <input id="store-link-audit-salesperson" type="search" placeholder="输入姓名或账号"></label>
+                        <label for="store-link-audit-type"><span>操作任务</span>
                         <select id="store-link-audit-type">
                             <option value="">全部任务</option>
                             <option value="sync">店铺同步</option>
@@ -12736,17 +12851,20 @@
                             <option value="video">视频上传</option>
                             <option value="query">查询与状态读取</option>
                             <option value="other">其他操作</option>
-                        </select>
-                        <label for="store-link-audit-from">开始日期</label>
-                        <input id="store-link-audit-from" type="date">
-                        <label for="store-link-audit-to">结束日期</label>
-                        <input id="store-link-audit-to" type="date">
-                        <button class="secondary" id="store-link-audit-filter" type="button" onclick="loadStoreLinkAudit(false)">筛选</button>
-                        <button class="secondary" id="store-link-audit-reset" type="button" onclick="resetStoreLinkAuditFilters()">重置</button>
-                    </div>
-                    <p id="store-link-audit-message" role="status" aria-live="polite">正在加载操作记录…</p>
-                    <div id="store-link-audit-rows" style="max-height:65vh;overflow:auto"></div>
-                    <button class="secondary" type="button" id="store-link-audit-more" onclick="loadStoreLinkAudit(true)">加载更早记录</button>
+                        </select></label>
+                        <label for="store-link-audit-from"><span>开始日期</span>
+                        <input id="store-link-audit-from" type="date"></label>
+                        <label for="store-link-audit-to"><span>结束日期</span>
+                        <input id="store-link-audit-to" type="date"></label>
+                        <div class="store-link-audit-filter-actions">
+                            <button class="primary" id="store-link-audit-filter" type="submit">筛选</button>
+                            <button class="secondary" id="store-link-audit-reset" type="button" onclick="resetStoreLinkAuditFilters()">重置</button>
+                        </div>
+                    </form>
+                    <div class="store-link-audit-list-heading"><strong>操作明细</strong><span>最新记录优先</span></div>
+                    <p id="store-link-audit-message" class="store-link-audit-message" role="status" aria-live="polite">正在加载操作记录…</p>
+                    <div id="store-link-audit-rows" class="store-link-audit-list"></div>
+                    <div class="store-link-audit-more-wrap"><button class="secondary" type="button" id="store-link-audit-more" onclick="loadStoreLinkAudit(true)"><span aria-hidden="true">↓</span> 加载更早记录</button></div>
                 </section>
             </div>
                 {% endif %}
@@ -12809,6 +12927,7 @@
                                 <option value="active">在售</option>
                                 <option value="paused">暂停</option>
                                 <option value="closed">已结束</option>
+                                <option value="deleted">已删除</option>
                                 <option value="under_review">审核中</option>
                             </select>
                         </div>
@@ -14151,7 +14270,7 @@
                 <div class="legacy-infractions-module" hidden aria-hidden="true">
                 <div class="tab-heading">
                     <h2>侵权数据</h2>
-                    <p id="infraction-heading-desc">统计最新一次提交批次的全部侵权数量，并展示最近 30 天新增明细</p>
+                    <p id="infraction-heading-desc">统计官方当前侵权列表中最近 30 天的侵权和权利人记录</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -14165,45 +14284,18 @@
                                 <button class="range-button" type="button" data-days="365" onclick="setInfractionDays(365)">365天</button>
                             </div>
                             <button class="secondary" type="button" onclick="window.open('/infringement-dashboard', '_blank', 'noopener')">独立分组看板</button>
-                            <button class="secondary" id="collect-infractions-btn" type="button" onclick="runInfractionCollection()">补跑已开启店铺</button>
+                            <button class="secondary" id="collect-infractions-btn" type="button" onclick="runInfractionCollection()">同步官方列表</button>
                             <button class="secondary" type="button" onclick="exportLatestInfractions()">导出明细 Excel</button>
                             <button class="secondary" type="button" onclick="loadLatestInfractions()">刷新数据</button>
                         </div>
                     </div>
-                    <div class="collection-scope-panel">
-                        <div class="collection-scope-grid collection-rerun-grid">
-                            <div class="collection-scope-field">
-                                <label>失败店铺</label>
-                                <div class="collection-checkbox-table-wrap">
-                                    <table class="collection-checkbox-table collection-shop-table collection-rerun-shop-table">
-                                        <thead>
-                                            <tr>
-                                                <th><input class="collection-checkbox" id="infraction-collection-shops-all" type="checkbox" aria-label="开启全部侵权失败店铺补跑" onchange="toggleAllCollectionOptions('infraction', 'shops', this.checked)"> 补跑</th>
-                                                <th>店铺</th>
-                                                <th>归属人</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="infraction-collection-shops">
-                                            <tr><td class="empty-state" colspan="3">正在加载店铺...</td></tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                            <div class="collection-scope-field">
-                                {% if can_change_task_workers %}<label for="infraction-collection-workers">并发进程</label>
-                                <input id="infraction-collection-workers" type="number" min="1" max="10" value="3" onchange="updateCollectionScopeSummary('infraction')">
-                                <p class="collection-scope-hint">默认 3 个进程。</p>{% endif %}
-                                <p class="collection-scope-summary" id="infraction-collection-summary">正在加载采集范围...</p>
-                            </div>
-                        </div>
-                    </div>
                     <div class="summary-row">
                         <div class="metric">
-                            <div class="metric-label">最新提交时间</div>
+                            <div class="metric-label">最近官方同步</div>
                             <div class="metric-value" id="infraction-time">-</div>
                         </div>
                         <div class="metric">
-                            <div class="metric-label" id="infraction-total-label">最近30天新增明细</div>
+                            <div class="metric-label" id="infraction-total-label">最近30天当前明细</div>
                             <div class="metric-value" id="infraction-total">0</div>
                         </div>
                         <div class="metric">
@@ -14215,7 +14307,7 @@
                             <div class="metric-value" id="infraction-rights">0</div>
                         </div>
                     </div>
-                    <h3 class="subsection-title" id="infraction-summary-title">按店铺和站点统计（最近30天，总数由高到低）</h3>
+                    <h3 class="subsection-title" id="infraction-summary-title">官方当前列表按店铺和站点统计（最近30天）</h3>
                     <div class="summary-table-wrap">
                         <table>
                             <thead>
@@ -14234,7 +14326,7 @@
                             </tbody>
                         </table>
                     </div>
-                    <h3 class="subsection-title" id="infraction-detail-title">侵权明细（最近30天新增）</h3>
+                    <h3 class="subsection-title" id="infraction-detail-title">官方当前侵权明细（最近30天）</h3>
                     <div class="table-wrap reputation-table-wrap">
                         <table class="reputation-table">
                             <thead>
@@ -15572,7 +15664,6 @@
         let storeLinkCategoryRows = [];
         let storeLinkCategoryPaths = {};
         let storeLinkCategoryPathLoading = false;
-        let storeLinkCategoryPathLoaded = false;
         let storeLinkCategoryActivePath = [];
         let storeLinkCategoryOptionsLoading = false;
         let storeLinkRows = [];
@@ -15725,6 +15816,7 @@
 
         let storeLinkAuditBefore = null;
         let storeLinkAuditLoading = false;
+        let storeLinkAuditLoadedCount = 0;
         const storeLinkAuditActions = {
             http_request: "接口请求", replace_store_snapshot: "同步链接数据", finalize_store_snapshot: "完成店铺同步",
             bulk_update_store_links: "修改链接", delete_store_links: "删除链接", request_store_link_sync: "提交同步",
@@ -15736,10 +15828,11 @@
             mark_advertising_enabled: "记录广告投放", mark_video_uploaded: "记录视频上传", mark_advertising_status: "更新广告状态"
         };
         const storeLinkAuditPhases = {started: "开始执行", completed: "执行结束", failed: "失败", partial: "部分成功", before: "变更前快照", success: "成功", error: "失败"};
+        const storeLinkAuditTypes = {sync: "店铺同步", update: "链接修改", delete: "链接删除", advertising: "广告操作", video: "视频上传", query: "查询与状态读取", other: "其他操作"};
         function storeLinkAuditSummary(row) {
             const context = row.details?.context || {};
             const actor = context.actor || {};
-            const operator = actor.display_name || actor.username || (actor.type === 'system' ? '系统自动任务' : '服务请求');
+            const operator = String(actor.display_name || actor.username || (actor.type === 'system' ? '系统自动任务' : '服务请求'));
             const time = new Date(row.created_at);
             const displayTime = Number.isNaN(time.getTime()) ? row.created_at : time.toLocaleString('zh-CN', {hour12: false});
             let action = storeLinkAuditActions[row.action] || row.action;
@@ -15748,7 +15841,82 @@
                 const actions = {'bulk-update': '批量修改', delete: '删除链接', advertise: '投放广告', 'bulk-advertise': '批量投放广告', video: '上传视频', 'category-paths': '查询分类'};
                 action = path.endsWith('/sync/start') ? '启动同步' : path.endsWith('/status') ? '查询任务进度' : actions[path.split('/').pop()] || (context.method === 'GET' ? '查询链接' : '链接操作');
             }
-            return `${displayTime} · ${operator} · ${action} · ${storeLinkAuditPhases[row.phase] || row.phase}`;
+            return {operator, displayTime, action};
+        }
+        function storeLinkAuditDetailChip(container, label, value) {
+            if (!value) return;
+            const chip = document.createElement('span');
+            chip.textContent = `${label} ${value}`;
+            container.append(chip);
+        }
+        function storeLinkAuditRenderRow(row) {
+            const context = row.details?.context || {};
+            const actor = context.actor || {};
+            const display = storeLinkAuditSummary(row);
+            const category = row.operation_type || 'other';
+            const knownCategory = Object.prototype.hasOwnProperty.call(storeLinkAuditTypes, category) ? category : 'other';
+            const phase = row.phase || 'started';
+            const details = document.createElement('details');
+            details.className = 'store-link-audit-entry';
+
+            const summary = document.createElement('summary');
+            summary.className = 'store-link-audit-summary';
+            const person = document.createElement('div');
+            person.className = 'store-link-audit-person';
+            const avatar = document.createElement('span');
+            avatar.className = 'store-link-audit-avatar';
+            avatar.setAttribute('aria-hidden', 'true');
+            avatar.textContent = display.operator.trim().slice(0, 1) || '操';
+            const personCopy = document.createElement('span');
+            personCopy.className = 'store-link-audit-person-copy';
+            const operator = document.createElement('strong');
+            operator.textContent = display.operator;
+            const actorHint = document.createElement('small');
+            actorHint.textContent = actor.username ? `账号 ${actor.username}` : actor.type === 'system' ? '系统任务' : '操作人';
+            personCopy.append(operator, actorHint);
+            person.append(avatar, personCopy);
+
+            const task = document.createElement('div');
+            task.className = 'store-link-audit-task';
+            const type = document.createElement('span');
+            type.className = `store-link-audit-type ${knownCategory}`;
+            type.textContent = storeLinkAuditTypes[knownCategory];
+            const taskName = document.createElement('span');
+            taskName.className = 'store-link-audit-task-name';
+            taskName.textContent = display.action;
+            task.append(type, taskName);
+
+            const time = document.createElement('time');
+            time.className = 'store-link-audit-time';
+            time.dateTime = row.created_at || '';
+            time.textContent = display.displayTime;
+            const phaseBadge = document.createElement('span');
+            phaseBadge.className = `store-link-audit-phase ${['started', 'completed', 'failed', 'partial', 'before', 'success', 'error'].includes(phase) ? phase : 'started'}`;
+            phaseBadge.textContent = storeLinkAuditPhases[phase] || phase;
+            const chevron = document.createElement('span');
+            chevron.className = 'store-link-audit-chevron';
+            chevron.setAttribute('aria-hidden', 'true');
+            chevron.textContent = '⌄';
+            summary.append(person, task, time, phaseBadge, chevron);
+
+            const detail = document.createElement('div');
+            detail.className = 'store-link-audit-detail';
+            const detailHead = document.createElement('div');
+            detailHead.className = 'store-link-audit-detail-head';
+            const detailTitle = document.createElement('span');
+            detailTitle.textContent = '完整操作详情';
+            const identifiers = document.createElement('span');
+            identifiers.className = 'store-link-audit-identifiers';
+            storeLinkAuditDetailChip(identifiers, '记录', row.id);
+            storeLinkAuditDetailChip(identifiers, '操作', row.operation_id);
+            storeLinkAuditDetailChip(identifiers, '追踪', row.trace_id);
+            detailHead.append(detailTitle, identifiers);
+            const pre = document.createElement('pre');
+            pre.className = 'store-link-audit-json';
+            pre.textContent = JSON.stringify(row, null, 2);
+            detail.append(detailHead, pre);
+            details.append(summary, detail);
+            return details;
         }
         function storeLinkAuditDateBoundary(value, nextDay = false) {
             if (!value) return '';
@@ -15783,7 +15951,7 @@
             storeLinkAuditLoading = true;
             [button, refresh, typeSelect, salespersonInput, fromInput, toInput, filterButton, resetButton].forEach(control => control.disabled = true);
             message.textContent = '正在加载操作记录…';
-            if (!more) { container.replaceChildren(); storeLinkAuditBefore = null; button.hidden = true; }
+            if (!more) { container.replaceChildren(); storeLinkAuditBefore = null; storeLinkAuditLoadedCount = 0; button.hidden = true; }
             try {
                 const params = new URLSearchParams({
                     limit: '30',
@@ -15798,18 +15966,24 @@
                 if (!response.ok || payload.status !== 'success') throw new Error(payload.message || '记录加载失败');
                 if (!more) container.replaceChildren();
                 for (const row of payload.data) {
-                    const details = document.createElement('details');
-                    details.style.cssText = 'padding:12px 8px;border-bottom:1px solid #e2e8f0';
-                    const summary = document.createElement('summary');
-                    summary.style.cursor = 'pointer';
-                    summary.textContent = storeLinkAuditSummary(row);
-                    const pre = document.createElement('pre');
-                    pre.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;background:#f8fafc;color:#0f172a';
-                    pre.textContent = JSON.stringify(row, null, 2);
-                    details.append(summary, pre); container.append(details);
+                    container.append(storeLinkAuditRenderRow(row));
+                }
+                storeLinkAuditLoadedCount += payload.data.length;
+                if (!storeLinkAuditLoadedCount) {
+                    const empty = document.createElement('div');
+                    empty.className = 'store-link-audit-empty';
+                    const emptyMark = document.createElement('span');
+                    emptyMark.setAttribute('aria-hidden', 'true');
+                    emptyMark.textContent = '⌕';
+                    const emptyTitle = document.createElement('strong');
+                    emptyTitle.textContent = '没有找到操作记录';
+                    const emptyHint = document.createElement('small');
+                    emptyHint.textContent = '调整业务员、任务或日期后再试。';
+                    empty.append(emptyMark, emptyTitle, emptyHint);
+                    container.append(empty);
                 }
                 storeLinkAuditBefore = payload.next_before_id;
-                message.textContent = container.childElementCount ? `已显示 ${container.childElementCount} 条记录，点击任一条可展开详情。` : '当前筛选条件暂无操作记录，请调整筛选条件后重试。';
+                message.textContent = storeLinkAuditLoadedCount ? `已显示 ${storeLinkAuditLoadedCount} 条记录 · 展开卡片可查看详情` : '';
                 button.hidden = payload.data.length < 30;
             } catch (error) {
                 message.textContent = `操作记录加载失败：${error.message}。请点击“刷新操作记录”重试。`;
@@ -17311,9 +17485,39 @@
         }
         let zyingOrderPollTimer = null;
         let zyingOrderWasRunning = false;
+        async function stopZyingOrderSync() {
+            const button = document.getElementById("order-zying-stop");
+            button.disabled = true;
+            try {
+                const response = await fetch("/api/orders/zying-sync/stop", {method: "POST"});
+                const payload = await readZyingOrderResponse(response);
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "结束任务失败");
+                await pollZyingOrderSync();
+            } catch (error) {
+                document.getElementById("order-zying-status").textContent = error.message;
+                button.disabled = false;
+            }
+        }
+        async function loadZyingOrderAgents() {
+            const select = document.getElementById("order-zying-agent");
+            const previous = select.value;
+            try {
+                const response = await fetch("/api/execution-agents?capability=daily_task", {cache: "no-store"});
+                const payload = await readZyingOrderResponse(response);
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "读取 Agent 失败");
+                select.replaceChildren();
+                for (const agent of payload.data?.agents || []) {
+                    if (agent.online) select.add(new Option(agent.name || agent.agent_id, agent.agent_id));
+                }
+                if (!select.options.length) select.add(new Option("暂无在线 Agent，请启动 Agent 后重新打开", ""));
+                if (Array.from(select.options).some(option => option.value === previous)) select.value = previous;
+            } catch (error) {
+                select.replaceChildren(new Option(error.message, ""));
+            }
+        }
         async function openZyingOrderSync() {
             document.getElementById("order-zying-sync-dialog").showModal();
-            await pollZyingOrderSync();
+            await Promise.all([loadZyingOrderAgents(), pollZyingOrderSync()]);
         }
         async function pollZyingOrderSync() {
             clearTimeout(zyingOrderPollTimer);
@@ -17324,6 +17528,9 @@
                 const data = payload.data || {};
                 document.getElementById("order-zying-confirm").hidden = data.phase !== "waiting_login";
                 document.getElementById("order-zying-start").disabled = Boolean(data.running);
+                document.getElementById("order-zying-stop").disabled = !data.running || Boolean(data.stop_requested);
+                document.getElementById("order-zying-target").disabled = Boolean(data.running);
+                document.getElementById("order-zying-agent").disabled = Boolean(data.running);
                 document.getElementById("order-zying-status").textContent = `${data.message || "等待启动"} · ${data.completed || 0}/${data.total || 0} · 已同步 ${data.updated || 0} · 跳过 ${data.skipped || 0} · 失败 ${data.failed || 0}`;
                 document.getElementById("order-zying-results").textContent = (data.results || []).map(row => `${row.order_number || row.order_id}：${row.message}${row.purchase_order ? "；采购 " + row.purchase_order : ""}${row.purchase_tracking ? "；物流 " + row.purchase_tracking : ""}${row.purchase_cost !== undefined ? "；成本 ¥" + row.purchase_cost : ""}`).join("\n");
                 if (zyingOrderWasRunning && !data.running) loadOrders(orderPage);
@@ -17338,13 +17545,16 @@
             const button = document.getElementById("order-zying-start");
             button.disabled = true;
             clearTimeout(zyingOrderPollTimer);
-            document.getElementById("order-zying-status").textContent = "正在启动同步并打开服务器 Edge…";
+            document.getElementById("order-zying-status").textContent = "正在启动智赢订单同步…";
             try {
+                const target = document.getElementById("order-zying-target").value || "agent";
+                const agentId = document.getElementById("order-zying-agent").value || "";
+                if (target === "agent" && !agentId) throw new Error("请先选择在线的 Agent");
                 const params = orderQueryParams();
                 if (params.get("start_date") && params.get("end_date") && params.get("start_date") > params.get("end_date")) throw new Error("起始时间不能晚于截止时间");
                 const response = await fetch(`/api/orders/zying-sync/start?${params}`, {
                     method: "POST", headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({}),
+                    body: JSON.stringify({execution_target: target, agent_id: agentId}),
                 });
                 const payload = await readZyingOrderResponse(response);
                 if (!response.ok || payload.status !== "success") throw new Error(payload.message || "启动失败");
@@ -20468,24 +20678,6 @@
                 mercadoAddSelected.textContent = "加入产品列表";
                 updateMercadoSelection();
             }
-        }
-
-        async function startMercadoCollectionAiCheck(button) {
-            const ids = Array.from(selectedMercadoCollectionIds);
-            if (!ids.length) { setMercadoListFeedback("请先勾选需要核查的商品", "error"); return; }
-            button.disabled = true;
-            try {
-                const response = await fetch("/api/mercado-collection/ai-weight-price", {
-                    method: "POST", headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({collection_item_ids: ids}),
-                });
-                const payload = await response.json();
-                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "启动失败");
-                setMercadoListFeedback(`${payload.data.message}。匹配后自动更新泽顺重量尺寸，刷新列表查看状态。`, "success");
-                await loadMercadoList();
-            } catch (error) {
-                setMercadoListFeedback(error.message || String(error), "error");
-            } finally { button.disabled = false; }
         }
 
         async function deleteSelectedMercadoItems() {
@@ -25058,6 +25250,7 @@
         }
 
         function storeLinkStatus(value, isCurrent) {
+            if (String(value || "").toLowerCase() === "deleted") return '<span class="market-status-tag failed">已删除</span>';
             if (!isCurrent) return '<span class="market-status-tag failed">已下架</span>';
             const text = String(value || "").toLowerCase();
             const labels = {
@@ -26308,10 +26501,12 @@
             }
             const items = completed.length ? completed.map(job => {
                 const cover = job.cover_url || job.target?.thumbnail_url || "";
+                const lastAttempt = (job.publish_attempts || []).filter(attempt => Number(attempt.link_id) === Number(row.id)).at(-1);
                 return `<article class="ai-video-picker-item">
                     <div class="ai-video-picker-cover">${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(job.name || "备选视频封面")}">` : "<span>无封面</span>"}</div>
                     <div class="ai-video-picker-copy"><strong>${escapeHtml(job.name || "未命名备选视频")}</strong><span>${escapeHtml(job.target?.item_id || "未关联商品")} · ${Number(job.duration || 10)} 秒 · ${Number(job.assets?.length || 0)} 个素材</span></div>
                     <button class="primary" type="button" onclick="publishAiVideoJob('${escapeHtml(job.id)}', ${Number(row.id)}, this)">上传到 ${escapeHtml(row.item_id || "当前链接")}</button>
+                    ${lastAttempt ? `<p class="ai-video-message ai-video-upload-result ${lastAttempt.status === "failed" ? "error" : ""}" role="status" aria-live="polite" style="grid-column:1/-1;white-space:pre-wrap;overflow-wrap:anywhere">最近上传：${escapeHtml(lastAttempt.message || lastAttempt.status || "未知结果")}</p>` : ""}
                 </article>`;
             }).join("") : '<div class="empty-state">还没有生成完成的备选视频，请先到“AI视频生成”模块创建。</div>';
             dialog.innerHTML = `<div class="ai-video-dialog-head"><div><h3>选择 AI 备选视频</h3><p>${escapeHtml(row.store_name || "-")} · ${escapeHtml(row.item_id || "-")} · ${escapeHtml(row.title || "")}</p></div><button class="secondary" type="button" onclick="this.closest('dialog').close()">关闭</button></div><div class="ai-video-dialog-body"><p class="ai-video-message" id="store-link-ai-video-library-message" role="status" aria-live="polite">请选择一条备选视频上传。提交成功后会显示美客多受理编号。</p><div class="ai-video-picker-list">${items}</div></div>`;
@@ -26320,7 +26515,20 @@
 
         async function publishAiVideoJob(jobId, linkId, button = null) {
             const pickerMessage = document.getElementById("store-link-ai-video-library-message");
+            const resultContainer = button?.closest('.ai-video-job-copy, .ai-video-picker-item');
+            let inlineMessage = resultContainer?.querySelector('.ai-video-upload-result');
+            if (resultContainer && !inlineMessage) {
+                inlineMessage = document.createElement('p');
+                inlineMessage.setAttribute('role', 'status');
+                inlineMessage.setAttribute('aria-live', 'polite');
+                inlineMessage.style.cssText = 'grid-column:1/-1;white-space:pre-wrap;overflow-wrap:anywhere';
+                resultContainer.appendChild(inlineMessage);
+            }
             const showResult = (text, state = "") => {
+                if (inlineMessage) {
+                    inlineMessage.textContent = text || "";
+                    inlineMessage.className = `ai-video-message ai-video-upload-result ${state}`.trim();
+                }
                 if (pickerMessage) {
                     pickerMessage.textContent = text || "";
                     pickerMessage.className = `ai-video-message ${state}`.trim();
@@ -26347,7 +26555,7 @@
                     body: JSON.stringify({link_id: linkId}),
                 });
                 const payload = await response.json().catch(() => ({}));
-                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "上传失败");
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || `服务器未返回具体错误（HTTP ${response.status} ${response.statusText || ""}），请查看上传记录或服务日志`);
                 const clipUuid = payload.data?.clip_uuid || "";
                 updateStoreLinkMarkers(linkId, "video_uploaded");
                 showResult(`${payload.message || "视频已提交美客多，等待平台审核"}${clipUuid ? `；受理编号：${clipUuid}` : ""}`, "success");
@@ -26609,17 +26817,19 @@
         }
 
         async function loadStoreLinkCategoryPaths() {
-            if (storeLinkCategoryPathLoaded || storeLinkCategoryPathLoading || !storeLinkCategoryRows.length) return;
+            if (storeLinkCategoryPathLoading || !storeLinkCategoryRows.length) return;
+            const missingIds = storeLinkCategoryRows.map(row => String(row.category_id || ""))
+                .filter(id => id && !storeLinkCategoryPaths[id]?.length);
+            if (!missingIds.length) return;
             storeLinkCategoryPathLoading = true;
             try {
                 const response = await fetch("/api/store-links/category-paths", {
                     method: "POST", headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({category_ids: storeLinkCategoryRows.map(row => row.category_id)}),
+                    body: JSON.stringify({category_ids: missingIds}),
                 });
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") throw new Error(payload.message || "分类路径读取失败");
-                storeLinkCategoryPaths = payload.data || {};
-                storeLinkCategoryPathLoaded = true;
+                Object.assign(storeLinkCategoryPaths, payload.data || {});
                 renderStoreLinkMercadoCategories(storeLinkCategoryRows);
             } catch (error) {
                 storeLinkMessage.textContent = `分类路径读取失败：${error.message || error}`;
@@ -26629,7 +26839,11 @@
         }
 
         async function loadStoreLinkCategoryOptions() {
-            if (storeLinkCategoryRows.length || storeLinkCategoryOptionsLoading) return;
+            if (storeLinkCategoryOptionsLoading) return;
+            if (storeLinkCategoryRows.length) {
+                await loadStoreLinkCategoryPaths();
+                return;
+            }
             storeLinkCategoryOptionsLoading = true;
             storeLinkCategoryColumns.innerHTML = '<div class="store-link-category-column">正在加载分类…</div>';
             try {
@@ -26861,8 +27075,10 @@
 
         async function deleteSelectedStoreLinks() {
             const linkIds = Array.from(selectedStoreLinkIds);
-            if (!linkIds.length) return;
-            if (!window.confirm(`确定删除选中的 ${linkIds.length} 条店铺链接吗？下次同步对应店铺时，这些链接会重新拉取。`)) return;
+            if (!linkIds.length || storeLinkRemoteUpdateRunning) return;
+            if (!window.confirm(`确定从美客多删除选中的 ${linkIds.length} 条站点链接吗？删除无法撤销；成功后保留记录并标记为“已删除”。`)) return;
+            storeLinkRemoteUpdateRunning = true;
+            updateStoreLinkSelection();
             storeLinkDeleteButton.disabled = true;
             storeLinkMessage.textContent = `正在删除 ${linkIds.length} 条店铺链接...`;
             try {
@@ -26872,13 +27088,14 @@
                     body: JSON.stringify({link_ids: linkIds}),
                 });
                 const payload = await response.json();
-                if (!response.ok || payload.status !== "success") {
+                if ((!response.ok && response.status !== 409) || !["success", "running"].includes(payload.status)) {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
-                selectedStoreLinkIds.clear();
-                storeLinkMessage.textContent = payload.message || `已删除 ${Number(payload.data?.deleted || 0)} 条店铺链接`;
-                await loadStoreLinks(storeLinkPage);
+                if (response.ok) selectedStoreLinkIds.clear();
+                renderStoreLinkRemoteUpdateStatus(payload.data || {});
+                loadStoreLinkRemoteUpdateStatus();
             } catch (error) {
+                storeLinkRemoteUpdateRunning = false;
                 storeLinkMessage.textContent = `删除失败：${error.message || error}`;
             } finally {
                 updateStoreLinkSelection();
@@ -29886,40 +30103,58 @@
             downloadWorkbenchExport(`/api/infractions/latest/export?days=${encodeURIComponent(infractionDays)}`);
         }
 
-        async function runInfractionCollection() {
+        let officialInfractionSyncTimer = null;
+        async function pollOfficialInfractionSync() {
             if (!collectInfractionsBtn) return;
-            let requestPayload;
             try {
-                await loadCollectionOptions();
-                requestPayload = collectionRequestPayload("infraction");
-            } catch (err) {
-                alert(`无法启动：${err.message || err}`);
-                return;
-            }
-            collectInfractionsBtn.disabled = true;
-            collectInfractionsBtn.textContent = "采集中...";
-            let launched = false;
-            try {
-                const response = await fetch("/api/infractions/collect", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify(requestPayload),
-                });
+                const response = await fetch("/api/official-infractions/sync/status", {cache: "no-store"});
                 const payload = await response.json();
-                if (response.status === 409) {
-                    alert(payload.message || "侵权数据采集正在运行中");
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || "读取官方侵权同步状态失败");
+                }
+                const state = payload.data || {};
+                if (state.running) {
+                    collectInfractionsBtn.disabled = true;
+                    collectInfractionsBtn.textContent = state.message || "同步中...";
+                    officialInfractionSyncTimer = setTimeout(pollOfficialInfractionSync, 2000);
                     return;
                 }
-                if (!response.ok || payload.status !== "success") {
+                collectInfractionsBtn.disabled = false;
+                collectInfractionsBtn.textContent = "同步官方列表";
+                if (["success", "partial", "error"].includes(String(state.status || ""))) {
+                    await loadLatestInfractions();
+                    if (state.status !== "success") {
+                        alert(state.message || "官方侵权列表同步未完整完成");
+                    }
+                }
+            } catch (error) {
+                collectInfractionsBtn.disabled = false;
+                collectInfractionsBtn.textContent = "同步官方列表";
+                alert(`同步状态读取失败：${error.message || error}`);
+            }
+        }
+
+        async function runInfractionCollection() {
+            if (!collectInfractionsBtn) return;
+            collectInfractionsBtn.disabled = true;
+            collectInfractionsBtn.textContent = "正在启动...";
+            try {
+                const response = await fetch("/api/official-infractions/sync", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({}),
+                });
+                const payload = await response.json();
+                if (![200, 202, 409].includes(response.status) || !["success", "running"].includes(payload.status)) {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
-                launched = true;
-                alert(payload.data?.message || payload.message || "侵权数据采集已启动");
-                setTimeout(() => pollCollectionRerun("infraction"), 1000);
+                collectInfractionsBtn.textContent = payload.message || "官方侵权数据同步中...";
+                if (officialInfractionSyncTimer) clearTimeout(officialInfractionSyncTimer);
+                officialInfractionSyncTimer = setTimeout(pollOfficialInfractionSync, 1000);
             } catch (err) {
                 alert(`启动失败：${err.message || err}`);
-            } finally {
-                if (!launched) resetCollectionRerunButton("infraction");
+                collectInfractionsBtn.disabled = false;
+                collectInfractionsBtn.textContent = "同步官方列表";
             }
         }
 
@@ -31277,12 +31512,12 @@
         }
 
         function updateInfractionRangeText(days) {
-            infractionHeadingDesc.textContent = `统计最新一次提交批次中最近 ${days} 天的侵权数据`;
-            infractionTotalLabel.textContent = `最近${days}天新增明细`;
+            infractionHeadingDesc.textContent = `统计官方当前侵权列表中最近 ${days} 天的侵权和权利人记录`;
+            infractionTotalLabel.textContent = `最近${days}天当前明细`;
             infractionNormalLabel.textContent = `最近${days}天侵权`;
             infractionRightsLabel.textContent = `最近${days}天权利人`;
-            infractionSummaryTitle.textContent = `按店铺和站点统计（最近${days}天，总数由高到低）`;
-            infractionDetailTitle.textContent = `侵权明细（最近${days}天新增）`;
+            infractionSummaryTitle.textContent = `官方当前列表按店铺和站点统计（最近${days}天）`;
+            infractionDetailTitle.textContent = `官方当前侵权明细（最近${days}天）`;
             document.querySelectorAll(".range-button").forEach(button => {
                 button.classList.toggle("active", Number(button.dataset.days) === Number(days));
             });
@@ -31345,8 +31580,7 @@
                 }
 
                 if (!rows.length) {
-                    infractionBody.innerHTML = `<tr><td class="empty-state" colspan="7">最新批次中暂无最近 ${recentDays} 天侵权数据</td></tr>`;
-                    await loadCollectionOptions(true);
+                    infractionBody.innerHTML = `<tr><td class="empty-state" colspan="7">官方当前列表中暂无最近 ${recentDays} 天侵权数据</td></tr>`;
                     return;
                 }
 
@@ -31361,7 +31595,6 @@
                         <td>${escapeHtml(row["执行时间"])}</td>
                     </tr>
                 `).join("");
-                await loadCollectionOptions(true);
             } catch (err) {
                 infractionSummaryBody.innerHTML = `<tr><td class="empty-state" colspan="7">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
                 infractionBody.innerHTML = `<tr><td class="empty-state" colspan="7">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
@@ -32931,6 +33164,7 @@
         }
 
     </script>
-    <script src="{{ url_for('static', filename='store-analysis.js') }}"></script>
+    <script src="{{ url_for('static', filename='store-analysis.js') }}?v=20260927-seven-days"></script>
+    <script src="{{ url_for('static', filename='collection-ai.js') }}?v=20260927-agent"></script>
 </body>
 </html>

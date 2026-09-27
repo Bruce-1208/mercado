@@ -50,7 +50,21 @@ def test_clip_timeout_is_not_retried():
     assert session.post.call_count == 1
 
 
-@pytest.mark.parametrize("overrides", [{}, {"status": "paused"}, {"cbt_item_id": ""}, {"site_id": "MLB"}, {"shipping": {}}])
+def test_clip_site_rejection_preserves_platform_reason():
+    session = Mock()
+    session.post.return_value.ok = False
+    session.post.return_value.status_code = 400
+    session.post.return_value.text = '{"message":"Invalid sites for this seller: [MLB]"}'
+    client = MercadoLibreClient("token", session=session)
+    with pytest.raises(MercadoAPIError) as caught:
+        client.upload_item_clip("CBT123", io.BytesIO(b"video"), "video.mp4", [{"site_id": "MLB"}])
+    assert "平台拒绝了当前卖家的上传站点" in str(caught.value)
+    assert "Invalid sites for this seller: [MLB]" in str(caught.value)
+    assert "400" in str(caught.value)
+    assert session.post.call_count == 1
+
+
+@pytest.mark.parametrize("overrides", [{}, {"status": "paused"}, {"cbt_item_id": ""}, {"site_id": "MLB"}, {"seller_id": 999}])
 def test_resolve_only_selected_listing(monkeypatch, overrides):
     from bit import bit_mysql, bit_store_link_sync
     from erp import mercadolibre_store_link_store
@@ -59,9 +73,13 @@ def test_resolve_only_selected_listing(monkeypatch, overrides):
     monkeypatch.setattr(bit_mysql, "get_mercado_store_token", lambda token_id: {"id": token_id})
     client = Mock()
     client.get_marketplace_item.return_value = {
-        "status": "active", "cbt_item_id": "CBT123", "site_id": "MLM",
-        "shipping": {"logistic_type": "remote"}, **overrides,
+        "status": "active", "cbt_item_id": "CBT123", "site_id": "MLM", "seller_id": 123,
+        "shipping": {"logistic_type": "cross_docking"}, **overrides,
     }
+    client.request.side_effect = [{"id": 7}, {"marketplaces": [
+        {"user_id": 456, "site_id": "MLM", "logistic_type": "fulfillment"},
+        {"user_id": 123, "site_id": "MLM", "logistic_type": "remote"},
+    ]}]
     client.upload_item_clip.return_value = {"status": "accepted", "clip_uuid": "clip-1"}
     monkeypatch.setattr(bit_store_link_sync, "_client_and_token", lambda token: (client, token))
     if overrides:

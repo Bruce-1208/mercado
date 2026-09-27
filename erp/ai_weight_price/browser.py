@@ -1531,8 +1531,8 @@ class Browser:
         product_id = self.normalize_erp_id(str(product_id or ""))
         if not re.fullmatch(r"[1-9]\d*", product_id):
             raise ValueError("智赢产品编号必须是正整数")
-        dims = [part.strip() for part in re.split(r"[x×*＊]\s*", str(dimensions_cm or ""))]
-        if len(dims) != 3 or any(not re.fullmatch(r"\d+(?:\.\d+)?", part) for part in dims):
+        dims = [part.strip() for part in re.split(r"[x×*＊]\s*", str(dimensions_cm or "")) if part.strip()]
+        if dims and (len(dims) != 3 or any(not re.fullmatch(r"\d+(?:\.\d+)?", part) for part in dims)):
             raise ValueError("智赢产品尺寸需要长x宽x高三项数值")
         weight = str(weight_g).strip()
         if not re.fullmatch(r"\d+(?:\.\d+)?", weight):
@@ -1551,19 +1551,19 @@ class Browser:
                 raise ValueError("智赢产品详情未能唯一定位")
             weight_input = self.unique(page, "erp_weight_input")
             weight_input.fill(weight)
-            dimensions_controls = self._zying_package_dimension_controls(root)
-            if len(dimensions_controls) == 1:
+            dimensions_controls = self._zying_package_dimension_controls(root) if dims else []
+            if dims and len(dimensions_controls) == 1:
                 dimensions_controls[0].fill("x".join(dims))
-            elif len(dimensions_controls) == 3:
+            elif dims and len(dimensions_controls) == 3:
                 for control, value in zip(dimensions_controls, dims):
                     control.fill(value)
-            else:
+            elif dims:
                 raise ValueError("智赢详情页未能识别唯一的包装尺寸字段")
             self._set_zying_product_level(page, root)
             if self.unique(page, "erp_weight_input").input_value().strip() != weight:
                 raise ValueError("智赢重量输入框回读与目标值不一致")
             expected_dims = ["x".join(dims)] if len(dimensions_controls) == 1 else dims
-            if [field.input_value().strip().lower().replace("×", "x") for field in dimensions_controls] != expected_dims:
+            if dims and [field.input_value().strip().lower().replace("×", "x") for field in dimensions_controls] != expected_dims:
                 raise ValueError("智赢尺寸输入框回读与目标值不一致")
             save = self.erp_save_button(page, root)
             self.check(page)
@@ -1583,16 +1583,18 @@ class Browser:
             root = page.locator(f"{root_selector}:visible")
             if self.normalize_erp_id(self.value(page, "erp_edit_id", required=True)) != product_id:
                 raise ValueError("保存后智赢详情编号发生变化，无法确认写入结果")
-            dimensions_controls = self._zying_package_dimension_controls(root)
-            if len(dimensions_controls) not in (1, 3):
+            dimensions_controls = self._zying_package_dimension_controls(root) if dims else []
+            if dims and len(dimensions_controls) not in (1, 3):
                 raise ValueError("保存后无法重新定位智赢包装尺寸字段")
             if self.unique(page, "erp_weight_input").input_value().strip() != weight:
                 raise ValueError("保存后回读的智赢重量与目标值不一致")
-            if [field.input_value().strip().lower().replace("×", "x") for field in dimensions_controls] != expected_dims:
+            if dims and [field.input_value().strip().lower().replace("×", "x") for field in dimensions_controls] != expected_dims:
                 raise ValueError("保存后回读的智赢尺寸与目标值不一致")
             self._verify_zying_product_level(root)
-            self.log(f"智赢产品 {product_id} 已保存：重量 {weight}g，尺寸 {'x'.join(dims)}cm，级别重点")
-            return {"product_id": product_id, "weight_g": weight, "dimensions_cm": "x".join(dims), "level": "重点"}
+            current_dims = "x".join(field.input_value().strip() for field in dimensions_controls)
+            self.log(f"智赢产品 {product_id} 已保存：重量 {weight}g" + (f"，尺寸 {'x'.join(dims)}cm" if dims else "，沿用原尺寸") + "，级别重点")
+            return {"product_id": product_id, "weight_g": weight,
+                    "dimensions_cm": "x".join(dims) if dims else current_dims, "level": "重点"}
         finally:
             self.release(page)
 

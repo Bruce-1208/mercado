@@ -191,3 +191,6 @@
   #tab-ai-original-products .ai-original-publish-filters { grid-template-columns:1fr; }
   #tab-ai-original-products .ai-original-site-fieldset { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
+
+#tab-ai-original-products .ai-original-fields>.ai-original-package-dimensions { grid-column:1/-1; padding:10px 12px; background:#f6f8fc; border-radius:8px; font-size:11px; color:#6f7f93; }
+#tab-ai-original-products .ai-original-package-dimensions p { margin:6px 0 0; color:#304462; line-height:1.7; overflow-wrap:anywhere; }

@@ -80,3 +80,96 @@ def test_store_analysis_respects_authorized_store_scope(monkeypatch):
     assert "o.`token_id` IN (%s)" in connection.db_cursor.sql
     assert "o.`token_id` = %s" in connection.db_cursor.sql
     assert connection.db_cursor.params[-3:] == [3, "王", "一组"]
+
+
+@pytest.fixture(autouse=True)
+def clear_analysis_cache():
+    from bit import store_analysis
+    store_analysis._ANALYSIS_CACHE.clear()
+    yield
+    store_analysis._ANALYSIS_CACHE.clear()
+
+
+def test_analysis_cache_expires_and_isolates_filters_and_permissions(monkeypatch):
+    from bit import store_analysis
+    calls = []
+    clock = [100]
+
+    def compute(*args, **kwargs):
+        calls.append(kwargs)
+        return {"sites": [{"orders": len(calls)}]}
+
+    monkeypatch.setattr(store_analysis, "_compute_store_analysis", compute)
+    monkeypatch.setattr(store_analysis.time, "monotonic", lambda: clock[0])
+    kwargs = dict(allowed_token_ids={1, 2})
+    result = list_store_analysis("2026-09-01", "2026-09-07", **kwargs)
+    result["sites"][0]["orders"] = 999
+    assert list_store_analysis("2026-09-01", "2026-09-07", **kwargs)["sites"][0]["orders"] == 1
+    assert len(calls) == 1
+    list_store_analysis("2026-09-01", "2026-09-07", allowed_token_ids={1})
+    list_store_analysis("2026-09-01", "2026-09-07", metric="gmv", **kwargs)
+    list_store_analysis("2026-09-01", "2026-09-07", category_level=3, **kwargs)
+    assert len(calls) == 4
+    clock[0] += 61
+    list_store_analysis("2026-09-01", "2026-09-07", **kwargs)
+    assert len(calls) == 5
+
+
+def test_analysis_only_translates_displayed_categories(monkeypatch):
+    from bit import store_analysis
+    rows = [{"order_id": str(i), "site_id": "MLM", "category_id": f"MLM{i}",
+             "total_amount": 1, "line_amount": 1, "order_line_amount": 1, "usd_rate": 1}
+            for i in range(8)]
+    paths = {f"MLM{i}": [{"id": "MLM100", "name": "root"},
+                          {"id": f"MLM{i}", "name": f"Category {i}"}] for i in range(8)}
+
+    class Cursor:
+        def __enter__(self): return self
+        def __exit__(self, *_): pass
+        def execute(self, *_): pass
+        def fetchall(self): return rows
+
+    class Connection:
+        def cursor(self): return Cursor()
+        def close(self): pass
+
+    translated = []
+    def translate(selected_paths, level):
+        translated.extend(selected_paths)
+        return {path[level - 1]["id"]: "中文分类" for path in selected_paths.values()}
+
+    monkeypatch.setattr(store_analysis.pymysql, "connect", lambda **_: Connection())
+    monkeypatch.setattr(store_analysis, "category_paths_for_ids", lambda _: paths)
+    monkeypatch.setattr(store_analysis, "_translate_category_names", translate)
+    data = list_store_analysis("2026-09-01", "2026-09-07")
+    site = data["sites"][0]
+    assert len(translated) == 5
+    assert site["orders"] == 8
+    assert site["category_total"] == 8
+    assert site["other_value"] == 3
+    assert all(category["name_zh"] == "中文分类" for category in site["top_categories"])
+
+
+def test_analysis_coalesces_concurrent_identical_requests(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from bit import store_analysis
+    started, release = Event(), Event()
+    calls = []
+
+    def compute(*args, **kwargs):
+        calls.append(kwargs)
+        started.set()
+        assert release.wait(3)
+        return {"sites": []}
+
+    monkeypatch.setattr(store_analysis, "_compute_store_analysis", compute)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(list_store_analysis, "2026-09-01", "2026-09-07")
+        try:
+            assert started.wait(3)
+            second = executor.submit(list_store_analysis, "2026-09-01", "2026-09-07")
+        finally:
+            release.set()
+        assert first.result() == second.result() == {"sites": []}
+    assert len(calls) == 1

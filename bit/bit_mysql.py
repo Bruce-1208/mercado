@@ -11,6 +11,10 @@ from decimal import Decimal, InvalidOperation
 import pymysql as _pymysql_driver
 
 from bit.workbench_runtime import bootstrap_runtime
+from bit.shipment_compensation import (
+    apply_dimension_costs, dimension_adjustment, dimension_adjustment_sql, saved_cost_payload_sql,
+    saved_dimension_adjustment_sql,
+)
 
 
 RUNTIME_SETTINGS = bootstrap_runtime()
@@ -3082,7 +3086,7 @@ def list_orders(
     freight_variance = str(freight_variance or "").strip().lower()
     if freight_variance not in (
         "", "different", "different_any", "actual_higher", "actual_lower",
-        "pending_actual", "pending_quote",
+        "pending_actual", "pending_quote", "dimensions_changed",
     ):
         raise ValueError("运费差异筛选参数无效")
 
@@ -3159,7 +3163,14 @@ def list_orders(
         if freight_variance:
             quoted = column("quoted_freight_usd")
             actual = column("actual_freight_usd")
-            if freight_variance == "different":
+            if freight_variance == "dimensions_changed":
+                clauses.append(
+                    f"COALESCE((SELECT {dimension_adjustment_sql('dimension_costs.payload_json')} "
+                    "FROM mercado_shipment_costs AS dimension_costs "
+                    f"WHERE dimension_costs.shipping_id = {column('platform_shipping_id')} "
+                    f"AND dimension_costs.token_id = {column('store_id')}), 0) <> 0"
+                )
+            elif freight_variance == "different":
                 clauses.append(
                     f"{quoted} IS NOT NULL AND {actual} IS NOT NULL "
                     f"AND ABS({actual} - {quoted}) > 0.01"
@@ -3476,6 +3487,7 @@ def list_orders(
                            synced.`buyer_name` AS `buyer`, synced.`purchase_remark`,
                            synced.`status_detail` AS `remark`, synced.`country`,
                            synced.`freight_checked_at`,
+                           synced.`shipping_id` AS `platform_shipping_id`,
                            {currency_sql} AS `currency_id`, {order_date_sql} AS `order_date`,
                            synced.`currency_id` AS `platform_currency_id`,
                            COALESCE(synced.`total_amount`, 0) AS `total_amount`,
@@ -4055,7 +4067,7 @@ def get_mercado_order_weight_quote(order_ids):
 
 
 def refresh_mercado_order_quoted_freight(limit=200):
-    """Persist weight-table freight for shipments so actual-vs-quoted can be filtered."""
+    """Calculate weight-table quotes independently of actual shipment costs."""
 
     limit = max(1, min(1000, int(limit or 200)))
     from erp.mercadolibre_store_link_store import (
@@ -4074,7 +4086,6 @@ def refresh_mercado_order_quoted_freight(limit=200):
                 SELECT `token_id`, `shipping_id`, MAX(`date_created`) AS `latest_order_at`
                 FROM `mercado_synced_orders`
                 WHERE COALESCE(`shipping_id`, '') <> ''
-                  AND `freight_source` = 'shipment_costs'
                   AND (
                       `quoted_freight_checked_at` IS NULL
                       OR `quoted_freight_checked_at` < CURDATE()
@@ -6309,10 +6320,10 @@ def save_weight_dimensions_records(rows, refresh=False):
 
 
 def list_weight_dimensions_changed_orders(filters=None):
-    """Return API freight changes with optional order-import enrichment.
+    """Return official nonzero incorrect-dimensions adjustments.
 
-    ``mercado_synced_orders`` is the authoritative source for freight checks
-    and deltas. The legacy ``orders`` table is deliberately
+    ``mercado_shipment_costs`` supplies the reason and amount; locally quoted
+    freight is deliberately not an eligibility condition. The legacy ``orders`` table is deliberately
     joined in Python because it is an order-import snapshot and may not exist
     on every installation.  This also lets an order import fill product id,
     salesperson, category, source and other fields without changing the API
@@ -6337,9 +6348,8 @@ def list_weight_dimensions_changed_orders(filters=None):
     freight_checked_from = str(filters.get("date_from") or "").strip()
     freight_checked_to = str(filters.get("date_to") or "").strip()
 
-    # The order list query already calculates actual USD freight and the
-    # quoted/current freight using the same exchange-rate rules as the orders
-    # screen.  Page through it so the WDR screen is not limited to one page.
+    # Use the same order access and pagination rules, with an official
+    # compensation predicate independent of actual-vs-quoted freight.
     api_rows = []
     page = 1
     while limit is None or len(api_rows) < limit:
@@ -6353,7 +6363,7 @@ def list_weight_dimensions_changed_orders(filters=None):
             start_date="",
             end_date="",
             origin="",
-            freight_variance="different_any",
+            freight_variance="dimensions_changed",
             page=page,
             page_size=page_size,
             store_ids=store_ids,
@@ -6382,6 +6392,7 @@ def list_weight_dimensions_changed_orders(filters=None):
 
     imported_by_key = {}
     raw_by_order_id = {}
+    costs_by_order_id = {}
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
@@ -6416,14 +6427,17 @@ def list_weight_dimensions_changed_orders(filters=None):
                 if batch_ids:
                     placeholders = ",".join(["%s"] * len(batch_ids))
                     cursor.execute(
-                        f"SELECT `order_id`, `raw_json` FROM `mercado_synced_orders` "
-                        f"WHERE `order_id` IN ({placeholders})",
+                        f"SELECT synced.order_id, synced.raw_json, costs.payload_json "
+                        f"FROM mercado_synced_orders AS synced "
+                        f"JOIN mercado_shipment_costs AS costs ON costs.shipping_id = synced.shipping_id "
+                        f"AND costs.token_id = synced.token_id "
+                        f"WHERE synced.order_id IN ({placeholders})",
                         batch_ids,
                     )
-                    raw_by_order_id.update({
-                        _text(row.get("order_id")): row.get("raw_json") or "{}"
-                        for row in cursor.fetchall() or ()
-                    })
+                    for row in cursor.fetchall() or ():
+                        key = _text(row.get("order_id"))
+                        raw_by_order_id[key] = row.get("raw_json") or "{}"
+                        costs_by_order_id[key] = json.loads(row.get("payload_json") or "{}")
     finally:
         connection.close()
 
@@ -6448,14 +6462,6 @@ def list_weight_dimensions_changed_orders(filters=None):
     if freight_min is not None and freight_max is not None and freight_min > freight_max:
         raise ValueError("运费差值最小值不能大于最大值")
 
-    def _money_text(value):
-        if value in (None, ""):
-            return ""
-        try:
-            return f"{Decimal(str(value)).normalize()} USD"
-        except (InvalidOperation, TypeError, ValueError):
-            return f"{value} USD"
-
     result = []
     for api_row in api_rows:
         order_id = _text(api_row.get("id"))
@@ -6479,17 +6485,12 @@ def list_weight_dimensions_changed_orders(filters=None):
             salesperson_value = salesperson.casefold() or "__unassigned__"
             if salesperson_value not in salesperson_filters:
                 continue
-        try:
-            actual_freight = Decimal(str(api_row.get("actual_freight_usd")))
-            current_freight = Decimal(str(api_row.get("quoted_freight_usd")))
-        except (InvalidOperation, TypeError, ValueError):
+        costs = costs_by_order_id.get(order_id) or {}
+        difference_decimal = dimension_adjustment(costs)
+        if not difference_decimal:
             continue
-        if not actual_freight.is_finite() or not current_freight.is_finite():
+        if (freight_min is not None or freight_max is not None) and costs.get("currency_id") != "USD":
             continue
-        difference_decimal = (actual_freight - current_freight).quantize(Decimal("0.01"))
-        if difference_decimal == 0:
-            continue
-        difference = difference_decimal
         if freight_min is not None and difference_decimal < freight_min:
             continue
         if freight_max is not None and difference_decimal > freight_max:
@@ -6524,12 +6525,12 @@ def list_weight_dimensions_changed_orders(filters=None):
             "region": region,
             "declared_weight_g": _text(api_row.get("quoted_freight_weight_g")),
             "declared_dimensions_cm": "",
-            "declared_freight": _money_text(api_row.get("quoted_freight_usd")),
+            "declared_freight": "",
             "actual_weight_g": "",
             "actual_dimensions_cm": "",
-            "actual_freight": _money_text(api_row.get("actual_freight_usd")),
-            "freight_difference": _money_text(difference),
-            "freight_difference_usd": str(difference) if difference is not None else "",
+            "actual_freight": "",
+            "freight_difference": "",
+            "freight_difference_usd": "",
             "marketplace_item_id": _text(api_row.get("product_id")),
             "query_status": "待补全",
             "query_error": (
@@ -6544,6 +6545,7 @@ def list_weight_dimensions_changed_orders(filters=None):
             "_net_status": "",
             "_source_type": "freight_changes",
         })
+        apply_dimension_costs(result[-1], costs)
     return result
 
 
@@ -6580,6 +6582,8 @@ def _weight_dimensions_saved_filters(filters):
         return f"COALESCE(JSON_UNQUOTE(JSON_EXTRACT(`record_json`, '$.{key}')), '')"
     clauses.append("`wdr_source_type` = %s")
     params.append("freight_changes")
+    official_delta = saved_dimension_adjustment_sql()
+    clauses.append(f"{official_delta} <> 0")
     if "store_ids" in filters:
         ids = list(filters.get("store_ids") or [])
         if not ids:
@@ -6621,14 +6625,15 @@ def _weight_dimensions_saved_filters(filters):
             raise ValueError("运费差值区间必须是有效数字") from exc
         bounds.append(value)
         if value is not None:
-            clauses.append("CAST(" + field("freight_difference_usd") + " AS DECIMAL(20, 2)) " + operator + " %s")
+            clauses.append(f"JSON_UNQUOTE(JSON_EXTRACT({saved_cost_payload_sql()}, '$.currency_id')) = 'USD'")
+            clauses.append(official_delta + " " + operator + " %s")
             params.append(str(value))
     if all(value is not None for value in bounds) and bounds[0] > bounds[1]:
         raise ValueError("运费差值最小值不能大于最大值")
     return clauses, params
 
 
-def list_weight_dimensions_records(order_numbers=None, filters=None):
+def list_weight_dimensions_records(order_numbers=None, filters=None, *, page=None, page_size=50):
     values = None if order_numbers is None else list(dict.fromkeys(str(value or "").strip() for value in order_numbers if str(value or "").strip()))
     if values == []:
         return []
@@ -6645,12 +6650,24 @@ def list_weight_dimensions_records(order_numbers=None, filters=None):
                 if filters is not None else
                 "ORDER BY COALESCE(NULLIF(`order_time`, ''), '0000-00-00') DESC, `id` DESC"
             )
+            where_clause = ("WHERE " + " AND ".join(clauses) + " ") if clauses else ""
+            query_params = list(params)
+            pagination = {}
+            if page is not None:
+                page_size = max(1, min(100, int(page_size)))
+                cursor.execute("SELECT COUNT(*) AS total FROM `zying_weight_dimensions_records` " + where_clause, params or ())
+                total = int((cursor.fetchone() or {}).get("total") or 0)
+                page = max(1, min(int(page), max(1, (total + page_size - 1) // page_size)))
+                pagination = {"page": page, "page_size": page_size, "record_total": total}
+                order_clause += " LIMIT %s OFFSET %s"
+                query_params.extend([page_size, (page - 1) * page_size])
             cursor.execute(
                 "SELECT `order_number`, `record_json`, `execution_logs_json` "
-                "FROM `zying_weight_dimensions_records` "
+                + (f", {saved_cost_payload_sql()} AS compensation_payload_json " if filters is not None else "")
+                + "FROM `zying_weight_dimensions_records` "
                 + ("WHERE " + " AND ".join(clauses) + " " if clauses else "")
                 + order_clause,
-                params or (),
+                query_params or (),
             )
             rows = cursor.fetchall() or []
         result = []
@@ -6664,10 +6681,12 @@ def list_weight_dimensions_records(order_numbers=None, filters=None):
             except (TypeError, ValueError):
                 record["execution_logs"] = []
             record["order_number"] = row.get("order_number") or record.get("order_number")
+            if row.get("compensation_payload_json"):
+                apply_dimension_costs(record, json.loads(row["compensation_payload_json"]))
             result.append(record)
         if filters is not None:
             result.sort(key=lambda row: str(row.get("freight_changed_at") or ""), reverse=True)
-        return result
+        return {**pagination, "records": result} if page is not None else result
     finally:
         connection.close()
 

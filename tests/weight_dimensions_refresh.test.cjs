@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
 
-test('refresh remains clickable during automatic read without a file', async () => {
+test('opening reads saved data and manual full sync replaces stale polls', async () => {
     const elements = new Map();
     function element() {
         return { value: '', files: [], disabled: false, listeners: {}, classList: {contains: () => true},
@@ -39,9 +39,11 @@ test('refresh remains clickable during automatic read without a file', async () 
     initialize();
     await new Promise(setImmediate);
     const refresh = elements.get('wdr-refresh-changed');
-    assert.equal(changedRequests, 1);
+    assert.equal(changedRequests, 0);
     assert.equal(refresh.disabled, false);
     assert.equal(elements.get('wdr-file').files.length, 0);
+    refresh.listeners.click();
+    await new Promise(setImmediate);
     const refreshPromise = refresh.listeners.click();
     await new Promise(setImmediate);
     assert.equal(changedRequests, 2);
@@ -53,7 +55,7 @@ test('refresh remains clickable during automatic read without a file', async () 
     pendingPolls[1]({ ok: true, headers: { get: () => 'application/json' },
         json: async () => ({ data: { status: 'ready', records: [], message: 'done' } }) });
     await refreshPromise;
-    assert.equal(elements.get('wdr-state').textContent, 'done');
+    assert.match(elements.get('wdr-state').textContent, /已读取/);
     assert.equal(refresh.disabled, false);
 });
 
@@ -79,8 +81,8 @@ test('recent week, pagination and selection without periodic refresh', async () 
         window: {location: {href: 'http://localhost/'}, setTimeout(callback) {timers.push(callback);} },
         fetch: async url => {
             requests.push(url);
-            const data = url.includes('/changed?') ? {task_id: 'task'} : url.includes('/task?') ?
-                (() => { const params = new URL(url, 'http://localhost').searchParams; const size = Number(params.get('page_size')) || 50; const page = Math.min(Number(params.get('page')) || 1, Math.max(1, Math.ceil(rows.length / size))); return {status: 'ready', total: rows.length, record_total: rows.length, page, records: params.get('include_records') === '0' ? [] : rows.slice((page - 1) * size, page * size), message: 'done'}; })() : {agents: []};
+            const data = url.includes('/changed?') ? {task_id: 'task', status: 'ready'} : (url.includes('/task?') || url.includes('/saved?')) ?
+                (() => { const params = new URL(url, 'http://localhost').searchParams; const size = Number(params.get('page_size')) || 50; const page = Math.min(Number(params.get('page')) || 1, Math.max(1, Math.ceil(rows.length / size))); return {task_id: 'task', status: 'ready', total: rows.length, record_total: rows.length, page, records: params.get('include_records') === '0' ? [] : rows.slice((page - 1) * size, page * size), message: 'done'}; })() : {agents: []};
             return {ok: true, headers: {get: () => 'application/json'}, json: async () => ({data})};
         },
     };
@@ -88,10 +90,12 @@ test('recent week, pagination and selection without periodic refresh', async () 
     initialize(); await new Promise(setImmediate);
     assert.equal(requests.length, 0, 'inactive tab must not start any requests');
     active = true; activate(); await new Promise(setImmediate);
-    const query = new URL(requests.find(url => url.includes('/changed?')), 'http://localhost').searchParams;
+    const query = new URL(requests.find(url => url.includes('/saved?')), 'http://localhost').searchParams;
     const start = new Date(); start.setDate(start.getDate() - 6); start.setHours(0, 0, 0, 0);
     assert.equal(new Date(query.get('date_from')).getTime(), start.getTime());
     assert.equal(query.has('date_to'), false, 'new changes remain included on automatic refresh');
+    assert.equal(requests.some(url => url.includes('/changed?')), false);
+    assert.equal(requests.some(url => url.includes('/task?')), false, 'initial saved request already contains first page');
     assert.equal(get('wdr-table').tbody.children.length, 50);
     let select = get('wdr-table').thead.children[0].children[0].children[0];
     select.checked = true; select.listeners.change();
@@ -109,6 +113,8 @@ test('recent week, pagination and selection without periodic refresh', async () 
     rows = rows.slice(0, 20);
     await get('wdr-refresh-changed').listeners.click();
     assert.match(get('wdr-page-summary').textContent, /共 20 条 · 第 1 \/ 1 页/);
+    assert.equal(requests.find(url => url.includes('/changed?')), '/api/weight-dimensions-records/changed?');
+    assert.ok(requests.filter(url => url.includes('/saved?')).length >= 2);
     const count = requests.length;
     document.hidden = true;
     assert.equal(timers.length, 0);
