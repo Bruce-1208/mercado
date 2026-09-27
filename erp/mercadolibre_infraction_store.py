@@ -13,6 +13,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 INFRACTION_TABLE = "erp_mercadolibre_infractions"
 INFRACTION_SYNC_STATE_TABLE = "erp_mercadolibre_infraction_sync_state"
+PPPI_SYNC_STATE_TABLE = "erp_mercadolibre_pppi_sync_state"
 PPPI_SCOPE = "pppi"
 PROHIBITED_REASON = "The product is prohibited."
 PROHIBITED_REASON_CODE = "PROHIBITED_REASON"
@@ -147,6 +148,15 @@ def ensure_infraction_tables(cursor: Any) -> None:
             "seen_count",
             "INT NOT NULL DEFAULT 1 AFTER `last_seen_at`",
         )
+        _ensure_infraction_column(cursor, "pppi_visible", "TINYINT(1) NULL")
+        cursor.execute(f"""
+            CREATE TABLE IF NOT EXISTS `{PPPI_SYNC_STATE_TABLE}` (
+                `token_id` BIGINT NOT NULL,
+                `site_id` VARCHAR(16) NOT NULL,
+                `checked_at` DATETIME NOT NULL,
+                PRIMARY KEY (`token_id`, `site_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
         cursor.execute(
             f"""
             UPDATE `{INFRACTION_TABLE}`
@@ -204,6 +214,9 @@ def ensure_infraction_tables(cursor: Any) -> None:
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """
         )
+        cursor.execute(f"SHOW COLUMNS FROM `{INFRACTION_SYNC_STATE_TABLE}` LIKE 'pppi_requested_at'")
+        if not cursor.fetchone():
+            cursor.execute(f"ALTER TABLE `{INFRACTION_SYNC_STATE_TABLE}` ADD COLUMN `pppi_requested_at` DATETIME NULL")
         cursor.execute(
             f"""
             UPDATE `{INFRACTION_SYNC_STATE_TABLE}`
@@ -233,6 +246,7 @@ def request_infraction_sync(
     token_ids: Iterable[Any],
     *,
     connection_factory: Callable[[], Any] | None = None,
+    pppi: bool = False,
 ) -> int:
     ids = _clean_token_ids(token_ids)
     if not ids:
@@ -244,13 +258,14 @@ def request_infraction_sync(
             cursor.executemany(
                 f"""
                 INSERT INTO `{INFRACTION_SYNC_STATE_TABLE}`
-                    (`token_id`, `requested_at`, `last_status`, `last_error`)
-                VALUES (%s, %s, 'queued', NULL)
+                    (`token_id`, `requested_at`, `last_status`, `last_error`, `pppi_requested_at`)
+                VALUES (%s, %s, 'queued', NULL, %s)
                 ON DUPLICATE KEY UPDATE
                     `requested_at` = VALUES(`requested_at`),
-                    `last_status` = 'queued', `last_error` = NULL
+                    `last_status` = 'queued', `last_error` = NULL,
+                    `pppi_requested_at` = COALESCE(VALUES(`pppi_requested_at`), `pppi_requested_at`)
                 """,
-                [(token_id, _now()) for token_id in ids],
+                [(token_id, _now(), _now() if pppi else None) for token_id in ids],
             )
         connection.commit()
         return len(ids)
@@ -325,6 +340,9 @@ def mark_infraction_sync_finished(
                         `detection_scanned_count` = VALUES(`detection_scanned_count`),
                         `detection_matched_count` = VALUES(`detection_matched_count`),
                         `rights_holder_count` = VALUES(`rights_holder_count`),
+                        `pppi_requested_at` = CASE
+                            WHEN `pppi_requested_at` <= `last_started_at`
+                            THEN NULL ELSE `pppi_requested_at` END,
                         `requested_at` = CASE
                             WHEN `requested_at` IS NULL OR `last_started_at` IS NULL
                               OR `requested_at` <= `last_started_at`
@@ -423,13 +441,19 @@ def get_infraction_sync_context(
             ensure_infraction_tables(cursor)
             cursor.execute(
                 f"""
-                SELECT `last_started_at`, `last_completed_at`, `last_status`, `last_error`
+                SELECT `last_started_at`, `last_completed_at`, `last_status`, `last_error`, `pppi_requested_at`
                 FROM `{INFRACTION_SYNC_STATE_TABLE}`
                 WHERE `token_id` = %s LIMIT 1
                 """,
                 (int(token_id),),
             )
-            return _json_safe_row(cursor.fetchone() or {})
+            result = _json_safe_row(cursor.fetchone() or {})
+            cursor.execute(
+                f"SELECT `site_id` FROM `{PPPI_SYNC_STATE_TABLE}` WHERE `token_id` = %s",
+                (int(token_id),),
+            )
+            result["pppi_sites"] = [row["site_id"] for row in cursor.fetchall()]
+            return result
     finally:
         connection.close()
 
@@ -811,6 +835,61 @@ def _build_store_rankings(group_tree: Iterable[Mapping[str, Any]]) -> list[dict[
     return stores
 
 
+def replace_pppi_snapshot(token, site_id, records, *, connection_factory=None):
+    """Atomically replace one fully validated site's two PPPI tabs.
+
+    Page visibility is separate from API case resolution. Existing API details
+    and history are preserved, including unsuccessful appeals still on PPPI.
+    """
+    token_id = int(token["id"])
+    site_id = str(site_id).upper()
+    records = list(records)
+    if any(row.get("site_id") != site_id for row in records):
+        raise ValueError("PPPI 快照包含其他站点，拒绝保存")
+    checked_at = _now()
+    store_name = str(token.get("display_name") or token.get("nickname") or token_id)
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_infraction_tables(cursor)
+            # Lock the site before resetting flags, including an empty snapshot.
+            cursor.execute(f"""
+                INSERT INTO `{PPPI_SYNC_STATE_TABLE}` (`token_id`, `site_id`, `checked_at`)
+                VALUES (%s, %s, %s)
+                ON DUPLICATE KEY UPDATE `checked_at` = VALUES(`checked_at`)
+            """, (token_id, site_id, checked_at))
+            cursor.execute(f"""
+                UPDATE `{INFRACTION_TABLE}` SET `pppi_visible` = 0
+                WHERE `token_id` = %s AND `site_id` = %s
+            """, (token_id, site_id))
+            for row in records:
+                cursor.execute(f"""
+                    INSERT INTO `{INFRACTION_TABLE}` (
+                        `token_id`, `store_name`, `seller_id`, `site_id`, `source_type`,
+                        `source_id`, `item_id`, `title`, `thumbnail_url`, `occurred_at`,
+                        `reason_code`, `reason`, `rights_holder`, `raw_json`,
+                        `is_current`, `resolution_status`, `last_seen_at`, `last_checked_at`,
+                        `pppi_visible`
+                    ) VALUES ({', '.join(['%s'] * 19)})
+                    ON DUPLICATE KEY UPDATE `pppi_visible` = 1,
+                        `title` = VALUES(`title`), `thumbnail_url` = VALUES(`thumbnail_url`),
+                        `last_checked_at` = VALUES(`last_checked_at`)
+                """, (
+                    token_id, store_name, str(token.get("meli_user_id") or ""), site_id,
+                    row["source_type"], row["source_id"], row["item_id"], row["title"],
+                    row["thumbnail_url"], row["occurred_at"], row["reason_code"],
+                    row["reason"], row["rights_holder"],
+                    json.dumps({"pppi_page": row}, ensure_ascii=False),
+                    1, "current", checked_at, checked_at, 1,
+                ))
+        connection.commit()
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def _pppi_only_condition(alias: str = "") -> str:
     """Exclude prohibited-list snapshots that never appear in the PPPI page."""
 
@@ -825,17 +904,11 @@ def _pppi_only_condition(alias: str = "") -> str:
 
 
 def _pppi_product_key(items_alias: str = "items", links_alias: str = "links") -> str:
-    """Return the row identity used by Global Selling's current PPPI list.
-
-    Detection events are emitted once per marketplace child listing and may be
-    repeated for the same global product.  The website groups those rows by the
-    current global SKU.  Rights-holder cases remain separate cases.
-    """
+    """PPPI lists marketplace item IDs, even when several share a seller SKU."""
 
     return (
         f"CASE WHEN {items_alias}.`source_type` = 'detection' THEN "
-        f"CONCAT('detection:', COALESCE(NULLIF({links_alias}.`seller_sku`, ''), "
-        f"{items_alias}.`item_id`)) ELSE CONCAT('rights_holder:', "
+        f"CONCAT('detection:', {items_alias}.`item_id`) ELSE CONCAT('rights_holder:', "
         f"{items_alias}.`source_id`) END"
     )
 
@@ -844,14 +917,19 @@ def _pppi_current_listing_condition(
     items_alias: str = "items",
     links_alias: str = "links",
 ) -> str:
-    """Keep only detection rows belonging to a currently visible listing."""
+    """Use the verified PPPI snapshot independently of listing/appeal status.
+
+    An API-only store remains available until its first page refresh. Never
+    infer absence from the active-listing cache: canceled items remain in PPPI.
+    """
 
     return (
-        f"({items_alias}.`source_type` = 'rights_holder' OR ("
-        f"{items_alias}.`source_type` = 'detection' AND "
-        f"{links_alias}.`is_current` = 1 AND "
-        f"LOWER(COALESCE({links_alias}.`status`, '')) IN "
-        f"('active', 'under_review')))"
+        f"(CASE WHEN EXISTS (SELECT 1 FROM `{PPPI_SYNC_STATE_TABLE}` AS pppi_state "
+        f"WHERE pppi_state.`token_id` = {items_alias}.`token_id` "
+        f"AND pppi_state.`site_id` = {items_alias}.`site_id`) "
+        f"THEN {items_alias}.`pppi_visible` = 1 ELSE "
+        f"({items_alias}.`is_current` = 1 OR ({items_alias}.`source_type` = 'rights_holder' "
+        f"AND {items_alias}.`resolution_status` = 'appeal_failed')) END)"
     )
 
 
@@ -883,7 +961,8 @@ def list_infraction_dashboard(
     rows_only: bool | str = False,
     connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
-    days = max(1, min(int(days or 30), 3650))
+    scope = str(scope or "").strip().lower()
+    days = max(0 if scope == PPPI_SCOPE else 1, min(int(days if days is not None else 30), 3650))
     page = max(1, int(page or 1))
     rows_only = (
         rows_only
@@ -921,8 +1000,11 @@ def list_infraction_dashboard(
     conditions: list[str] = []
     values: list[Any] = []
     if view_mode == "current":
-        conditions.extend(["items.`occurred_at` >= %s", "items.`is_current` = 1"])
-        values.append(cutoff)
+        if days:
+            conditions.append("items.`occurred_at` >= %s")
+            values.append(cutoff)
+        if not pppi_current:
+            conditions.append("items.`is_current` = 1")
     if group_name:
         conditions.append(f"{ownership_group} = %s")
         values.append(group_name)
@@ -1116,8 +1198,9 @@ def list_infraction_dashboard(
                        COALESCE(NULLIF(settings.`salesperson`, ''), '未分配') AS `salesperson`,
                        COALESCE(counts.`detection_count`, 0) AS `detection_count`,
                        COALESCE(counts.`rights_holder_count`, 0) AS `rights_holder_count`,
-                       counts.`latest_infraction_at`, state.`last_completed_at` AS `last_synced_at`,
-                       state.`last_started_at` AS `last_read_at`,
+                       counts.`latest_infraction_at`,
+                       {"COALESCE(pppi_state.`checked_at`, state.`last_completed_at`)" if pppi_current else "state.`last_completed_at`"} AS `last_synced_at`,
+                       {"COALESCE(pppi_state.`checked_at`, state.`last_started_at`)" if pppi_current else "state.`last_started_at`"} AS `last_read_at`,
                        state.`last_status`, state.`last_error`
                 FROM `mercado_store_tokens` AS tokens
                 {settings_account_join} `mercado_store_site_settings` AS settings
@@ -1136,6 +1219,9 @@ def list_infraction_dashboard(
                            AND {counts_site_join}
                 LEFT JOIN `{INFRACTION_SYNC_STATE_TABLE}` AS state
                   ON state.`token_id` = tokens.`id`
+                LEFT JOIN `{PPPI_SYNC_STATE_TABLE}` AS pppi_state
+                  ON pppi_state.`token_id` = tokens.`id`
+                 AND pppi_state.`site_id` = settings.`site_id`
                 {account_where}
                 ORDER BY `group_name`, `salesperson`, tokens.`display_name`, settings.`site_id`
                 """,
@@ -1194,13 +1280,11 @@ def list_infraction_dashboard(
             category_conditions = [f"COALESCE({category_prefix}`reason`, '') <> ''"]
             category_values: list[Any] = []
             if view_mode == "current":
-                category_conditions.extend(
-                    [
-                        f"{category_prefix}`occurred_at` >= %s",
-                        f"{category_prefix}`is_current` = 1",
-                    ]
-                )
-                category_values.append(cutoff)
+                if days:
+                    category_conditions.append(f"{category_prefix}`occurred_at` >= %s")
+                    category_values.append(cutoff)
+                if not pppi_current:
+                    category_conditions.append(f"{category_prefix}`is_current` = 1")
             if source_type:
                 category_conditions.append(f"{category_prefix}`source_type` = %s")
                 category_values.append(source_type)

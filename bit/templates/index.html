@@ -14279,7 +14279,8 @@
                         <div class="header-actions">
                             <div class="range-switch" aria-label="侵权数据时间范围">
                                 <button class="range-button" type="button" data-days="7" onclick="setInfractionDays(7)">7天</button>
-                                <button class="range-button active" type="button" data-days="30" onclick="setInfractionDays(30)">30天</button>
+                                <button class="range-button active" type="button" data-days="0" onclick="setInfractionDays(0)">官网当前全部</button>
+                                <button class="range-button" type="button" data-days="30" onclick="setInfractionDays(30)">30天</button>
                                 <button class="range-button" type="button" data-days="100" onclick="setInfractionDays(100)">100天</button>
                                 <button class="range-button" type="button" data-days="365" onclick="setInfractionDays(365)">365天</button>
                             </div>
@@ -15553,7 +15554,7 @@
         let orderDetailWeightRequestKey = "";
         let orderSplitPreview = null;
         let orderSplitSubmitting = false;
-        let infractionDays = 30;
+        let infractionDays = 0;
         let infractionsLoaded = false;
         let riskCheckLoaded = false;
         let riskCategoriesLoaded = false;
@@ -30121,9 +30122,9 @@
                 }
                 collectInfractionsBtn.disabled = false;
                 collectInfractionsBtn.textContent = "同步官方列表";
-                if (["success", "partial", "error"].includes(String(state.status || ""))) {
+                if (["success", "completed", "partial", "error"].includes(String(state.status || ""))) {
                     await loadLatestInfractions();
-                    if (state.status !== "success") {
+                    if (!["success", "completed"].includes(state.status)) {
                         alert(state.message || "官方侵权列表同步未完整完成");
                     }
                 }
@@ -30142,7 +30143,7 @@
                 const response = await fetch("/api/official-infractions/sync", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({}),
+                    body: JSON.stringify({pppi: true}),
                 });
                 const payload = await response.json();
                 if (![200, 202, 409].includes(response.status) || !["success", "running"].includes(payload.status)) {
@@ -31512,19 +31513,20 @@
         }
 
         function updateInfractionRangeText(days) {
-            infractionHeadingDesc.textContent = `统计官方当前侵权列表中最近 ${days} 天的侵权和权利人记录`;
-            infractionTotalLabel.textContent = `最近${days}天当前明细`;
-            infractionNormalLabel.textContent = `最近${days}天侵权`;
-            infractionRightsLabel.textContent = `最近${days}天权利人`;
-            infractionSummaryTitle.textContent = `官方当前列表按店铺和站点统计（最近${days}天）`;
-            infractionDetailTitle.textContent = `官方当前侵权明细（最近${days}天）`;
+            const range = days === 0 ? "官网当前全部" : `最近${days}天`;
+            infractionHeadingDesc.textContent = `统计${range}的侵权和权利人记录`;
+            infractionTotalLabel.textContent = `${range}当前明细`;
+            infractionNormalLabel.textContent = `${range}侵权`;
+            infractionRightsLabel.textContent = `${range}权利人`;
+            infractionSummaryTitle.textContent = `官方当前列表按店铺和站点统计（${range}）`;
+            infractionDetailTitle.textContent = `官方当前侵权明细（${range}）`;
             document.querySelectorAll(".range-button").forEach(button => {
                 button.classList.toggle("active", Number(button.dataset.days) === Number(days));
             });
         }
 
         function setInfractionDays(days) {
-            infractionDays = Number(days) || 30;
+            infractionDays = Number(days) || 0;
             infractionsLoaded = false;
             updateInfractionRangeText(infractionDays);
             loadLatestInfractions();
@@ -31551,7 +31553,7 @@
                 const data = payload.data || {};
                 const rows = data.rows || [];
                 const summary = data.summary || [];
-                const recentDays = Number(data.recent_days || infractionDays || 30);
+                const recentDays = Number(data.recent_days ?? infractionDays);
                 infractionDays = recentDays;
                 updateInfractionRangeText(recentDays);
                 infractionsLoaded = true;
@@ -31580,7 +31582,7 @@
                 }
 
                 if (!rows.length) {
-                    infractionBody.innerHTML = `<tr><td class="empty-state" colspan="7">官方当前列表中暂无最近 ${recentDays} 天侵权数据</td></tr>`;
+                    infractionBody.innerHTML = `<tr><td class="empty-state" colspan="7">${recentDays === 0 ? "官网当前列表" : `最近 ${recentDays} 天`}暂无侵权数据</td></tr>`;
                     return;
                 }
 

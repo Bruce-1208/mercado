@@ -1091,7 +1091,7 @@ def test_follow_sell_skips_one_failed_picture_upload_and_publishes_remaining():
                 return {"id": 77, "site_id": "CBT", "tags": ["user_product_seller"]}
             if path == "/pictures/uploaded-good-picture":
                 return {"id": "uploaded-good-picture", "max_size": "800x800"}
-            if method == "POST" and path == "/global/user-products":
+            if method == "POST" and path == "/global/items":
                 self.posted_payload = kwargs["json_body"]
                 return {"id": "CBT999"}
             return super().request(method, path, **kwargs)
@@ -1122,7 +1122,7 @@ def test_follow_sell_skips_one_failed_picture_upload_and_publishes_remaining():
 
     assert client.posted_payload["pictures"] == [{"id": "uploaded-good-picture"}]
     assert "70x70" in result["picture_upload_errors"][0]
-    assert result["endpoint"] == "/global/user-products"
+    assert result["endpoint"] == "/global/items"
     assert result["timings"]["total"] >= 0
 
 
@@ -1138,7 +1138,7 @@ def test_follow_sell_skips_picture_that_shrinks_below_limit_after_upload():
                 return {"id": "uploaded-small-picture", "max_size": "358x495"}
             if path == "/pictures/uploaded-good-picture":
                 return {"id": "uploaded-good-picture", "max_size": "480x854"}
-            if method == "POST" and path == "/global/user-products":
+            if method == "POST" and path == "/global/items":
                 self.posted_payload = kwargs["json_body"]
                 return {"id": "CBT999"}
             return super().request(method, path, **kwargs)
@@ -1221,7 +1221,8 @@ def test_database_client_user_profile_is_loaded_and_cached():
     assert client.request_calls == 1
 
 
-def test_user_products_endpoint_falls_back_only_on_explicit_not_found():
+def test_user_products_endpoint_falls_back_only_on_explicit_not_found(monkeypatch):
+    monkeypatch.setenv("MERCADO_USER_PRODUCTS_CREATE_ENDPOINT", "/global/user-products")
     class FallbackClient(CategoryClient):
         def __init__(self):
             self.paths = []
@@ -1297,7 +1298,7 @@ def test_repeated_user_product_conflict_is_reconciled_with_existing_resource():
                     "site_id": "CBT",
                     "tags": ["user_product_seller"],
                 }
-            if method == "POST" and path == "/global/user-products":
+            if method == "POST" and path == "/global/items":
                 raise MercadoLibreError(
                     'Validation error; cause=[{"code":"user_product.repeated.conflict",'
                     '"message":"user product already exists. Conflict id: MLMU123"}]',
@@ -1372,7 +1373,7 @@ def test_existing_user_product_adds_marketplace_without_recreating_or_uploading(
             "net_proceeds": 20,
         }]
     }
-    assert ("POST", "/global/user-products") not in client.paths
+    assert ("POST", "/global/items") not in client.paths
 
 
 def test_existing_user_product_skips_add_when_marketplace_mapping_already_exists():
@@ -1593,3 +1594,50 @@ def test_family_different_returned_family_ids_are_reported():
     rows = [{"siteless_family_id": i, "site_items": [{"site_id": "MLM", "item_id": f"MLM{i}"}]} for i in (1, 2)]
     with pytest.raises(MercadoLibreError, match="多个 family"):
         follow_sell_module._user_product_family_result(rows, 2, "MLM")
+
+
+def test_family_dependent_length_cannot_distinguish_same_color():
+    class IdentityClient(FamilyClient):
+        def request(self, method, path, **kwargs):
+            result = super().request(method, path, **kwargs)
+            if path == '/categories/CBT301/attributes':
+                result = [dict(a, hierarchy='CHILD_PK') if a['id'] == 'COLOR' else a for a in result]
+                result += [{'id': 'LENGTH', 'hierarchy': 'CHILD_DEPENDENT'}]
+            return result
+    source = family_source()
+    for i, v in enumerate(source['variations']):
+        v['attribute_combinations'] = [
+            {'id': 'COLOR', 'value_name': 'Red'},
+            {'id': 'LENGTH', 'value_name': f'{130 + i * 20} cm'},
+        ]
+    client = IdentityClient()
+    with pytest.raises(MercadoLibreError, match='CHILD_PK'):
+        follow_sell(client, source['id'], prepared_listing=(source, {}), net_proceeds=20, publish=True)
+    assert client.posts == []
+    assert client.uploads == []
+
+
+def test_family_preserves_each_variants_package_measurements():
+    class PackageClient(FamilyClient):
+        def request(self, method, path, **kwargs):
+            result = super().request(method, path, **kwargs)
+            if path == '/categories/CBT301/attributes':
+                result += [{'id': 'PACKAGE_WEIGHT'}, {'id': 'PACKAGE_LENGTH'}]
+            return result
+    source = family_source()
+    source['variations'][0].update(weight_g=200, package_length_cm=30)
+    source['variations'][1].update(weight_g=350, package_length_cm=40)
+    payload = follow_sell_module.build_user_product_family_payload(PackageClient(), source, {}, net_proceeds=20)
+    attrs = [{a['id']: a.get('value_name') for a in p['attributes']} for p in payload]
+    assert [a['PACKAGE_WEIGHT'] for a in attrs] == ['200 g', '350 g']
+    assert [a['PACKAGE_LENGTH'] for a in attrs] == ['30 cm', '40 cm']
+
+
+def test_family_error_summary_keeps_late_restriction_and_full_response():
+    rows = [{'error': {'cause': [{'code': 'item.dimensions', 'message': 'x' * 2200}]}}] * 10
+    rows += [{'error': 'User is unable to list.', 'cause': ['restrictions_coliving']}]
+    with pytest.raises(MercadoLibreError) as caught:
+        follow_sell_module._user_product_family_result(rows, 11, 'MLM')
+    assert 'restrictions_coliving' in str(caught.value)[:2000]
+    assert 'item.dimensions' in str(caught.value)
+    assert caught.value.publication_result['raw_response'] == rows

@@ -138,7 +138,10 @@ class Service:
         # authoritative for an Agent execution while it is still running.
         running = bool(owner and not lock._is_stale()) or bool(
             run.get("outcome") == "running"
-            and str(run.get("execution_target") or identity.get("target") or "") == "agent"
+            # A short login job replaces execution_identity without starting a
+            # batch. Never use that identity to reclassify an old plugin run
+            # as a live Agent batch and permanently disable the login controls.
+            and run.get("execution_target") == "agent"
         )
         actor = self.store.actor() or {}
         current_counts = None if actor.get("view_all") else self.store.run_counts(run.get("run_id"))
@@ -161,6 +164,7 @@ class Service:
                 "selection": self.store.state("run_selection"),
                 "visual_progress": self.store.state("visual_progress", {}),
                 "execution_target": execution_target,
+                "execution_identity": identity,
                 "execution_terminal": execution_terminal,
                 "computer": execution_terminal,
                 "model_connection": {**self.store.state("model_connection", {}),

@@ -7005,13 +7005,13 @@ def api_infringement_knowledge_detail(record_id):
         return jsonify({"status": "error", "message": str(exc)}), 400
 
 
-def _latest_official_pppi_infractions(recent_days=30):
+def _latest_official_pppi_infractions(recent_days=0):
     """Use the same current PPPI rows and counts as the IP/rights dashboard."""
     try:
         recent_days = int(recent_days)
     except (TypeError, ValueError):
         recent_days = 30
-    if recent_days not in (7, 30, 90, 100, 365):
+    if recent_days not in (0, 7, 30, 90, 100, 365):
         recent_days = 30
 
     allowed_token_ids = _authorized_token_ids_for_user()
@@ -7145,7 +7145,7 @@ def _latest_official_pppi_infractions(recent_days=30):
 @login_required
 def api_latest_infractions():
     try:
-        recent_days = request.args.get("days", 30)
+        recent_days = request.args.get("days", 0)
         return jsonify({
             "status": "success",
             "data": _latest_official_pppi_infractions(recent_days)
@@ -7162,10 +7162,10 @@ def api_latest_infractions():
 @login_required
 def api_export_latest_infractions():
     try:
-        recent_days = request.args.get("days", 30)
+        recent_days = request.args.get("days", 0)
         data = _latest_official_pppi_infractions(recent_days)
         rows = data.get("rows") or []
-        recent_days = data.get("recent_days") or 30
+        recent_days = data.get("recent_days", 0)
 
         wb = Workbook()
         detail_ws = wb.active
@@ -7200,7 +7200,7 @@ def api_export_latest_infractions():
 
         submit_time = str(data.get("latest_submit_time") or datetime.now().strftime("%Y%m%d%H%M%S"))
         safe_time = "".join(ch if ch.isdigit() else "" for ch in submit_time) or datetime.now().strftime("%Y%m%d%H%M%S")
-        filename = f"最新侵权明细_最近{recent_days}天_{safe_time}.xlsx"
+        filename = f"最新侵权明细_{str(recent_days) + '天' if recent_days else '官网当前全部'}_{safe_time}.xlsx"
         encoded_filename = quote(filename)
         response = send_file(
             output,
@@ -7354,7 +7354,7 @@ def api_official_ip_rights_dashboard():
 
     try:
         filters = {
-            "days": request.args.get("days", 30),
+            "days": request.args.get("days", 0),
             "view_mode": request.args.get("view_mode", "current"),
             "salesperson": _scoped_salesperson(request.args.get("salesperson", "")),
             "source_type": request.args.get("source_type", ""),
@@ -7563,7 +7563,7 @@ def api_export_official_ip_rights():
 
     try:
         filters = {
-            "days": request.args.get("days", 30),
+            "days": request.args.get("days", 0),
             "view_mode": request.args.get("view_mode", "current"),
             "salesperson": _scoped_salesperson(request.args.get("salesperson", "")),
             "source_type": request.args.get("source_type", ""),
@@ -7604,7 +7604,9 @@ def api_start_official_infraction_sync():
             if USE_DB_API
             else mercado_infraction_sync.start_official_infraction_sync
         )
-        started, state = start_operation(token_ids)
+        started, state = start_operation(
+            token_ids, **({"pppi": True} if payload.get("pppi") is True else {})
+        )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
@@ -16451,7 +16453,9 @@ def api_db_start_official_infraction_sync():
     if not isinstance(token_ids, list):
         return jsonify({"status": "error", "message": "token_ids 必须是数组"}), 400
     try:
-        started, state = mercado_infraction_sync.start_official_infraction_sync(token_ids)
+        started, state = mercado_infraction_sync.start_official_infraction_sync(
+            token_ids, **({"pppi": True} if payload.get("pppi") is True else {})
+        )
         return jsonify({
             "status": "success",
             "data": {"started": bool(started), "state": state},

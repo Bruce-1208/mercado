@@ -507,15 +507,17 @@ def collect_live_detection_infractions(
     raise RuntimeError("官方侵权读取服务端任务超时（超过 16 分钟）")
 
 
-def start_official_infraction_sync(token_ids=None):
+def start_official_infraction_sync(token_ids=None, *, pppi=False):
     if DB_MODE == "mysql":
         from bit import mercado_infraction_sync
 
-        return mercado_infraction_sync.start_official_infraction_sync(token_ids or [])
+        return mercado_infraction_sync.start_official_infraction_sync(
+            token_ids or [], **({"pppi": True} if pppi else {})
+        )
     data = _request(
         "POST",
         "/api/db/official-infractions/sync",
-        json={"token_ids": list(token_ids or [])},
+        json={"token_ids": list(token_ids or []), "pppi": bool(pppi)},
     ) or {}
     return bool(data.get("started")), dict(data.get("state") or {})
 

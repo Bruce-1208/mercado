@@ -22,6 +22,7 @@ from erp import mercadolibre_infraction_store as infraction_store
     [
         ({"filter_subgroup": "BRAND_PROTECTION"}, True),
         ({"reason": "The product could be counterfeit."}, True),
+        ({"reason": "The product details do not match those of the original product."}, True),
         ({"reason": "The product's brand is not generic."}, True),
         ({"reason": "la publicación usa una marca ilegítimamente"}, True),
         ({"reason": "O produto pode ser falsificado."}, True),
@@ -687,9 +688,11 @@ def test_current_pppi_matches_global_selling_product_identity():
     condition = _pppi_current_listing_condition()
     product_key = _pppi_product_key()
 
-    assert "links.`is_current` = 1" in condition
-    assert "'active', 'under_review'" in condition
-    assert "links.`seller_sku`" in product_key
+    assert "links." not in condition
+    assert "items.`pppi_visible` = 1" in condition
+    assert "appeal_failed" in condition
+    assert "seller_sku" not in product_key
+    assert "items.`item_id`" in product_key
     assert "rights_holder:" in product_key
 
 
@@ -779,7 +782,7 @@ def test_independent_dashboard_page_and_data_api(monkeypatch):
 
     assert page_response.status_code == 200
     assert "按账户组与业务员查看违规商品" in page_response.get_data(as_text=True)
-    assert '<body class="embedded">' in embedded_response.get_data(as_text=True)
+    assert '<body class="zs-standalone embedded">' in embedded_response.get_data(as_text=True)
     assert api_response.status_code == 200
     assert api_response.get_json()["data"] == dashboard
     assert received[0]["detail_token_id"] == "7"
@@ -812,6 +815,19 @@ def test_dashboard_sync_endpoint_starts_background_job(monkeypatch):
 
     assert response.status_code == 202
     assert response.get_json()["data"]["token_ids"] == [2, 3]
+
+
+def test_pppi_refresh_requests_authoritative_browser_snapshot(monkeypatch):
+    calls = []
+    def start(ids, **kwargs):
+        calls.append((ids, kwargs))
+        return True, {"running": True}
+    monkeypatch.setattr(sync, "start_official_infraction_sync", start)
+    response = _client(monkeypatch).post(
+        "/api/official-infractions/sync", json={"token_ids": [2], "pppi": True}
+    )
+    assert response.status_code == 202
+    assert calls == [([2], {"pppi": True})]
 
 
 def test_overview_auto_sync_switch_is_persisted_through_db_api(monkeypatch):
@@ -1032,7 +1048,7 @@ def test_dashboard_template_supports_store_detail_drilldown():
     assert "单店重试" in source
     assert "data-retry-token-id" in source
     assert "async function retryStore" in source
-    assert "JSON.stringify({token_ids: [tokenId]})" in source
+    assert "JSON.stringify({token_ids: [tokenId], pppi: ipRightsMode})" in source
     assert 'scope: "official_infractions"' in source
 
 

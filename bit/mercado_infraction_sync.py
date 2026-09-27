@@ -91,6 +91,7 @@ _BRAND_PROTECTION_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
         r"\bcounterfeit(?:ed|ing)?\b",
+        r"\bproduct details do not match those of the original product\b",
         r"\bintellectual propert(?:y|ies)\b",
         r"\btrademark(?:ed|s)?\b",
         r"\bcopyright(?:ed|s)?\b",
@@ -1094,6 +1095,14 @@ def _sync_store_once(client: MercadoLibreClient, record: dict) -> dict:
             raise
         errors.append(f"权利人举报：{exc}")
 
+    # Once a site uses authoritative page visibility, keep it refreshed on the
+    # same schedule. A browser failure preserves the previous complete snapshot.
+    if context.get("pppi_sites"):
+        try:
+            from bit.mercado_pppi_snapshot import sync_store_pages
+            sync_store_pages(record, context["pppi_sites"])
+        except Exception as exc:
+            errors.append(f"PPPI 页面快照：{exc}")
     status = "partial" if errors else ("limited" if warnings else "success")
     return {
         "store": store_name,
@@ -1579,6 +1588,7 @@ def backfill_infraction_images(
 
 def run_official_infraction_sync(
     token_ids: Iterable[Any] | None = None,
+    *, pppi: bool = False,
 ) -> dict[str, Any]:
     seed_result = seed_legacy_infraction_snapshot()
     if seed_result.get("seeded"):
@@ -1612,7 +1622,11 @@ def run_official_infraction_sync(
         _set_store_active(store_name, True)
         mark_infraction_sync_started(token_id)
         try:
-            result = _sync_store(record)
+            if pppi or get_infraction_sync_context(token_id).get("pppi_requested_at"):
+                from bit.mercado_pppi_snapshot import sync_store_pages
+                result = sync_store_pages(record)
+            else:
+                result = _sync_store(record)
             mark_infraction_sync_finished(
                 token_id,
                 result["status"],
@@ -1695,7 +1709,7 @@ def run_official_infraction_sync(
     return official_infraction_sync_status()
 
 
-def _run_background(token_ids: list[int]) -> None:
+def _run_background(token_ids: list[int], pppi: bool = False) -> None:
     task_lock = InterProcessLock(
         INFRACTION_SYNC_LOCK_KEY,
         owner="mercado_infraction_sync",
@@ -1710,7 +1724,10 @@ def _run_background(token_ids: list[int]) -> None:
         )
         return
     try:
-        run_official_infraction_sync(token_ids)
+        if pppi:
+            run_official_infraction_sync(token_ids, pppi=True)
+        else:
+            run_official_infraction_sync(token_ids)
     except Exception as exc:
         _state_update(
             running=False,
@@ -1726,6 +1743,7 @@ def _run_background(token_ids: list[int]) -> None:
 
 def start_official_infraction_sync(
     token_ids: Iterable[Any] | None = None,
+    *, pppi: bool = False,
 ) -> tuple[bool, dict[str, Any]]:
     selected_ids = _token_ids(token_ids or ())
     if selected_ids:
@@ -1736,7 +1754,7 @@ def start_official_infraction_sync(
         if bool(row.get("enabled", True))
     )
     if queued_ids:
-        request_infraction_sync(queued_ids)
+        request_infraction_sync(queued_ids, **({"pppi": True} if pppi else {}))
     with _state_guard:
         if _sync_state.get("running"):
             return False, official_infraction_sync_status()
@@ -1764,7 +1782,7 @@ def start_official_infraction_sync(
         )
     thread = threading.Thread(
         target=_run_background,
-        args=(selected_ids,),
+        args=(selected_ids, pppi),
         name="mercado-official-infraction-sync",
         daemon=True,
     )

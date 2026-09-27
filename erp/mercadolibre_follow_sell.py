@@ -1672,6 +1672,22 @@ def _user_product_family_name(source: Mapping[str, Any]) -> str:
     return family_name[:60]
 
 
+def _user_product_identity_signature(attributes, schema):
+    """Dependent measurements do not distinguish UPs in Mercado's identity."""
+    identity_ids = {
+        str(a.get("id")) for a in schema
+        if a.get("hierarchy") in {"PARENT_PK", "CHILD_PK"}
+    }
+    values = []
+    for attribute in attributes:
+        aid = str(attribute.get("id") or "")
+        if aid == "SELLER_SKU" or (identity_ids and aid not in identity_ids):
+            continue
+        value = attribute.get("value_id") or attribute.get("value_name") or attribute.get("values")
+        values.append((aid, value))
+    return json.dumps(sorted(values, key=lambda a: a[0]), sort_keys=True, ensure_ascii=False)
+
+
 def build_user_product_family_payload(
     client: MercadoLibreClient,
     source: Mapping[str, Any],
@@ -1718,8 +1734,11 @@ def build_user_product_family_payload(
         }
         for attribute in variation["attributes"] + variation["attribute_combinations"]:
             attributes[str(attribute.get("id") or attribute.get("name") or "").upper()] = attribute
-        child["attributes"] = list(attributes.values())
         raw_variation = source["variations"][index - 1]
+        from erp.mercadolibre_source_store import _package_attributes
+        for attribute in _package_attributes(raw_variation):
+            attributes[attribute["id"]] = attribute
+        child["attributes"] = list(attributes.values())
         if (any(raw_variation.get(key) for key in ("picture_ids", "images", "image", "image_url"))
                 and not variation.get("picture_ids")):
             raise MercadoLibreError(f"变体 {index} 的图片无法解析，请重新采集变体图片")
@@ -1742,15 +1761,40 @@ def build_user_product_family_payload(
         payload["family_name"] = family_name
         if payload["category_id"] != category_id:
             raise MercadoLibreError(f"变体 {index} 的目标类目与 family 不一致")
-        signature = json.dumps(sorted(
-            (a for a in payload["attributes"] if a.get("id") != "SELLER_SKU"),
-            key=lambda a: a.get("id", ""),
-        ), sort_keys=True, ensure_ascii=False)
+        signature = _user_product_identity_signature(payload["attributes"], schema)
         if signature in signatures:
-            raise MercadoLibreError(f"变体 {index} 缺少可区分属性，不能合并库存创建 User Product")
+            raise MercadoLibreError(
+                f"变体 {index} 缺少可区分属性：平台仅按 PARENT_PK/CHILD_PK 识别商品，"
+                "长度等从属属性不能区分变体；请将原始尺码映射到类目的 SIZE 等身份属性，不能合并库存"
+            )
         signatures.add(signature)
         payloads.append(payload)
     return payloads
+
+
+def publication_failure_summary(raw):
+    """Summarize repeated nested failures without discarding the raw response."""
+    codes = set()
+    def visit(value):
+        if isinstance(value, Mapping):
+            for key, item in value.items():
+                if key in {"code", "message", "error"} and isinstance(item, str):
+                    codes.add(item)
+                visit(item)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+        elif isinstance(value, str):
+            codes.add(value)
+    visit(raw)
+    hints = []
+    if "restrictions_coliving" in codes:
+        hints.append("平台拒绝当前账号的刊登模式（restrictions_coliving / seller.unable_to_list）；需核对目标站点 User Products 开通状态并联系平台确认限制")
+    if "item.dimensions" in codes:
+        hints.append("平台判定包装尺寸或重量不符合真实测量（item.dimensions）；请核实实际包装长宽高和重量")
+    if "user_product.repeated.conflict" in codes:
+        hints.append("变体与已创建的 User Product 冲突（user_product.repeated.conflict）；请核对平台身份属性及已有商品，勿直接重复创建")
+    return "；".join(hints)
 
 
 def _user_product_family_result(raw: Any, expected: int, site_id: str) -> dict[str, Any]:
@@ -1779,7 +1823,8 @@ def _user_product_family_result(raw: Any, expected: int, site_id: str) -> dict[s
     if len(family_ids) > 1:
         errors.append("平台返回了多个 family，请检查变体的公共属性")
     if errors:
-        exc = MercadoLibreError("User Products family 刊登未全部成功：" + "; ".join(errors))
+        summary = publication_failure_summary(raw)
+        exc = MercadoLibreError("User Products family 刊登未全部成功：" + (summary or "; ".join(errors)))
         # Batch workers save the complete response, including products already
         # created, so a partial failure never disappears behind a success flag.
         exc.publication_result = result
@@ -2000,7 +2045,7 @@ def follow_sell(
         endpoint = (
             "/global/user-products/families" if is_family else str(
                 os.environ.get("MERCADO_USER_PRODUCTS_CREATE_ENDPOINT")
-                or "/global/user-products"
+                or "/global/items"
             ).strip()
         )
         if is_family:
@@ -2065,7 +2110,7 @@ def follow_sell(
                 result = client.request("POST", endpoint, json_body=payload)
             elif (
                 is_user_product
-                and endpoint == "/global/user-products"
+                and endpoint in {"/global/user-products", "/global/items"}
                 and exc.status_code == 400
                 and (
                     "user_product.repeated.conflict" in str(exc)

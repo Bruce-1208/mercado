@@ -1,0 +1,86 @@
+{
+  "siteID": "CBT",
+  "title": "Intellectual property infringements - Mexico",
+  "denouncesTotal": 3,
+  "detectionsTotal": 64,
+  "infractions": {
+    "paging": {
+      "total": 3,
+      "offset": 0,
+      "limit": 7
+    },
+    "results": [
+      {
+        "date_created": "9/17/26",
+        "related_filter_name": "PPPI1",
+        "member_id": 1003437,
+        "case_id": 37905319,
+        "element_id": "MLM6096585624",
+        "url": {
+          "href": "https://global-selling.mercadolibre.com/noindex/pppi/counter-notice?case_id=37905319&user_id=3460059613",
+          "label": "View notice"
+        },
+        "item": {
+          "id": "6096585624",
+          "title": "Para El Juego De Cartas Dixit Libellud",
+          "shipping": "cross_docking",
+          "picture": "https://http2.mlstatic.com/D_999646-MLB104373265345_012026-I.jpg",
+          "channels": [
+            "marketplace"
+          ]
+        },
+        "denouncer": "Reported by Asmodee Enforcement Team"
+      },
+      {
+        "date_created": "9/18/26",
+        "related_filter_name": "PPPI1",
+        "member_id": 1003437,
+        "case_id": 37910812,
+        "element_id": "MLM6046374758",
+        "url": {
+          "href": "https://global-selling.mercadolibre.com/noindex/pppi/counter-notice?case_id=37910812&user_id=3460059613",
+          "label": "View notice"
+        },
+        "item": {
+          "id": "6046374758",
+          "title": "Dixit Daydreams - Expansión Al 2025 Productos Populares",
+          "shipping": "cross_docking",
+          "picture": "https://http2.mlstatic.com/D_816657-CBT101572134630_122025-I.jpg",
+          "channels": [
+            "marketplace"
+          ]
+        },
+        "denouncer": "Reported by Asmodee Enforcement Team"
+      },
+      {
+        "date_created": "9/17/26",
+        "related_filter_name": "PPPI1",
+        "member_id": 1003437,
+        "case_id": 37905325,
+        "element_id": "MLM6095713872",
+        "url": {
+          "href": "https://global-selling.mercadolibre.com/noindex/pppi/counter-notice?case_id=37905325&user_id=3460059613",
+          "label": "View notice"
+        },
+        "item": {
+          "id": "6095713872",
+          "title": "Para El Juego De Cartas Dixit Libellud",
+          "shipping": "cross_docking",
+          "picture": "https://http2.mlstatic.com/D_825516-CBT100861904067_122025-I.jpg",
+          "channels": [
+            "marketplace"
+          ]
+        },
+        "denouncer": "Reported by Asmodee Enforcement Team"
+      }
+    ]
+  },
+  "selectedTab": "denounces",
+  "denouncesTableAnalytics": {
+    "denouncesLink": "/SJ-INFRACTIONS/DENOUNCE_LINK",
+    "withdrawProductsLink": "/SJ-INFRACTIONS/WITHDRAW_PRODUCTS",
+    "avoidInfractionsLink": "/SJ-INFRACTIONS/AVOID_INFRACTION"
+  },
+  "isRestricted": false,
+  "hasPendingItems": false
+}

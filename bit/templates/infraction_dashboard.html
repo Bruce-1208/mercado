@@ -531,7 +531,7 @@
             <div>
                 {% if ip_rights_mode %}
                 <h1>全部店铺侵权和权利人排名</h1>
-                <p class="heading-note">仅统计 PPPI 侵权页面中的平台侵权和权利人举报，不包含禁限售商品；后台每 12 小时自动同步一次。</p>
+                <p class="heading-note">刷新时通过店铺浏览器核对官网当前侵权和举报列表；读取失败保留上次结果。首次核对前显示已有同步数据，已核对站点每 12 小时自动更新。</p>
                 {% else %}
                 <h1>按账户组与业务员查看违规商品</h1>
                 <p class="heading-note">平台违规检测、禁限售与权利人举报统一统计；后台每 12 小时自动同步一次。</p>
@@ -567,8 +567,9 @@
             <div class="field">
                 <label for="days-select">统计范围</label>
                 <select id="days-select">
+                    {% if ip_rights_mode %}<option value="0" selected>官网当前全部</option>{% endif %}
                     <option value="7">最近 7 天</option>
-                    <option value="30" selected>最近 30 天</option>
+                    <option value="30" {% if not ip_rights_mode %}selected{% endif %}>最近 30 天</option>
                     <option value="90">最近 90 天</option>
                     <option value="365">最近 365 天</option>
                 </select>
@@ -787,7 +788,7 @@
             document.getElementById("metric-people").textContent = number(summary.salesperson_count);
             document.getElementById("metric-range").textContent = viewMode === "history"
                 ? "全部历史 · 已去重"
-                : `最近 ${days} 天 · 当前违规商品`;
+                : (days === 0 ? "官网当前全部" : `最近 ${days} 天 · 当前违规商品`);
             document.getElementById("metric-groups").textContent = ipRightsMode
                 ? `${number(summary.site_count)} 个账户站点 · 全店铺统一排名`
                 : `${number(summary.site_count)} 个账户站点 · ${number(summary.group_count)} 个组`;
@@ -1084,7 +1085,7 @@
                 const response = await fetch("/api/official-infractions/sync", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: "{}",
+                    body: JSON.stringify({pppi: ipRightsMode}),
                 });
                 const payload = await response.json();
                 if (!response.ok && response.status !== 409) throw new Error(payload.message || "启动同步失败");
@@ -1112,7 +1113,7 @@
                 const response = await fetch("/api/official-infractions/sync", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({token_ids: [tokenId]}),
+                    body: JSON.stringify({token_ids: [tokenId], pppi: ipRightsMode}),
                 });
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {

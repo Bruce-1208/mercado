@@ -971,6 +971,8 @@ def _normalize_marketplace_variations_once(original, schema, *, api_key="", mode
             "返回JSON对象 options 数组，每项包含 option_id 和 attributes 数组。"
             "每个输入选项必须且只能返回一次；属性只能使用schema中的id，value_name使用英文，"
             "枚举value_id必须来自schema。保留颜色、尺码、款式等完整区别，不能合并不同选项；"
+            "User Products 仅按hierarchy=PARENT_PK/CHILD_PK识别商品；CHILD_DEPENDENT等从属属性不能独立区分SKU。"
+            "长度规格应同时保留LENGTH并将原始尺码如130 cm映射到SIZE（仅当schema允许）；不得编造标准码。"
             "不要将款式冒充颜色，不要编造规格。若schema有MODEL，商品款式/版本可完整翻译到MODEL；"
             "例如英雄归来网纱款可映射MODEL=Homecoming mesh version；角色名可映射CHARACTER。"
             "复合款式须完整保留版本、角色、网纱/镜片、颜色、造型，不可只取共同角色名。"
@@ -1027,7 +1029,8 @@ def _normalize_marketplace_variations_once(original, schema, *, api_key="", mode
                 if aid in attributes and attributes[aid] != attribute:
                     raise ValueError("同一变体的规格映射冲突，未保存")
                 attributes[aid] = deepcopy(attribute)
-        signature = json.dumps(attributes, sort_keys=True, ensure_ascii=False)
+        from erp.mercadolibre_follow_sell import _user_product_identity_signature
+        signature = _user_product_identity_signature(attributes.values(), schema)
         if signature in signatures:
             previous_refs = signatures[signature]
             detail = json.dumps({

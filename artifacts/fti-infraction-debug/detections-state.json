@@ -1,0 +1,163 @@
+{
+  "siteID": "CBT",
+  "title": "Intellectual property infringements - Mexico",
+  "denouncesTotal": 3,
+  "detectionsTotal": 64,
+  "infractions": {
+    "paging": {
+      "total": 64,
+      "offset": 0,
+      "limit": 7
+    },
+    "results": [
+      {
+        "date_created": "9/2/26",
+        "related_filter_name": "FAKES",
+        "case_id": 6157321393,
+        "denouncer": "Detected by Mercado Libre",
+        "element_id": "MLM3401185759",
+        "url": {
+          "href": "https://mercadolibre.com.mx/ayuda/1078",
+          "label": "View policy"
+        },
+        "item": {
+          "id": "3401185759",
+          "title": "Gorra De Béisbol De Animales De Dibujos Ajustable Pro Black Negro Ajustable",
+          "shipping": "cross_docking",
+          "picture": "https://http2.mlstatic.com/D_794383-CBT75589263807_042024-I.jpg",
+          "channels": [
+            "marketplace"
+          ]
+        }
+      },
+      {
+        "date_created": "9/2/26",
+        "related_filter_name": "FAKES",
+        "case_id": 6223191540,
+        "denouncer": "Detected by Mercado Libre",
+        "element_id": "MLM3355692839",
+        "url": {
+          "href": "https://mercadolibre.com.mx/ayuda/1078",
+          "label": "View policy"
+        },
+        "item": {
+          "id": "3355692839",
+          "title": "Gorra De Béisbol De Animales De Dibujos Ajustable Pro Black Old Lion King White Ajustable",
+          "shipping": "cross_docking",
+          "picture": "https://http2.mlstatic.com/D_829794-CBT75589263825_042024-I.jpg",
+          "channels": [
+            "marketplace"
+          ]
+        }
+      },
+      {
+        "date_created": "9/2/26",
+        "related_filter_name": "FAKES",
+        "case_id": 6223191232,
+        "denouncer": "Detected by Mercado Libre",
+        "element_id": "MLM6097063360",
+        "url": {
+          "href": "https://mercadolibre.com.mx/ayuda/1078",
+          "label": "View policy"
+        },
+        "item": {
+          "id": "6097063360",
+          "title": "Gorra De Béisbol De Animales De Dibujos Ajustable Pro Black Blanco Ajustable",
+          "shipping": "cross_docking",
+          "picture": "https://http2.mlstatic.com/D_612622-CBT75589263795_042024-I.jpg",
+          "channels": [
+            "marketplace"
+          ]
+        }
+      },
+      {
+        "date_created": "9/2/26",
+        "related_filter_name": "FAKES",
+        "case_id": 6223191132,
+        "denouncer": "Detected by Mercado Libre",
+        "element_id": "MLM3355701257",
+        "url": {
+          "href": "https://mercadolibre.com.mx/ayuda/1078",
+          "label": "View policy"
+        },
+        "item": {
+          "id": "3355701257",
+          "title": "Gorra De Béisbol De Animales De Dibujos Ajustable Pro Black Agua Ajustable",
+          "shipping": "cross_docking",
+          "picture": "https://http2.mlstatic.com/D_798979-CBT75589263843_042024-I.jpg",
+          "channels": [
+            "marketplace"
+          ]
+        }
+      },
+      {
+        "date_created": "9/2/26",
+        "related_filter_name": "FAKES",
+        "case_id": 6157296633,
+        "denouncer": "Detected by Mercado Libre",
+        "element_id": "MLM6032649892",
+        "url": {
+          "href": "https://mercadolibre.com.mx/ayuda/1078",
+          "label": "View policy"
+        },
+        "item": {
+          "id": "6032649892",
+          "title": "Gorra De Béisbol De Animales De Dibujos Ajustable Pro Black Lion White Ajustable",
+          "shipping": "cross_docking",
+          "picture": "https://http2.mlstatic.com/D_772513-CBT75589263801_042024-I.jpg",
+          "channels": [
+            "marketplace"
+          ]
+        }
+      },
+      {
+        "date_created": "9/2/26",
+        "related_filter_name": "FAKES",
+        "case_id": 6157296617,
+        "denouncer": "Detected by Mercado Libre",
+        "element_id": "MLM6032671802",
+        "url": {
+          "href": "https://mercadolibre.com.mx/ayuda/1078",
+          "label": "View policy"
+        },
+        "item": {
+          "id": "6032671802",
+          "title": "Gorra De Béisbol De Animales De Dibujos Ajustable Pro Black Agua Ajustable",
+          "shipping": "cross_docking",
+          "picture": "https://http2.mlstatic.com/D_798979-CBT75589263843_042024-I.jpg",
+          "channels": [
+            "marketplace"
+          ]
+        }
+      },
+      {
+        "date_created": "9/2/26",
+        "related_filter_name": "FAKES",
+        "case_id": 6223189594,
+        "denouncer": "Detected by Mercado Libre",
+        "element_id": "MLM6097100030",
+        "url": {
+          "href": "https://mercadolibre.com.mx/ayuda/1078",
+          "label": "View policy"
+        },
+        "item": {
+          "id": "6097100030",
+          "title": "Gorra De Béisbol De Animales De Dibujos Ajustable Pro Black New White Panther Ajustable",
+          "shipping": "cross_docking",
+          "picture": "https://http2.mlstatic.com/D_892542-CBT75589263789_042024-I.jpg",
+          "channels": [
+            "marketplace"
+          ]
+        }
+      }
+    ]
+  },
+  "selectedTab": "detections",
+  "denouncesTableAnalytics": {
+    "denouncesLink": "/SJ-INFRACTIONS/DENOUNCE_LINK",
+    "withdrawProductsLink": "/SJ-INFRACTIONS/WITHDRAW_PRODUCTS",
+    "avoidInfractionsLink": "/SJ-INFRACTIONS/AVOID_INFRACTION"
+  },
+  "isRestricted": false,
+  "hasPendingItems": false
+}

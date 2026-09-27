@@ -1087,7 +1087,8 @@ def _package_attributes(client: MercadoLibreClient, global_item_id: str,
             raise ValueError("重量或尺寸必须是大于 0 的有效数值")
     if any(value < 3 for value in pieces):
         raise ValueError("美客多要求包装长宽高至少 3 厘米")
-    remote = client.request("GET", f"/global/items/{global_item_id}")
+    # Global Selling reads use /marketplace/items; /global/items is for writes.
+    remote = client.get_marketplace_item(global_item_id)
     attrs = list(remote.get("attributes") or [])
     updates = {
         key: {"id": key, "value_name": f"{format(number.normalize(), 'f')} {unit}"}

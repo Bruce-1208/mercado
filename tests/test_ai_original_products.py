@@ -740,3 +740,32 @@ def test_approved_ai_item_failure_does_not_block_other_approved_items(monkeypatc
     assert result['published_count'] == 1
     assert result['failed_count'] == 1
     assert len(calls) == 1
+
+
+def test_marketplace_variations_retry_dependent_length_with_real_size():
+    from erp.ai_original_products import normalize_marketplace_variations
+    original = {'variations': [
+        {'sku_id': str(i), 'available_quantity': i + 3,
+         'attribute_combinations': [{'name': '规格', 'value_name': f'{n}cm'}]}
+        for i, n in enumerate((130, 150))
+    ]}
+    schema = [
+        {'id': 'COLOR', 'hierarchy': 'CHILD_PK'},
+        {'id': 'SIZE', 'hierarchy': 'CHILD_PK'},
+        {'id': 'LENGTH', 'hierarchy': 'CHILD_DEPENDENT'},
+    ]
+    calls = []
+    def chat(messages, **kwargs):
+        calls.append(messages)
+        return json.dumps({'options': [
+            {'option_id': i, 'attributes': [
+                {'id': 'COLOR', 'value_name': 'Orange'},
+                {'id': 'LENGTH', 'value_name': f'{n} cm'},
+            ] + ([{'id': 'SIZE', 'value_name': f'{n} cm'}] if len(calls) > 1 else [])}
+            for i, n in enumerate((130, 150))
+        ]})
+    result = normalize_marketplace_variations(original, schema, chat=chat)
+    assert len(calls) == 2
+    assert [v['sku_id'] for v in result] == ['0', '1']
+    assert [v['available_quantity'] for v in result] == [3, 4]
+    assert all(any(a['id'] == 'SIZE' for a in v['attribute_combinations']) for v in result)

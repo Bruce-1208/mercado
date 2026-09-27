@@ -84,6 +84,30 @@ def test_status_exposes_current_product_category_name(service):
     }
 
 
+@pytest.mark.parametrize("target,expected_running", [(None, False), ("plugin", False), ("local", False), ("agent", True)])
+def test_agent_login_identity_does_not_revive_previous_plugin_run(service, target, expected_running):
+    run = {"run_id": "old-collection", "outcome": "running", "mode": "pipeline"}
+    if target is not None:
+        run["execution_target"] = target
+    service.store.set_state("run", run)
+    identity = {"target": "agent", "agent_id": "login-computer", "job_id": "login-job"}
+    service.store.set_state("execution_identity", identity)
+    service.store.set_state("login", {"confirmed": False})
+
+    status = service.status()
+
+    assert status["running"] is expected_running
+    assert status["execution_identity"] == identity
+    assert service.store.state("run") == run  # Preserve the previous batch.
+
+
+def test_local_browser_lock_still_blocks_controls_after_agent_login(service):
+    service.store.set_state("execution_identity", {"target": "agent"})
+    with service.idle():
+        assert service.status()["running"] is True
+    assert service.status()["running"] is False
+
+
 @pytest.mark.parametrize("value", [0,.95,.9499,1,True,float("nan"),".96"])
 def test_invalid_config_confidence(value):
     if value == .95 and type(value) is float:

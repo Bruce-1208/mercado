@@ -3,6 +3,42 @@ from unittest.mock import Mock, patch
 import pytest
 
 from bit import weight_dimensions_records as records
+from mercado_api.client import MercadoLibreClient
+
+
+@pytest.mark.parametrize("dimensions", ["14x13x13", ""])
+def test_package_attributes_reads_marketplace_endpoint_before_global_write(dimensions):
+    client = MercadoLibreClient("test")
+    original = [
+        {"id": "BRAND", "value_name": "Example"},
+        {"id": "PACKAGE_WEIGHT", "value_name": "500 g"},
+        {"id": "PACKAGE_LENGTH", "value_name": "10 cm"},
+    ]
+    calls = []
+
+    def request(method, path, **kwargs):
+        calls.append((method, path, kwargs))
+        if method == "GET" and path == "/marketplace/items/CBT3588524519":
+            return {"attributes": original}
+        if method == "PUT" and path == "/global/items/CBT3588524519":
+            return {}
+        raise AssertionError(f"Unexpected endpoint: {method} {path}")
+
+    client.request = request
+    records._package_attributes(client, "CBT3588524519", "866", dimensions)
+    assert [c[:2] for c in calls] == [
+        ("GET", "/marketplace/items/CBT3588524519"),
+        ("PUT", "/global/items/CBT3588524519"),
+    ]
+    attributes = calls[1][2]["json_body"]["attributes"]
+    values = {a["id"]: a["value_name"] for a in attributes}
+    expected = {"BRAND": "Example", "PACKAGE_WEIGHT": "866 g",
+                "PACKAGE_LENGTH": "14 cm" if dimensions else "10 cm"}
+    if dimensions:
+        expected.update(PACKAGE_WIDTH="13 cm", PACKAGE_HEIGHT="13 cm")
+    assert values == expected
+    assert len(attributes) == len(expected)
+    assert original[1]["value_name"] == "500 g"
 
 
 def order(number="1", **changes):
@@ -33,7 +69,7 @@ def test_expansion_pages_exact_title_scope_and_duplicate_links():
     assert all(c.kwargs["token_ids"] == [1, 2] for c in listing.call_args_list)
 
 
-@pytest.mark.parametrize("failed_item", [None, "MLB2"])
+@pytest.mark.parametrize("failed_item", [None, "MLB2", "CBT2"])
 def test_execute_deduplicates_latest_measurements_and_keeps_each_net(failed_item):
     originals = [order("1"), order("2")]
     originals[1]["actual_weight_g"] = "600"
@@ -47,18 +83,23 @@ def test_execute_deduplicates_latest_measurements_and_keeps_each_net(failed_item
         if item == failed_item:
             raise RuntimeError("remote write failed")
     client.update_global_item.side_effect = write
+    def update_package(_client, global_id, *_args):
+        if global_id == failed_item:
+            raise RuntimeError("package write failed")
+
     with patch.object(records, "_tasks", {"test": task}), \
          patch.object(records.bit_mysql, "get_mercado_store_token", return_value={}), \
          patch.object(records, "_client_and_token", return_value=(client, {})), \
          patch.object(records, "MercadoLibreClient", return_value=client), \
          patch.object(records.bit_db_api, "list_mercado_store_links", return_value={"pages": 1, "rows": [
              {"token_id": 2, "item_id": "MLB2", "title": "Same"}]}), \
-         patch.object(records, "_package_attributes") as package, \
+         patch.object(records, "_package_attributes", side_effect=update_package) as package, \
          patch.object(records.bit_db_api, "append_weight_dimensions_record_log"):
         records._run_execute("test", "user", action="zeshun")
     assert package.call_count == 2
     assert {c.args[1:] for c in package.call_args_list} == {("CBT1", "600", "10x5x5"), ("CBT2", "600", "10x5x5")}
-    assert {(c.args[0], c.args[1]["net_proceeds"]) for c in client.update_global_item.call_args_list} == {("MLM1", 11), ("MLB2", 22)}
+    expected_net = {("MLM1", 11)} if failed_item == "CBT2" else {("MLM1", 11), ("MLB2", 22)}
+    assert {(c.args[0], c.args[1]["net_proceeds"]) for c in client.update_global_item.call_args_list} == expected_net
     assert all(r["_zeshun_status"] == ("失败" if failed_item else "成功") for r in originals)
     assert all(r["current_net_proceeds_usd"] == "11" for r in originals)
     if failed_item:

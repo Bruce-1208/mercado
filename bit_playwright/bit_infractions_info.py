@@ -998,7 +998,9 @@ def _switch_site_if_needed(page, name, site, retries=3):
 
     for attempt in range(1, retries + 1):
         try:
-            page.locator(".nav-header-cbt__site-switcher").click(
+            page.locator(
+                ".nav-header-cbt__site-switcher, .nav-header-sellers-sites-switcher__trigger"
+            ).first.click(
                 timeout=INFRACTIONS_ELEMENT_TIMEOUT_MS
             )
             print(f"{name}打开站点选择器")
