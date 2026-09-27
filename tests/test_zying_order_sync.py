@@ -1,8 +1,9 @@
 from contextlib import contextmanager
 import threading
+import time
 
 import pytest
-from bit.zying_order_sync import SyncManager, parse_purchase, snapshot_orders
+from bit.zying_order_sync import AgentSync, SyncManager, parse_purchase, snapshot_orders
 
 
 def detail(**root):
@@ -43,6 +44,69 @@ def test_filtered_snapshot_reads_all_pages_before_writing():
     assert len(snapshot_orders(read, {"page": 12, "status": "待采", "store_ids": [7]})) == 2
     assert [item["page"] for item in calls] == [1, 2]
     assert all(item["status"] == "待采" and item["store_ids"] == [7] for item in calls)
+
+
+def test_agent_sync_preparation_returns_before_order_snapshot_finishes():
+    entered = threading.Event()
+    release = threading.Event()
+    enqueued = threading.Event()
+    jobs = []
+
+    class Store:
+        def enqueue_job(self, *args, **kwargs):
+            jobs.append((args, kwargs))
+            enqueued.set()
+
+    def read(**params):
+        entered.set()
+        assert release.wait(3)
+        return {"rows": [{"id": "2000001", "order_number": "1001", "pack_id": "4001"}], "total": 1}
+
+    agent_sync = AgentSync()
+    initial = agent_sync.start_preparing(
+        71, "agent-123456789", {"status": "待采"}, read, Store(),
+        required_version=lambda: {"version": "bundle-v1"},
+        created_by_id=71, created_by_name="测试账号",
+    )
+    assert initial["running"] and initial["phase"] == "loading"
+    assert entered.wait(1)
+    assert not enqueued.is_set()
+
+    release.set()
+    assert enqueued.wait(3)
+    args, kwargs = jobs[0]
+    assert args[2] == "zying_order_sync"
+    assert args[3]["rows"] == [{"id": "2000001", "order_number": "1001", "pack_id": "4001"}]
+    assert kwargs["required_version"] == "bundle-v1"
+    assert agent_sync.preparing_status(71) is None
+
+
+def test_stopping_agent_sync_during_order_snapshot_prevents_enqueue():
+    entered = threading.Event()
+    release = threading.Event()
+    enqueued = threading.Event()
+
+    class Store:
+        def enqueue_job(self, *args, **kwargs):
+            enqueued.set()
+
+    def read(**params):
+        entered.set()
+        assert release.wait(3)
+        return {"rows": [{"id": "2000001"}], "total": 1}
+
+    agent_sync = AgentSync()
+    agent_sync.start_preparing(71, "agent-123456789", {}, read, Store(), required_version="v1")
+    assert entered.wait(1)
+    stopping = agent_sync.stop_preparing(71)
+    assert stopping["phase"] == "stopping"
+    release.set()
+    deadline = time.monotonic() + 3
+    while agent_sync.preparing_status(71)["running"] and time.monotonic() < deadline:
+        time.sleep(0.01)
+    state = agent_sync.preparing_status(71)
+    assert state["phase"] == "stopped"
+    assert not enqueued.is_set()
 
 
 def test_partial_failure_and_user_isolation():
@@ -110,10 +174,11 @@ def test_route_scopes_filters_and_status(monkeypatch):
     assert app_module.app.test_client().post("/api/orders/zying-sync/start").status_code == 401
 
 
-def test_playwright_search_and_detail_flow():
+@pytest.mark.parametrize("initial_route", [None, "/home", "/product", "/login", "/order-detail"])
+def test_playwright_search_and_detail_flow(initial_route):
     """Real browser exercises search submit, response correlation and detail click offline."""
     from playwright.sync_api import sync_playwright
-    from bit.zying_order_sync import ZyingPage, SEARCH_PLACEHOLDER
+    from bit.zying_order_sync import ZyingPage, SEARCH_PLACEHOLDER, ORDER_URL
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
@@ -131,6 +196,9 @@ def test_playwright_search_and_detail_flow():
             else:
                 route.fulfill(content_type="text/html; charset=utf-8", body=f'''<meta charset="utf-8"><form><input placeholder="{SEARCH_PLACEHOLDER}"></form><table><tbody></tbody></table>
                 <script>
+                function showOrderSearch() {{ document.querySelector('form').hidden = location.hash !== '#/order'; }}
+                addEventListener('hashchange', showOrderSearch);
+                showOrderSearch();
                 document.querySelector('form').onsubmit=async e=>{{
                   e.preventDefault();
                   await fetch('/api/CmdHandler?cmd=orders.load', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{key:document.querySelector('input').value}})}});
@@ -140,10 +208,18 @@ def test_playwright_search_and_detail_flow():
                 </script>''')
         page.route("**/*", route_request)
         try:
-            result = ZyingPage(page).lookup({"id": "2000001", "pack_id": "4000001"})
+            if initial_route:
+                page.goto(ORDER_URL.split('#')[0] + '#' + initial_route)
+            reader = ZyingPage(page)
+            result = reader.lookup({"id": "2000001", "pack_id": "4000001"})
             assert result == detail()
+            assert page.url == ORDER_URL
             assert calls[0][1]["key"] == "2000001,4000001"
             assert calls[1][1]["id"] == 123
+            # A later navigation must not be hidden by the cached ready flag.
+            page.goto(ORDER_URL.split('#')[0] + '#/product')
+            reader._ensure_order_page()
+            assert page.url == ORDER_URL
         finally:
             browser.close()
 
@@ -229,6 +305,17 @@ def agent_routes(monkeypatch, tmp_path, isolated_legacy_console_user):
     return app_module, client, store, calls
 
 
+def wait_for_agent_job(store, owner=71):
+    import time
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        jobs = store.list_jobs(job_type="zying_order_sync", created_by_id=owner, limit=1)
+        if jobs:
+            return jobs[0]
+        time.sleep(0.01)
+    raise AssertionError("后台订单准备完成后没有创建 Agent 任务")
+
+
 def test_default_agent_permission_and_filtered_payload(agent_routes):
     app_module, client, store, calls = agent_routes
     assert client.post("/api/orders/zying-sync/start", json={"execution_target": "server"}).status_code == 403
@@ -236,7 +323,8 @@ def test_default_agent_permission_and_filtered_payload(agent_routes):
     assert client.post("/api/orders/zying-sync/start", json={"agent_id": "offline-agent"}).status_code == 400
     response = client.post("/api/orders/zying-sync/start?store_id=7&store_id=99", json={"agent_id": "agent-001"})
     assert response.status_code == 202
-    job = store.get_job(response.json["data"]["task_id"])
+    assert response.json["data"]["phase"] == "loading"
+    job = wait_for_agent_job(store)
     assert job["job_type"] == "zying_order_sync"
     assert job["created_by_id"] == 71
     assert job["payload"]["rows"] == [{"id": "2000001", "order_number": "2000001", "pack_id": None}]
@@ -250,7 +338,7 @@ def test_agent_login_owner_scope_persistence_and_stop_blocks_writes(agent_routes
     app_module, client, store, calls = agent_routes
     from bit import zying_order_sync as sync
     response = client.post("/api/orders/zying-sync/start", json={"agent_id": "agent-001"})
-    job_id = response.json["data"]["task_id"]
+    job_id = wait_for_agent_job(store)["job_id"]
     store.claim_job("agent-001")
     path = "/api/local-agents/zying-sync/" + job_id
     headers = {"X-Internal-Token": "agent-001"}

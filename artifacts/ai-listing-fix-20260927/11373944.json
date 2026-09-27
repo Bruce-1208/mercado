@@ -1,0 +1,389 @@
+{
+  "category_id": "CBT7787",
+  "category_name": "Wigs",
+  "variations": [
+    {
+      "id": "6079348725008",
+      "sku_id": "6079348725008",
+      "seller_sku": "",
+      "label": "黑色乱尖",
+      "attribute_combinations": [
+        {
+          "id": "TONALITY",
+          "name": "Tonality",
+          "value_name": "Black",
+          "value_id": "2165827"
+        },
+        {
+          "id": "MODEL",
+          "name": "Model",
+          "value_name": "Messy spikes"
+        }
+      ],
+      "price": 19,
+      "price_text": "¥19.00",
+      "available_quantity": 54,
+      "image_url": "",
+      "raw_weight": "20g",
+      "raw_text": "黑色乱尖",
+      "weight_g": 20
+    },
+    {
+      "id": "6241267339957",
+      "sku_id": "6241267339957",
+      "seller_sku": "",
+      "label": "灰色单尖",
+      "attribute_combinations": [
+        {
+          "id": "MODEL",
+          "name": "Model",
+          "value_name": "Single spike"
+        }
+      ],
+      "price": 12.35,
+      "price_text": "¥12.35",
+      "available_quantity": 1450,
+      "image_url": "",
+      "raw_weight": "20g",
+      "raw_text": "灰色单尖",
+      "weight_g": 20
+    },
+    {
+      "id": "6241267339958",
+      "sku_id": "6241267339958",
+      "seller_sku": "",
+      "label": "多彩色13尖",
+      "attribute_combinations": [
+        {
+          "id": "MODEL",
+          "name": "Model",
+          "value_name": "Multicolor 13 spikes"
+        }
+      ],
+      "price": 19,
+      "price_text": "¥19.00",
+      "available_quantity": 4973,
+      "image_url": "",
+      "raw_weight": "20g",
+      "raw_text": "多彩色13尖",
+      "weight_g": 20
+    },
+    {
+      "id": "6241267339959",
+      "sku_id": "6241267339959",
+      "seller_sku": "",
+      "label": "红色13尖",
+      "attribute_combinations": [
+        {
+          "id": "MODEL",
+          "name": "Model",
+          "value_name": "Red 13 spikes"
+        }
+      ],
+      "price": 13.3,
+      "price_text": "¥13.30",
+      "available_quantity": 473,
+      "image_url": "",
+      "raw_weight": "20g",
+      "raw_text": "红色13尖",
+      "weight_g": 20
+    },
+    {
+      "id": "6241267339960",
+      "sku_id": "6241267339960",
+      "seller_sku": "",
+      "label": "彩色13尖",
+      "attribute_combinations": [
+        {
+          "id": "MODEL",
+          "name": "Model",
+          "value_name": "Colorful 13 spikes"
+        }
+      ],
+      "price": 13.48,
+      "price_text": "¥13.48",
+      "available_quantity": 726,
+      "image_url": "",
+      "raw_weight": "20g",
+      "raw_text": "彩色13尖",
+      "weight_g": 20
+    },
+    {
+      "id": "6241267339961",
+      "sku_id": "6241267339961",
+      "seller_sku": "",
+      "label": "黑色13尖",
+      "attribute_combinations": [
+        {
+          "id": "TONALITY",
+          "name": "Tonality",
+          "value_name": "Black",
+          "value_id": "2165827"
+        },
+        {
+          "id": "MODEL",
+          "name": "Model",
+          "value_name": "13 spikes"
+        }
+      ],
+      "price": 13.3,
+      "price_text": "¥13.30",
+      "available_quantity": 3759,
+      "image_url": "",
+      "raw_weight": "20g",
+      "raw_text": "黑色13尖",
+      "weight_g": 20
+    },
+    {
+      "id": "6241267339962",
+      "sku_id": "6241267339962",
+      "seller_sku": "",
+      "label": "湖蓝色13尖",
+      "attribute_combinations": [
+        {
+          "id": "MODEL",
+          "name": "Model",
+          "value_name": "Lake blue 13 spikes"
+        }
+      ],
+      "price": 13.3,
+      "price_text": "¥13.30",
+      "available_quantity": 3598,
+      "image_url": "",
+      "raw_weight": "20g",
+      "raw_text": "湖蓝色13尖",
+      "weight_g": 20
+    },
+    {
+      "id": "6241267339963",
+      "sku_id": "6241267339963",
+      "seller_sku": "",
+      "label": "黄色13尖",
+      "attribute_combinations": [
+        {
+          "id": "MODEL",
+          "name": "Model",
+          "value_name": "Yellow 13 spikes"
+        }
+      ],
+      "price": 13.3,
+      "price_text": "¥13.30",
+      "available_quantity": 2636,
+      "image_url": "",
+      "raw_weight": "20g",
+      "raw_text": "黄色13尖",
+      "weight_g": 20
+    },
+    {
+      "id": "6241267339964",
+      "sku_id": "6241267339964",
+      "seller_sku": "",
+      "label": "深蓝色13尖",
+      "attribute_combinations": [
+        {
+          "id": "MODEL",
+          "name": "Model",
+          "value_name": "Dark blue 13 spikes"
+        }
+      ],
+      "price": 13.3,
+      "price_text": "¥13.30",
+      "available_quantity": 484,
+      "image_url": "",
+      "raw_weight": "20g",
+      "raw_text": "深蓝色13尖",
+      "weight_g": 20
+    },
+    {
+      "id": "6241267339965",
+      "sku_id": "6241267339965",
+      "seller_sku": "",
+      "label": "红黄单尖",
+      "attribute_combinations": [
+        {
+          "id": "MODEL",
+          "name": "Model",
+          "value_name": "Red-yellow single spike"
+        }
+      ],
+      "price": 12.35,
+      "price_text": "¥12.35",
+      "available_quantity": 4981,
+      "image_url": "",
+      "raw_weight": "20g",
+      "raw_text": "红黄单尖",
+      "weight_g": 20
+    },
+    {
+      "id": "6241267339966",
+      "sku_id": "6241267339966",
+      "seller_sku": "",
+      "label": "精灵深粉色单尖",
+      "attribute_combinations": [
+        {
+          "id": "MODEL",
+          "name": "Model",
+          "value_name": "Elf dark pink single spike"
+        }
+      ],
+      "price": 12.35,
+      "price_text": "¥12.35",
+      "available_quantity": 496,
+      "image_url": "",
+      "raw_weight": "20g",
+      "raw_text": "精灵深粉色单尖",
+      "weight_g": 20
+    },
+    {
+      "id": "6241267339967",
+      "sku_id": "6241267339967",
+      "seller_sku": "",
+      "label": "桔色单尖",
+      "attribute_combinations": [
+        {
+          "id": "MODEL",
+          "name": "Model",
+          "value_name": "Orange single spike"
+        }
+      ],
+      "price": 12.35,
+      "price_text": "¥12.35",
+      "available_quantity": 594,
+      "image_url": "",
+      "raw_weight": "20g",
+      "raw_text": "桔色单尖",
+      "weight_g": 20
+    },
+    {
+      "id": "6241267339968",
+      "sku_id": "6241267339968",
+      "seller_sku": "",
+      "label": "浅紫色单尖",
+      "attribute_combinations": [
+        {
+          "id": "MODEL",
+          "name": "Model",
+          "value_name": "Light purple single spike"
+        }
+      ],
+      "price": 12.35,
+      "price_text": "¥12.35",
+      "available_quantity": 499,
+      "image_url": "",
+      "raw_weight": "20g",
+      "raw_text": "浅紫色单尖",
+      "weight_g": 20
+    },
+    {
+      "id": "6247963447976",
+      "sku_id": "6247963447976",
+      "seller_sku": "",
+      "label": "白色多尖带刘海",
+      "attribute_combinations": [
+        {
+          "id": "MODEL",
+          "name": "Model",
+          "value_name": "White multiple spikes with bangs"
+        },
+        {
+          "id": "WITH_BANGS",
+          "name": "With bangs",
+          "value_name": "Yes",
+          "value_id": "242085"
+        }
+      ],
+      "price": 15.2,
+      "price_text": "¥15.20",
+      "available_quantity": 2221,
+      "image_url": "",
+      "raw_weight": "20g",
+      "raw_text": "白色多尖带刘海",
+      "weight_g": 20
+    }
+  ],
+  "category_prediction_query": "Anime cosplay wig",
+  "attributes": [
+    {
+      "id": "BRAND",
+      "name": "Brand",
+      "value_name": "Generic"
+    },
+    {
+      "id": "CAP_SIZE",
+      "name": "Cap size",
+      "value_name": "M",
+      "value_id": "2165830"
+    },
+    {
+      "id": "HAIR_MATERIAL",
+      "name": "Hair material",
+      "value_name": "Synthetic",
+      "value_id": "2651423"
+    },
+    {
+      "id": "GENDER",
+      "name": "Gender",
+      "value_name": "Gender neutral",
+      "value_id": "110461"
+    },
+    {
+      "id": "PACKAGE_WEIGHT",
+      "name": "Package weight",
+      "value_name": "20 g"
+    },
+    {
+      "id": "EMPTY_GTIN_REASON",
+      "name": "Empty GTIN reason",
+      "value_name": "The product does not have registered code",
+      "value_id": "17055160"
+    },
+    {
+      "id": "INVOICE_PRODUCT_NAME",
+      "name": "Invoice product name",
+      "value_name": "Anime cosplay wig"
+    },
+    {
+      "id": "SAT_KEY",
+      "name": "Sat key",
+      "value_name": "Does not exist in the catalog",
+      "value_id": "82021094"
+    },
+    {
+      "id": "MEASURE_UNIT_KEY",
+      "name": "Measure unit key",
+      "value_name": "Does not exist in the catalog",
+      "value_id": "82021108"
+    },
+    {
+      "id": "MEASURE_UNIT_DESCRIPTION",
+      "name": "Measure unit description",
+      "value_name": "Piece"
+    },
+    {
+      "id": "ITEM_CONDITION",
+      "name": "Item condition",
+      "value_name": "New",
+      "value_id": "2230284"
+    },
+    {
+      "id": "IS_KIT",
+      "name": "Is kit",
+      "value_name": "No",
+      "value_id": "242084"
+    }
+  ],
+  "missing_required_attributes": [
+    {
+      "id": "PACKAGE_HEIGHT",
+      "name": "Package height"
+    },
+    {
+      "id": "PACKAGE_WIDTH",
+      "name": "Package width"
+    },
+    {
+      "id": "PACKAGE_LENGTH",
+      "name": "Package length"
+    }
+  ]
+}

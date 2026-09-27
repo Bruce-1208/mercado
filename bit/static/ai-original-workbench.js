@@ -86,13 +86,13 @@ function syncAiOriginalWorkbenchSelection() {
   const skippedCount = count - readyCount;
   const publish = document.getElementById("ai-original-publish");
   if (publish) {
-    publish.disabled = !readyCount;
-    publish.title = count ? `可上架 ${readyCount} 件，将自动忽略 ${skippedCount} 件资料不完整或未审核的产品` : "";
+    publish.disabled = !count;
+    publish.title = count ? `审核通过 ${readyCount} 件，将自动忽略 ${skippedCount} 件未审核通过的产品` : "";
   }
   const process = document.getElementById("ai-original-process");
   if (process && aiOriginalWorkbenchRunning) process.disabled = true;
   const hint = document.getElementById("ai-original-selection-hint");
-  if (hint) hint.textContent = count ? `所选 ${count} 件 · 可上架 ${readyCount} 件 · 将忽略 ${skippedCount} 件` : "选择商品后，批量生成刊登内容";
+  if (hint) hint.textContent = count ? `所选 ${count} 件 · 审核通过 ${readyCount} 件 · 将忽略 ${skippedCount} 件` : "选择商品后，批量生成刊登内容";
 }
 
 document.addEventListener("DOMContentLoaded", () => {

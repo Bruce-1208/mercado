@@ -6598,7 +6598,7 @@ def _weight_dimensions_saved_filters(filters):
                 value += " 00:00:00" if key == "date_from" else " 23:59:59"
             elif len(value) == 16:
                 value += ":00" if key == "date_from" else ":59"
-            clauses.append("`wdr_freight_changed_at` " + operator + " %s")
+            clauses.append("TRIM(REPLACE(COALESCE(`order_time`, ''), 'T', ' ')) " + operator + " %s")
             params.append(value)
     for key in ("source", "category", "region"):
         value = str(filters.get(key) or "").strip().casefold()
@@ -6646,9 +6646,7 @@ def list_weight_dimensions_records(order_numbers=None, filters=None, *, page=Non
         with connection.cursor() as cursor:
             _ensure_weight_dimensions_record_table(cursor)
             order_clause = (
-                "ORDER BY `wdr_freight_changed_at` DESC, `id` DESC"
-                if filters is not None else
-                "ORDER BY COALESCE(NULLIF(`order_time`, ''), '0000-00-00') DESC, `id` DESC"
+                "ORDER BY COALESCE(NULLIF(TRIM(REPLACE(`order_time`, 'T', ' ')), ''), '0000-00-00') DESC, `id` DESC"
             )
             where_clause = ("WHERE " + " AND ".join(clauses) + " ") if clauses else ""
             query_params = list(params)
@@ -6684,8 +6682,13 @@ def list_weight_dimensions_records(order_numbers=None, filters=None, *, page=Non
             if row.get("compensation_payload_json"):
                 apply_dimension_costs(record, json.loads(row["compensation_payload_json"]))
             result.append(record)
-        if filters is not None:
-            result.sort(key=lambda row: str(row.get("freight_changed_at") or ""), reverse=True)
+        result.sort(
+            key=lambda row: (
+                bool(str(row.get("time") or "").strip()),
+                str(row.get("time") or "").strip().replace("T", " "),
+            ),
+            reverse=True,
+        )
         return {**pagination, "records": result} if page is not None else result
     finally:
         connection.close()

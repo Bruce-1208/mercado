@@ -9907,10 +9907,10 @@
     <script src="{{ url_for('static', filename='console-ui.js') }}?v=20260915"></script>
     <script src="{{ url_for('static', filename='copy-anywhere.js') }}?v=20260922"></script>
     <script src="{{ url_for('static', filename='appeal-polling.js') }}?v=20260922"></script>
-    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260927-bulk-review"></script>
-    <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20260927-bulk-review"></script>
+    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260927-review-only-publish"></script>
+    <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20260927-review-only-publish"></script>
     <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260927-owners-net"></script>
-    <script defer src="{{ url_for('static', filename='weight-dimensions-records.js') }}?v=20260927-10"></script>
+    <script defer src="{{ url_for('static', filename='weight-dimensions-records.js') }}?v=20260927-11"></script>
     <script defer src="{{ url_for('static', filename='inventory-sku.js') }}?v=20260925-1"></script>
     <style>
         .ai-video-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(360px, .9fr); gap: 14px; align-items: start; }
@@ -11594,8 +11594,8 @@
                     <span id="wdr-state" role="status">正在读取最近七天已保存记录…</span>
                 </section>
                 <section class="panel wdr-filters" aria-label="重量尺寸变更记录筛选器">
-                    <label>变更开始时间<input id="wdr-filter-date-from" type="datetime-local" step="60"></label>
-                    <label>变更结束时间<input id="wdr-filter-date-to" type="datetime-local" step="60"></label>
+                    <label>下单开始时间<input id="wdr-filter-date-from" type="datetime-local" step="60"></label>
+                    <label>下单结束时间<input id="wdr-filter-date-to" type="datetime-local" step="60"></label>
                     <label>业务员<input id="wdr-filter-salesperson" type="text" placeholder="可输入多个，逗号分隔"></label>
                     <label>来源<input id="wdr-filter-source" type="text" placeholder="来源关键词"></label>
                     <label>店铺<input id="wdr-filter-store" type="text" placeholder="店铺名称或店铺 ID"></label>
@@ -11605,7 +11605,7 @@
                     <label>运费差值最大值<input id="wdr-filter-freight-max" type="number" step="0.01" placeholder="USD"></label>
                     <button class="primary" id="wdr-filter-apply" type="button">筛选已保存记录</button>
                 </section>
-                <p class="wdr-note">首次打开栏目和修改筛选条件时，会直接读取数据库中已保存的记录；点击“全量同步入库”会同步全部历史变更订单，分批保存后按当前条件展示；只纳入官方补差原因为重量尺寸不符且金额不为零的订单，排除单纯的预估运费差异。运费差值使用官方重量尺寸补差金额（含退款）；重量尺寸来自官方补差 API：当前标记值来自 declared，实际值来自 validated，未提供的实测项保留提示。时间筛选针对运费变更时间；可用“全选筛选结果”一次选择跨页的全部匹配记录，也可逐页勾选。产品 id、业务员、来源和分类等缺失信息通过订单导入补全。勾选订单后可分别执行两个更新动作；泽顺先更新关联链接重量尺寸，再重新提交当前净收益；智赢调用已登录的本机 Agent 逐个更新产品重量尺寸并将级别改为“重点”。</p>
+                <p class="wdr-note">首次打开栏目和修改筛选条件时，会直接读取数据库中已保存的记录；点击“全量同步入库”会同步全部历史变更订单，分批保存后按当前条件展示；只纳入官方补差原因为重量尺寸不符且金额不为零的订单，排除单纯的预估运费差异。运费差值使用官方重量尺寸补差金额（含退款）；重量尺寸来自官方补差 API：当前标记值来自 declared，实际值来自 validated，未提供的实测项保留提示。时间筛选和记录排序均按下单时间；可用“全选筛选结果”一次选择跨页的全部匹配记录，也可逐页勾选。产品 id、业务员、来源和分类等缺失信息通过订单导入补全。勾选订单后可分别执行两个更新动作；泽顺更新关联链接及授权店铺内所有已同步的同名链接（标题完全相同）的重量尺寸，再逐条重新提交各自当前净收益；同名链接采用所选最新订单的实测数据，未提供尺寸时保留原尺寸；智赢调用已登录的本机 Agent 逐个更新产品重量尺寸并将级别改为“重点”。</p>
                 <section class="panel wdr-table-panel">
                     <div class="wdr-table-wrap"><table id="wdr-table"><thead></thead><tbody><tr><td class="wdr-empty">正在读取最近七天记录</td></tr></tbody></table></div>
                     <div class="wdr-pagination" aria-label="变更记录分页">

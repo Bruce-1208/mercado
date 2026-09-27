@@ -1,0 +1,1086 @@
+{
+  "source_snapshot_json": {
+    "original_1688": {
+      "source_item_id": "1688734091201459",
+      "source_1688_item_id": "734091201459",
+      "source_url": "https://detail.1688.com/offer/734091201459.html?spm=a26352.13672862.offerlist.33.55b51e62hFspiA&offerId=734091201459&sortType=&pageId=&abBizDataType=cbuOffer&hotSaleSkuId=6241267339960&trace_log=normal&uuid=f115ab75b2754b99aaec713cdfb283dd&sourceId=V1-7a81ba1f6a0b9d70c3bc4b7fdd0f068d-S02&forcePC=1790256057084&kj_agent_plugin=zying",
+      "title": "赛亚人橘黄混色七龙珠假发成人儿童动漫cosplay发套蓬松头套短发",
+      "price": 12.35,
+      "currency_id": "CNY",
+      "main_image_url": "https://cbu01.alicdn.com/img/ibank/O1CN01BevEwF1DWdaZyLZnK_!!1009940224-0-cib.jpg",
+      "images": [
+        "https://cbu01.alicdn.com/img/ibank/O1CN01BevEwF1DWdaZyLZnK_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN01f1dZsI1DWdaOFtC87_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN01HzSUYv1DWdaYpQfLC_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN01wQAroz1DWdaVCuGjy_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN01nuSVPe1DWdadmnSKA_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN01cJ6aEv1DWdaVBIN6T_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN01WdDAgm1DWdQA1xRuI_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN01tD4ntl1DWdQ1TAfs7_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN012ECkss1DWdQ78b9sr_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN01dTr6WB1DWdmzQ7LID_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN01RVvn3I1DWdUApyiza_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN013WZ2091DWdpWpwL06_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN013KZbwn1DWdpQrw7pz_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/14024789842_366742712.jpg",
+        "https://cbu01.alicdn.com/img/ibank/13938882363_366742712.jpg",
+        "https://cbu01.alicdn.com/img/ibank/13938873536_366742712.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN01FdpdBf1DWdqxpZ3Z6_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN01zdwTdv1DWdrEC6m0s_!!1009940224-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN01OJ6QjX1DWdrFXe9UG_!!1009940224-0-cib.jpg"
+      ],
+      "properties": [],
+      "variations": [
+        {
+          "id": "6079348725008",
+          "sku_id": "6079348725008",
+          "seller_sku": "",
+          "label": "黑色乱尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "黑色乱尖"
+            }
+          ],
+          "price": 19,
+          "price_text": "¥19.00",
+          "available_quantity": 54,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "黑色乱尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339957",
+          "sku_id": "6241267339957",
+          "seller_sku": "",
+          "label": "灰色单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "灰色单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 1450,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "灰色单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339958",
+          "sku_id": "6241267339958",
+          "seller_sku": "",
+          "label": "多彩色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "多彩色13尖"
+            }
+          ],
+          "price": 19,
+          "price_text": "¥19.00",
+          "available_quantity": 4973,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "多彩色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339959",
+          "sku_id": "6241267339959",
+          "seller_sku": "",
+          "label": "红色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "红色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 473,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "红色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339960",
+          "sku_id": "6241267339960",
+          "seller_sku": "",
+          "label": "彩色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "彩色13尖"
+            }
+          ],
+          "price": 13.48,
+          "price_text": "¥13.48",
+          "available_quantity": 726,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "彩色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339961",
+          "sku_id": "6241267339961",
+          "seller_sku": "",
+          "label": "黑色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "黑色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 3759,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "黑色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339962",
+          "sku_id": "6241267339962",
+          "seller_sku": "",
+          "label": "湖蓝色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "湖蓝色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 3598,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "湖蓝色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339963",
+          "sku_id": "6241267339963",
+          "seller_sku": "",
+          "label": "黄色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "黄色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 2636,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "黄色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339964",
+          "sku_id": "6241267339964",
+          "seller_sku": "",
+          "label": "深蓝色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "深蓝色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 484,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "深蓝色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339965",
+          "sku_id": "6241267339965",
+          "seller_sku": "",
+          "label": "红黄单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "红黄单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 4981,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "红黄单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339966",
+          "sku_id": "6241267339966",
+          "seller_sku": "",
+          "label": "精灵深粉色单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "精灵深粉色单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 496,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "精灵深粉色单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339967",
+          "sku_id": "6241267339967",
+          "seller_sku": "",
+          "label": "桔色单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "桔色单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 594,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "桔色单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339968",
+          "sku_id": "6241267339968",
+          "seller_sku": "",
+          "label": "浅紫色单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "浅紫色单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 499,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "浅紫色单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6247963447976",
+          "sku_id": "6247963447976",
+          "seller_sku": "",
+          "label": "白色多尖带刘海",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "白色多尖带刘海"
+            }
+          ],
+          "price": 15.2,
+          "price_text": "¥15.20",
+          "available_quantity": 2221,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "白色多尖带刘海",
+          "weight_g": 20
+        }
+      ],
+      "description_text": "商品详情 【平台活动下价格】 活动前价格：（1）非分销场景下，指平台活动（不含分销场景的活动）预热期（若无预热期，则为爆发期）前的商品销售价格；（2）分销场景下，专指分销活动预热期（若无预热期，则为爆发期）前的商品销售价格。 前述价格未计算平台发放的各种采购津贴、跨店券、红包等优惠，未计算商家设置的满减优惠、优惠券、店铺返利金、店铺会员折扣以及L会员价、商家设置的指定人群单品优惠活动等各种优惠；该价格会计算其他非平台活动下的各种优惠（包括商家自行设置的非指定人群的单品优惠等，最终以商家的自行设置为准）。前述商品销售价格指商品页面当日展示的标价；若当日商家多次调整销售价格的，取当日最后展示的销售价格。 【非平台活动下价格】 划线价格：指商家自营销活动场景下的商品价格，该价格不包含平台的各种优惠活动。可能是商品的销售指导价或该商品的曾经展示过的销售价等，并非原价，仅供参考。 未划线价格：商品在1688平台上由商家自行设置的销售标价，具体的成交价格根据商家设置的各种优惠活动发生变化，最终以订单结算页价格为准。 【发布价】 指商品在1688平台上由商家自行设置的销售标价并叠加L会员价折扣后的价格，并非原价，仅供参考。 【全网销量】 指同款商品在多个平台（含淘宝、天猫及其他电子商务平台）上的累积销量 同款：指商品名称、外观、规格、成分、颜色、材质、功效、功能等多维度要素具有高度的相似性，但不视为二者具有完全相同的品牌、品质、功效或功能。 *注： 1、前述说明仅适用于价格比较下的场景。 2、活动前的时间通常为预热期/爆发期的前一天，但因数据的延迟性，取价时间可能会发生改变，最终以前述展示的具体时间和所对应的商品价格为准。 内容声明：阿里巴巴中国站为第三方交易平台及互联网信息服务提供者，阿里巴巴中国站（含网站、客户端等）所展示的商品/服务的标题、价格、详情等信息内容系由店铺经营者发布，其真实性、准确性和合法性均由店铺经营者负责。阿里巴巴提醒您购买商品/服务前注意谨慎核实，如您对商品/服务的标题、价格、详情等任何信息有任何疑问的，请在购买前通过阿里旺旺与店铺经营者沟通确认；阿里巴巴中国站存在海量店铺，如您发现店铺内有任何违法/侵权信息，请立即向阿里巴巴举报并提供有效线索。",
+      "category_id": "",
+      "category_name": "",
+      "scrape_status": "partial",
+      "error_message": "未读取到完整的1688规格包装尺寸",
+      "weight_g": 20,
+      "volumetric_weight_kg": null,
+      "package_length_cm": null,
+      "package_width_cm": null,
+      "package_height_cm": null,
+      "dimensions_display": "",
+      "weight_basis": "1688_source",
+      "collected_at": "2026-09-24T13:21:02.510Z"
+    },
+    "ai_original": {
+      "product_type_en": "Anime cosplay wig",
+      "title_es": "Peluca corta de cosplay anime, color naranja y negro",
+      "title_pt": "Peruca curta cosplay anime, laranja e preta",
+      "description_es": "Peluca corta de cosplay inspirada en personajes de anime, ideal para adultos y niños. Confeccionada en fibra sintética suave y ligera, con un peso de solo 20 gramos. Presenta un diseño con múltiples puntas y flequillo, disponible en varios colores: negro, gris, multicolor, rojo, azul, amarillo, naranja, morado, blanco y combinaciones. Perfecta para fiestas de disfraces, convenciones, Halloween o uso diario. Fácil de colocar y ajustar, cómoda para uso prolongado. Incluye: 1 peluca.",
+      "description_pt": "Peruca curta de cosplay inspirada em personagens de anime, ideal para adultos e crianças. Confeccionada em fibra sintética macia e leve, pesando apenas 20 gramas. Possui design com múltiplas pontas e franja, disponível em várias cores: preto, cinza, multicolorido, vermelho, azul, amarelo, laranja, roxo, branco e combinações. Perfeita para festas à fantasia, convenções, Halloween ou uso diário. Fácil de colocar e ajustar, confortável para uso prolongado. Inclui: 1 peruca.",
+      "attributes": [
+        {
+          "id": "BRAND",
+          "name": "Brand",
+          "value_name": "Generic"
+        },
+        {
+          "id": "GENDER",
+          "name": "Gender",
+          "value_name": "Gender neutral",
+          "value_id": "110461"
+        },
+        {
+          "id": "COMPOSITION",
+          "name": "Composition",
+          "value_name": "Synthetic fiber"
+        },
+        {
+          "id": "COSTUMES_NUMBER",
+          "name": "Costumes number",
+          "value_name": "1"
+        },
+        {
+          "id": "PACKAGE_WEIGHT",
+          "name": "Package weight",
+          "value_name": "20 g"
+        },
+        {
+          "id": "EMPTY_GTIN_REASON",
+          "name": "Empty GTIN reason",
+          "value_name": "The product does not have registered code",
+          "value_id": "17055160"
+        },
+        {
+          "id": "INCLUDES_ACCESSORIES",
+          "name": "Includes accessories",
+          "value_name": "No",
+          "value_id": "242084"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Item condition",
+          "value_name": "New",
+          "value_id": "2230284"
+        },
+        {
+          "id": "IS_KIT",
+          "name": "Is kit",
+          "value_name": "No",
+          "value_id": "242084"
+        },
+        {
+          "id": "INVOICE_PRODUCT_NAME",
+          "name": "Invoice product name",
+          "value_name": "Anime cosplay wig"
+        },
+        {
+          "id": "MEASURE_UNIT_DESCRIPTION",
+          "name": "Measure unit description",
+          "value_name": "Piece"
+        }
+      ],
+      "category_id": "CBT455862",
+      "category_name": "Cosplay Kits",
+      "category_prediction_query": "Anime cosplay wig",
+      "missing_required_attributes": [
+        {
+          "id": "PACKAGE_HEIGHT",
+          "name": "Package height"
+        },
+        {
+          "id": "PACKAGE_WIDTH",
+          "name": "Package width"
+        },
+        {
+          "id": "PACKAGE_LENGTH",
+          "name": "Package length"
+        }
+      ],
+      "variations": [
+        {
+          "id": "6079348725008",
+          "sku_id": "6079348725008",
+          "seller_sku": "",
+          "label": "黑色乱尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "黑色乱尖"
+            }
+          ],
+          "price": 19,
+          "price_text": "¥19.00",
+          "available_quantity": 54,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "黑色乱尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339957",
+          "sku_id": "6241267339957",
+          "seller_sku": "",
+          "label": "灰色单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "灰色单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 1450,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "灰色单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339958",
+          "sku_id": "6241267339958",
+          "seller_sku": "",
+          "label": "多彩色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "多彩色13尖"
+            }
+          ],
+          "price": 19,
+          "price_text": "¥19.00",
+          "available_quantity": 4973,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "多彩色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339959",
+          "sku_id": "6241267339959",
+          "seller_sku": "",
+          "label": "红色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "红色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 473,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "红色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339960",
+          "sku_id": "6241267339960",
+          "seller_sku": "",
+          "label": "彩色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "彩色13尖"
+            }
+          ],
+          "price": 13.48,
+          "price_text": "¥13.48",
+          "available_quantity": 726,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "彩色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339961",
+          "sku_id": "6241267339961",
+          "seller_sku": "",
+          "label": "黑色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "黑色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 3759,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "黑色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339962",
+          "sku_id": "6241267339962",
+          "seller_sku": "",
+          "label": "湖蓝色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "湖蓝色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 3598,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "湖蓝色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339963",
+          "sku_id": "6241267339963",
+          "seller_sku": "",
+          "label": "黄色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "黄色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 2636,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "黄色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339964",
+          "sku_id": "6241267339964",
+          "seller_sku": "",
+          "label": "深蓝色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "深蓝色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 484,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "深蓝色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339965",
+          "sku_id": "6241267339965",
+          "seller_sku": "",
+          "label": "红黄单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "红黄单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 4981,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "红黄单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339966",
+          "sku_id": "6241267339966",
+          "seller_sku": "",
+          "label": "精灵深粉色单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "精灵深粉色单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 496,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "精灵深粉色单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339967",
+          "sku_id": "6241267339967",
+          "seller_sku": "",
+          "label": "桔色单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "桔色单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 594,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "桔色单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339968",
+          "sku_id": "6241267339968",
+          "seller_sku": "",
+          "label": "浅紫色单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "浅紫色单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 499,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "浅紫色单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6247963447976",
+          "sku_id": "6247963447976",
+          "seller_sku": "",
+          "label": "白色多尖带刘海",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "白色多尖带刘海"
+            }
+          ],
+          "price": 15.2,
+          "price_text": "¥15.20",
+          "available_quantity": 2221,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "白色多尖带刘海",
+          "weight_g": 20
+        }
+      ],
+      "main_image_url": "/api/ai-original-products/images/1688-734091201459-ai-white.jpg",
+      "image_generation_method": "local_background_removal",
+      "status": "failed",
+      "error": "自动映射已尝试 3 次：Expecting ',' delimiter: line 16 column 6 (char 273)",
+      "generated_by": "管理员"
+    },
+    "source": {
+      "id": "CBT734091201459",
+      "site_id": "CBT",
+      "title": "Peluca corta de cosplay anime, color naranja y negro",
+      "price": 12.35,
+      "currency_id": "USD",
+      "category_id": "CBT455862",
+      "category_name": "Cosplay Kits",
+      "permalink": "https://detail.1688.com/offer/734091201459.html?spm=a26352.13672862.offerlist.33.55b51e62hFspiA&offerId=734091201459&sortType=&pageId=&abBizDataType=cbuOffer&hotSaleSkuId=6241267339960&trace_log=normal&uuid=f115ab75b2754b99aaec713cdfb283dd&sourceId=V1-7a81ba1f6a0b9d70c3bc4b7fdd0f068d-S02&forcePC=1790256057084&kj_agent_plugin=zying",
+      "pictures": [
+        {
+          "source": "/api/ai-original-products/images/1688-734091201459-ai-white.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN01f1dZsI1DWdaOFtC87_!!1009940224-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN01HzSUYv1DWdaYpQfLC_!!1009940224-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN01wQAroz1DWdaVCuGjy_!!1009940224-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN01nuSVPe1DWdadmnSKA_!!1009940224-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN01cJ6aEv1DWdaVBIN6T_!!1009940224-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN01WdDAgm1DWdQA1xRuI_!!1009940224-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN01tD4ntl1DWdQ1TAfs7_!!1009940224-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN012ECkss1DWdQ78b9sr_!!1009940224-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN01dTr6WB1DWdmzQ7LID_!!1009940224-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN01RVvn3I1DWdUApyiza_!!1009940224-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN013WZ2091DWdpWpwL06_!!1009940224-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN013KZbwn1DWdpQrw7pz_!!1009940224-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/14024789842_366742712.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/13938882363_366742712.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/13938873536_366742712.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN01FdpdBf1DWdqxpZ3Z6_!!1009940224-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN01zdwTdv1DWdrEC6m0s_!!1009940224-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN01OJ6QjX1DWdrFXe9UG_!!1009940224-0-cib.jpg"
+        }
+      ],
+      "attributes": [
+        {
+          "id": "BRAND",
+          "name": "Brand",
+          "value_name": "Generic"
+        },
+        {
+          "id": "GENDER",
+          "name": "Gender",
+          "value_name": "Gender neutral",
+          "value_id": "110461"
+        },
+        {
+          "id": "COMPOSITION",
+          "name": "Composition",
+          "value_name": "Synthetic fiber"
+        },
+        {
+          "id": "COSTUMES_NUMBER",
+          "name": "Costumes number",
+          "value_name": "1"
+        },
+        {
+          "id": "PACKAGE_WEIGHT",
+          "name": "Package weight",
+          "value_name": "20 g"
+        },
+        {
+          "id": "EMPTY_GTIN_REASON",
+          "name": "Empty GTIN reason",
+          "value_name": "The product does not have registered code",
+          "value_id": "17055160"
+        },
+        {
+          "id": "INCLUDES_ACCESSORIES",
+          "name": "Includes accessories",
+          "value_name": "No",
+          "value_id": "242084"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Item condition",
+          "value_name": "New",
+          "value_id": "2230284"
+        },
+        {
+          "id": "IS_KIT",
+          "name": "Is kit",
+          "value_name": "No",
+          "value_id": "242084"
+        },
+        {
+          "id": "INVOICE_PRODUCT_NAME",
+          "name": "Invoice product name",
+          "value_name": "Anime cosplay wig"
+        },
+        {
+          "id": "MEASURE_UNIT_DESCRIPTION",
+          "name": "Measure unit description",
+          "value_name": "Piece"
+        }
+      ],
+      "variations": [
+        {
+          "id": "6079348725008",
+          "sku_id": "6079348725008",
+          "seller_sku": "",
+          "label": "黑色乱尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "黑色乱尖"
+            }
+          ],
+          "price": 19,
+          "price_text": "¥19.00",
+          "available_quantity": 54,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "黑色乱尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339957",
+          "sku_id": "6241267339957",
+          "seller_sku": "",
+          "label": "灰色单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "灰色单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 1450,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "灰色单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339958",
+          "sku_id": "6241267339958",
+          "seller_sku": "",
+          "label": "多彩色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "多彩色13尖"
+            }
+          ],
+          "price": 19,
+          "price_text": "¥19.00",
+          "available_quantity": 4973,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "多彩色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339959",
+          "sku_id": "6241267339959",
+          "seller_sku": "",
+          "label": "红色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "红色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 473,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "红色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339960",
+          "sku_id": "6241267339960",
+          "seller_sku": "",
+          "label": "彩色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "彩色13尖"
+            }
+          ],
+          "price": 13.48,
+          "price_text": "¥13.48",
+          "available_quantity": 726,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "彩色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339961",
+          "sku_id": "6241267339961",
+          "seller_sku": "",
+          "label": "黑色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "黑色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 3759,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "黑色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339962",
+          "sku_id": "6241267339962",
+          "seller_sku": "",
+          "label": "湖蓝色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "湖蓝色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 3598,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "湖蓝色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339963",
+          "sku_id": "6241267339963",
+          "seller_sku": "",
+          "label": "黄色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "黄色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 2636,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "黄色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339964",
+          "sku_id": "6241267339964",
+          "seller_sku": "",
+          "label": "深蓝色13尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "深蓝色13尖"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 484,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "深蓝色13尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339965",
+          "sku_id": "6241267339965",
+          "seller_sku": "",
+          "label": "红黄单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "红黄单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 4981,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "红黄单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339966",
+          "sku_id": "6241267339966",
+          "seller_sku": "",
+          "label": "精灵深粉色单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "精灵深粉色单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 496,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "精灵深粉色单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339967",
+          "sku_id": "6241267339967",
+          "seller_sku": "",
+          "label": "桔色单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "桔色单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 594,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "桔色单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6241267339968",
+          "sku_id": "6241267339968",
+          "seller_sku": "",
+          "label": "浅紫色单尖",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "浅紫色单尖"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 499,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "浅紫色单尖",
+          "weight_g": 20
+        },
+        {
+          "id": "6247963447976",
+          "sku_id": "6247963447976",
+          "seller_sku": "",
+          "label": "白色多尖带刘海",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "白色多尖带刘海"
+            }
+          ],
+          "price": 15.2,
+          "price_text": "¥15.20",
+          "available_quantity": 2221,
+          "image_url": "",
+          "raw_weight": "20g",
+          "raw_text": "白色多尖带刘海",
+          "weight_g": 20
+        }
+      ]
+    },
+    "description": {
+      "plain_text": "Peluca corta de cosplay inspirada en personajes de anime, ideal para adultos y niños. Confeccionada en fibra sintética suave y ligera, con un peso de solo 20 gramos. Presenta un diseño con múltiples puntas y flequillo, disponible en varios colores: negro, gris, multicolor, rojo, azul, amarillo, naranja, morado, blanco y combinaciones. Perfecta para fiestas de disfraces, convenciones, Halloween o uso diario. Fácil de colocar y ajustar, cómoda para uso prolongado. Incluye: 1 peluca."
+    },
+    "page_snapshot": {},
+    "plugin_snapshot": {
+      "source_type": "ai_original",
+      "source_platform": "1688",
+      "created_by": "浏览器插件：管理员"
+    }
+  },
+  "category_id": "CBT455862",
+  "category_name": "Cosplay Kits",
+  "review_status": "unreviewed"
+}

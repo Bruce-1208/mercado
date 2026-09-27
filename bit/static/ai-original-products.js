@@ -683,7 +683,7 @@ function updateAiOriginalSelection() {
   const process = document.getElementById("ai-original-process");
   const publish = document.getElementById("ai-original-publish");
   if (process) process.disabled = !count;
-  if (publish) publish.disabled = !aiOriginalPublishableSelection().length;
+  if (publish) publish.disabled = !count;
 }
 
 async function updateSelectedAiOriginalReviewStatus() {
@@ -954,7 +954,7 @@ function renderAiOriginalPublishFormula() {
 }
 
 function aiOriginalPublishableSelection() {
-  return aiOriginalRows.filter(row => aiOriginalSelected.has(Number(row.id)) && aiOriginalListingReady(row));
+  return aiOriginalRows.filter(row => aiOriginalSelected.has(Number(row.id)) && row.review_status === "approved");
 }
 
 async function publishSelectedAiOriginalProducts() {
@@ -963,11 +963,11 @@ async function publishSelectedAiOriginalProducts() {
   const tokenIds = [...(document.getElementById("ai-original-stores")?.selectedOptions || [])].map(option => Number(option.value)).filter(Boolean);
   const siteIds = aiOriginalSelectedSiteIds();
   const status = document.getElementById("ai-original-publish-status");
-  if (!ids.length) { status.textContent = "所选产品暂无可上架产品，请先补齐资料并审核通过"; status.className = "ai-original-status error"; return; }
+  if (!ids.length) { status.textContent = "所选产品均未审核通过，已全部忽略，本次上架 0 件"; status.className = "ai-original-status success"; return; }
   if (!tokenIds.length || !siteIds.length) { status.textContent = "请选择对应店铺和至少一个目标站点"; status.className = "ai-original-status error"; return; }
   const netProceedsRatio = Number(document.getElementById("ai-original-net-ratio")?.value || 200);
   if (!(netProceedsRatio > 0) || netProceedsRatio > 10000) { status.textContent = "AI 原创比例必须大于 0 且不超过 10000%"; status.className = "ai-original-status error"; return; }
-  if (!window.confirm(`已自动忽略 ${skippedCount} 件资料不完整或未审核的产品。确定把 ${ids.length} 件产品上架到 ${tokenIds.length} 个店铺、${siteIds.length} 个站点吗？AI 原创比例 ${netProceedsRatio}% 将再乘以每个店铺的站点比例。`)) return;
+  if (!window.confirm(`已自动忽略 ${skippedCount} 件未审核通过的产品。确定把 ${ids.length} 件产品上架到 ${tokenIds.length} 个店铺、${siteIds.length} 个站点吗？AI 原创比例 ${netProceedsRatio}% 将再乘以每个店铺的站点比例。`)) return;
   try {
     const publishPayload = {
       product_item_ids: ids, selection_mode: "accounts", token_ids: tokenIds, site_ids: siteIds,

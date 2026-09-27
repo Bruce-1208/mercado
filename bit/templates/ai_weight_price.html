@@ -99,7 +99,7 @@ const names={pending:'待处理',waiting_merchant_reply:'等待回复',success:'
 const $=id=>document.getElementById(id);let page=1,searchTimer,config=null,currentTask=null,toastTimer,refreshing=false,seq=0;
 let runStatus={running:false,login:{confirmed:false}},loginBusy=false,rangeBusy=false,skipBusy=false,terminateBusy=false,selectionRestored=false;
 let categoryOptions=[],categoryBusy=false;
-let executionTarget=agentLaunchAvailable&&(remoteReadOnly||({{ server_execution|default(false)|tojson }}&&!{{ is_admin|default(false)|tojson }}))?'agent':'local',selectedAgentId='';
+let executionTarget=agentLaunchAvailable?'agent':'local',selectedAgentId='';
 const fields=[['daily_limit','每日咨询上限',1,1000],['consult_interval_seconds','商家咨询最小间隔（秒）',60,86400],['max_waiting','同时等待的会话数',1,2],['poll_minutes','回复轮询间隔（分钟）',1,1440],['timeout_minutes','商家回复超时（分钟）',1,10080],['match_threshold','同款匹配分数门槛（大于等于）',.95,.999],['small_tolerance_g','≤500g 允许误差（克）',0,50],['large_tolerance_g','>500g 允许误差（克）',0,30],['max_candidates','1688以图搜货识别图片数量',1,20],['max_pages','每次最多采集页数',1,10000],['api_timeout_seconds','模型请求超时（秒）',5,300]];
 const connections=[['cdp_url','本机 Edge CDP 地址'],['erp_list_url','智赢商品列表页'],['supplier_home_url','1688 搜索首页'],['api_base_url','模型 API 基础地址'],['api_key_env','API 密钥环境变量名'],['model','同款初筛模型'],['review_model','同款复核模型'],['weight_model','重量提取模型']];
 function esc(v){const d=document.createElement('span');d.textContent=v??'';return d.innerHTML.replaceAll('"','&quot;').replaceAll("'",'&#39;');}

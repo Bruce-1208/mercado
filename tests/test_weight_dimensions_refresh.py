@@ -332,6 +332,7 @@ def test_database_view_executes_selection_across_pages_with_scope():
     task = {"task_id": "saved", "owner": "user", "database_view": True,
             "status": "ready", "records": [], "filters": {"store_ids": [1]}}
     rows = [{"order_number": number, "product_id": "sku", "actual_weight_g": "400",
+             "_dimension_compensation_confirmed": True,
              "actual_dimensions_cm": "10x5x5"} for number in ("1", "51")]
     with patch.object(records, "_tasks", {"saved": task}), \
          patch.object(records.bit_db_api, "list_weight_dimensions_records", return_value=rows) as query:

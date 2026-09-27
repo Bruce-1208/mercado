@@ -1,0 +1,47 @@
+{
+  "attributes": [
+    {
+      "id": "BRAND",
+      "name": "Brand",
+      "value_name": "Generic"
+    },
+    {
+      "id": "INCLUDES_ACCESSORIES",
+      "name": "Includes accessories",
+      "value_id": "242085",
+      "value_name": "Yes"
+    },
+    {
+      "id": "PACKAGE_LENGTH",
+      "value_name": "20 cm"
+    },
+    {
+      "id": "PACKAGE_WIDTH",
+      "value_name": "20 cm"
+    },
+    {
+      "id": "PACKAGE_HEIGHT",
+      "value_name": "10 cm"
+    },
+    {
+      "id": "PACKAGE_WEIGHT",
+      "value_name": "450 g"
+    },
+    {
+      "id": "ITEM_CONDITION",
+      "value_id": "2230284",
+      "value_name": "New"
+    },
+    {
+      "id": "EMPTY_GTIN_REASON",
+      "value_id": "17055160",
+      "value_name": "The product does not have registered code"
+    },
+    {
+      "id": "GENDER",
+      "name": "Gender",
+      "value_id": "110461",
+      "value_name": "Gender neutral"
+    }
+  ]
+}

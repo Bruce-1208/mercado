@@ -44,28 +44,28 @@ function setup() {
   return {run, nodes, requests, confirmations};
 }
 
-test('mixed selection enables publishing and sends only eligible products', async () => {
+test('mixed selection enables publishing and sends all approved products regardless of completeness', async () => {
   const {run, nodes, requests, confirmations} = setup();
   run('updateAiOriginalSelection(); syncAiOriginalWorkbenchSelection()');
   assert.equal(nodes.get('ai-original-publish').disabled, false);
-  assert.match(nodes.get('ai-original-selection-hint').textContent, /可上架 1 件 · 将忽略 2 件/);
+  assert.match(nodes.get('ai-original-selection-hint').textContent, /审核通过 2 件 · 将忽略 1 件/);
   await run('publishSelectedAiOriginalProducts()');
   assert.equal(requests.length, 1);
-  assert.deepEqual(requests[0].body.product_item_ids, [1]);
-  assert.match(confirmations[0], /自动忽略 2 件/);
+  assert.deepEqual(requests[0].body.product_item_ids, [1, 3]);
+  assert.match(confirmations[0], /自动忽略 1 件/);
   assert.equal(run('aiOriginalSelected.size'), 3);
 });
 
-test('no eligible products disables publishing and sends no request', async () => {
+test('all unapproved products keep button enabled and are ignored', async () => {
   const {run, nodes, requests, confirmations} = setup();
-  run('aiOriginalSelected = new Set([2, 3]); updateAiOriginalSelection()');
-  assert.equal(nodes.get('ai-original-publish').disabled, true);
+  run('aiOriginalSelected = new Set([2]); updateAiOriginalSelection()');
+  assert.equal(nodes.get('ai-original-publish').disabled, false);
   run('syncAiOriginalWorkbenchSelection()');
-  assert.equal(nodes.get('ai-original-publish').disabled, true);
+  assert.equal(nodes.get('ai-original-publish').disabled, false);
   await run('publishSelectedAiOriginalProducts()');
   assert.equal(requests.length, 0);
   assert.equal(confirmations.length, 0);
-  assert.match(nodes.get('ai-original-publish-status').textContent, /暂无可上架产品/);
+  assert.match(nodes.get('ai-original-publish-status').textContent, /已全部忽略，本次上架 0 件/);
 });
 
 test('empty selection disables publishing', () => {

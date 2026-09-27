@@ -534,6 +534,36 @@ def _prepared_listing_from_product_row(
     return source, dict(snapshot["description"])
 
 
+def _complete_ai_publication_attributes(row, prepared_listing, client, *, chat=None, api_key="", model="", base_url=""):
+    """Repair legacy AI drafts against the actual target schema before publishing."""
+    from erp.ai_original_products import complete_required_attributes
+    from erp.mercadolibre_follow_sell import (
+        _required_category_attribute_schema, _ensure_required_attribute_defaults,
+        _ensure_item_condition, _ensure_gtin_or_empty_reason, _validate_required_attributes,
+    )
+    source, description = prepared_listing
+    category_id = str(source.get('category_id') or '')
+    if not category_id.startswith('CBT'):
+        raise ValueError('AI 原创商品尚未确认目标分类，请重新执行 AI 任务')
+    schema = _required_category_attribute_schema(client, category_id)
+    attributes = [dict(a) for a in source.get('attributes') or []]
+    variations = source.get('variations') or []
+    _ensure_item_condition(attributes, str(source.get('condition') or 'new'))
+    _ensure_gtin_or_empty_reason(attributes)
+    _ensure_required_attribute_defaults(attributes, schema, variations)
+    raw = row.get('source_snapshot_json') or {}
+    snapshot = raw if isinstance(raw, Mapping) else json.loads(raw)
+    attributes, missing = complete_required_attributes(
+        snapshot.get('original_1688') or {}, attributes, schema, variations, chat=chat,
+        api_key=api_key, model=model, base_url=base_url,
+    )
+    if missing:
+        raise ValueError('DeepSeek 已尝试补全，仍缺少有依据的必填属性：'
+                         + ', '.join(a['id'] for a in missing) + '；请在商品编辑中补充对应资料')
+    _validate_required_attributes(attributes, schema, variations)
+    return {**source, 'attributes': attributes}, description
+
+
 def _sync_product_source_snapshot(row: Mapping[str, Any]) -> None:
     """Refresh the publication source row from the selected product snapshot."""
     snapshot = _product_source_snapshot(row)
@@ -561,9 +591,14 @@ def publish_product_batch(
     create_records: Callable[..., Mapping[int, int]] | None = None,
     update_record: Callable[..., Any] | None = None,
     existing_user_product_ids: Mapping[int, str] | None = None,
+    ai_completion_options: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     rows = [dict(row) for row in product_rows or []]
-    validate_publishable_products(rows)
+    if not rows:
+        raise ValueError("请至少勾选一个产品")
+    regular_rows = [row for row in rows if str(row.get("source_type") or "").lower() != "ai_original"]
+    if regular_rows:
+        validate_publishable_products(regular_rows)
     quantity = int(quantity)
     if quantity < 1 or quantity > 9999:
         raise ValueError("上架库存必须在 1-9999 之间")
@@ -694,18 +729,23 @@ def publish_product_batch(
         source_url = str(row.get("source_url") or source_item_id)
         source_net_proceeds = float(_decimal_value(row.get("net_proceeds_usd")) or 0)
         is_ai_original = str(row.get("source_type") or "").strip().lower() == "ai_original"
-        publish_net_proceeds = discounted_net_proceeds_usd(
-            row, resolved_discount_rate, resolved_net_proceeds_ratio
-        )
-        pricing_metadata = {
-            "source_net_proceeds_usd": source_net_proceeds,
-            "ai_original_ratio_percent": (
-                float(resolved_net_proceeds_ratio) if is_ai_original else 100.0
-            ),
-            "store_site_ratio_percent": float(resolved_discount_rate),
-            "publish_net_proceeds_usd": publish_net_proceeds,
-        }
+        pricing_metadata = {}
         try:
+            if is_ai_original:
+                issues = product_publish_issues(row)
+                if issues:
+                    raise ValueError("、".join(issues))
+            publish_net_proceeds = discounted_net_proceeds_usd(
+                row, resolved_discount_rate, resolved_net_proceeds_ratio
+            )
+            pricing_metadata = {
+                "source_net_proceeds_usd": source_net_proceeds,
+                "ai_original_ratio_percent": (
+                    float(resolved_net_proceeds_ratio) if is_ai_original else 100.0
+                ),
+                "store_site_ratio_percent": float(resolved_discount_rate),
+                "publish_net_proceeds_usd": publish_net_proceeds,
+            }
             if account_listing_blocked.is_set():
                 raise MercadoLibreError(
                     "账号刊登已暂停："
@@ -723,6 +763,10 @@ def publish_product_batch(
                 # Legacy rows without an embedded snapshot keep the compatible
                 # database path; normal collected rows avoid the write/read pair.
                 _sync_product_source_snapshot(row)
+            if is_ai_original and prepared_listing is not None and not reusable_user_product_ids.get(product_id):
+                prepared_listing = _complete_ai_publication_attributes(
+                    row, prepared_listing, worker_client(), **dict(ai_completion_options or {})
+                )
             publication = follow_sell(
                 worker_client(),
                 source_url,

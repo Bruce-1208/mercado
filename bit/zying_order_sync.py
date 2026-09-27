@@ -2,10 +2,12 @@
 import copy
 import html
 import re
+import secrets
 import threading
 import time
 from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlsplit
 
 ORDER_URL = "https://meli.zying.net/#/order"
 SEARCH_PLACEHOLDER = "订单、采购单、运单,多个编号可以逗号、空格分隔"
@@ -100,16 +102,35 @@ class ZyingPage:
 
     def _ensure_order_page(self):
         page = self.page
-        if self._ready:
-            return
-        # Load the SPA once, then reuse it for every order in this task.
-        if not page.url.startswith(ORDER_URL.split("#", 1)[0]):
-            page.goto(ORDER_URL, wait_until="domcontentloaded")
+        current = urlsplit(page.url)
+        target = urlsplit(ORDER_URL)
+        on_order_page = (
+            (current.scheme, current.netloc, current.path)
+            == (target.scheme, target.netloc, target.path)
+            and current.fragment.split("?", 1)[0].rstrip("/") == target.fragment
+        )
         field = page.get_by_placeholder(SEARCH_PLACEHOLDER, exact=True)
+        if self._ready and on_order_page and field.is_visible():
+            return
+        self._ready = False
+        # Login can redirect to another hash route on the same host. Navigate
+        # back to orders after confirmation instead of waiting on that page.
         try:
+            if not on_order_page:
+                page.goto(ORDER_URL, wait_until="domcontentloaded", timeout=30000)
             field.wait_for(timeout=30000)
         except Exception as exc:
-            raise RuntimeError("无法打开智赢订单页，请先在执行端 Edge 登录并确认订单查看权限") from exc
+            current = urlsplit(page.url)
+            route = current.fragment.split("?", 1)[0]
+            if route.rstrip("/") == "/login" or current.path.rstrip("/") == "/login":
+                message = "智赢仍停留在登录页，请在 Agent 打开的 Edge 中完成登录后重新启动同步"
+            else:
+                location = current.path + ("#" + route if route else "")
+                message = (
+                    f"已尝试切换智赢订单页，但未找到订单搜索框（当前页面：{location}）；"
+                    "请确认该账号能打开订单列表，或检查智赢页面是否已改版"
+                )
+            raise RuntimeError(message) from exc
         self._ready = True
 
     @staticmethod
@@ -365,6 +386,115 @@ class AgentSync:
     """Serialize control and writes on the worker; the hub owns Agent lifecycle."""
     def __init__(self):
         self.lock = threading.RLock()
+        self.preparing = {}
+
+    def preparing_status(self, owner):
+        if owner is None:
+            return None
+        with self.lock:
+            entry = self.preparing.get(str(owner))
+            if entry is None:
+                return None
+            return copy.deepcopy(entry["state"])
+
+    def start_preparing(
+        self, owner, agent_id, filters, reader, store, *, required_version,
+        created_by_id=None, created_by_name="",
+    ):
+        """Return immediately while the server gathers the authorized order set."""
+        owner_key = str(owner)
+        with self.lock:
+            current = self.preparing.get(owner_key)
+            if current and current["state"].get("running"):
+                raise ValueError("智赢订单同步正在准备，请稍后再试")
+            state = {
+                "started_at": time.time(), "running": True, "phase": "loading",
+                "execution_target": "agent", "total": 0, "completed": 0,
+                "updated": 0, "skipped": 0, "failed": 0, "results": [],
+                "message": "正在后台读取当前筛选范围内的订单",
+            }
+            entry = {"state": state, "stop_event": threading.Event()}
+            self.preparing[owner_key] = entry
+            thread = threading.Thread(
+                target=self._prepare_and_enqueue,
+                args=(owner_key, agent_id, dict(filters), reader, store, entry),
+                kwargs={
+                    "required_version": required_version,
+                    "created_by_id": created_by_id,
+                    "created_by_name": created_by_name,
+                },
+                name="zying-order-sync-prepare", daemon=True,
+            )
+            entry["thread"] = thread
+            try:
+                thread.start()
+            except Exception:
+                self.preparing.pop(owner_key, None)
+                raise
+            return copy.deepcopy(state)
+
+    def _prepare_and_enqueue(
+        self, owner, agent_id, filters, reader, store, entry, *,
+        required_version, created_by_id, created_by_name,
+    ):
+        try:
+            rows = snapshot_orders(reader, filters, entry["stop_event"].is_set)
+            if entry["stop_event"].is_set():
+                raise InterruptedError("任务已结束")
+            rows = [
+                {key: row.get(key) for key in ("id", "order_number", "pack_id")}
+                for row in rows
+            ]
+            with self.lock:
+                if entry["stop_event"].is_set():
+                    raise InterruptedError("任务已结束")
+                job_id = secrets.token_hex(16)
+                version = required_version() if callable(required_version) else required_version
+                if isinstance(version, dict):
+                    version = version.get("version") or ""
+                store.enqueue_job(
+                    job_id, agent_id, "zying_order_sync", {"rows": rows},
+                    required_version=version,
+                    created_by_id=created_by_id, created_by_name=created_by_name,
+                )
+                if self.preparing.get(owner) is entry:
+                    self.preparing.pop(owner, None)
+        except InterruptedError as exc:
+            with self.lock:
+                if self.preparing.get(owner) is entry:
+                    entry["state"].update(
+                        running=False, phase="stopped", stop_requested=True,
+                        message=str(exc),
+                    )
+        except Exception as exc:
+            with self.lock:
+                if self.preparing.get(owner) is entry:
+                    entry["state"].update(
+                        running=False, phase="failed", message=str(exc)[:300],
+                    )
+
+    def stop_preparing(self, owner):
+        if owner is None:
+            return None
+        with self.lock:
+            entry = self.preparing.get(str(owner))
+            if entry is None or not entry["state"].get("running"):
+                return None
+            entry["stop_event"].set()
+            entry["state"].update(
+                phase="stopping", stop_requested=True, message="正在停止订单读取",
+            )
+            return copy.deepcopy(entry["state"])
+
+    def owner_status(self, store, owner, manager):
+        job = self.job(store, owner)
+        preparing = self.preparing_status(owner)
+        if preparing and (
+            job is None
+            or float(preparing.get("started_at") or 0) >= float(job.get("created_at") or 0)
+        ):
+            return preparing
+        return self.status(job) if job else manager.status(owner)
 
     def job(self, store, owner):
         if owner is None:

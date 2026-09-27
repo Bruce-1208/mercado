@@ -1498,7 +1498,7 @@ def build_workbench_session_user(user):
         "role_key": role_key,
         "role_name": user.get("role_name") or role_key,
         "permissions": permissions,
-        "own_store_only": bool(user.get("own_store_only")) and role_key != "super_admin",
+        "own_store_only": (role_key == "member" or bool(user.get("own_store_only"))) and role_key != "super_admin",
         "access_version": 1,
         "is_platform_admin": role_key == "super_admin",
     }
@@ -2050,7 +2050,7 @@ def register_workbench_user_local(data):
 
     now = datetime.utcnow()
     expected_code_hash = _workbench_registration_code_hash(email, code)
-    organization_key = _default_workbench_organization_key()
+    organization_key = "wuhan-zeshun"
     connection = pymysql.connect(**mysql_config)
     try:
         with connection.cursor() as cursor:
@@ -2300,7 +2300,7 @@ def hide_task_capacity_from_non_admin(response):
 
 def workbench_user_own_store_only(user=None):
     user = user if user is not None else get_current_workbench_user()
-    return bool(user and user.get("own_store_only"))
+    return bool(user and (user.get("role_key") == "member" or user.get("own_store_only")))
 
 
 def workbench_user_salesperson(user=None):
@@ -2821,7 +2821,10 @@ def _verify_local_agent_credential(token):
         agent = get_local_agent_store().get_agent(payload.get("agent_id"))
     except (KeyError, ValueError):
         return None
-    if not agent:
+    if not agent or (
+        agent.get("owner_user_id")
+        and int(agent["owner_user_id"]) != int(payload.get("user_id") or 0)
+    ):
         return None
     return {
         "agent_id": agent["agent_id"],
@@ -3197,6 +3200,36 @@ def enforce_task_worker_change_permission():
         "required_role": "super_admin",
         "fields": changed_keys,
     }), 403
+
+
+def workbench_user_can_use_agent(agent, user=None):
+    user = user if user is not None else get_current_workbench_user()
+    if not user or not agent:
+        return False
+    if not workbench_user_own_store_only(user):
+        return True
+    return bool(user.get("id")) and int(agent.get("owner_user_id") or 0) == int(user["id"])
+
+
+@app.before_request
+def enforce_local_agent_owner():
+    if not request.path.startswith("/api/") or request.path.startswith(("/api/db/", "/api/local-agents/")):
+        return None
+    user = get_current_workbench_user()
+    if not workbench_user_own_store_only(user):
+        return None
+    data = request.get_json(silent=True)
+    agent_ids = request.args.getlist("agent_id")
+    if isinstance(data, dict) and data.get("agent_id"):
+        agent_ids.append(data["agent_id"])
+    for agent_id in agent_ids:
+        try:
+            agent = get_local_agent_store().get_agent(agent_id)
+        except ValueError:
+            agent = None
+        if not workbench_user_can_use_agent(agent, user):
+            return jsonify({"status": "error", "message": "只能调用本人绑定的本地 Agent，请从当前账号重新下载并注册 Agent"}), 403
+    return None
 
 
 @app.before_request
@@ -8745,7 +8778,7 @@ def api_orders():
 @app.route('/api/orders/zying-sync/start', methods=['POST'])
 @login_required
 def api_zying_order_sync_start():
-    from bit.zying_order_sync import manager, agent_sync, snapshot_orders
+    from bit.zying_order_sync import manager, agent_sync
     user = get_current_workbench_user() or {}
     data = request.get_json(silent=True) or {}
     target = data.get("execution_target") or "agent"
@@ -8766,7 +8799,10 @@ def api_zying_order_sync_start():
             store = get_local_agent_store()
             store.reap_expired_jobs()
             existing = agent_sync.job(store, user.get("id"))
-            if manager.status(user.get("id")).get("running") or (existing and agent_sync.status(existing)["running"]):
+            preparing = agent_sync.preparing_status(user.get("id"))
+            if (manager.status(user.get("id")).get("running")
+                    or (existing and agent_sync.status(existing)["running"])
+                    or (preparing and preparing.get("running"))):
                 raise ValueError("智赢订单同步正在运行，请先结束任务")
             if target == "agent":
                 agent_id = normalize_agent_id(data.get("agent_id"))
@@ -8775,14 +8811,12 @@ def api_zying_order_sync_start():
                     raise ValueError("请选择在线的 Agent")
                 if "daily_task" not in agent.get("capabilities", ()):
                     raise ValueError("请更新 Agent 至支持业务任务的版本")
-                rows = snapshot_orders(db_list_orders, params)
-                # Send only the identifiers needed for browser lookup.
-                rows = [{key: row.get(key) for key in ("id", "order_number", "pack_id")} for row in rows]
-                job_id = secrets.token_hex(16)
-                job = store.enqueue_job(job_id, agent_id, "zying_order_sync", {"rows": rows},
-                    required_version=current_local_agent_bundle()["version"],
-                    created_by_id=user.get("id"), created_by_name=user.get("display_name") or user.get("username") or "")
-                state = agent_sync.status(job)
+                state = agent_sync.start_preparing(
+                    user.get("id"), agent_id, params, db_list_orders, store,
+                    required_version=current_local_agent_bundle,
+                    created_by_id=user.get("id"),
+                    created_by_name=user.get("display_name") or user.get("username") or "",
+                )
             else:
                 def write(order_id, changes):
                     return bit_db_api.bulk_update_orders(
@@ -8827,12 +8861,16 @@ def api_zying_order_sync_stop():
     owner = (get_current_workbench_user() or {}).get("id")
     with agent_sync.lock:
         store = get_local_agent_store()
-        job = agent_sync.job(store, owner)
-        if job:
-            store.request_cancel(job["job_id"])
-            state = agent_sync.status(store.get_job(job["job_id"]))
+        preparing = agent_sync.preparing_status(owner)
+        if preparing and preparing.get("running"):
+            state = agent_sync.stop_preparing(owner)
         else:
-            state = manager.stop(owner)
+            job = agent_sync.job(store, owner)
+            if job:
+                store.request_cancel(job["job_id"])
+                state = agent_sync.status(store.get_job(job["job_id"]))
+            else:
+                state = manager.stop(owner)
     return jsonify({"status": "success", "data": state})
 
 
@@ -8843,8 +8881,7 @@ def api_zying_order_sync_status():
     owner = (get_current_workbench_user() or {}).get("id")
     store = get_local_agent_store()
     store.reap_expired_jobs()
-    job = agent_sync.job(store, owner)
-    state = agent_sync.status(job) if job else manager.status(owner)
+    state = agent_sync.owner_status(store, owner, manager)
     response = jsonify({"status": "success", "data": state})
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -11139,6 +11176,7 @@ def api_local_agent_enroll():
             business_version="",
             capabilities=data.get("capabilities") or ("appeal",),
             session_id=data.get("session_id"),
+            owner_user_id=user_claims["id"],
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -11167,6 +11205,9 @@ def api_local_agent_heartbeat():
             capabilities=capabilities,
             session_id=data.get("session_id"),
             current_job_id=data.get("current_job_id"),
+            # Existing signed credentials provide a trusted migration path.
+            owner_user_id=(getattr(g, "local_agent_claims", {}) or {}).get("user_id") or None,
+            claim_unowned=True,
         )
         # Claim in the same request that made this Agent visible.  This keeps
         # heartbeat and queue reads on one backend even when a reverse proxy
@@ -11503,6 +11544,7 @@ def api_execution_agents():
             else requested_capability
         ),
     )
+    agents = [agent for agent in agents if workbench_user_can_use_agent(agent)]
     login_status_error = ""
     try:
         anomaly_data = filter_shop_status_anomalies(
@@ -11836,6 +11878,8 @@ def enqueue_local_agent_daily_task(agent_id, params):
         agent = store.get_agent(agent_id, online_seconds=LOCAL_AGENT_ONLINE_SECONDS)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
+    if agent and not workbench_user_can_use_agent(agent):
+        return jsonify({"status": "error", "message": "只能调用本人绑定的本地 Agent"}), 403
     if not agent or not agent["online"]:
         return jsonify({"status": "error", "message": "所选 Agent 不在线，请启动 Agent 并刷新电脑"}), 409
     if "daily_task" not in agent.get("capabilities", ()):
@@ -11975,6 +12019,8 @@ def enqueue_local_agent_ai_weight_price(action, data):
         agent = store.get_agent(agent_id, online_seconds=LOCAL_AGENT_ONLINE_SECONDS)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
+    if agent and not workbench_user_can_use_agent(agent):
+        return jsonify({"status": "error", "message": "只能调用本人绑定的本地 Agent"}), 403
     if not agent or not agent.get("online"):
         return jsonify({"status": "error", "message": "所选 Agent 不在线，请启动 Agent 并刷新电脑"}), 409
     if "ai_weight_price" not in agent.get("capabilities", ()):
@@ -12107,6 +12153,8 @@ def enqueue_local_agent_appeal(
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
+    if agent and not workbench_user_can_use_agent(agent):
+        return jsonify({"status": "error", "message": "只能调用本人绑定的本地 Agent"}), 403
     if not agent or not agent.get("online"):
         return jsonify({
             "status": "error",
@@ -14342,6 +14390,7 @@ def _run_mercado_product_publish_schedule(schedule):
             int(payload.get("moved_to_collection_count") or 0),
             int(payload.get("skipped_other_account_count") or 0),
             float(payload.get("net_proceeds_ratio") or 100),
+            ai_model_user_id=int(payload.get("ai_model_user_id") or 0),
         )
         with _mercado_publish_lock:
             result = {
@@ -14543,9 +14592,25 @@ def _run_mercado_product_publish(
 def _run_mercado_product_publish_targets(
     product_rows, targets, quantity, worker_count, batch_id, created_by,
     moved_to_collection_count=0, skipped_other_account_count=0,
-    net_proceeds_ratio=100,
+    net_proceeds_ratio=100, ai_model_user_id=0,
 ):
     from erp.mercadolibre_batch_publish import publish_product_batch
+
+    ai_completion_options = {}
+    if ai_model_user_id:
+        from AI_Agent.deepseek import DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+        provider = ("dashscope" if "aliyuncs.com" in DEEPSEEK_BASE_URL
+                    else "openai" if "openai.com" in DEEPSEEK_BASE_URL else "deepseek")
+        def completion_chat(messages, **kwargs):
+            from erp.ai_original_products import _listing_json_chat
+            kwargs["api_key"] = browser_extension_models.get_api_key(
+                ai_model_user_id, provider, app.secret_key
+            ) or None
+            return _listing_json_chat(model=DEEPSEEK_MODEL, base_url=DEEPSEEK_BASE_URL)(messages, **kwargs)
+
+        ai_completion_options = {
+            "chat": completion_chat, "base_url": DEEPSEEK_BASE_URL, "model": DEEPSEEK_MODEL,
+        }
 
     rows = [dict(row) for row in product_rows or []]
     target_rows = [dict(target) for target in targets or []]
@@ -14666,6 +14731,7 @@ def _run_mercado_product_publish_targets(
                     create_records=db_create_mercado_product_publish_records,
                     update_record=db_update_mercado_product_publish_record,
                     existing_user_product_ids=existing_user_product_ids,
+                    ai_completion_options=ai_completion_options,
                 )
                 target_requested = int(
                     result.get("requested_count") or len(target_rows_to_publish)
@@ -14873,25 +14939,19 @@ def api_publish_mercado_products():
             raise ValueError("部分勾选产品已不存在，请刷新列表后重试")
         blocked_rows = []
         publish_rows = []
+        skipped_unapproved_count = 0
         for row in rows:
+            if str(row.get("source_type") or "").strip().lower() == "ai_original":
+                if row.get("review_status") == "approved":
+                    publish_rows.append(row)
+                else:
+                    skipped_unapproved_count += 1
+                continue
             issues = product_publish_issues(row)
             if issues:
                 blocked_rows.append((row, issues))
             else:
                 publish_rows.append(row)
-        ai_blocked_rows = [
-            (row, issues) for row, issues in blocked_rows
-            if str(row.get("source_type") or "").strip().lower() == "ai_original"
-        ]
-        if ai_blocked_rows:
-            samples = [
-                f"{row.get('source_item_id') or row.get('id')}：{'、'.join(issues)}"
-                for row, issues in ai_blocked_rows[:5]
-            ]
-            raise ValueError(
-                "AI 原创产品尚未达到上架条件，请在当前页面补齐后重试："
-                + "；".join(samples)
-            )
         moved_to_collection_count = 0
         if blocked_rows:
             reason_counts: dict[str, int] = {}
@@ -14911,6 +14971,8 @@ def api_publish_mercado_products():
         rows = publish_rows
         if not rows:
             message = (
+                f"已忽略 {skipped_unapproved_count} 件未审核通过的 AI 产品，本次上架 0 件"
+                if skipped_unapproved_count and not moved_to_collection_count else
                 f"已忽略并移回采集列表 {moved_to_collection_count} 件不可上架商品，"
                 "本次没有可上架产品"
             )
@@ -14955,7 +15017,9 @@ def api_publish_mercado_products():
                 })
                 state = dict(_mercado_publish_state)
             return jsonify({"status": "success", "data": state})
-        validate_publishable_products(rows)
+        regular_rows = [row for row in rows if row.get("source_type") != "ai_original"]
+        if regular_rows:
+            validate_publishable_products(regular_rows)
         token_rows = list(
             _filter_mercado_tokens_for_user(
                 bit_db_api.list_mercado_store_tokens() or {}
@@ -15170,6 +15234,7 @@ def api_publish_mercado_products():
                         "worker_count": worker_count,
                         "batch_id": batch_id,
                         "created_by": created_by,
+                        "ai_model_user_id": int(current_user.get("id") or 0),
                         "moved_to_collection_count": moved_to_collection_count,
                         "skipped_other_account_count": skipped_other_account_count,
                         "net_proceeds_ratio": float(net_proceeds_ratio),
@@ -15263,6 +15328,7 @@ def api_publish_mercado_products():
                 skipped_other_account_count,
                 float(net_proceeds_ratio),
             ),
+            kwargs={"ai_model_user_id": int(current_user.get("id") or 0)},
             name=f"mercado-publish-{batch_id}",
             daemon=True,
         )
@@ -15589,6 +15655,7 @@ def api_retry_mercado_product_publish_records():
         thread = threading.Thread(
             target=_run_mercado_product_publish_targets,
             args=([], targets, 1, worker_count, batch_id, created_by, 0),
+            kwargs={"ai_model_user_id": int(current_user.get("id") or 0)},
             name=f"mercado-publish-retry-{batch_id}",
             daemon=True,
         )
@@ -20605,8 +20672,7 @@ def login_page():
 
 @app.route("/register")
 def register_page():
-    if session.get("workbench_user"):
-        return redirect(url_for("index"))
+    # A remembered session must not turn the explicit registration link into login.
     return render_template("register.html")
 
 

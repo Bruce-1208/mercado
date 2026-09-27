@@ -208,6 +208,8 @@ class LocalAgentStore:
                 connection.execute(
                     "ALTER TABLE local_agents ADD COLUMN session_id TEXT NOT NULL DEFAULT ''"
                 )
+            if "owner_user_id" not in agent_columns:
+                connection.execute("ALTER TABLE local_agents ADD COLUMN owner_user_id INTEGER NOT NULL DEFAULT 0")
             job_columns = {
                 row[1] for row in connection.execute("PRAGMA table_info(local_agent_jobs)")
             }
@@ -279,6 +281,8 @@ class LocalAgentStore:
         capabilities=(),
         session_id="",
         current_job_id="",
+        owner_user_id=None,
+        claim_unowned=False,
         lease_seconds=DEFAULT_JOB_LEASE_SECONDS,
         now=None,
     ):
@@ -291,7 +295,7 @@ class LocalAgentStore:
         lease_seconds = max(60.0, float(lease_seconds or DEFAULT_JOB_LEASE_SECONDS))
         heartbeat_key = (name, str(hostname), str(platform), str(agent_version),
                          str(business_version), tuple(capabilities), session_id,
-                         current_job_id, lease_seconds)
+                         current_job_id, lease_seconds, owner_user_id, claim_unowned)
         # Also protects the server from older agents that poll every second.
         # Cancellation is read separately on every request. A new session,
         # job, or version always writes immediately; leases are >=60 seconds.
@@ -302,8 +306,15 @@ class LocalAgentStore:
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             previous = connection.execute(
-                "SELECT session_id FROM local_agents WHERE agent_id = ?", (agent_id,)
+                "SELECT session_id, owner_user_id FROM local_agents WHERE agent_id = ?", (agent_id,)
             ).fetchone()
+            if owner_user_id is not None:
+                owner_user_id = int(owner_user_id)
+                if owner_user_id <= 0 or (
+                    previous and int(previous["owner_user_id"]) != owner_user_id
+                    and not (claim_unowned and not previous["owner_user_id"])
+                ):
+                    raise ValueError("Agent 已存在，不能绑定其他账号；请使用新的 Agent 标识重新注册")
             previous_session = str(previous["session_id"] or "") if previous else ""
             if session_id and previous_session and session_id != previous_session:
                 connection.execute(
@@ -355,6 +366,8 @@ class LocalAgentStore:
                     now,
                 ),
             )
+            if owner_user_id is not None:
+                connection.execute("UPDATE local_agents SET owner_user_id = ? WHERE agent_id = ?", (owner_user_id, agent_id))
             if current_job_id and session_id:
                 connection.execute(
                     """

@@ -571,7 +571,10 @@ def _run_read(task_id: str, file_bytes: bytes, filename: str, store_rows, allowe
                 task["message"] = f"数据已查询，但写入永久记录失败：{str(exc)[:250]}"
         return
     records.sort(
-        key=lambda row: str(row.get("freight_changed_at") or row.get("time") or ""),
+        key=lambda row: (
+            bool(str(row.get("time") or "").strip()),
+            str(row.get("time") or "").strip().replace("T", " "),
+        ),
         reverse=True,
     )
     with _lock:
@@ -605,6 +608,7 @@ def start_upload(file_bytes: bytes, filename: str, owner: str,
             "records": [], "execute_status": "idle", "execute_message": "",
             "execute_processed": 0, "execute_total": 0, "created_at": datetime.now().isoformat(timespec="seconds"),
             "upload_skipped": 0,
+            "authorized_ids": sorted(allowed_token_ids) if allowed_token_ids is not None else None,
             "agent_job_id": "",
         }
         _latest_task_by_owner[owner] = task_id
@@ -644,7 +648,13 @@ def _read_changed_records(task_id, owner, filters, store_rows, allowed_token_ids
         return
 
     # Keep page boundaries stable while background enrichment is running.
-    records.sort(key=lambda row: str(row.get("freight_changed_at") or row.get("time") or ""), reverse=True)
+    records.sort(
+        key=lambda row: (
+            bool(str(row.get("time") or "").strip()),
+            str(row.get("time") or "").strip().replace("T", " "),
+        ),
+        reverse=True,
+    )
     with _lock:
         task = _tasks.get(task_id)
         if not task:
@@ -740,7 +750,10 @@ def _read_changed_records(task_id, owner, filters, store_rows, allowed_token_ids
             bit_db_api.save_weight_dimensions_records(batch, refresh=True)
 
     records.sort(
-        key=lambda row: str(row.get("freight_changed_at") or row.get("time") or ""),
+        key=lambda row: (
+            bool(str(row.get("time") or "").strip()),
+            str(row.get("time") or "").strip().replace("T", " "),
+        ),
         reverse=True,
     )
     failed_count = sum(row.get("query_status") == "查询失败" for row in records)
@@ -818,6 +831,7 @@ def load_saved_changes(owner: str, filters, allowed_token_ids=None, *, page_size
             "execute_status": "idle", "execute_message": "", "execute_processed": 0,
             "execute_total": 0, "created_at": now, "finished_at": now,
             "filters": filters, "agent_job_id": "",
+            "authorized_ids": sorted(allowed_token_ids) if allowed_token_ids is not None else None,
         }
         _latest_task_by_owner[owner] = task_id
     return {"task_id": task_id, "status": "ready", "total": total,
@@ -1094,7 +1108,108 @@ def _package_attributes(client: MercadoLibreClient, global_item_id: str,
     client.update_global_item(global_item_id, {"attributes": merged})
 
 
+def _expand_same_title_records(records, authorized_ids):
+    """Resolve every current exact-title listing before writing any attributes."""
+    clients, details, matches = {}, {}, {}
+    expanded = []
+
+    def detail(token_id, item_id):
+        key = (token_id, item_id)
+        if key not in details:
+            if token_id not in clients:
+                token = bit_mysql.get_mercado_store_token(token_id)
+                clients[token_id], _ = _client_and_token(dict(token or {}))
+            details[key] = clients[token_id].get_marketplace_item(
+                item_id, attributes=("id", "title", "cbt_item_id")
+            )
+        return details[key]
+
+    for row in records:
+        if not _public_record(row)["can_execute_zeshun"]:
+            continue
+        row["execution_error"] = ""
+        row["execution_status"] = "执行中"
+        try:
+            token_id = int(row["_token_id"])
+            item_id = str(row["marketplace_item_id"])
+            if authorized_ids is not None and token_id not in authorized_ids:
+                raise ValueError("订单关联店铺不在授权范围内")
+            original = detail(token_id, item_id)
+            title = str(original.get("title") or "").strip()
+            if not title:
+                raise ValueError("无法读取关联链接标题，不能确定同名链接范围")
+            if title not in matches:
+                found = {}
+                page = 1
+                while True:
+                    result = bit_db_api.list_mercado_store_links(
+                        search=title, token_ids=authorized_ids, include_categories=False,
+                        sort_by="item_id", sort_order="asc", page=page, page_size=1000,
+                    )
+                    for link in result["rows"]:
+                        link_token = int(link["token_id"])
+                        if authorized_ids is not None and link_token not in authorized_ids:
+                            continue
+                        if str(link.get("title") or "").strip() != title:
+                            continue
+                        key = (link_token, str(link["item_id"]))
+                        remote = detail(*key)
+                        if str(remote.get("title") or "").strip() != title:
+                            continue
+                        global_id = str(remote.get("cbt_item_id") or "").strip()
+                        if not global_id:
+                            raise ValueError(f"同名链接 {key[1]} 缺少 Global 商品关联")
+                        found[key] = global_id
+                    if page >= int(result["pages"] or 1):
+                        break
+                    page += 1
+                matches[title] = found
+            targets = dict(matches[title])
+            targets[(token_id, item_id)] = str(original.get("cbt_item_id") or row["_global_item_id"])
+            for (target_token, target_item), global_id in targets.items():
+                child = dict(row)
+                for field in ("_package_status", "_net_status", "_zeshun_status"):
+                    child.pop(field, None)
+                child.update(_token_id=target_token, marketplace_item_id=target_item,
+                             _global_item_id=global_id, _execution_parent=row,
+                             execution_logs=[])
+                expanded.append(child)
+            _log_execution(row, "同名链接", "进行中", f"标题“{title}”匹配 {len(targets)} 条链接（含订单关联链接），将逐条保留并重提各自净收益")
+        except Exception as exc:
+            row["_zeshun_status"] = "失败"
+            row["execution_status"] = "失败"
+            row["execution_error"] = f"同名链接查询失败：{str(exc)[:250]}"
+            _log_execution(row, "同名链接", "失败", row["execution_error"])
+    return expanded
+
+
+def _finish_same_title_records(originals, expanded):
+    by_parent = defaultdict(list)
+    for row in expanded:
+        by_parent[id(row["_execution_parent"])].append(row)
+    for original in originals:
+        children = by_parent[id(original)]
+        if not children:
+            continue
+        succeeded = sum(row.get("_zeshun_status") == "成功" for row in children)
+        complete = succeeded == len(children)
+        original["_zeshun_status"] = "成功" if complete else "失败"
+        original["execution_status"] = "完成" if complete else "部分完成"
+        failures = [f"{row['marketplace_item_id']}：{row.get('execution_error') or '未完成'}"
+                    for row in children if row.get("_zeshun_status") != "成功"]
+        original["execution_error"] = "；".join(failures)
+        for child in children:
+            if (child["_token_id"], child["marketplace_item_id"]) == (original["_token_id"], original["marketplace_item_id"]):
+                original["current_net_proceeds_usd"] = child.get("current_net_proceeds_usd", "")
+        _log_execution(original, "同名链接", "成功" if complete else "失败",
+                       f"同名链接更新成功 {succeeded}/{len(children)} 条" + (f"；{original['execution_error']}" if failures else ""))
+
+
 def _log_execution(row: dict[str, Any], stage: str, status: str, message: str) -> None:
+    parent = row.get("_execution_parent")
+    if parent is not None:
+        _log_execution(parent, stage, status, f"链接 {row['marketplace_item_id']}：{message}")
+        return
     entry = {
         "time": datetime.now().isoformat(timespec="seconds"),
         "stage": str(stage), "status": str(status), "message": str(message)[:500],
@@ -1135,6 +1250,12 @@ def _run_execute(
         ]
         task["execute_status"] = "running"
         task["execute_message"] = "正在更新泽顺数据和链接"
+    original_records = records
+    if action == "zeshun":
+        authorized_ids = task.get("authorized_ids", sorted({
+            int(row["_token_id"]) for row in records if row.get("_token_id")
+        }))
+        records = _expand_same_title_records(records, authorized_ids)
     erp_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     dim_groups: dict[tuple[int, str], list[dict[str, Any]]] = defaultdict(list)
     net_groups: dict[tuple[int, str], list[dict[str, Any]]] = defaultdict(list)
@@ -1170,7 +1291,7 @@ def _run_execute(
     if not erp_groups and not dim_groups:
         with _lock:
             task["execute_status"] = "completed"
-            task["execute_message"] = "没有具备有效数据的选中记录"
+            task["execute_message"] = "没有可更新的链接，请查看订单执行日志"
             task["execute_total"] = 0
         return
 
@@ -1383,6 +1504,9 @@ def _run_execute(
     run_parallel_group_updates(
         net_groups, update_net_group, "净收益", "尺寸与净收益更新",
     )
+    if action == "zeshun":
+        _finish_same_title_records(original_records, records)
+        records = original_records
     with _lock:
         task["execute_status"] = "completed"
         if action == "zeshun":

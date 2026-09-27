@@ -1,0 +1,2119 @@
+{
+  "source_snapshot_json": {
+    "original_1688": {
+      "source_item_id": "1688908359704935",
+      "source_1688_item_id": "908359704935",
+      "source_url": "https://detail.1688.com/offer/908359704935.html?spm=a26352.13672862.offerlist.19.55b51e62hFspiA&offerId=908359704935&sortType=&pageId=&abBizDataType=cbuOffer&hotSaleSkuId=5769529229857&trace_log=normal&uuid=f115ab75b2754b99aaec713cdfb283dd&sourceId=V1-7a81ba1f6a0b9d70c3bc4b7fdd0f068d-S02&forcePC=1790256052437&kj_agent_plugin=zying",
+      "title": "抓鬼敢死队制服捉鬼队COS扮演服连体衣带枪量子包万圣节演出服装",
+      "price": 19.95,
+      "currency_id": "CNY",
+      "main_image_url": "https://cbu01.alicdn.com/img/ibank/O1CN01DN2bTa2K9vc2kSNMQ_!!2205149515-0-cib.jpg",
+      "images": [
+        "https://cbu01.alicdn.com/img/ibank/O1CN01DN2bTa2K9vc2kSNMQ_!!2205149515-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN01J1CPQ62K9vc28sbND_!!2205149515-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN016v9vxD2K9vbzZ0yhf_!!2205149515-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN01IbUmbR2K9vc1vFN4j_!!2205149515-0-cib.jpg",
+        "https://cbu01.alicdn.com/img/ibank/O1CN015UTGA52K9vflriHiO_!!2205149515-0-cib.jpg"
+      ],
+      "properties": [],
+      "variations": [
+        {
+          "id": "5769529229847",
+          "sku_id": "5769529229847",
+          "seller_sku": "",
+          "label": "连体衣 / 110cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣"
+            },
+            {
+              "name": "规格2",
+              "value_name": "110cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 997,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 110cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229848",
+          "sku_id": "5769529229848",
+          "seller_sku": "",
+          "label": "连体衣 / 120cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣"
+            },
+            {
+              "name": "规格2",
+              "value_name": "120cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 947,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 120cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229849",
+          "sku_id": "5769529229849",
+          "seller_sku": "",
+          "label": "连体衣 / 130cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣"
+            },
+            {
+              "name": "规格2",
+              "value_name": "130cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 955,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 130cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229850",
+          "sku_id": "5769529229850",
+          "seller_sku": "",
+          "label": "连体衣 / 140cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣"
+            },
+            {
+              "name": "规格2",
+              "value_name": "140cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 750,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 140cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229851",
+          "sku_id": "5769529229851",
+          "seller_sku": "",
+          "label": "连体衣 / 150cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣"
+            },
+            {
+              "name": "规格2",
+              "value_name": "150cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 789,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 150cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229852",
+          "sku_id": "5769529229852",
+          "seller_sku": "",
+          "label": "连体衣 / 160cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣"
+            },
+            {
+              "name": "规格2",
+              "value_name": "160cm"
+            }
+          ],
+          "price": 35.15,
+          "price_text": "¥35.15",
+          "available_quantity": 819,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 160cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229853",
+          "sku_id": "5769529229853",
+          "seller_sku": "",
+          "label": "连体衣 / 170cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣"
+            },
+            {
+              "name": "规格2",
+              "value_name": "170cm"
+            }
+          ],
+          "price": 35.15,
+          "price_text": "¥35.15",
+          "available_quantity": 852,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 170cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229854",
+          "sku_id": "5769529229854",
+          "seller_sku": "",
+          "label": "连体衣 / 180cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣"
+            },
+            {
+              "name": "规格2",
+              "value_name": "180cm"
+            }
+          ],
+          "price": 35.15,
+          "price_text": "¥35.15",
+          "available_quantity": 882,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 180cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229855",
+          "sku_id": "5769529229855",
+          "seller_sku": "",
+          "label": "连体衣 / 190cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣"
+            },
+            {
+              "name": "规格2",
+              "value_name": "190cm"
+            }
+          ],
+          "price": 35.15,
+          "price_text": "¥35.15",
+          "available_quantity": 819,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 190cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229856",
+          "sku_id": "5769529229856",
+          "seller_sku": "",
+          "label": "连体衣+包 / 110cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣+包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "110cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 960,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 110cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229857",
+          "sku_id": "5769529229857",
+          "seller_sku": "",
+          "label": "连体衣+包 / 120cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣+包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "120cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 960,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 120cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229858",
+          "sku_id": "5769529229858",
+          "seller_sku": "",
+          "label": "连体衣+包 / 130cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣+包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "130cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 959,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 130cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229859",
+          "sku_id": "5769529229859",
+          "seller_sku": "",
+          "label": "连体衣+包 / 140cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣+包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "140cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 957,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 140cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229860",
+          "sku_id": "5769529229860",
+          "seller_sku": "",
+          "label": "连体衣+包 / 150cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣+包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "150cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 962,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 150cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229861",
+          "sku_id": "5769529229861",
+          "seller_sku": "",
+          "label": "连体衣+包 / 160cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣+包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "160cm"
+            }
+          ],
+          "price": 55.1,
+          "price_text": "¥55.10",
+          "available_quantity": 950,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 160cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229862",
+          "sku_id": "5769529229862",
+          "seller_sku": "",
+          "label": "连体衣+包 / 170cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣+包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "170cm"
+            }
+          ],
+          "price": 55.1,
+          "price_text": "¥55.10",
+          "available_quantity": 938,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 170cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229863",
+          "sku_id": "5769529229863",
+          "seller_sku": "",
+          "label": "连体衣+包 / 180cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣+包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "180cm"
+            }
+          ],
+          "price": 55.1,
+          "price_text": "¥55.10",
+          "available_quantity": 956,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 180cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229864",
+          "sku_id": "5769529229864",
+          "seller_sku": "",
+          "label": "连体衣+包 / 190cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "连体衣+包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "190cm"
+            }
+          ],
+          "price": 55.1,
+          "price_text": "¥55.10",
+          "available_quantity": 963,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 190cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229865",
+          "sku_id": "5769529229865",
+          "seller_sku": "",
+          "label": "包 / 110cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "110cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 110cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229866",
+          "sku_id": "5769529229866",
+          "seller_sku": "",
+          "label": "包 / 120cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "120cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 949,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 120cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229867",
+          "sku_id": "5769529229867",
+          "seller_sku": "",
+          "label": "包 / 130cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "130cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 997,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 130cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229868",
+          "sku_id": "5769529229868",
+          "seller_sku": "",
+          "label": "包 / 140cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "140cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 140cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229869",
+          "sku_id": "5769529229869",
+          "seller_sku": "",
+          "label": "包 / 150cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "150cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 150cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229870",
+          "sku_id": "5769529229870",
+          "seller_sku": "",
+          "label": "包 / 160cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "160cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 160cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229871",
+          "sku_id": "5769529229871",
+          "seller_sku": "",
+          "label": "包 / 170cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "170cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 998,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 170cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229872",
+          "sku_id": "5769529229872",
+          "seller_sku": "",
+          "label": "包 / 180cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "180cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 180cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229873",
+          "sku_id": "5769529229873",
+          "seller_sku": "",
+          "label": "包 / 190cm",
+          "attribute_combinations": [
+            {
+              "name": "规格1",
+              "value_name": "包"
+            },
+            {
+              "name": "规格2",
+              "value_name": "190cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 950,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 190cm",
+          "weight_g": 450
+        }
+      ],
+      "description_text": "商品详情 【平台活动下价格】 活动前价格：（1）非分销场景下，指平台活动（不含分销场景的活动）预热期（若无预热期，则为爆发期）前的商品销售价格；（2）分销场景下，专指分销活动预热期（若无预热期，则为爆发期）前的商品销售价格。 前述价格未计算平台发放的各种采购津贴、跨店券、红包等优惠，未计算商家设置的满减优惠、优惠券、店铺返利金、店铺会员折扣以及L会员价、商家设置的指定人群单品优惠活动等各种优惠；该价格会计算其他非平台活动下的各种优惠（包括商家自行设置的非指定人群的单品优惠等，最终以商家的自行设置为准）。前述商品销售价格指商品页面当日展示的标价；若当日商家多次调整销售价格的，取当日最后展示的销售价格。 【非平台活动下价格】 划线价格：指商家自营销活动场景下的商品价格，该价格不包含平台的各种优惠活动。可能是商品的销售指导价或该商品的曾经展示过的销售价等，并非原价，仅供参考。 未划线价格：商品在1688平台上由商家自行设置的销售标价，具体的成交价格根据商家设置的各种优惠活动发生变化，最终以订单结算页价格为准。 【发布价】 指商品在1688平台上由商家自行设置的销售标价并叠加L会员价折扣后的价格，并非原价，仅供参考。 【全网销量】 指同款商品在多个平台（含淘宝、天猫及其他电子商务平台）上的累积销量 同款：指商品名称、外观、规格、成分、颜色、材质、功效、功能等多维度要素具有高度的相似性，但不视为二者具有完全相同的品牌、品质、功效或功能。 *注： 1、前述说明仅适用于价格比较下的场景。 2、活动前的时间通常为预热期/爆发期的前一天，但因数据的延迟性，取价时间可能会发生改变，最终以前述展示的具体时间和所对应的商品价格为准。 内容声明：阿里巴巴中国站为第三方交易平台及互联网信息服务提供者，阿里巴巴中国站（含网站、客户端等）所展示的商品/服务的标题、价格、详情等信息内容系由店铺经营者发布，其真实性、准确性和合法性均由店铺经营者负责。阿里巴巴提醒您购买商品/服务前注意谨慎核实，如您对商品/服务的标题、价格、详情等任何信息有任何疑问的，请在购买前通过阿里旺旺与店铺经营者沟通确认；阿里巴巴中国站存在海量店铺，如您发现店铺内有任何违法/侵权信息，请立即向阿里巴巴举报并提供有效线索。",
+      "category_id": "",
+      "category_name": "",
+      "scrape_status": "partial",
+      "error_message": "未读取到完整的1688规格包装尺寸",
+      "weight_g": 450,
+      "volumetric_weight_kg": null,
+      "package_length_cm": null,
+      "package_width_cm": null,
+      "package_height_cm": null,
+      "dimensions_display": "",
+      "weight_basis": "1688_source",
+      "collected_at": "2026-09-24T13:20:55.620Z"
+    },
+    "ai_original": {
+      "product_type_en": "Ghostbusters costume jumpsuit with proton pack",
+      "title_es": "Disfraz de overol con mochila para cosplay y Halloween",
+      "title_pt": "Macacão com mochila para cosplay e Halloween",
+      "description_es": "Disfraz de overol de una pieza, ideal para cosplay, fiestas de disfraces y Halloween. Incluye mochila tipo cuántica con correas ajustables. Confeccionado en material cómodo y resistente. Disponible en varias tallas desde 110 cm hasta 190 cm. Se puede adquirir solo el overol, solo la mochila o el conjunto completo. Perfecto para recrear el look de cazador de fantasmas.",
+      "description_pt": "Fantasia de macacão de peça única, ideal para cosplay, festas à fantasia e Halloween. Inclui mochila tipo quântica com alças ajustáveis. Confeccionado em material confortável e resistente. Disponível em vários tamanhos de 110 cm a 190 cm. Pode ser adquirido apenas o macacão, apenas a mochila ou o conjunto completo. Perfeito para recriar o visual de caçador de fantasmas.",
+      "attributes": [
+        {
+          "id": "BRAND",
+          "name": "Brand",
+          "value_name": "Generic"
+        },
+        {
+          "id": "PACKAGE_WEIGHT",
+          "name": "Package weight",
+          "value_name": "450 g"
+        },
+        {
+          "id": "INCLUDES_ACCESSORIES",
+          "name": "Includes accessories",
+          "value_name": "Yes",
+          "value_id": "242085"
+        }
+      ],
+      "category_id": "CBT24790",
+      "category_name": "Costumes",
+      "variations": [
+        {
+          "id": "5769529229847",
+          "sku_id": "5769529229847",
+          "seller_sku": "",
+          "label": "连体衣 / 110cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "110cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 997,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 110cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229848",
+          "sku_id": "5769529229848",
+          "seller_sku": "",
+          "label": "连体衣 / 120cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "120cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 947,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 120cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229849",
+          "sku_id": "5769529229849",
+          "seller_sku": "",
+          "label": "连体衣 / 130cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "130cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 955,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 130cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229850",
+          "sku_id": "5769529229850",
+          "seller_sku": "",
+          "label": "连体衣 / 140cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "140cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 750,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 140cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229851",
+          "sku_id": "5769529229851",
+          "seller_sku": "",
+          "label": "连体衣 / 150cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "150cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 789,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 150cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229852",
+          "sku_id": "5769529229852",
+          "seller_sku": "",
+          "label": "连体衣 / 160cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "160cm"
+            }
+          ],
+          "price": 35.15,
+          "price_text": "¥35.15",
+          "available_quantity": 819,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 160cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229853",
+          "sku_id": "5769529229853",
+          "seller_sku": "",
+          "label": "连体衣 / 170cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "170cm"
+            }
+          ],
+          "price": 35.15,
+          "price_text": "¥35.15",
+          "available_quantity": 852,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 170cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229854",
+          "sku_id": "5769529229854",
+          "seller_sku": "",
+          "label": "连体衣 / 180cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "180cm"
+            }
+          ],
+          "price": 35.15,
+          "price_text": "¥35.15",
+          "available_quantity": 882,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 180cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229855",
+          "sku_id": "5769529229855",
+          "seller_sku": "",
+          "label": "连体衣 / 190cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "190cm"
+            }
+          ],
+          "price": 35.15,
+          "price_text": "¥35.15",
+          "available_quantity": 819,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 190cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229856",
+          "sku_id": "5769529229856",
+          "seller_sku": "",
+          "label": "连体衣+包 / 110cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "110cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 960,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 110cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229857",
+          "sku_id": "5769529229857",
+          "seller_sku": "",
+          "label": "连体衣+包 / 120cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "120cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 960,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 120cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229858",
+          "sku_id": "5769529229858",
+          "seller_sku": "",
+          "label": "连体衣+包 / 130cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "130cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 959,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 130cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229859",
+          "sku_id": "5769529229859",
+          "seller_sku": "",
+          "label": "连体衣+包 / 140cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "140cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 957,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 140cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229860",
+          "sku_id": "5769529229860",
+          "seller_sku": "",
+          "label": "连体衣+包 / 150cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "150cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 962,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 150cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229861",
+          "sku_id": "5769529229861",
+          "seller_sku": "",
+          "label": "连体衣+包 / 160cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "160cm"
+            }
+          ],
+          "price": 55.1,
+          "price_text": "¥55.10",
+          "available_quantity": 950,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 160cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229862",
+          "sku_id": "5769529229862",
+          "seller_sku": "",
+          "label": "连体衣+包 / 170cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "170cm"
+            }
+          ],
+          "price": 55.1,
+          "price_text": "¥55.10",
+          "available_quantity": 938,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 170cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229863",
+          "sku_id": "5769529229863",
+          "seller_sku": "",
+          "label": "连体衣+包 / 180cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "180cm"
+            }
+          ],
+          "price": 55.1,
+          "price_text": "¥55.10",
+          "available_quantity": 956,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 180cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229864",
+          "sku_id": "5769529229864",
+          "seller_sku": "",
+          "label": "连体衣+包 / 190cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "190cm"
+            }
+          ],
+          "price": 55.1,
+          "price_text": "¥55.10",
+          "available_quantity": 963,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 190cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229865",
+          "sku_id": "5769529229865",
+          "seller_sku": "",
+          "label": "包 / 110cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "110cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 110cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229866",
+          "sku_id": "5769529229866",
+          "seller_sku": "",
+          "label": "包 / 120cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "120cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 949,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 120cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229867",
+          "sku_id": "5769529229867",
+          "seller_sku": "",
+          "label": "包 / 130cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "130cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 997,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 130cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229868",
+          "sku_id": "5769529229868",
+          "seller_sku": "",
+          "label": "包 / 140cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "140cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 140cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229869",
+          "sku_id": "5769529229869",
+          "seller_sku": "",
+          "label": "包 / 150cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "150cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 150cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229870",
+          "sku_id": "5769529229870",
+          "seller_sku": "",
+          "label": "包 / 160cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "160cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 160cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229871",
+          "sku_id": "5769529229871",
+          "seller_sku": "",
+          "label": "包 / 170cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "170cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 998,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 170cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229872",
+          "sku_id": "5769529229872",
+          "seller_sku": "",
+          "label": "包 / 180cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "180cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 180cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229873",
+          "sku_id": "5769529229873",
+          "seller_sku": "",
+          "label": "包 / 190cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "190cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 950,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 190cm",
+          "weight_g": 450
+        }
+      ],
+      "category_prediction_query": "Ghostbusters costume jumpsuit with proton pack",
+      "missing_required_attributes": [
+        {
+          "id": "GENDER",
+          "name": "Gender"
+        },
+        {
+          "id": "PACKAGE_HEIGHT",
+          "name": "Package height"
+        },
+        {
+          "id": "PACKAGE_WIDTH",
+          "name": "Package width"
+        },
+        {
+          "id": "PACKAGE_LENGTH",
+          "name": "Package length"
+        }
+      ],
+      "main_image_url": "/api/ai-original-products/images/1688-908359704935-ai-white.jpg",
+      "image_generation_method": "local_background_removal",
+      "status": "completed",
+      "error": "",
+      "generated_by": "管理员"
+    },
+    "source": {
+      "id": "CBT908359704935",
+      "site_id": "CBT",
+      "title": "Disfraz de overol con mochila para cosplay y Halloween",
+      "price": 19.95,
+      "currency_id": "USD",
+      "category_id": "CBT24790",
+      "category_name": "Costumes",
+      "permalink": "https://detail.1688.com/offer/908359704935.html?spm=a26352.13672862.offerlist.19.55b51e62hFspiA&offerId=908359704935&sortType=&pageId=&abBizDataType=cbuOffer&hotSaleSkuId=5769529229857&trace_log=normal&uuid=f115ab75b2754b99aaec713cdfb283dd&sourceId=V1-7a81ba1f6a0b9d70c3bc4b7fdd0f068d-S02&forcePC=1790256052437&kj_agent_plugin=zying",
+      "pictures": [
+        {
+          "source": "/api/ai-original-products/images/1688-908359704935-ai-white.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN01J1CPQ62K9vc28sbND_!!2205149515-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN016v9vxD2K9vbzZ0yhf_!!2205149515-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN01IbUmbR2K9vc1vFN4j_!!2205149515-0-cib.jpg"
+        },
+        {
+          "source": "https://cbu01.alicdn.com/img/ibank/O1CN015UTGA52K9vflriHiO_!!2205149515-0-cib.jpg"
+        }
+      ],
+      "attributes": [
+        {
+          "id": "BRAND",
+          "name": "Brand",
+          "value_name": "Generic"
+        },
+        {
+          "id": "PACKAGE_WEIGHT",
+          "name": "Package weight",
+          "value_name": "450 g"
+        },
+        {
+          "id": "INCLUDES_ACCESSORIES",
+          "name": "Includes accessories",
+          "value_name": "Yes",
+          "value_id": "242085"
+        }
+      ],
+      "variations": [
+        {
+          "id": "5769529229847",
+          "sku_id": "5769529229847",
+          "seller_sku": "",
+          "label": "连体衣 / 110cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "110cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 997,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 110cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229848",
+          "sku_id": "5769529229848",
+          "seller_sku": "",
+          "label": "连体衣 / 120cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "120cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 947,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 120cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229849",
+          "sku_id": "5769529229849",
+          "seller_sku": "",
+          "label": "连体衣 / 130cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "130cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 955,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 130cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229850",
+          "sku_id": "5769529229850",
+          "seller_sku": "",
+          "label": "连体衣 / 140cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "140cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 750,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 140cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229851",
+          "sku_id": "5769529229851",
+          "seller_sku": "",
+          "label": "连体衣 / 150cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "150cm"
+            }
+          ],
+          "price": 31.35,
+          "price_text": "¥31.35",
+          "available_quantity": 789,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 150cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229852",
+          "sku_id": "5769529229852",
+          "seller_sku": "",
+          "label": "连体衣 / 160cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "160cm"
+            }
+          ],
+          "price": 35.15,
+          "price_text": "¥35.15",
+          "available_quantity": 819,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 160cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229853",
+          "sku_id": "5769529229853",
+          "seller_sku": "",
+          "label": "连体衣 / 170cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "170cm"
+            }
+          ],
+          "price": 35.15,
+          "price_text": "¥35.15",
+          "available_quantity": 852,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 170cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229854",
+          "sku_id": "5769529229854",
+          "seller_sku": "",
+          "label": "连体衣 / 180cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "180cm"
+            }
+          ],
+          "price": 35.15,
+          "price_text": "¥35.15",
+          "available_quantity": 882,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 180cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229855",
+          "sku_id": "5769529229855",
+          "seller_sku": "",
+          "label": "连体衣 / 190cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "190cm"
+            }
+          ],
+          "price": 35.15,
+          "price_text": "¥35.15",
+          "available_quantity": 819,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣 / 190cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229856",
+          "sku_id": "5769529229856",
+          "seller_sku": "",
+          "label": "连体衣+包 / 110cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "110cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 960,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 110cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229857",
+          "sku_id": "5769529229857",
+          "seller_sku": "",
+          "label": "连体衣+包 / 120cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "120cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 960,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 120cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229858",
+          "sku_id": "5769529229858",
+          "seller_sku": "",
+          "label": "连体衣+包 / 130cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "130cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 959,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 130cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229859",
+          "sku_id": "5769529229859",
+          "seller_sku": "",
+          "label": "连体衣+包 / 140cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "140cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 957,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 140cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229860",
+          "sku_id": "5769529229860",
+          "seller_sku": "",
+          "label": "连体衣+包 / 150cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "150cm"
+            }
+          ],
+          "price": 51.3,
+          "price_text": "¥51.30",
+          "available_quantity": 962,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 150cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229861",
+          "sku_id": "5769529229861",
+          "seller_sku": "",
+          "label": "连体衣+包 / 160cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "160cm"
+            }
+          ],
+          "price": 55.1,
+          "price_text": "¥55.10",
+          "available_quantity": 950,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 160cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229862",
+          "sku_id": "5769529229862",
+          "seller_sku": "",
+          "label": "连体衣+包 / 170cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "170cm"
+            }
+          ],
+          "price": 55.1,
+          "price_text": "¥55.10",
+          "available_quantity": 938,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 170cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229863",
+          "sku_id": "5769529229863",
+          "seller_sku": "",
+          "label": "连体衣+包 / 180cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "180cm"
+            }
+          ],
+          "price": 55.1,
+          "price_text": "¥55.10",
+          "available_quantity": 956,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 180cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229864",
+          "sku_id": "5769529229864",
+          "seller_sku": "",
+          "label": "连体衣+包 / 190cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Jumpsuit + Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "190cm"
+            }
+          ],
+          "price": 55.1,
+          "price_text": "¥55.10",
+          "available_quantity": 963,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "连体衣+包 / 190cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229865",
+          "sku_id": "5769529229865",
+          "seller_sku": "",
+          "label": "包 / 110cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "110cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 110cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229866",
+          "sku_id": "5769529229866",
+          "seller_sku": "",
+          "label": "包 / 120cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "120cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 949,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 120cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229867",
+          "sku_id": "5769529229867",
+          "seller_sku": "",
+          "label": "包 / 130cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "130cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 997,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 130cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229868",
+          "sku_id": "5769529229868",
+          "seller_sku": "",
+          "label": "包 / 140cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "140cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 140cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229869",
+          "sku_id": "5769529229869",
+          "seller_sku": "",
+          "label": "包 / 150cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "150cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 150cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229870",
+          "sku_id": "5769529229870",
+          "seller_sku": "",
+          "label": "包 / 160cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "160cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 160cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229871",
+          "sku_id": "5769529229871",
+          "seller_sku": "",
+          "label": "包 / 170cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "170cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 998,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 170cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229872",
+          "sku_id": "5769529229872",
+          "seller_sku": "",
+          "label": "包 / 180cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "180cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 180cm",
+          "weight_g": 450
+        },
+        {
+          "id": "5769529229873",
+          "sku_id": "5769529229873",
+          "seller_sku": "",
+          "label": "包 / 190cm",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Pack"
+            },
+            {
+              "id": "SIZE",
+              "name": "Size",
+              "value_name": "190cm"
+            }
+          ],
+          "price": 19.95,
+          "price_text": "¥19.95",
+          "available_quantity": 950,
+          "image_url": "",
+          "raw_weight": "450g",
+          "raw_text": "包 / 190cm",
+          "weight_g": 450
+        }
+      ]
+    },
+    "description": {
+      "plain_text": "Disfraz de overol de una pieza, ideal para cosplay, fiestas de disfraces y Halloween. Incluye mochila tipo cuántica con correas ajustables. Confeccionado en material cómodo y resistente. Disponible en varias tallas desde 110 cm hasta 190 cm. Se puede adquirir solo el overol, solo la mochila o el conjunto completo. Perfecto para recrear el look de cazador de fantasmas."
+    },
+    "page_snapshot": {},
+    "plugin_snapshot": {
+      "source_type": "ai_original",
+      "source_platform": "1688",
+      "created_by": "浏览器插件：管理员"
+    }
+  },
+  "category_id": "CBT24790",
+  "category_name": "Costumes",
+  "review_status": "approved"
+}

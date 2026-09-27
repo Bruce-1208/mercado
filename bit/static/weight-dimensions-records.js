@@ -299,7 +299,8 @@
         const selectionDescription = allMatchingSelected
             ? `筛选结果 ${recordTotal} 条（执行时自动跳过缺少商品关联、实际重量或已完成该操作的记录）`
             : `已选 ${rows.length} 条订单`;
-        if (!window.confirm(`确认更新${selectionDescription}的${label}吗？`)) return;
+        const scope = action === "zeshun" ? "将同时更新授权店铺内所有已同步的同名链接（标题完全相同），每条链接保留并重新提交各自当前净收益。" : "";
+        if (!window.confirm(`确认更新${selectionDescription}的${label}吗？${scope}`)) return;
         busyMode = "execute"; busy = true; updateButtons(); status(`正在提交${label}更新…`);
         try {
             await api(`/api/weight-dimensions-records/${encodeURIComponent(taskId)}/execute`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({action, select_all_matching: allMatchingSelected, excluded_order_numbers: allMatchingSelected ? Array.from(excludedOrderNumbers) : [], order_numbers: allMatchingSelected ? [] : rows.map((row) => row.order_number), agent_id: $("wdr-agent-id")?.value || ""}) });

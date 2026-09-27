@@ -722,3 +722,21 @@ def test_variation_mapping_retry_is_bounded():
             {'variations': [{'attribute_combinations': [{'name': '规格1', 'value_name': '电次'}]}]},
             [{'id': 'COLOR'}], chat=chat)
     assert len(calls) == 3
+
+
+def test_approved_ai_item_failure_does_not_block_other_approved_items(monkeypatch):
+    from erp import mercadolibre_batch_publish as batch
+    good = _ai_row()
+    incomplete = {**_ai_row(), 'id': 9, 'net_proceeds_usd': None}
+    calls = []
+    monkeypatch.setattr(batch, '_token_record', lambda _: {'display_name': 'test', 'site_settings': [
+        {'site_id': 'MLM', 'discount_rate': 100}]})
+    monkeypatch.setattr(batch, '_complete_ai_publication_attributes', lambda row, listing, client, **kw: listing)
+    monkeypatch.setattr(batch, 'follow_sell', lambda *a, **kw: calls.append(kw) or {'result': {'id': 'CBT999'}})
+    result = batch.publish_product_batch(
+        [incomplete, good], token_id=1, site_id='MLM', workers=1,
+        client=object(), update_state=lambda *a, **k: None,
+    )
+    assert result['published_count'] == 1
+    assert result['failed_count'] == 1
+    assert len(calls) == 1
