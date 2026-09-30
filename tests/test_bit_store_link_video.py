@@ -9,6 +9,11 @@ from bit import bit_store_link_video as video
 from mercado_api.client import MercadoAPIError, MercadoLibreClient
 
 
+@pytest.fixture(autouse=True)
+def isolated_video_markers(tmp_path, monkeypatch):
+    monkeypatch.setenv("BIT_STORE_LINK_MARKER_DB_PATH", str(tmp_path / "markers.sqlite3"))
+
+
 def upload(name="clip.mp4", content=b"sample video"):
     return FileStorage(stream=io.BytesIO(content), filename=name)
 

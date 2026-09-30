@@ -236,8 +236,9 @@
             font-weight: 700;
         }
     </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20260930-unified1">
 </head>
-<body>
+<body class="zs-standalone zs-auth">
     <section class="login-panel">
         <div class="login-header">
             <div class="login-brand">
@@ -263,11 +264,11 @@
             <div class="remember-row">
                 <label class="remember-option" for="remember-login">
                     <input id="remember-login" name="remember" type="checkbox" value="1">
-                    <span class="remember-copy">记住账号密码<small>6 小时内自动登录</small></span>
+                    <span class="remember-copy">记住账号<small>仅保存账号名称；登录状态固定 72 小时</small></span>
                 </label>
             </div>
             <button id="login-btn" type="submit">登录</button>
-            <p class="security-note">密码不会以明文保存在页面中，登录状态由安全 Cookie 维持。</p>
+            <p class="security-note">密码不会保存在页面中；登录状态将在 72 小时后失效。</p>
         </form>
         <div class="register-entry">还没有账号？<a href="/register">创建账号</a></div>
     </section>
@@ -321,7 +322,7 @@
                     window.localStorage.removeItem(rememberedUsernameKey);
                 }
                 const params = new URLSearchParams(window.location.search);
-                window.location.href = params.get("next") || "/";
+                window.location.href = params.get("next") || "/mercado/today";
             } catch (error) {
                 showError(error.message || "登录失败");
             } finally {

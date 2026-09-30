@@ -509,19 +509,26 @@ def test_product_batch_inputs_search_and_start(popup):
     search = popup.evaluate("messages.find(m => m.type === 'OPEN_PRODUCT_SEARCH')")
     assert search == {"type": "OPEN_PRODUCT_SEARCH", "country": "MLB", "keyword": "brinquedo infantil"}
     popup.locator("#product-max-items").fill("17")
-    popup.locator("#product-concurrency").fill("11")
+    assert popup.locator("#product-concurrency-mode").input_value() == "normal"
+    popup.locator("#product-concurrency-mode").select_option("gentle")
     popup.locator("#product-batch-start").click()
-    assert "并发数" in popup.locator("#result").inner_text()
-    assert not popup.evaluate("messages.some(m => m.type === 'START_PRODUCT_BATCH')")
-    popup.locator("#product-concurrency").fill("4")
+    gentle_message = popup.evaluate("messages.find(m => m.type === 'START_PRODUCT_BATCH')")
+    assert gentle_message["params"]["concurrency_mode"] == "gentle"
+    assert gentle_message["params"]["concurrency"] == 1
+    assert popup.locator("#product-batch-start").is_disabled()
+    assert popup.locator("#product-concurrency-mode").is_disabled()
+    popup.locator("#product-batch-stop").click()
+    assert popup.locator("#product-batch-start").is_enabled()
+    popup.locator("#product-concurrency-mode").select_option("normal")
     popup.locator("#product-min-sales").fill("20")
     popup.locator("#product-max-sales").fill("200")
     popup.locator("#product-batch-start").click()
-    message = popup.evaluate("messages.find(m => m.type === 'START_PRODUCT_BATCH')")
+    message = popup.evaluate("messages.filter(m => m.type === 'START_PRODUCT_BATCH').pop()")
     assert message == {"type": "START_PRODUCT_BATCH", "tab_id": 8, "params": {
-        "max_items": 17, "concurrency": 4, "min_sales": 20, "max_sales": 200}}
+        "max_items": 17, "concurrency_mode": "normal", "concurrency": 5,
+        "min_sales": 20, "max_sales": 200}}
     assert popup.locator("#product-batch-start").is_disabled()
-    assert popup.locator("#product-concurrency").is_disabled()
+    assert popup.locator("#product-concurrency-mode").is_disabled()
     popup.locator("#product-batch-stop").click()
     assert popup.locator("#product-batch-start").is_enabled()
     assert popup.locator("#product-batch-status").inner_text() == "已停止采集"

@@ -190,3 +190,160 @@ def test_dispatch_function_also_restores_existing_browser_actions(collection_api
         response = web.app.make_response(web.enqueue_local_agent_ai_weight_price('login/open', {'agent_id': 'agent-office'}))
     assert response.status_code == 200
     assert hub.list_jobs()[0]['payload']['action'] == 'login/open'
+
+
+def awp_control(action, **data):
+    from bit import bit_interface as web
+    with web.app.test_request_context():
+        return web.app.make_response(web.enqueue_local_agent_ai_weight_price(
+            action, {'agent_id': 'agent-office', **data}))
+
+
+@pytest.mark.parametrize('outcome', ['running', 'blocked', 'stopped', 'failed', 'completed'])
+def test_terminate_orphan_batch_unblocks_login_and_preserves_history(collection_api, outcome):
+    client, service, hub, user, saved = collection_api
+    store = service.store
+    store.add({'erp_goods_id': 'old-product', 'title': 'Old product'})
+    store.save_run({'run_id': 'old-run', 'outcome': outcome})
+    store.record_run_item('old-run', 'old-product', execution_result='pending')
+    store.set_state('run', {'run_id': 'old-run', 'outcome': outcome, 'execution_target': 'agent'})
+    store.set_state('login', {'confirmed': True})
+    store.set_state('circuit', {'reason': 'login required'})
+    store.set_state('pipeline_current', {'erp_goods_id': 'old-product'})
+    response = awp_control('terminate')
+    assert response.status_code == 200, response.json
+    assert response.json['data']['cleared'] is True
+    assert store.state('run') == {}
+    assert store.state('circuit') is None
+    assert store.state('pipeline_current') is None
+    assert not store.has_run_item('old-run', 'old-product')
+    with pytest.raises(ValueError, match='执行批次不存在'):
+        store.run_items('old-run')
+    assert store.get('old-product')['title'] == 'Old product'
+    assert store.state('login')['confirmed'] is True
+    assert service.status()['running'] is False
+    assert awp_control('terminate').status_code == 200  # repeat is harmless
+    assert awp_control('login/open').status_code == 200
+    assert hub.list_jobs()[0]['payload']['action'] == 'login/open'
+
+
+def test_terminate_orphan_works_when_agent_offline(collection_api):
+    client, service, hub, user, saved = collection_api
+    hub.heartbeat('agent-office', name='Office', capabilities=['ai_weight_price'], now=1)
+    service.store.set_state('run', {'run_id': 'orphan', 'outcome': 'running', 'execution_target': 'agent'})
+    assert awp_control('terminate').status_code == 200
+    assert service.status()['running'] is False
+    assert awp_control('login/open').status_code == 409
+
+
+def test_terminate_controls_users_job_on_previous_agent(collection_api):
+    client, service, hub, user, saved = collection_api
+    hub.heartbeat('agent-previous', name='Previous', capabilities=['ai_weight_price'])
+    job = hub.enqueue_job('previous-job', 'agent-previous', 'ai_weight_price',
+                          {'actor': user, 'action': 'start'}, created_by_id=user['id'])
+    service.store.set_state('run', {'run_id': 'previous-run', 'outcome': 'running', 'execution_target': 'agent'})
+    assert awp_control('terminate').status_code == 200
+    assert hub.get_job(job['job_id'])['cancel_requested']
+    assert service.store.state('agent_terminate_requested') == job['job_id']
+    assert service.store.state('run') == {}
+
+
+def test_admin_termination_cleans_job_owner_state_only(collection_api):
+    client, service, hub, user, saved = collection_api
+    user['role_key'] = 'super_admin'
+    service.store.set_state('run', {'run_id': 'admin-batch', 'outcome': 'completed'})
+    with service.store.actor_scope({'id': 8}):
+        service.store.set_state('run', {'run_id': 'employee-batch', 'outcome': 'blocked'})
+    job = hub.enqueue_job('employee-job', 'agent-office', 'ai_weight_price',
+                          {'actor': {'id': 8}, 'action': 'start'}, created_by_id=8)
+    assert awp_control('terminate').status_code == 200
+    assert hub.get_job(job['job_id'])['cancel_requested']
+    assert service.store.state('run')['run_id'] == 'admin-batch'
+    with service.store.actor_scope({'id': 8}):
+        assert service.store.state('run') == {}
+        assert service.store.state('agent_terminate_requested') == job['job_id']
+
+
+def test_employee_cannot_terminate_another_owners_job(collection_api):
+    client, service, hub, user, saved = collection_api
+    job = hub.enqueue_job('foreign-job', 'agent-office', 'ai_weight_price',
+                          {'actor': {'id': 8}, 'action': 'start'}, created_by_id=8)
+    assert awp_control('terminate').status_code == 409
+    assert not hub.get_job(job['job_id'])['cancel_requested']
+
+
+def test_terminate_endpoint_clears_stale_running_status(collection_api):
+    from flask import Flask
+    from bit import bit_interface as web
+    from erp.ai_weight_price.web import create_blueprint
+    _, service, hub, user, _ = collection_api
+    app = Flask(__name__)
+    app.secret_key = 'isolated-awp-test'
+    app.register_blueprint(create_blueprint(service, authorize=lambda _: None,
+                                            agent_dispatch=web.enqueue_local_agent_ai_weight_price))
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session['workbench_user'] = user
+    service.store.set_state('run', {'run_id': 'orphan', 'outcome': 'running', 'execution_target': 'agent'})
+    assert client.get('/api/ai-weight-price/status').json['running'] is True
+    response = client.post('/api/ai-weight-price/terminate',
+                           headers={'X-AWP-Request': '1'},
+                           json={'execution_target': 'agent', 'agent_id': 'agent-office'})
+    assert response.status_code == 200, response.json
+    status = client.get('/api/ai-weight-price/status').json
+    assert status['running'] is False
+    assert status['run'] == {}
+    response = client.post('/api/ai-weight-price/login/open',
+                           headers={'X-AWP-Request': '1'},
+                           json={'execution_target': 'agent', 'agent_id': 'agent-office'})
+    assert response.status_code == 200, response.json
+
+
+def test_terminate_orphan_without_selected_agent(collection_api):
+    _, service, _, _, _ = collection_api
+    service.store.set_state('run', {'run_id': 'orphan', 'outcome': 'running', 'execution_target': 'agent'})
+    assert awp_control('terminate', agent_id='').status_code == 200
+    assert service.store.state('run') == {}
+
+
+@pytest.mark.parametrize('cancelled', [False, True])
+def test_start_reaps_expired_worker_without_visiting_agent_list(collection_api, cancelled):
+    import time
+    _, service, hub, user, _ = collection_api
+    old = time.time() - 1800
+    hub.enqueue_job('expired-job', 'agent-office', 'ai_weight_price',
+                    {'actor': user, 'action': 'start'}, created_by_id=user['id'], now=old)
+    hub.claim_job('agent-office', session_id='old-session', now=old)
+    if cancelled:
+        hub.request_cancel('expired-job', now=old + 1)
+    response = awp_control('start', mode='pipeline')
+    assert response.status_code == 200, response.json
+    assert hub.get_job('expired-job')['status'] == ('stopped' if cancelled else 'error')
+    assert response.json['data']['task_id'] != 'expired-job'
+
+
+def test_start_preserves_live_worker_and_exposes_blocking_job(collection_api):
+    _, _, hub, user, _ = collection_api
+    hub.enqueue_job('live-job', 'agent-office', 'ai_weight_price',
+                    {'actor': user, 'action': 'login/open'}, created_by_id=user['id'])
+    hub.claim_job('agent-office', session_id='live-session')
+    response = awp_control('start', mode='pipeline')
+    assert response.status_code == 409
+    assert response.json['data']['blocking_job']['task_id'] == 'live-job'
+    assert 'login/open' in response.json['message']
+    assert hub.get_job('live-job')['status'] == 'running'
+
+
+@pytest.mark.parametrize('claimed', [False, True])
+def test_terminate_login_job_without_batch(collection_api, claimed):
+    _, service, hub, user, _ = collection_api
+    hub.enqueue_job('login-only', 'agent-office', 'ai_weight_price',
+                    {'actor': user, 'action': 'login/open'}, created_by_id=user['id'])
+    if claimed:
+        hub.claim_job('agent-office', session_id='login-session')
+    assert not service.store.state('run')
+    response = awp_control('terminate')
+    assert response.status_code == 200, response.json
+    job = hub.get_job('login-only')
+    assert job['cancel_requested']
+    assert job['status'] == ('stopping' if claimed else 'stopped')

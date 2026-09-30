@@ -12,6 +12,8 @@ const LEGACY_DEFAULT_CONSOLE_URL = "http://127.0.0.1:5000";
 const CONSOLE_URL_DEFAULT_MIGRATION_KEY = "consoleUrlDefaultMigration";
 const CONSOLE_URL_DEFAULT_MIGRATION_VERSION = 1;
 const AUTH_KEY = "browserExtensionAuth";
+const DOWNLOADED_ACCOUNT_BUNDLE_KEY = "downloadedAccountBundleId";
+const DOWNLOADED_ACCOUNT_CONFIG = null;
 const QUEUE_KEY = "pendingProducts";
 const YANDEX_SEARCH_RUN_KEY = "yandexSearchRunId";
 const PURCHASE_TRACKING_SESSION_KEY = "purchaseTrackingSession";
@@ -136,6 +138,7 @@ async function migrateConsoleUrlDefault(synced) {
 }
 
 async function authSession() {
+  await installDownloadedAccountAuth();
   // Keep the short-lived token across an extension/service-worker reload. The
   // password is never stored; using local storage here only prevents a code
   // update from silently logging the operator out in the middle of a task.
@@ -152,6 +155,25 @@ async function authSession() {
     return null;
   }
   return auth;
+}
+
+async function installDownloadedAccountAuth() {
+  const downloaded = DOWNLOADED_ACCOUNT_CONFIG;
+  if (!downloaded?.bundleId || !downloaded?.token || !downloaded?.user) return;
+  const stored = await storageGet("local", [DOWNLOADED_ACCOUNT_BUNDLE_KEY]);
+  if (stored[DOWNLOADED_ACCOUNT_BUNDLE_KEY] === downloaded.bundleId) return;
+
+  const expiresAt = Number(downloaded.expiresAt || 0);
+  const values = {[DOWNLOADED_ACCOUNT_BUNDLE_KEY]: downloaded.bundleId};
+  if (expiresAt > Date.now()) {
+    values[AUTH_KEY] = {
+      mode: "token",
+      token: downloaded.token,
+      user: downloaded.user,
+      expiresAt
+    };
+  }
+  await storageSet("local", values);
 }
 
 async function clearAuth() {
@@ -495,7 +517,7 @@ async function login(username, password) {
       mode: "legacy",
       token: "legacy-workbench-session",
       user,
-      expiresAt: Date.now() + 6 * 60 * 60 * 1000
+      expiresAt: Date.now() + 72 * 60 * 60 * 1000
     };
   }
   await storageSet("local", {[AUTH_KEY]: auth});
@@ -978,7 +1000,7 @@ async function aiWeightPriceSendContentMessage(tabId, message, files, timeoutMs 
   }
 }
 
-const AI_WEIGHT_PRICE_CONTENT_VERSION = "1.8.22";
+const AI_WEIGHT_PRICE_CONTENT_VERSION = "1.8.29";
 
 async function aiWeightPriceFrameIds(tabId) {
   const ids = [0];

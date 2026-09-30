@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import re
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import defaultdict
@@ -75,7 +77,8 @@ PUBLIC_COLUMNS = (
 )
 EXPORT_COLUMNS = PUBLIC_COLUMNS + (
     ("current_net_proceeds_usd", "本次净收益（USD）"),
-    ("execution_status", "执行状态"),
+    ("_zeshun_status", "泽顺 ERP 执行状态"),
+    ("_zying_status", "智赢产品执行状态"),
     ("execution_error", "执行说明"),
     ("execution_logs", "执行日志"),
 )
@@ -89,6 +92,13 @@ _PACKAGE_ATTRIBUTES = {
     "PACKAGE_LENGTH": ("length", "cm"),
     "PACKAGE_WIDTH": ("width", "cm"),
     "PACKAGE_HEIGHT": ("height", "cm"),
+}
+_SITE_NAME_BY_ID = {
+    **{site_id: site_name for site_id, site_name in getattr(
+        bit_mysql, "MERCADO_CONFIGURABLE_SITES", {}
+    ).items()},
+    "MLM": "墨西哥", "MLB": "巴西", "MLC": "智利", "MCO": "哥伦比亚",
+    "MLA": "阿根廷", "MLU": "乌拉圭", "MPE": "秘鲁", "MEC": "厄瓜多尔",
 }
 
 
@@ -430,164 +440,59 @@ def _configured_workers(total: int, default: int, cap: int, env_name: str) -> in
 
 
 def _run_read(task_id: str, file_bytes: bytes, filename: str, store_rows, allowed_token_ids):
+    """Fill saved order metadata by order number without marketplace requests."""
     with _lock:
         task = _tasks.get(task_id)
         if not task:
             return
-        task.update(status="preparing", message="正在解析订单文件", processed=0, total=0)
+        task.update(status="preparing", message="正在按单号匹配订单文件", processed=0, total=0)
     try:
-        records = read_order_file(file_bytes, filename)
-        order_numbers = [str(row.get("order_number") or "").strip() for row in records]
-        existing_ids = set(bit_db_api.get_weight_dimensions_record_order_numbers(order_numbers) or [])
-        seen = set()
-        fresh = []
-        skipped = 0
-        for record in records:
-            order_number = str(record.get("order_number") or "").strip()
-            if order_number in existing_ids or order_number in seen:
-                skipped += 1
-                continue
-            seen.add(order_number)
-            fresh.append(record)
-        records = fresh
+        uploaded = read_order_file(file_bytes, filename)
+        by_number = {}
+        for row in uploaded:
+            number = str(row.get("order_number") or "").strip()
+            if number not in by_number:
+                by_number[number] = dict(row)
+            else:
+                # Repeated lines may contain complementary metadata.
+                for key in HEADERS:
+                    if row.get(key) and not by_number[number].get(key):
+                        by_number[number][key] = row[key]
+        duplicates = len(uploaded) - len(by_number)
+        existing_ids = set(bit_db_api.get_weight_dimensions_record_order_numbers(list(by_number)) or [])
+        supplements = [row for number, row in by_number.items() if number in existing_ids]
+        unmatched = [row for number, row in by_number.items() if number not in existing_ids]
+        enriched = 0
+        for start in range(0, len(supplements), 100):
+            saved = bit_db_api.save_weight_dimensions_records(
+                supplements[start:start + 100], enrich_only=True,
+            ) or {}
+            enriched += int(saved.get("enriched") or 0)
+        records = (bit_db_api.list_weight_dimensions_records(list(existing_ids)) or []) if existing_ids else []
+        for row in unmatched:
+            row["query_status"] = "未匹配"
+            row["query_error"] = "已保存记录中没有此单号，未补充数据"
+        records.extend(unmatched)
+        records.sort(key=lambda row: str(row.get("time") or "").replace("T", " "), reverse=True)
     except Exception as exc:
         with _lock:
             task = _tasks.get(task_id)
             if task:
                 task.update(
                     status="failed", finished_at=datetime.now().isoformat(timespec="seconds"),
-                    message=f"订单文件处理失败：{str(exc)[:250]}",
+                    message=f"订单文件补充失败：{str(exc)[:250]}",
                 )
         return
-
-    with _lock:
-        task = _tasks.get(task_id)
-        if not task:
-            return
-        task.update(
-            status="querying", message="正在查询美客多订单与运费补差数据",
-            records=records, total=len(records), processed=0, upload_skipped=skipped,
-        )
-    if not records:
-        with _lock:
-            task.update(
-                status="ready", finished_at=datetime.now().isoformat(timespec="seconds"),
-                message=f"文件中的订单编号均已存在，重复编号跳过 {skipped} 条",
-            )
-        return
-
-    store_map = _store_map(store_rows, allowed_token_ids)
-    token_clients: dict[int, MercadoLibreClient] = {}
-    token_errors: dict[int, str] = {}
-    for record in records:
-        try:
-            store = _resolve_store(record, store_map)
-            if not store:
-                raise ValueError("无法按公司店铺和站点匹配当前用户可用的店铺授权")
-            token_id = int(store["id"])
-            record["_token_id"] = token_id
-            record["store_token_id"] = token_id
-            if token_id not in token_clients and token_id not in token_errors:
-                try:
-                    token = bit_mysql.get_mercado_store_token(token_id)
-                    if not token:
-                        raise ValueError("店铺授权不存在")
-                    token_clients[token_id], _ = _client_and_token(dict(token))
-                except Exception as exc:
-                    token_errors[token_id] = str(exc)
-            if token_id in token_errors:
-                raise ValueError("店铺授权不可用：" + token_errors[token_id])
-        except Exception as exc:
-            record["query_status"] = "查询失败"
-            record["query_error"] = str(exc)[:300]
-
-    worker_local = threading.local()
-
-    def read_one(record):
-        try:
-            _read_one_record(record, store_map, token_clients, token_errors, worker_local)
-        except Exception as exc:
-            record["query_status"] = "查询失败"
-            record["query_error"] = str(exc)[:300]
-
-    progress_lock = threading.Lock()
-    progress = sum(row.get("query_status") == "查询失败" for row in records)
-    def query_and_count(record):
-        nonlocal progress
-        if record.get("query_status") != "查询失败":
-            read_one(record)
-        with progress_lock:
-            progress += 1
-            with _lock:
-                task = _tasks.get(task_id)
-                if task:
-                    task["processed"] = progress
-                    task["message"] = f"已并发查询 {progress}/{len(records)} 条订单"
-
-    query_records = [row for row in records if row.get("query_status") != "查询失败"]
-    if query_records:
-        workers = _configured_workers(
-            len(query_records), READ_MAX_WORKERS, READ_MAX_WORKERS,
-            "WEIGHT_DIMENSIONS_READ_WORKERS",
-        )
-        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="wdr-read") as executor:
-            futures = [executor.submit(query_and_count, row) for row in query_records]
-            for future in as_completed(futures):
-                future.result()
-    failed_count = sum(row.get("query_status") == "查询失败" for row in records)
-    if failed_count:
-        with _lock:
-            task["processed"] = len(records)
-            task["message"] = f"查询完成 {len(records) - failed_count} 条，失败 {failed_count} 条"
-    else:
-        with _lock:
-            task["processed"] = len(records)
-
-    successful = [row for row in records if row.get("query_status") == "已读取"]
-    try:
-        inserted_count = 0
-        race_duplicates = 0
-        inserted_ids = set()
-        for start in range(0, len(successful), 100):
-            batch = successful[start:start + 100]
-            saved = bit_db_api.save_weight_dimensions_records(batch) or {}
-            inserted_count += int(saved.get("inserted") or 0)
-            race_duplicates += int(saved.get("duplicates") or 0)
-            batch_inserted_ids = saved.get("inserted_order_numbers")
-            if batch_inserted_ids is not None:
-                inserted_ids.update(str(value) for value in batch_inserted_ids)
-            elif int(saved.get("inserted") or 0) == len(batch):
-                inserted_ids.update(str(row.get("order_number") or "") for row in batch)
-        for row in successful:
-            if str(row.get("order_number") or "") not in inserted_ids:
-                row["query_status"] = "编号重复"
-                row["query_error"] = "该订单已由另一任务先行保存，本批次不执行更新"
-    except Exception as exc:
-        with _lock:
-            task = _tasks.get(task_id)
-            if task:
-                task["status"] = "failed"
-                task["finished_at"] = datetime.now().isoformat(timespec="seconds")
-                task["message"] = f"数据已查询，但写入永久记录失败：{str(exc)[:250]}"
-        return
-    records.sort(
-        key=lambda row: (
-            bool(str(row.get("time") or "").strip()),
-            str(row.get("time") or "").strip().replace("T", " "),
-        ),
-        reverse=True,
-    )
     with _lock:
         task = _tasks.get(task_id)
         if task:
-            task["records"] = records
-            task["status"] = "ready"
-            task["finished_at"] = datetime.now().isoformat(timespec="seconds")
-            skipped_total = int(task.get("upload_skipped", 0)) + race_duplicates
-            task["upload_skipped"] = skipped_total
-            task["message"] = (
-                f"查询完成，新增 {inserted_count} 条，查询失败 {failed_count} 条，"
-                f"重复编号跳过 {skipped_total} 条"
+            task.update(
+                records=records, status="ready", total=len(records), processed=len(records),
+                finished_at=datetime.now().isoformat(timespec="seconds"),
+                upload_enriched=enriched, upload_unmatched=len(unmatched), upload_skipped=duplicates,
+                message=(f"补充完成，匹配已有订单 {len(supplements)} 条，补充 {enriched} 条，"
+                         f"无需补充 {max(0, len(supplements) - enriched)} 条，"
+                         f"未匹配单号 {len(unmatched)} 条，文件内重复单号 {duplicates} 条"),
             )
 
 
@@ -689,6 +594,11 @@ def _read_changed_records(task_id, owner, filters, store_rows, allowed_token_ids
             continue
         for key in ("execution_status", "execution_error", "execution_logs", "_zeshun_status", "_zying_status"):
             if key in saved:
+                record[key] = saved[key]
+        # Restore Excel metadata before querying and displaying refreshed orders.
+        for key in ("time", "salesperson", "source", "company_store", "product_id",
+                    "category", "title", "image_url", "tracking_number", "carrier", "region"):
+            if not str(record.get(key) or "").strip() and saved.get(key):
                 record[key] = saved[key]
         for key in ("actual_weight_g", "actual_dimensions_cm", "declared_weight_g", "declared_dimensions_cm"):
             if not record.get(key) and saved.get(key):
@@ -861,6 +771,8 @@ def _public_record(row: Mapping[str, Any]) -> dict[str, Any]:
     result = {key: row.get(key, "") for key, _label in PUBLIC_COLUMNS}
     result["measurement_notes"] = row.get("measurement_notes", {})
     result["execution_status"] = row.get("execution_status", "")
+    result["zeshun_execution_status"] = row.get("_zeshun_status") or "未执行"
+    result["zying_execution_status"] = row.get("_zying_status") or "未执行"
     result["execution_error"] = row.get("execution_error", "")
     result["execution_logs"] = row.get("execution_logs", [])
     net_value = row.get("current_net_proceeds_usd")
@@ -890,7 +802,7 @@ def _public_record(row: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _apply_agent_job(task, job):
-    """Mirror a completed Agent package-update job into the WDR task."""
+    """Mirror Agent queue, execution, and result states into the WDR task."""
     if not task or not job:
         return
     job_status = str(job.get("status") or "").strip().lower()
@@ -907,8 +819,23 @@ def _apply_agent_job(task, job):
         if str(value or "").strip()
     }
     if job_status in {"queued", "running", "stopping"}:
-        task["execute_status"] = "running"
+        task["execute_status"] = "queued" if job_status == "queued" else "running"
         task["execute_message"] = job.get("message") or "Agent 正在逐个更新智赢产品"
+        row_status = "排队中" if job_status == "queued" else "执行中"
+        progress_message = (
+            "任务已提交本机 Agent 队列，尚未开始更新"
+            if job_status == "queued" else "本机 Agent 已领取任务，正在更新智赢产品"
+        )
+        for row in records:
+            order_number = str(row.get("order_number") or "").strip()
+            if selected_orders and order_number not in selected_orders:
+                continue
+            if row.get("execution_status") == row_status and row.get("_zying_status") == row_status:
+                continue
+            row["_zying_status"] = row_status
+            row["execution_status"] = row_status
+            row["execution_error"] = ""
+            _log_execution(row, "智赢 Agent", row_status, progress_message)
         return
     if task.get("agent_applied_status") == job_status and task.get("agent_applied_result"):
         return
@@ -953,7 +880,7 @@ def task_status(task_id: str, owner: str, agent_job_provider=None, *, page=None,
     if agent_job_id and agent_job_provider:
         try:
             job = agent_job_provider(agent_job_id)
-            # Applying a terminal Agent result writes execution logs to the
+            # Applying Agent state transitions writes execution logs to the
             # database. Do not hold the task lock across that I/O.
             _apply_agent_job(task, job)
         except Exception as exc:
@@ -1044,7 +971,15 @@ def export_records_xlsx(records) -> bytes:
                 values.append(str(value) if value is not None else "")
             elif key == "execution_logs":
                 values.append("\n".join(
-                    f"{log.get('time', '')} [{log.get('stage', '')}/{log.get('status', '')}] {log.get('message', '')}"
+                    f"{log.get('time', '')} [{log.get('stage', '')}/{log.get('status', '')}] "
+                    + " · ".join(
+                        str(value) for value in (
+                            log.get("site_name") or log.get("site_id"),
+                            log.get("link_name"), log.get("marketplace_item_id"),
+                            log.get("salesperson"), log.get("store_group"), log.get("store_name"),
+                            log.get("message"),
+                        ) if value not in (None, "")
+                    )
                     for log in row.get("execution_logs", []) if isinstance(log, Mapping)
                 ))
             else:
@@ -1052,7 +987,7 @@ def export_records_xlsx(records) -> bytes:
         sheet.append(values)
     sheet.freeze_panes = "A2"
     sheet.auto_filter.ref = sheet.dimensions
-    widths = [20, 20, 24, 20, 16, 24, 28, 16, 18, 46, 20, 26, 18, 16, 18, 22, 18, 18, 22, 18, 22, 16, 44, 22, 18, 44, 64, 64]
+    widths = [20, 20, 24, 20, 16, 24, 28, 16, 18, 46, 20, 26, 18, 16, 18, 22, 18, 18, 22, 18, 22, 16, 44, 22, 18, 44, 44, 64, 64]
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
     for cell in sheet[1]:
@@ -1064,6 +999,39 @@ def export_records_xlsx(records) -> bytes:
     stream = io.BytesIO()
     workbook.save(stream)
     return stream.getvalue()
+
+
+def _package_value(attribute, unit):
+    """Normalize API package attributes for read-back comparison."""
+    raw = attribute.get("value_struct") or {}
+    if not raw:
+        match = re.fullmatch(r"\s*([\d.]+)\s*(\w+)\s*", str(attribute.get("value_name") or ""))
+        if not match:
+            return None
+        raw = {"number": match[1], "unit": match[2]}
+    factors = {"g": {"g": "1", "kg": "1000", "lb": "453.59237", "oz": "28.349523125"},
+               "cm": {"cm": "1", "mm": "0.1", "m": "100", "in": "2.54"}}
+    try:
+        result = Decimal(str(raw["number"])) * Decimal(factors[unit][raw["unit"]])
+        return result if result.is_finite() and result > 0 else None
+    except (KeyError, InvalidOperation, TypeError):
+        return None
+
+
+def _update_error(exc):
+    """Keep the useful API cause instead of truncating before its description."""
+    message = str(exc)
+    try:
+        body = json.loads(message[message.index("{"):])
+        causes = body.get("cause") or []
+        detail = "; ".join(str(c.get("code", "")) + ": " +
+                           str(c.get("message") or c.get("description") or "")
+                           for c in causes if isinstance(c, Mapping))
+        if detail:
+            return (str(body.get("message") or "更新失败") + "；" + detail)[:1600]
+    except (ValueError, TypeError, AttributeError):
+        pass
+    return message[:1600]
 
 
 def _package_attributes(client: MercadoLibreClient, global_item_id: str,
@@ -1089,40 +1057,158 @@ def _package_attributes(client: MercadoLibreClient, global_item_id: str,
         raise ValueError("美客多要求包装长宽高至少 3 厘米")
     # Global Selling reads use /marketplace/items; /global/items is for writes.
     remote = client.get_marketplace_item(global_item_id)
-    attrs = list(remote.get("attributes") or [])
-    updates = {
-        key: {"id": key, "value_name": f"{format(number.normalize(), 'f')} {unit}"}
-        for key, (number, unit) in values.items()
+    attrs = {a["id"]: a for a in remote.get("attributes") or [] if isinstance(a, Mapping) and a.get("id")}
+    # The API needs all four package fields, even for a weight-only update.
+    # Preserve existing dimensions, but never copy stale values/value_struct or
+    # unrelated immutable attributes into the write payload.
+    for key, (_, unit) in _PACKAGE_ATTRIBUTES.items():
+        if key not in values:
+            current = _package_value(attrs.get(key, {}), unit)
+            if current is None:
+                raise ValueError(f"官方未提供尺寸，且商品缺少有效 {key}，无法保留原尺寸")
+            values[key] = (current, unit)
+
+    def differences(item):
+        actual = {a["id"]: a for a in item.get("attributes") or [] if isinstance(a, Mapping) and a.get("id")}
+        return [key for key, (number, unit) in values.items()
+                if _package_value(actual.get(key, {}), unit) != number]
+
+    if not differences(remote):
+        return
+    updates = [{"id": key, "value_name": f"{format(number.normalize(), 'f')} {unit}"}
+               for key, (number, unit) in values.items()]
+    # A user_product_id alone does not imply the account exposes the newer UP
+    # endpoint. The documented global item update remains compatible; sending
+    # only clean package fields avoids legacy metadata conflicts on both models.
+    client.update_global_item(global_item_id, {"attributes": updates})
+    for delay in (0, 1, 2, 4, 8, 8):
+        if delay:
+            time.sleep(delay)
+        missing = differences(client.get_marketplace_item(global_item_id))
+        if not missing:
+            return
+    raise RuntimeError("提交后回读尚未确认重量尺寸生效：" + ", ".join(missing))
+
+
+def _closed_listing_reason(item):
+    if "deleted" in (item.get("sub_status") or []):
+        return "美客多链接已删除，跳过重量尺寸及净收益更新"
+    if str(item.get("status") or "").lower() == "closed":
+        return "美客多链接已关闭，跳过重量尺寸及净收益更新"
+    return ""
+
+
+def _normalize_history_site_id(value):
+    text = str(value or "").strip().upper()
+    if text in _SITE_NAME_BY_ID:
+        return text
+    country_sites = {country.upper(): site_id for country, site_id in _COUNTRY_TO_SITE.items()}
+    country_sites.update({
+        "MX": "MLM", "MEXICO": "MLM", "BR": "MLB", "BRAZIL": "MLB",
+        "CL": "MLC", "CHILE": "MLC", "CO": "MCO", "COLOMBIA": "MCO",
+        "AR": "MLA", "ARGENTINA": "MLA", "UY": "MLU", "URUGUAY": "MLU",
+        "PE": "MPE", "PERU": "MPE", "EC": "MEC", "ECUADOR": "MEC",
+    })
+    return country_sites.get(text, "")
+
+
+def _history_site_settings(token_id):
+    payload = bit_db_api.list_mercado_store_site_settings(token_id)
+    rows = payload.get("rows", []) if isinstance(payload, Mapping) else payload
+    return [row for row in (rows or []) if isinstance(row, Mapping)]
+
+
+def _order_history_context(row, settings_cache=None):
+    """Capture the order's store/site ownership for product-level update logs."""
+    try:
+        token_id = int(row.get("_token_id") or row.get("store_token_id") or 0)
+    except (TypeError, ValueError):
+        token_id = 0
+    site_id = (
+        _normalize_history_site_id(row.get("site_id"))
+        or _normalize_history_site_id(row.get("region"))
+        or _normalize_history_site_id(str(row.get("marketplace_item_id") or "")[:3])
+    )
+    salesperson = str(row.get("salesperson") or "").strip()
+    store_group = str(row.get("store_group") or row.get("group_name") or "").strip()
+    if token_id > 0 and site_id and settings_cache is not None:
+        if token_id not in settings_cache:
+            try:
+                settings_cache[token_id] = _history_site_settings(token_id)
+            except Exception:
+                settings_cache[token_id] = []
+        setting = next((value for value in settings_cache[token_id]
+                        if _normalize_history_site_id(value.get("site_id")) == site_id), {})
+        salesperson = salesperson or str(setting.get("salesperson") or "").strip()
+        store_group = store_group or str(setting.get("group_name") or "").strip()
+    return {
+        "site_id": site_id,
+        "site_name": _SITE_NAME_BY_ID.get(site_id, ""),
+        "link_name": str(row.get("title") or "").strip(),
+        "salesperson": salesperson,
+        "store_group": store_group,
+        "store_name": str(row.get("company_store") or row.get("store_name") or "").strip(),
+        "marketplace_item_id": str(row.get("marketplace_item_id") or "").strip(),
+        "product_id": str(row.get("product_id") or "").strip(),
     }
-    seen = set()
-    merged = []
-    for attribute in attrs:
-        attribute_id = str((attribute or {}).get("id") or "")
-        if attribute_id in updates:
-            merged.append({**attribute, **updates[attribute_id]})
-            seen.add(attribute_id)
-        else:
-            merged.append(attribute)
-    for key, value in updates.items():
-        if key not in seen:
-            merged.append(value)
-    client.update_global_item(global_item_id, {"attributes": merged})
 
 
-def _expand_same_title_records(records, authorized_ids):
+def _listing_history_context(row, token_id, item_id, link, remote, settings_cache):
+    link = link if isinstance(link, Mapping) else {}
+    remote = remote if isinstance(remote, Mapping) else {}
+    site_id = _normalize_history_site_id(
+        remote.get("site_id") or link.get("site_id") or str(item_id or "")[:3]
+    )
+    context = _order_history_context(row, settings_cache)
+    context.update({
+        "site_id": site_id,
+        "site_name": _SITE_NAME_BY_ID.get(site_id, ""),
+        "link_name": str(remote.get("title") or link.get("title") or row.get("title") or "").strip(),
+        "store_name": str(link.get("store_name") or row.get("company_store") or "").strip(),
+        "marketplace_item_id": str(item_id or "").strip(),
+        "product_id": str(row.get("product_id") or "").strip(),
+    })
+    if token_id and site_id:
+        token_id = int(token_id)
+        if token_id not in settings_cache:
+            try:
+                settings_cache[token_id] = _history_site_settings(token_id)
+            except Exception:
+                settings_cache[token_id] = []
+        setting = next((value for value in settings_cache[token_id]
+                        if _normalize_history_site_id(value.get("site_id")) == site_id), {})
+        context["salesperson"] = str(setting.get("salesperson") or link.get("salesperson") or context.get("salesperson") or "").strip()
+        context["store_group"] = str(setting.get("group_name") or link.get("group_name") or context.get("store_group") or "").strip()
+    return context
+
+
+def _expand_same_title_records(records, authorized_ids, settings_cache=None):
     """Resolve every current exact-title listing before writing any attributes."""
-    clients, details, matches = {}, {}, {}
+    clients, details, matches, lookup_errors, token_errors = {}, {}, {}, {}, {}
+    link_rows, settings_cache = {}, settings_cache if settings_cache is not None else {}
     expanded = []
 
     def detail(token_id, item_id):
         key = (token_id, item_id)
+        if token_id in token_errors:
+            raise ValueError(token_errors[token_id])
+        if key in lookup_errors:
+            raise ValueError(lookup_errors[key])
         if key not in details:
             if token_id not in clients:
-                token = bit_mysql.get_mercado_store_token(token_id)
-                clients[token_id], _ = _client_and_token(dict(token or {}))
-            details[key] = clients[token_id].get_marketplace_item(
-                item_id, attributes=("id", "title", "cbt_item_id")
-            )
+                try:
+                    token = bit_mysql.get_mercado_store_token(token_id)
+                    clients[token_id], _ = _client_and_token(dict(token or {}))
+                except Exception as exc:
+                    token_errors[token_id] = _update_error(exc)
+                    raise
+            try:
+                details[key] = clients[token_id].get_marketplace_item(
+                    item_id, attributes=("id", "title", "cbt_item_id", "status", "sub_status")
+                )
+            except Exception as exc:
+                lookup_errors[key] = _update_error(exc)
+                raise
         return details[key]
 
     for row in records:
@@ -1130,6 +1216,7 @@ def _expand_same_title_records(records, authorized_ids):
             continue
         row["execution_error"] = ""
         row["execution_status"] = "执行中"
+        row["_zeshun_status"] = "执行中"
         try:
             token_id = int(row["_token_id"])
             item_id = str(row["marketplace_item_id"])
@@ -1139,6 +1226,12 @@ def _expand_same_title_records(records, authorized_ids):
             title = str(original.get("title") or "").strip()
             if not title:
                 raise ValueError("无法读取关联链接标题，不能确定同名链接范围")
+            row["_history_context"] = _listing_history_context(
+                row, token_id, item_id,
+                {"token_id": token_id, "item_id": item_id, "site_id": original.get("site_id") or item_id[:3],
+                 "title": title, "store_name": row.get("company_store") or ""},
+                original, settings_cache,
+            )
             if title not in matches:
                 found = {}
                 page = 1
@@ -1154,32 +1247,65 @@ def _expand_same_title_records(records, authorized_ids):
                         if str(link.get("title") or "").strip() != title:
                             continue
                         key = (link_token, str(link["item_id"]))
-                        remote = detail(*key)
-                        if str(remote.get("title") or "").strip() != title:
-                            continue
-                        global_id = str(remote.get("cbt_item_id") or "").strip()
-                        if not global_id:
-                            raise ValueError(f"同名链接 {key[1]} 缺少 Global 商品关联")
-                        found[key] = global_id
+                        link_rows[key] = link
+                        try:
+                            remote = detail(*key)
+                            if str(remote.get("title") or "").strip() != title:
+                                continue
+                            skip_reason = _closed_listing_reason(remote)
+                            if skip_reason:
+                                found[key] = ("", "", skip_reason)
+                                continue
+                            global_id = str(remote.get("cbt_item_id") or "").strip()
+                            if not global_id:
+                                raise ValueError("缺少 Global 商品关联")
+                            found[key] = (global_id, "", "")
+                        except Exception as exc:
+                            # An inaccessible sibling must not discard every
+                            # valid listing in this title group. Retain failure
+                            # children so the final summary cannot claim success.
+                            found[key] = ("", _update_error(exc), "")
                     if page >= int(result["pages"] or 1):
                         break
                     page += 1
                 matches[title] = found
             targets = dict(matches[title])
-            targets[(token_id, item_id)] = str(original.get("cbt_item_id") or row["_global_item_id"])
-            for (target_token, target_item), global_id in targets.items():
+            original_global = str(original.get("cbt_item_id") or row.get("_global_item_id") or "")
+            original_skip = _closed_listing_reason(original)
+            targets[(token_id, item_id)] = (original_global, "" if original_global or original_skip else "缺少 Global 商品关联", original_skip)
+            link_rows.setdefault((token_id, item_id), {
+                "token_id": token_id, "item_id": item_id,
+                "site_id": original.get("site_id") or item_id[:3],
+                "title": title, "store_name": row.get("company_store") or "",
+            })
+            for (target_token, target_item), (global_id, lookup_error, skip_reason) in targets.items():
                 child = dict(row)
-                for field in ("_package_status", "_net_status", "_zeshun_status"):
+                for field in ("_package_status", "_net_status", "_zeshun_status", "_expansion_error", "_expansion_skip"):
                     child.pop(field, None)
                 child.update(_token_id=target_token, marketplace_item_id=target_item,
                              _global_item_id=global_id, _execution_parent=row,
                              execution_logs=[])
+                child["_history_context"] = _listing_history_context(
+                    row, target_token, target_item, link_rows.get((target_token, target_item)),
+                    details.get((target_token, target_item)), settings_cache,
+                )
+                if lookup_error:
+                    child.update(_zeshun_status="失败", _expansion_error=lookup_error,
+                                 execution_status="失败", execution_error=lookup_error)
+                    _log_execution(child, "同名链接", "失败", lookup_error)
+                elif skip_reason:
+                    child.update(_zeshun_status="跳过", _expansion_skip=skip_reason,
+                                 execution_status="跳过", execution_error="")
+                    _log_execution(child, "同名链接", "跳过", skip_reason)
                 expanded.append(child)
-            _log_execution(row, "同名链接", "进行中", f"标题“{title}”匹配 {len(targets)} 条链接（含订单关联链接），将逐条保留并重提各自净收益")
+            skipped_count = sum(bool(value[2]) for value in targets.values())
+            _log_execution(row, "同名链接", "进行中", f"标题“{title}”匹配 {len(targets)} 条链接（含订单关联链接），"
+                           + (f"其中 {skipped_count} 条已关闭或删除并跳过；" if skipped_count else "")
+                           + "其余可更新链接将逐条保留并重提各自净收益")
         except Exception as exc:
             row["_zeshun_status"] = "失败"
             row["execution_status"] = "失败"
-            row["execution_error"] = f"同名链接查询失败：{str(exc)[:250]}"
+            row["execution_error"] = f"同名链接查询失败：{_update_error(exc)}"
             _log_execution(row, "同名链接", "失败", row["execution_error"])
     return expanded
 
@@ -1192,29 +1318,63 @@ def _finish_same_title_records(originals, expanded):
         children = by_parent[id(original)]
         if not children:
             continue
-        succeeded = sum(row.get("_zeshun_status") == "成功" for row in children)
-        complete = succeeded == len(children)
-        original["_zeshun_status"] = "成功" if complete else "失败"
-        original["execution_status"] = "完成" if complete else "部分完成"
+        skipped = sum(bool(row.get("_expansion_skip")) for row in children)
+        targets = [row for row in children if not row.get("_expansion_skip")]
+        succeeded = sum(row.get("_zeshun_status") == "成功" for row in targets)
+        complete = bool(targets) and succeeded == len(targets)
+        original["_zeshun_status"] = "成功" if complete else "失败" if targets else "跳过"
+        original["execution_status"] = "完成" if complete else "部分完成" if targets else "跳过"
         failures = [f"{row['marketplace_item_id']}：{row.get('execution_error') or '未完成'}"
-                    for row in children if row.get("_zeshun_status") != "成功"]
+                    for row in targets if row.get("_zeshun_status") != "成功"]
         original["execution_error"] = "；".join(failures)
         for child in children:
             if (child["_token_id"], child["marketplace_item_id"]) == (original["_token_id"], original["marketplace_item_id"]):
                 original["current_net_proceeds_usd"] = child.get("current_net_proceeds_usd", "")
-        _log_execution(original, "同名链接", "成功" if complete else "失败",
-                       f"同名链接更新成功 {succeeded}/{len(children)} 条" + (f"；{original['execution_error']}" if failures else ""))
+        _log_execution(original, "同名链接", "成功" if complete else "失败" if targets else "跳过",
+                       f"同名链接更新成功 {succeeded}/{len(targets)} 条"
+                       + (f"；跳过已关闭或删除链接 {skipped} 条" if skipped else "")
+                       + (f"；{original['execution_error']}" if failures else ""))
 
 
 def _log_execution(row: dict[str, Any], stage: str, status: str, message: str) -> None:
+    context = row
     parent = row.get("_execution_parent")
     if parent is not None:
-        _log_execution(parent, stage, status, f"链接 {row['marketplace_item_id']}：{message}")
-        return
+        message = f"链接 {row['marketplace_item_id']}：{message}"
+        row = parent
     entry = {
         "time": datetime.now().isoformat(timespec="seconds"),
-        "stage": str(stage), "status": str(status), "message": str(message)[:500],
+        "stage": str(stage), "status": str(status), "message": str(message)[:2000],
+        "order_number": str(row.get("order_number") or ""),
+        "execution_id": str(context.get("_execution_id") or ""),
+        "action": str(context.get("_execution_action") or ""),
+        "operator": str(context.get("_execution_operator") or ""),
     }
+    history_context = context.get("_history_context") or row.get("_history_context") or {}
+    entry.update({
+        "site_id": str(history_context.get("site_id") or ""),
+        "site_name": str(history_context.get("site_name") or ""),
+        "link_name": str(history_context.get("link_name") or ""),
+        "salesperson": str(history_context.get("salesperson") or ""),
+        "store_group": str(history_context.get("store_group") or ""),
+        "store_name": str(history_context.get("store_name") or ""),
+        "product_id": str(history_context.get("product_id") or ""),
+    })
+    if history_context.get("marketplace_item_id"):
+        entry["marketplace_item_id"] = str(history_context["marketplace_item_id"])
+    # Snapshot the actual child target and submitted values. Never infer history
+    # from mutable order measurements when the page is read later.
+    if parent is not None or stage in {"美客多链接", "净收益"}:
+        entry.update(
+            marketplace_item_id=str(context.get("marketplace_item_id") or ""),
+            global_item_id=str(context.get("_global_item_id") or ""),
+            token_id=context.get("_token_id"),
+            submitted_weight_g=str(context.get("_submitted_weight_g") or ""),
+            submitted_dimensions_cm=str(context.get("_submitted_dimensions_cm") or ""),
+            dimensions_preserved=bool(context.get("_dimensions_preserved")),
+        )
+    if stage == "净收益" and context.get("current_net_proceeds_usd") is not None:
+        entry["net_proceeds_usd"] = str(context["current_net_proceeds_usd"])
     row.setdefault("execution_logs", []).append(entry)
     updates = {
         "execution_status": row.get("execution_status", ""),
@@ -1250,21 +1410,32 @@ def _run_execute(
             if not selected or str(row.get("order_number") or "").strip() in selected
         ]
         task["execute_status"] = "running"
-        task["execute_message"] = "正在更新泽顺数据和链接"
+        task["execute_message"] = "正在服务器更新智赢产品" if action == "zying" else "正在更新泽顺数据和链接"
+    execution_id = uuid.uuid4().hex
+    settings_cache = {}
+    for row in records:
+        row.update(_execution_id=execution_id, _execution_action=action, _execution_operator=owner)
+        row["_history_context"] = _order_history_context(row, settings_cache)
+        for key in ("_submitted_weight_g", "_submitted_dimensions_cm", "_dimensions_preserved"):
+            row.pop(key, None)
     original_records = records
     if action == "zeshun":
         authorized_ids = task.get("authorized_ids", sorted({
             int(row["_token_id"]) for row in records if row.get("_token_id")
         }))
-        records = _expand_same_title_records(records, authorized_ids)
+        records = _expand_same_title_records(records, authorized_ids, settings_cache=settings_cache)
     erp_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     dim_groups: dict[tuple[int, str], list[dict[str, Any]]] = defaultdict(list)
     net_groups: dict[tuple[int, str], list[dict[str, Any]]] = defaultdict(list)
     for row in records:
+        if row.get("_expansion_error") or row.get("_expansion_skip"):
+            continue
         public = _public_record(row)
         if action == "zeshun" and not public["can_execute_zeshun"]:
             continue
-        if action != "zeshun" and not public["can_execute"]:
+        if action == "zying" and not public["can_execute_zying"]:
+            continue
+        if action == "combined" and not public["can_execute"]:
             continue
         product_id = str(row.get("product_id") or "").strip()
         weight = str(row.get("actual_weight_g") or "").strip()
@@ -1277,6 +1448,8 @@ def _run_execute(
 
         if action != "zeshun":
             erp_groups[product_id].append(row)
+        if action == "zying":
+            continue
         if row.get("_token_id") and row.get("_global_item_id") and row.get("marketplace_item_id"):
             token_id = int(row["_token_id"])
             dim_groups[(token_id, str(row["_global_item_id"]))].append(row)
@@ -1290,6 +1463,8 @@ def _run_execute(
     }
 
     if not erp_groups and not dim_groups:
+        if action == "zeshun":
+            _finish_same_title_records(original_records, records)
         with _lock:
             task["execute_status"] = "completed"
             task["execute_message"] = "没有可更新的链接，请查看订单执行日志"
@@ -1347,6 +1522,7 @@ def _run_execute(
         chosen_order = str(row.get("order_number") or "未知")
         chosen_time = str(row.get("time") or "时间未记录")
         for item in grouped:
+            item["_zying_status"] = "执行中"
             item["execution_status"] = "执行中"
             item["execution_error"] = ""
             _log_execution(
@@ -1406,6 +1582,9 @@ def _run_execute(
             chosen_order = str(row.get("order_number") or "未知")
             chosen_time = str(row.get("time") or "时间未记录")
             for item in eligible:
+                item.update(_submitted_weight_g=row["actual_weight_g"],
+                            _submitted_dimensions_cm=row.get("actual_dimensions_cm") or "",
+                            _dimensions_preserved=not bool(row.get("actual_dimensions_cm")))
                 _log_execution(
                     item, "美客多链接", "进行中",
                     f"正在更新 Global 商品 {global_id}；采用最新成功订单 {chosen_order}（{chosen_time}）的重量 {row['actual_weight_g']}g" + (f"、尺寸 {row['actual_dimensions_cm']}cm" if row.get("actual_dimensions_cm") else "；官方未提供尺寸，仅更新重量"),
@@ -1423,7 +1602,7 @@ def _run_execute(
                 item["_package_status"] = "失败"
                 item["_zeshun_status"] = "失败"
                 item["execution_status"] = "部分完成"
-                item["execution_error"] = f"美客多链接重量尺寸更新失败：{str(exc)[:250]}"
+                item["execution_error"] = f"美客多链接重量尺寸更新失败：{_update_error(exc)}"
                 _log_execution(item, "美客多链接", "失败", item["execution_error"])
 
     def run_parallel_group_updates(groups, callback, stage_name, message):
@@ -1512,10 +1691,46 @@ def _run_execute(
         task["execute_status"] = "completed"
         if action == "zeshun":
             completed_count = sum(row.get("_zeshun_status") == "成功" for row in records)
-            task["execute_message"] = f"泽顺数据和链接更新结束，成功 {completed_count} 条"
+            task["execute_message"] = (f"泽顺数据和链接更新结束，共 {len(records)} 条订单，"
+                                       f"全部成功 {completed_count} 条，"
+                                       f"未全部完成 {len(records) - completed_count} 条；请查看逐条日志")
         else:
             completed_count = sum(row.get("_zying_status") == "成功" for row in records)
             task["execute_message"] = f"执行结束，成功 {completed_count} 条订单记录"
+
+
+def _run_execute_guarded(task_id, owner, action, selected_order_numbers, erp_browser_factory):
+    """Ensure an unexpected worker exception cannot leave rows marked executing."""
+    try:
+        _run_execute(task_id, owner, action, selected_order_numbers, erp_browser_factory)
+    except Exception as exc:
+        task = _tasks.get(task_id)
+        if not task:
+            return
+        selected = {str(value or "").strip() for value in selected_order_numbers or () if str(value or "").strip()}
+        reason = f"重量尺寸更新异常结束：{str(exc)[:400]}"
+        affected = []
+        with _lock:
+            for row in task.get("records") or ():
+                if selected and str(row.get("order_number") or "").strip() not in selected:
+                    continue
+                zying_done = row.get("_zying_status") in {"成功", "失败", "跳过"}
+                zeshun_done = row.get("_zeshun_status") in {"成功", "失败", "跳过"}
+                if ((action == "zying" and zying_done)
+                        or (action == "zeshun" and zeshun_done)
+                        or (action == "combined" and zying_done and zeshun_done)):
+                    continue
+                row["execution_status"] = "失败"
+                row["execution_error"] = reason
+                if action in {"zying", "combined"} and row.get("_zying_status") != "成功":
+                    row["_zying_status"] = "失败"
+                if action in {"zeshun", "combined"} and row.get("_zeshun_status") != "成功":
+                    row["_zeshun_status"] = "失败"
+                affected.append(row)
+            task["execute_status"] = "completed"
+            task["execute_message"] = f"{reason}；未完成记录已标记失败"
+        for row in affected:
+            _log_execution(row, "任务", "失败", reason)
 
 
 def start_execute(
@@ -1571,6 +1786,28 @@ def start_execute(
             ready_rows = [row for row in candidates if _public_record(row)["can_execute"]]
         ready = len(ready_rows)
         if not ready:
+            if action == "combined":
+                all_already_succeeded = bool(candidates) and all(
+                    row.get("_zeshun_status") == "成功" and row.get("_zying_status") == "成功"
+                    for row in candidates
+                )
+            else:
+                status_key = "_zeshun_status" if action == "zeshun" else "_zying_status"
+                all_already_succeeded = bool(candidates) and all(
+                    row.get(status_key) == "成功" for row in candidates
+                )
+            if all_already_succeeded:
+                task["execute_status"] = "completed"
+                task["execute_action"] = action
+                task["execute_message"] = f"所选 {len(candidates)} 条记录已成功，已跳过，无需重复执行"
+                task["execute_total"] = 0
+                task["execute_processed"] = 0
+                task["execute_order_numbers"] = []
+                task["agent_job_id"] = ""
+                return {
+                    "status": "completed", "ready_count": 0,
+                    "skipped_success_count": len(candidates),
+                }
             raise ValueError(
                 "所选记录没有具备可执行数据；智赢更新需要产品id和实际重量，"
                 "泽顺更新需要美客多链接关联和实际重量；尺寸有官方核验值时一并更新"
@@ -1586,11 +1823,13 @@ def start_execute(
         task["agent_applied_status"] = ""
         task["agent_applied_result"] = False
 
-    if action == "zying":
-        if agent_dispatch is None:
-            with _lock:
-                task["execute_status"] = "idle"
-            raise ValueError("智赢产品更新需要在线的本机 Agent")
+    if action == "zying" and agent_dispatch is not None:
+        execution_id = uuid.uuid4().hex
+        settings_cache = {}
+        for row in ready_rows:
+            row.update(_execution_id=execution_id, _execution_action=action,
+                       _execution_operator=owner)
+            row["_history_context"] = _order_history_context(row, settings_cache)
         payload_rows = [
             {
                 "order_number": row.get("order_number"),
@@ -1613,10 +1852,16 @@ def start_execute(
             task["agent_job_id"] = job_id
             task["execute_status"] = "queued"
             task["execute_message"] = f"已提交智赢 Agent，准备逐个更新 {ready} 个产品"
+            for row in ready_rows:
+                row["_zying_status"] = "排队中"
+                row["execution_status"] = "排队中"
+                row["execution_error"] = ""
+        for row in ready_rows:
+            _log_execution(row, "智赢 Agent", "排队中", "任务已提交本机 Agent 队列，尚未开始更新")
         return {"status": "queued", "ready_count": ready, "agent_job_id": job_id}
 
     thread = threading.Thread(
-        target=_run_execute,
+        target=_run_execute_guarded,
         args=(task_id, owner, action, selected, erp_browser_factory),
                               name=f"weight-dimensions-update-{task_id[:8]}", daemon=True)
     thread.start()

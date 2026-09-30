@@ -7,8 +7,9 @@
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:"Microsoft YaHei",system-ui,sans-serif;background:#f3f6fb;color:#172033}.shell{max-width:1200px;margin:auto;padding:28px 24px 60px}.top,.heading,.task-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}h1{font-size:28px;margin:0 0 8px}h2{font-size:18px;margin:0 0 16px}.subtitle{color:#64748b;font-size:14px}.top{margin-bottom:24px}.panel,.task{background:white;border:1px solid #e4e9f0;border-radius:14px;padding:20px;margin-bottom:18px}.task{margin-bottom:0;border-left:4px solid #84adff}.task.overdue{border-left-color:#d92d20}.task.resolved{border-left-color:#12b76a}.button{font:inherit;border:1px solid #d0d5dd;background:#fff;border-radius:9px;padding:9px 13px;color:#344054;cursor:pointer;text-decoration:none}.button.primary{background:#175cd3;color:white;border-color:#175cd3}.button:disabled{opacity:.5;cursor:default}.task-title{font-size:16px;font-weight:700}.task-meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.tag{font-size:12px;background:#f2f4f7;color:#475467;padding:4px 8px;border-radius:20px}.empty{padding:28px;text-align:center;color:#64748b}.hint{font-size:13px;color:#64748b}[hidden]{display:none!important}@media(max-width:600px){.shell{padding:18px 12px}.panel{padding:14px}}
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20260930-unified1">
 </head>
-<body><main class="shell">
+<body class="zs-standalone"><main class="shell">
 <header class="top"><div><h1>员工任务</h1><div class="subtitle">设置工作安排，查看业务员的完成情况和备注。时间统一为北京时间。</div></div><div><a class="button" href="/">返回工作台</a> <a class="button" href="/mercado/today">今日必办</a></div></header>
 <section class="panel">
 <h2 id="employee-form-title">新增任务</h2>

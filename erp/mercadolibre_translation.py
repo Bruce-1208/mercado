@@ -93,9 +93,16 @@ def _get_argos_translation(source_code: str, target_code: str):
     """Load one installed direct Argos model without downloading at runtime."""
     argos_translate = _load_argos_translate_module()
 
+    # Models may be installed by the deployment script while the workbench is
+    # running. Argos caches this list process-wide, so refresh it before lookup
+    # to make a product-detail retry see newly installed models immediately.
+    get_installed_languages = argos_translate.get_installed_languages
+    clear_cache = getattr(get_installed_languages, "cache_clear", None)
+    if callable(clear_cache):
+        clear_cache()
     languages = {
         str(language.code): language
-        for language in argos_translate.get_installed_languages()
+        for language in get_installed_languages()
     }
     source_language = languages.get(source_code)
     target_language = languages.get(target_code)

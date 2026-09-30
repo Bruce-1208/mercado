@@ -1,4 +1,5 @@
 import json
+import re
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -510,6 +511,39 @@ def test_existing_schema_still_installs_refresh_indexes_once(monkeypatch):
     ]
 
 
+def test_missing_listing_ratio_triggers_schema_migration(monkeypatch):
+    class SchemaCursor(_FakeCursor):
+        columns = set()
+
+        def execute(self, query, params=None):
+            super().execute(query, params)
+            create = re.search(r"CREATE TABLE IF NOT EXISTS `([^`]+)`", query)
+            if create:
+                self.columns.update(
+                    (create[1], column)
+                    for column in re.findall(r"^\s*`([^`]+)`", query, re.MULTILINE)
+                )
+            alter = re.search(r"ALTER TABLE `([^`]+)` ADD COLUMN `([^`]+)`", query)
+            if alter:
+                self.columns.add((alter[1], alter[2]))
+
+        def fetchone(self):
+            return None
+
+        def fetchall(self):
+            return [{"TABLE_NAME": table, "COLUMN_NAME": column}
+                    for table, column in self.columns]
+
+    cursor = SchemaCursor()
+    store._migrate_collection_tables(cursor)
+    assert store._collection_schema_is_current(cursor)
+    cursor.columns.remove((store.MANAGEMENT_CATEGORY_TABLE, "listing_ratio_percent"))
+    assert not store._collection_schema_is_current(cursor)
+    monkeypatch.setattr(store, "_schema_ready", False)
+    store.ensure_collection_tables(cursor)
+    assert store._collection_schema_is_current(cursor)
+
+
 @pytest.mark.parametrize(("weight_basis", "expected_scrape_status"), [
     ("official_api", "ok"),
     ("plugin_volumetric_fallback", "partial"),
@@ -993,7 +1027,7 @@ def test_collection_list_can_hide_items_already_added_to_products():
     count_sql, _params = next(
         (query, params)
         for query, params in connection.fake_cursor.queries
-        if query.startswith(f"SELECT COUNT(*) AS total FROM `{store.COLLECTION_TABLE}`")
+        if query.startswith(f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ COUNT(*) AS total FROM `{store.COLLECTION_TABLE}`")
     )
     assert "`added_to_products` = 0" in count_sql
 
@@ -1007,12 +1041,12 @@ def test_lists_filter_by_management_category_and_include_category_name():
     count_sql, count_params = next(
         (query, params)
         for query, params in categorized.fake_cursor.queries
-        if query.startswith(f"SELECT COUNT(*) AS total FROM `{store.COLLECTION_TABLE}`")
+        if query.startswith(f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ COUNT(*) AS total FROM `{store.COLLECTION_TABLE}`")
     )
     row_sql, _row_params = next(
         (query, params)
         for query, params in categorized.fake_cursor.queries
-        if query.startswith(f"SELECT `{store.COLLECTION_TABLE}`.*")
+        if query.startswith(f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ `{store.COLLECTION_TABLE}`.*")
     )
     assert "`management_category_id` = %s" in count_sql
     assert count_params == (12,)
@@ -1027,7 +1061,7 @@ def test_lists_filter_by_management_category_and_include_category_name():
     product_count_sql, product_params = next(
         (query, params)
         for query, params in uncategorized.fake_cursor.queries
-        if query.startswith(f"SELECT COUNT(*) AS total FROM `{store.PRODUCT_TABLE}`")
+        if query.startswith(f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ COUNT(*) AS total FROM `{store.PRODUCT_TABLE}`")
     )
     assert "`management_category_id` IS NULL" in product_count_sql
     assert product_params == ()
@@ -1088,7 +1122,7 @@ def test_collection_list_applies_weight_profit_and_collection_time_filters():
     count_sql, params = next(
         (query, params)
         for query, params in connection.fake_cursor.queries
-        if query.startswith(f"SELECT COUNT(*) AS total FROM `{store.COLLECTION_TABLE}`")
+        if query.startswith(f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ COUNT(*) AS total FROM `{store.COLLECTION_TABLE}`")
     )
     for clause in (
         "`review_status` = %s",
@@ -1127,7 +1161,7 @@ def test_collection_list_filters_by_actual_weight_status(
     count_sql, params = next(
         (query, params)
         for query, params in connection.fake_cursor.queries
-        if query.startswith(f"SELECT COUNT(*) AS total FROM `{store.COLLECTION_TABLE}`")
+        if query.startswith(f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ COUNT(*) AS total FROM `{store.COLLECTION_TABLE}`")
     )
     assert expected_clause in count_sql
     assert "'calculated_volumetric', 'legacy_unknown', 'plugin_volumetric_fallback'" in count_sql
@@ -1156,7 +1190,7 @@ def test_product_list_applies_status_range_and_date_filters_in_database():
     count_sql, params = next(
         (query, params)
         for query, params in connection.fake_cursor.queries
-        if query.startswith(f"SELECT COUNT(*) AS total FROM `{store.PRODUCT_TABLE}`")
+        if query.startswith(f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ COUNT(*) AS total FROM `{store.PRODUCT_TABLE}`")
     )
     for clause in (
         "`review_status` = %s",
@@ -1192,7 +1226,7 @@ def test_product_list_filters_zying_category_and_product_developer():
     count_sql, params = next(
         (query, params)
         for query, params in connection.fake_cursor.queries
-        if query.startswith(f"SELECT COUNT(*) AS total FROM `{store.PRODUCT_TABLE}`")
+        if query.startswith(f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ COUNT(*) AS total FROM `{store.PRODUCT_TABLE}`")
     )
     assert "plugin_snapshot.zying_category" in count_sql
     assert "plugin_snapshot.zying_category_id" in count_sql
@@ -1214,7 +1248,7 @@ def test_product_list_applies_minute_datetime_range_in_database():
     count_sql, params = next(
         (query, params)
         for query, params in connection.fake_cursor.queries
-        if query.startswith(f"SELECT COUNT(*) AS total FROM `{store.PRODUCT_TABLE}`")
+        if query.startswith(f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ COUNT(*) AS total FROM `{store.PRODUCT_TABLE}`")
     )
     assert "`added_at` >= %s" in count_sql
     assert "`added_at` < %s" in count_sql
@@ -1498,3 +1532,28 @@ def test_product_owner_filter_applies_before_pagination(field, path):
         assert path in sql
         assert "%张三%" in params
     assert queries[-1][1][-2:] == (50, 50)
+
+
+def test_product_list_limits_before_join_and_records_query_stages(caplog):
+    connection = _FakeConnection()
+    with caplog.at_level("INFO"):
+        store.list_product_items(search="shirt", limit=100, offset=200,
+                                 connection_factory=lambda: connection)
+    sql, params = next((q, p) for q, p in connection.fake_cursor.queries
+                       if "LEFT JOIN" in q and "LIMIT %s OFFSET %s" in q)
+    assert sql.index("LIMIT %s OFFSET %s") < sql.index("LEFT JOIN")
+    assert params == ("%shirt%", "%shirt%", 100, 200)
+    assert "stages_ms=" in caplog.text
+    assert "'count':" in caplog.text and "'page':" in caplog.text
+    assert connection.closed
+
+
+def test_product_list_closes_connection_on_query_timeout(caplog):
+    connection = _FakeConnection()
+    def timeout(sql, params=None):
+        raise TimeoutError("query timed out")
+    connection.fake_cursor.execute = timeout
+    with patch.object(store, "ensure_collection_tables"), pytest.raises(TimeoutError):
+        store.list_product_items(connection_factory=lambda: connection)
+    assert connection.closed
+    assert "'count':" in caplog.text

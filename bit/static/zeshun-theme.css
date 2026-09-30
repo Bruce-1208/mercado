@@ -157,3 +157,54 @@ body.zs-standalone .account b { color: var(--zs-heading); }
 @media (prefers-reduced-motion: reduce) {
     body.zs-console *, body.zs-standalone * { scroll-behavior: auto !important; }
 }
+
+/* Shared controls also cover task management, authentication and detail pages. */
+body.zs-standalone {
+    --primary: var(--zs-brand);
+    --primary-dark: var(--zs-brand-hover);
+    --text: var(--zs-heading);
+    --border: var(--zs-stroke);
+    font-size: 13px;
+    line-height: 1.5;
+}
+body.zs-standalone :is(button, .button, .btn) {
+    font: inherit;
+    font-weight: 600;
+    min-height: 38px;
+    border-radius: var(--zs-control-corner);
+    padding: 8px 13px;
+}
+body.zs-standalone :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]):not([type="file"]), select) {
+    min-height: 38px;
+    padding: 8px 11px;
+    font: inherit;
+    box-sizing: border-box;
+    max-width: 100%;
+}
+body.zs-standalone textarea { font: inherit; padding: 10px 11px; line-height: 1.6; }
+body.zs-standalone :is(button, input, select, textarea):disabled { cursor: not-allowed; opacity: .6; }
+body.zs-standalone :is(.task, .login-panel, .table, .table-wrap) {
+    border-radius: var(--zs-corner);
+    border-color: var(--zs-stroke);
+    box-shadow: var(--zs-shadow);
+}
+body.zs-standalone :is(h1, h2, h3) { font-weight: 650; }
+body.zs-standalone h1 { font-size: 24px; }
+body.zs-standalone h2 { font-size: 18px; }
+body.zs-standalone th { font-size: 12px; font-weight: 600; }
+body.zs-standalone td { font-size: 13px; }
+body.zs-standalone tbody tr:hover { background-color: var(--zs-card-soft); }
+body.zs-standalone .empty { color: var(--zs-secondary); background: var(--zs-card-soft); border-color: var(--zs-stroke); }
+body.zs-auth { background: var(--zs-canvas); }
+body.zs-auth :is(.header, .login-header) { background: var(--zs-card-soft); color: var(--zs-heading); border-bottom: 1px solid var(--zs-stroke); }
+body.zs-auth :is(.header, .login-header)::after { display: none; }
+body.zs-auth :is(.company, .subtitle) { color: var(--zs-secondary); }
+body.zs-auth button { background: var(--zs-brand); color: #fff; border-color: var(--zs-brand); }
+body.zs-auth button:hover:not(:disabled) { background: var(--zs-brand-hover); }
+body.zs-auth :is(.panel, .login-panel) { border: 1px solid var(--zs-stroke); box-shadow: var(--zs-shadow); }
+@media (max-width: 600px) {
+    body.zs-standalone :is(.toolbar, .heading) { flex-wrap: wrap; }
+    body.zs-standalone :is(.table, .table-wrap) { overflow-x: auto; }
+}
+body.zs-auth :is(.company-name, .company-name-en, .login-subtitle) { color: var(--zs-secondary); }
+body.zs-auth :is(h1, .login-header h1) { color: var(--zs-heading); }

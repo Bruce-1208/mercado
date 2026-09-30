@@ -159,7 +159,7 @@ def test_route_scopes_filters_and_status(monkeypatch):
     with client.session_transaction() as session:
         session["workbench_user"] = {"id": 71, "username": "test", "role_key": "super_admin"}
     monkeypatch.setattr(app_module, "_authorized_token_ids_for_user", lambda: {7, 8})
-    monkeypatch.setattr(app_module, "workbench_user_own_store_only", lambda: False)
+    monkeypatch.setattr(app_module, "workbench_user_own_store_only", lambda *args: False)
     captured = []
     monkeypatch.setattr(manager, "start", lambda *args: captured.append(args) or {"running": True})
     result = client.post("/api/orders/zying-sync/start?store_id=7&store_id=99&salesperson=A&salesperson=B&status=待采&page=3", json={"execution_target": "server"})
@@ -263,7 +263,7 @@ def test_start_failure_returns_json_and_edge_is_mandatory(monkeypatch):
     with client.session_transaction() as session:
         session["workbench_user"] = {"id": 71, "username": "test", "role_key": "super_admin"}
     monkeypatch.setattr(app_module, "_authorized_token_ids_for_user", lambda: {7})
-    monkeypatch.setattr(app_module, "workbench_user_own_store_only", lambda: False)
+    monkeypatch.setattr(app_module, "workbench_user_own_store_only", lambda *args: False)
     def start(*args):
         assert args[2] == {"browser_type": "edge", "require_login": True}
         raise RuntimeError("worker failed")
@@ -286,7 +286,7 @@ def agent_routes(monkeypatch, tmp_path, isolated_legacy_console_user):
     monkeypatch.setattr(app_module, "get_local_agent_store", lambda: store)
     monkeypatch.setattr(app_module, "current_local_agent_bundle", lambda: {"version": "test"})
     monkeypatch.setattr(app_module, "_authorized_token_ids_for_user", lambda: {7})
-    monkeypatch.setattr(app_module, "workbench_user_own_store_only", lambda: False)
+    monkeypatch.setattr(app_module, "workbench_user_own_store_only", lambda *args: False)
     monkeypatch.setattr(app_module, "USE_DB_API", False)
     monkeypatch.setattr(sync, "manager", SyncManager())
     monkeypatch.setattr(sync, "agent_sync", sync.AgentSync())
@@ -431,7 +431,7 @@ def test_agent_worker_executes_browser_and_reports_rows():
     state = run_agent_sync({"job_id": "test-job", "payload": {"rows": [{"id": "2000001"}]}},
                            threading.Event(), request, browser)
     assert state["phase"] == "completed"
-    assert [a["action"] for a in actions] == ["ready", "control", "row"]
+    assert [a["action"] for a in actions] == ["ready", "row"]
     assert actions[-1]["detail"] == detail()
 
 
@@ -446,3 +446,232 @@ def test_server_option_only_rendered_for_super_admin():
         rendered = template.render(current_user={"role_key": role})
         assert ('value="server"' in rendered) == (role == "super_admin")
         assert 'id="order-zying-stop"' in rendered
+
+
+def test_detail_timeout_preserves_batch_results_and_continues():
+    from playwright.sync_api import TimeoutError as BrowserTimeout
+    from bit.zying_order_sync import ZyingPage
+    reader = ZyingPage(None)
+    reader._search = lambda rows: ([{"id": str(i), "no": row["id"]} for i, row in enumerate(rows, 1)], False)
+    visited = []
+    def read_detail(internal_id):
+        visited.append(internal_id)
+        if internal_id == "2":
+            raise BrowserTimeout('Timeout 30000ms exceeded while waiting for event "response"')
+        return detail(order_no=str(2000000 + int(internal_id)))
+    reader._detail = read_detail
+    results = reader.lookup_many([{"id": str(i)} for i in range(2000001, 2000004)])
+    assert visited == ["1", "2", "3"]
+    assert results["2000001"]["detail"]
+    assert "超时" in results["2000002"]["skip_reason"]
+    assert results["2000003"]["detail"]
+
+
+def test_search_timeout_skips_batch_and_searches_next_batch():
+    from bit.zying_order_sync import SYNC_BATCH_SIZE
+    from playwright.sync_api import TimeoutError as BrowserTimeout
+    from bit.zying_order_sync import ZyingPage
+    reader = ZyingPage(None)
+    calls = []
+    def search(rows):
+        calls.append(rows)
+        if len(calls) == 1:
+            raise BrowserTimeout("response timeout")
+        return [], False
+    reader._search = search
+    results = reader.lookup_many([{"id": str(i)} for i in range(SYNC_BATCH_SIZE + 1)])
+    assert len(calls) == 2
+    assert all(results[str(i)].get("skip_reason") for i in range(SYNC_BATCH_SIZE))
+    assert results[str(SYNC_BATCH_SIZE)] == {"detail": None}
+
+
+def test_server_timeout_skipped_and_next_order_written():
+    manager = SyncManager()
+    writes = []
+    @contextmanager
+    def browser(options):
+        class Reader:
+            def lookup(self, row):
+                if row["id"] == "timeout":
+                    raise TimeoutError("response timeout")
+                return detail()
+        yield Reader()
+    manager.start(71, {}, {},
+        lambda **kw: {"rows": [{"id": "timeout"}, {"id": "2000001"}], "total": 2},
+        lambda order_id, changes: writes.append(order_id) or {"matched": 1}, browser)
+    for thread in threading.enumerate():
+        if thread.name == "zying-order-sync":
+            thread.join(3)
+    state = manager.status(71)
+    assert not state["running"]
+    assert (state["completed"], state["skipped"], state["updated"], state["failed"]) == (2, 1, 1, 0)
+    assert writes == ["2000001"]
+
+
+@pytest.mark.parametrize("release_mode", ["stop", "stale"])
+def test_stopped_server_cleanup_cannot_unlock_new_job(release_mode):
+    manager = SyncManager()
+    old_cleanup = threading.Event()
+    release_old = threading.Event()
+    new_entered = threading.Event()
+    release_new = threading.Event()
+    @contextmanager
+    def old_browser(options):
+        class Reader:
+            def lookup(self, row):
+                return None
+        try:
+            yield Reader()
+        finally:
+            old_cleanup.set()
+            assert release_old.wait(5)
+    @contextmanager
+    def new_browser(options):
+        new_entered.set()
+        assert release_new.wait(5)
+        class Reader:
+            def lookup(self, row):
+                return None
+        yield Reader()
+    read = lambda **kw: {"rows": [{"id": "1"}], "total": 1}
+    try:
+        manager.start(71, {}, {}, read, None, old_browser)
+        assert old_cleanup.wait(3)
+        old_thread = next(t for t in threading.enumerate() if t.name == "zying-order-sync")
+        if release_mode == "stop":
+            assert not manager.stop(71)["running"]
+        else:
+            manager.jobs["71"]["progress_at"] = time.time() - 601
+            assert not manager.status(71)["running"]
+        manager.start(71, {}, {}, read, None, new_browser)
+        assert new_entered.wait(3)
+        release_old.set()
+        old_thread.join(3)
+        assert manager.status(71)["running"]
+        with pytest.raises(ValueError, match="正在运行"):
+            manager.start(72, {}, {}, read, None, new_browser)
+    finally:
+        release_old.set()
+        release_new.set()
+        for thread in threading.enumerate():
+            if thread.name == "zying-order-sync":
+                thread.join(3)
+
+
+def test_agent_timeout_roundtrip_is_skipped_once(agent_routes):
+    from bit.zying_order_sync import run_agent_sync
+    app_module, client, store, writes = agent_routes
+    client.post('/api/orders/zying-sync/start', json={"agent_id": "agent-001"})
+    job = wait_for_agent_job(store)
+    store.claim_job('agent-001')
+    @contextmanager
+    def browser(options):
+        class Reader:
+            def lookup(self, row):
+                raise TimeoutError("response timeout")
+        yield Reader()
+    sent = []
+    def request(method, path, **kwargs):
+        data = kwargs['json']
+        response = client.post(path, headers={"X-Internal-Token": "agent-001"}, json=data)
+        assert response.status_code == 200
+        if data['action'] == 'ready':
+            assert client.post('/api/orders/zying-sync/confirm-login').status_code == 200
+        if data['action'] == 'row':
+            sent.append(data)
+        return response.json['data']
+    state = run_agent_sync(job, threading.Event(), request, browser)
+    assert state['phase'] == 'completed'
+    assert (state['skipped'], state['failed'], state['completed']) == (1, 0, 1)
+    assert not writes
+    duplicate = request('POST', '/api/local-agents/zying-sync/' + job['job_id'], json=sent[0])
+    assert duplicate['completed'] == 1
+
+
+def test_stale_progress_releases_agent_despite_fresh_heartbeat(agent_routes):
+    from bit.zying_order_sync import SYNC_PROGRESS_TIMEOUT
+    app_module, client, store, writes = agent_routes
+    client.post('/api/orders/zying-sync/start', json={"agent_id": "agent-001"})
+    job = wait_for_agent_job(store)
+    store.claim_job('agent-001')
+    state = {"phase": "syncing", "total": 1252, "completed": 75,
+             "updated": 34, "skipped": 36, "failed": 5, "results": [],
+             "progress_at": time.time() - SYNC_PROGRESS_TIMEOUT - 1}
+    store.append_event(job['job_id'], job['agent_id'], status='running', result=state)
+    store.heartbeat('agent-001', name='测试电脑', current_job_id=job['job_id'], capabilities=['daily_task'])
+    response = client.get('/api/orders/zying-sync/status').json['data']
+    assert response['running'] is False
+    assert response['completed'] == 75
+    assert job['job_id'] in store.cancellation_job_ids('agent-001')
+    late = client.post('/api/local-agents/zying-sync/' + job['job_id'],
+                      headers={"X-Internal-Token": "agent-001"},
+                      json={"action": "row", "order_id": "2000001", "detail": detail()})
+    assert late.json['data']['stop'] is True
+    assert not writes
+    assert client.post('/api/orders/zying-sync/start', json={"agent_id": "agent-001"}).status_code == 202
+
+
+def test_agent_batches_ten_orders_and_stops_on_result_response():
+    from bit.zying_order_sync import run_agent_sync
+    actions, batches = [], []
+
+    @contextmanager
+    def browser(options):
+        class Reader:
+            def lookup_many(self, rows):
+                batches.append(rows)
+                return {row['id']: {'detail': None} for row in rows}
+        yield Reader()
+
+    def request(method, path, **kwargs):
+        data = kwargs['json']
+        assert data['compact'] is True
+        actions.append(data['action'])
+        return {'phase': 'syncing', 'stop': data['action'] == 'rows'}
+
+    stop = threading.Event()
+    state = run_agent_sync(
+        {'job_id': 'batch-test', 'payload': {'rows': [{'id': str(i)} for i in range(21)]}},
+        stop, request, browser,
+    )
+    assert [len(batch) for batch in batches] == [10]
+    assert actions == ['ready', 'rows']
+    assert stop.is_set() and state['stop']
+
+
+def test_larger_search_batch_splits_overflow_without_losing_orders():
+    from bit.zying_order_sync import ZyingPage
+    reader = ZyingPage(None)
+    searches = []
+
+    def search(rows):
+        searches.append(len(rows))
+        return [{'id': row['id'], 'no': row['id']} for row in rows], len(rows) > 5
+
+    reader._search = search
+    reader._detail = lambda internal_id: detail(order_id=internal_id, order_no=internal_id)
+    rows = [{'id': str(i)} for i in range(10)]
+    outcomes = reader.lookup_many(rows)
+    assert searches == [10, 5, 5]
+    assert all(outcomes[row['id']]['detail']['root'][0]['order_no'] == row['id'] for row in rows)
+
+
+def test_compact_agent_response_preserves_server_result_history(agent_routes):
+    _, client, store, _ = agent_routes
+    client.post('/api/orders/zying-sync/start', json={'agent_id': 'agent-001'})
+    job = wait_for_agent_job(store)
+    store.claim_job('agent-001')
+    path = '/api/local-agents/zying-sync/' + job['job_id']
+    headers = {'X-Internal-Token': 'agent-001'}
+    client.post(path, headers=headers, json={'action': 'ready'})
+    client.post('/api/orders/zying-sync/confirm-login')
+    response = client.post(path, headers=headers, json={
+        'action': 'row', 'order_id': job['payload']['rows'][0]['id'],
+        'detail': None, 'compact': True,
+    })
+    assert response.status_code == 200
+    assert response.json['data']['completed'] == 1
+    assert 'results' not in response.json['data']
+    assert len(store.get_job(job['job_id'])['result']['results']) == 1
+    full = client.post(path, headers=headers, json={'action': 'control'})
+    assert len(full.json['data']['results']) == 1

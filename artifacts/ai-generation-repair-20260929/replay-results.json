@@ -1,0 +1,230 @@
+[
+  {
+    "id": 13088988,
+    "result": {
+      "category_id": "CBT1584",
+      "category_name": "Night Lights & Lamps",
+      "variations": [
+        {
+          "id": "6124451813264",
+          "sku_id": "6124451813264",
+          "seller_sku": "",
+          "label": "橙色南瓜灯-背面黑色骷髅头 / 7*7*11.2",
+          "attribute_combinations": [
+            {
+              "id": "STRUCTURE_COLOR",
+              "name": "Structure color",
+              "value_name": "Orange",
+              "value_id": "52000"
+            },
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Orange pumpkin lantern with black skull on back"
+            },
+            {
+              "id": "TOTAL_WIDTH",
+              "name": "Total width",
+              "value_name": "7 cm"
+            },
+            {
+              "id": "TOTAL_HEIGHT",
+              "name": "Total height",
+              "value_name": "11.2 cm"
+            },
+            {
+              "id": "TOTAL_DIAMETER",
+              "name": "Total diameter",
+              "value_name": "7 cm"
+            }
+          ],
+          "price": 2.8,
+          "price_text": "¥2.80",
+          "available_quantity": 9759,
+          "image_url": "",
+          "raw_weight": "30g",
+          "raw_text": "橙色南瓜灯-背面黑色骷髅头 / 7*7*11.2",
+          "weight_g": 30,
+          "package_length_cm": 7,
+          "package_width_cm": 7,
+          "package_height_cm": 11.2,
+          "dimensions_display": "7 × 7 × 11.2 cm"
+        },
+        {
+          "id": "6124451813265",
+          "sku_id": "6124451813265",
+          "seller_sku": "",
+          "label": "黑色南瓜灯-背面橙色骷髅头 / 7*7*11.2",
+          "attribute_combinations": [
+            {
+              "id": "STRUCTURE_COLOR",
+              "name": "Structure color",
+              "value_name": "Black",
+              "value_id": "52049"
+            },
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Black pumpkin lantern with orange skull on back"
+            },
+            {
+              "id": "TOTAL_WIDTH",
+              "name": "Total width",
+              "value_name": "7 cm"
+            },
+            {
+              "id": "TOTAL_HEIGHT",
+              "name": "Total height",
+              "value_name": "11.2 cm"
+            },
+            {
+              "id": "TOTAL_DIAMETER",
+              "name": "Total diameter",
+              "value_name": "7 cm"
+            }
+          ],
+          "price": 2.8,
+          "price_text": "¥2.80",
+          "available_quantity": 9951,
+          "image_url": "",
+          "raw_weight": "30g",
+          "raw_text": "黑色南瓜灯-背面橙色骷髅头 / 7*7*11.2",
+          "weight_g": 30,
+          "package_length_cm": 7,
+          "package_width_cm": 7,
+          "package_height_cm": 11.2,
+          "dimensions_display": "7 × 7 × 11.2 cm"
+        }
+      ],
+      "category_prediction_query": "Halloween pumpkin lantern with skull design",
+      "attributes": [
+        {
+          "id": "BRAND",
+          "name": "Brand",
+          "value_name": "Generic"
+        },
+        {
+          "id": "STRUCTURE_COLOR",
+          "name": "Structure color",
+          "value_name": "Orange",
+          "value_id": "52000"
+        },
+        {
+          "id": "SCREEN_COLOR",
+          "name": "Screen color",
+          "value_name": "Black",
+          "value_id": "52049"
+        },
+        {
+          "id": "TOTAL_WIDTH",
+          "name": "Total width",
+          "value_name": "7 cm"
+        },
+        {
+          "id": "TOTAL_HEIGHT",
+          "name": "Total height",
+          "value_name": "11.2 cm"
+        },
+        {
+          "id": "PACKAGE_HEIGHT",
+          "name": "Package height",
+          "value_name": "11.2 cm"
+        },
+        {
+          "id": "PACKAGE_WIDTH",
+          "name": "Package width",
+          "value_name": "7 cm"
+        },
+        {
+          "id": "PACKAGE_LENGTH",
+          "name": "Package length",
+          "value_name": "7 cm"
+        },
+        {
+          "id": "PACKAGE_WEIGHT",
+          "name": "Package weight",
+          "value_name": "30 g"
+        },
+        {
+          "id": "STRUCTURE_MATERIAL",
+          "name": "Structure material",
+          "value_name": "Plastic",
+          "value_id": "2748302"
+        },
+        {
+          "id": "WITH_USB",
+          "name": "With USB",
+          "value_name": "No",
+          "value_id": "242084"
+        },
+        {
+          "id": "WITH_WI_FI",
+          "name": "With Wi-Fi",
+          "value_name": "No",
+          "value_id": "242084"
+        },
+        {
+          "id": "EMPTY_GTIN_REASON",
+          "name": "Empty GTIN reason",
+          "value_name": "The product does not have registered code",
+          "value_id": "17055160"
+        },
+        {
+          "id": "INVOICE_PRODUCT_NAME",
+          "name": "Invoice product name",
+          "value_name": "Halloween pumpkin lantern with skull design"
+        },
+        {
+          "id": "SAT_KEY",
+          "name": "Sat key",
+          "value_name": "Does not exist in the catalog",
+          "value_id": "82021094"
+        },
+        {
+          "id": "MEASURE_UNIT_KEY",
+          "name": "Measure unit key",
+          "value_name": "Does not exist in the catalog",
+          "value_id": "82021108"
+        },
+        {
+          "id": "MEASURE_UNIT_DESCRIPTION",
+          "name": "Measure unit description",
+          "value_name": "Piece"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Item condition",
+          "value_name": "New",
+          "value_id": "2230284"
+        },
+        {
+          "id": "SELLER_PACKAGE_WIDTH",
+          "name": "Seller package width",
+          "value_name": "7 cm"
+        },
+        {
+          "id": "SELLER_PACKAGE_LENGTH",
+          "name": "Seller package length",
+          "value_name": "7 cm"
+        },
+        {
+          "id": "SELLER_PACKAGE_HEIGHT",
+          "name": "Seller package height",
+          "value_name": "11.2 cm"
+        },
+        {
+          "id": "SELLER_PACKAGE_WEIGHT",
+          "name": "Seller package weight",
+          "value_name": "30 g"
+        },
+        {
+          "id": "IS_KIT",
+          "name": "Is kit",
+          "value_name": "No",
+          "value_id": "242084"
+        }
+      ],
+      "missing_required_attributes": []
+    }
+  }
+]

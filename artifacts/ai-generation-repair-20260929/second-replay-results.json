@@ -1,0 +1,5021 @@
+[
+  {
+    "id": 13088981,
+    "result": {
+      "category_id": "CBT116631",
+      "category_name": "Fairy Lights",
+      "variations": [
+        {
+          "id": "5137014942351",
+          "sku_id": "5137014942351",
+          "seller_sku": "",
+          "label": "布艺南瓜灯笼 / 1.5米10灯 常亮电池款",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Fabric pumpkin lantern 1.5m 10 lights steady battery"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "1.5 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "10"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "No",
+              "value_id": "242084"
+            }
+          ],
+          "price": 10.9,
+          "price_text": "¥10.90",
+          "available_quantity": 9735,
+          "image_url": "",
+          "raw_weight": "130g",
+          "raw_text": "布艺南瓜灯笼 / 1.5米10灯 常亮电池款",
+          "weight_g": 130,
+          "package_length_cm": 14,
+          "package_width_cm": 7,
+          "package_height_cm": 9,
+          "dimensions_display": "14 × 7 × 9 cm"
+        },
+        {
+          "id": "5137014942353",
+          "sku_id": "5137014942353",
+          "seller_sku": "",
+          "label": "布艺南瓜灯笼 / 3米20灯 带闪电池款",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Fabric pumpkin lantern 3m 20 lights flashing battery"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "No",
+              "value_id": "242084"
+            }
+          ],
+          "price": 21.3,
+          "price_text": "¥21.30",
+          "available_quantity": 9023,
+          "image_url": "",
+          "raw_weight": "130g",
+          "raw_text": "布艺南瓜灯笼 / 3米20灯 带闪电池款",
+          "weight_g": 130,
+          "package_length_cm": 14,
+          "package_width_cm": 7,
+          "package_height_cm": 9,
+          "dimensions_display": "14 × 7 × 9 cm"
+        },
+        {
+          "id": "5137014942355",
+          "sku_id": "5137014942355",
+          "seller_sku": "",
+          "label": "布艺南瓜灯笼 / 3米20灯 常亮USB款",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Fabric pumpkin lantern 3m 20 lights steady USB"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Domestic current",
+              "value_id": "49713698"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "No",
+              "value_id": "242084"
+            }
+          ],
+          "price": 21.3,
+          "price_text": "¥21.30",
+          "available_quantity": 9981,
+          "image_url": "",
+          "raw_weight": "130g",
+          "raw_text": "布艺南瓜灯笼 / 3米20灯 常亮USB款",
+          "weight_g": 130,
+          "package_length_cm": 14,
+          "package_width_cm": 7,
+          "package_height_cm": 9,
+          "dimensions_display": "14 × 7 × 9 cm"
+        },
+        {
+          "id": "5137014942357",
+          "sku_id": "5137014942357",
+          "seller_sku": "",
+          "label": "布艺南瓜灯笼 / 3米20灯 遥控8模式USB款",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Fabric pumpkin lantern 3m 20 lights remote 8 modes USB"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Domestic current",
+              "value_id": "49713698"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 24.3,
+          "price_text": "¥24.30",
+          "available_quantity": 9965,
+          "image_url": "",
+          "raw_weight": "130g",
+          "raw_text": "布艺南瓜灯笼 / 3米20灯 遥控8模式USB款",
+          "weight_g": 130,
+          "package_length_cm": 14,
+          "package_width_cm": 7,
+          "package_height_cm": 9,
+          "dimensions_display": "14 × 7 × 9 cm"
+        },
+        {
+          "id": "5137014942359",
+          "sku_id": "5137014942359",
+          "seller_sku": "",
+          "label": "布艺南瓜灯笼 / 3米20灯 遥控两用电池盒",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Fabric pumpkin lantern 3m 20 lights remote dual battery box"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 25.3,
+          "price_text": "¥25.30",
+          "available_quantity": 9998,
+          "image_url": "",
+          "raw_weight": "130g",
+          "raw_text": "布艺南瓜灯笼 / 3米20灯 遥控两用电池盒",
+          "weight_g": 130,
+          "package_length_cm": 14,
+          "package_width_cm": 7,
+          "package_height_cm": 9,
+          "dimensions_display": "14 × 7 × 9 cm"
+        },
+        {
+          "id": "5446679489105",
+          "sku_id": "5446679489105",
+          "seller_sku": "",
+          "label": "布艺南瓜灯笼 / 5米20灯 太阳能款（墨绿色线）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Fabric pumpkin lantern 5m 20 lights solar dark green wire"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Solar energy",
+              "value_id": "38547771"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "No",
+              "value_id": "242084"
+            }
+          ],
+          "price": 25.5,
+          "price_text": "¥25.50",
+          "available_quantity": 9916,
+          "image_url": "",
+          "raw_weight": "130g",
+          "raw_text": "布艺南瓜灯笼 / 5米20灯 太阳能款（墨绿色线）",
+          "weight_g": 130,
+          "package_length_cm": 14,
+          "package_width_cm": 7,
+          "package_height_cm": 9,
+          "dimensions_display": "14 × 7 × 9 cm"
+        },
+        {
+          "id": "6029505183301",
+          "sku_id": "6029505183301",
+          "seller_sku": "",
+          "label": "布艺南瓜灯笼 / 2米10灯 常亮电池款",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Fabric pumpkin lantern 2m 10 lights steady battery"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "2 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "10"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "No",
+              "value_id": "242084"
+            }
+          ],
+          "price": 11.2,
+          "price_text": "¥11.20",
+          "available_quantity": 9991,
+          "image_url": "",
+          "raw_weight": "130g",
+          "raw_text": "布艺南瓜灯笼 / 2米10灯 常亮电池款",
+          "weight_g": 130,
+          "package_length_cm": 14,
+          "package_width_cm": 7,
+          "package_height_cm": 9,
+          "dimensions_display": "14 × 7 × 9 cm"
+        },
+        {
+          "id": "6029505183302",
+          "sku_id": "6029505183302",
+          "seller_sku": "",
+          "label": "布艺南瓜灯笼 / 6.5米30灯 太阳能款（墨绿色线）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Fabric pumpkin lantern 6.5m 30 lights solar dark green wire"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "6.5 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Solar energy",
+              "value_id": "38547771"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "No",
+              "value_id": "242084"
+            }
+          ],
+          "price": 34.8,
+          "price_text": "¥34.80",
+          "available_quantity": 9998,
+          "image_url": "",
+          "raw_weight": "130g",
+          "raw_text": "布艺南瓜灯笼 / 6.5米30灯 太阳能款（墨绿色线）",
+          "weight_g": 130,
+          "package_length_cm": 14,
+          "package_width_cm": 7,
+          "package_height_cm": 9,
+          "dimensions_display": "14 × 7 × 9 cm"
+        }
+      ],
+      "category_prediction_query": "Halloween pumpkin string lights",
+      "attributes": [
+        {
+          "id": "BRAND",
+          "name": "Brand",
+          "value_name": "Generic"
+        },
+        {
+          "id": "LIGHT_TYPE",
+          "name": "Light type",
+          "value_name": "LED",
+          "value_id": "1123747"
+        },
+        {
+          "id": "POWER_SUPPLY_TYPE",
+          "name": "Power supply type",
+          "value_name": "Battery/Domestic current/Solar energy",
+          "value_id": "53690421"
+        },
+        {
+          "id": "AMBIENTS",
+          "name": "Ambients",
+          "value_name": "Indoor",
+          "value_id": "115340"
+        },
+        {
+          "id": "PRESENTATION_TYPE",
+          "name": "Presentation type",
+          "value_name": "String",
+          "value_id": "3955608"
+        },
+        {
+          "id": "PACKAGE_HEIGHT",
+          "name": "Package height",
+          "value_name": "9 cm"
+        },
+        {
+          "id": "PACKAGE_WIDTH",
+          "name": "Package width",
+          "value_name": "7 cm"
+        },
+        {
+          "id": "PACKAGE_LENGTH",
+          "name": "Package length",
+          "value_name": "14 cm"
+        },
+        {
+          "id": "PACKAGE_WEIGHT",
+          "name": "Package weight",
+          "value_name": "130 g"
+        },
+        {
+          "id": "WITH_REMOTE_CONTROL",
+          "name": "With remote control",
+          "value_name": "Yes",
+          "value_id": "242085"
+        },
+        {
+          "id": "INCLUDES_CELL_BATTERIES",
+          "name": "Includes cell batteries",
+          "value_name": "No",
+          "value_id": "242084"
+        }
+      ],
+      "missing_required_attributes": []
+    }
+  },
+  {
+    "id": 13088986,
+    "result": {
+      "category_id": "CBT116631",
+      "category_name": "Fairy Lights",
+      "variations": [
+        {
+          "id": "5914914979649",
+          "sku_id": "5914914979649",
+          "seller_sku": "",
+          "label": "枫叶 / 1.5米10灯 （2节常亮电池盒）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf, 1.5 m 10 lights, 2 AA battery box steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "1.5 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "10"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 3.5,
+          "price_text": "¥3.50",
+          "available_quantity": 993,
+          "image_url": "",
+          "raw_weight": "35g",
+          "raw_text": "枫叶 / 1.5米10灯 （2节常亮电池盒）",
+          "weight_g": 35,
+          "package_length_cm": 20,
+          "package_width_cm": 10,
+          "package_height_cm": 2,
+          "dimensions_display": "20 × 10 × 2 cm"
+        },
+        {
+          "id": "5914914979650",
+          "sku_id": "5914914979650",
+          "seller_sku": "",
+          "label": "枫叶 / 3米20灯（2节常亮电池盒）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf, 3 m 20 lights, 2 AA battery box steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 6.3,
+          "price_text": "¥6.30",
+          "available_quantity": 996,
+          "image_url": "",
+          "raw_weight": "51g",
+          "raw_text": "枫叶 / 3米20灯（2节常亮电池盒）",
+          "weight_g": 51,
+          "package_length_cm": 22,
+          "package_width_cm": 11,
+          "package_height_cm": 3,
+          "dimensions_display": "22 × 11 × 3 cm"
+        },
+        {
+          "id": "5914914979651",
+          "sku_id": "5914914979651",
+          "seller_sku": "",
+          "label": "枫叶 / 3米20灯 （3节电池盒带闪）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf, 3 m 20 lights, 3 AA battery box flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 6.8,
+          "price_text": "¥6.80",
+          "available_quantity": 692,
+          "image_url": "",
+          "raw_weight": "61g",
+          "raw_text": "枫叶 / 3米20灯 （3节电池盒带闪）",
+          "weight_g": 61,
+          "package_length_cm": 22,
+          "package_width_cm": 11,
+          "package_height_cm": 3,
+          "dimensions_display": "22 × 11 × 3 cm"
+        },
+        {
+          "id": "5914914979652",
+          "sku_id": "5914914979652",
+          "seller_sku": "",
+          "label": "枫叶 / 3米20灯 （3节电池盒+USB双用）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf, 3 m 20 lights, 3 AA battery box + USB dual use"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery/Domestic current",
+              "value_id": "54973049"
+            }
+          ],
+          "price": 7.3,
+          "price_text": "¥7.30",
+          "available_quantity": 992,
+          "image_url": "",
+          "raw_weight": "70g",
+          "raw_text": "枫叶 / 3米20灯 （3节电池盒+USB双用）",
+          "weight_g": 70,
+          "package_length_cm": 22,
+          "package_width_cm": 11,
+          "package_height_cm": 3,
+          "dimensions_display": "22 × 11 × 3 cm"
+        },
+        {
+          "id": "5914914979653",
+          "sku_id": "5914914979653",
+          "seller_sku": "",
+          "label": "枫叶 / 6米40灯（ 3节电池盒带闪）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf, 6 m 40 lights, 3 AA battery box flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "6 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 12.5,
+          "price_text": "¥12.50",
+          "available_quantity": 999,
+          "image_url": "",
+          "raw_weight": "97g",
+          "raw_text": "枫叶 / 6米40灯（ 3节电池盒带闪）",
+          "weight_g": 97,
+          "package_length_cm": 25,
+          "package_width_cm": 13,
+          "package_height_cm": 3.5,
+          "dimensions_display": "25 × 13 × 3.5 cm"
+        },
+        {
+          "id": "5914914979654",
+          "sku_id": "5914914979654",
+          "seller_sku": "",
+          "label": "枫叶 / 3米20灯 （USB款常亮）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf, 3 m 20 lights, USB steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Domestic current",
+              "value_id": "49713698"
+            }
+          ],
+          "price": 6.8,
+          "price_text": "¥6.80",
+          "available_quantity": 850,
+          "image_url": "",
+          "raw_weight": "89g",
+          "raw_text": "枫叶 / 3米20灯 （USB款常亮）",
+          "weight_g": 89,
+          "package_length_cm": 22,
+          "package_width_cm": 11,
+          "package_height_cm": 3,
+          "dimensions_display": "22 × 11 × 3 cm"
+        },
+        {
+          "id": "5914914979655",
+          "sku_id": "5914914979655",
+          "seller_sku": "",
+          "label": "枫叶 / 6米40灯（USB款常亮）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf, 6 m 40 lights, USB steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "6 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Domestic current",
+              "value_id": "49713698"
+            }
+          ],
+          "price": 12.5,
+          "price_text": "¥12.50",
+          "available_quantity": 986,
+          "image_url": "",
+          "raw_weight": "77g",
+          "raw_text": "枫叶 / 6米40灯（USB款常亮）",
+          "weight_g": 77,
+          "package_length_cm": 25,
+          "package_width_cm": 13,
+          "package_height_cm": 3,
+          "dimensions_display": "25 × 13 × 3 cm"
+        },
+        {
+          "id": "5914914979663",
+          "sku_id": "5914914979663",
+          "seller_sku": "",
+          "label": "枫叶+帽子南瓜 / 1.5米10灯 （2节常亮电池盒）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + hat pumpkin, 1.5 m 10 lights, 2 AA battery box steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "1.5 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "10"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 5.5,
+          "price_text": "¥5.50",
+          "available_quantity": 42,
+          "image_url": "",
+          "raw_weight": "62g",
+          "raw_text": "枫叶+帽子南瓜 / 1.5米10灯 （2节常亮电池盒）",
+          "weight_g": 62,
+          "package_length_cm": 18,
+          "package_width_cm": 10,
+          "package_height_cm": 5,
+          "dimensions_display": "18 × 10 × 5 cm"
+        },
+        {
+          "id": "5914914979664",
+          "sku_id": "5914914979664",
+          "seller_sku": "",
+          "label": "枫叶+帽子南瓜 / 3米20灯（2节常亮电池盒）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + hat pumpkin, 3 m 20 lights, 2 AA battery box steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 10.5,
+          "price_text": "¥10.50",
+          "available_quantity": 997,
+          "image_url": "",
+          "raw_weight": "108g",
+          "raw_text": "枫叶+帽子南瓜 / 3米20灯（2节常亮电池盒）",
+          "weight_g": 108,
+          "package_length_cm": 21,
+          "package_width_cm": 16,
+          "package_height_cm": 6.5,
+          "dimensions_display": "21 × 16 × 6.5 cm"
+        },
+        {
+          "id": "5914914979665",
+          "sku_id": "5914914979665",
+          "seller_sku": "",
+          "label": "枫叶+帽子南瓜 / 3米20灯 （3节电池盒带闪）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + hat pumpkin, 3 m 20 lights, 3 AA battery box flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 11,
+          "price_text": "¥11.00",
+          "available_quantity": 954,
+          "image_url": "",
+          "raw_weight": "118g",
+          "raw_text": "枫叶+帽子南瓜 / 3米20灯 （3节电池盒带闪）",
+          "weight_g": 118,
+          "package_length_cm": 21,
+          "package_width_cm": 16,
+          "package_height_cm": 6.5,
+          "dimensions_display": "21 × 16 × 6.5 cm"
+        },
+        {
+          "id": "5914914979666",
+          "sku_id": "5914914979666",
+          "seller_sku": "",
+          "label": "枫叶+帽子南瓜 / 3米20灯 （3节电池盒+USB双用）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + hat pumpkin, 3 m 20 lights, 3 AA battery box + USB dual use"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery/Domestic current",
+              "value_id": "54973049"
+            }
+          ],
+          "price": 11.5,
+          "price_text": "¥11.50",
+          "available_quantity": 998,
+          "image_url": "",
+          "raw_weight": "123g",
+          "raw_text": "枫叶+帽子南瓜 / 3米20灯 （3节电池盒+USB双用）",
+          "weight_g": 123,
+          "package_length_cm": 14.5,
+          "package_width_cm": 16,
+          "package_height_cm": 6.5,
+          "dimensions_display": "14.5 × 16 × 6.5 cm"
+        },
+        {
+          "id": "5914914979667",
+          "sku_id": "5914914979667",
+          "seller_sku": "",
+          "label": "枫叶+帽子南瓜 / 6米40灯（ 3节电池盒带闪）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + hat pumpkin, 6 m 40 lights, 3 AA battery box flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "6 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 20.5,
+          "price_text": "¥20.50",
+          "available_quantity": 994,
+          "image_url": "",
+          "raw_weight": "204g",
+          "raw_text": "枫叶+帽子南瓜 / 6米40灯（ 3节电池盒带闪）",
+          "weight_g": 204,
+          "package_length_cm": 26,
+          "package_width_cm": 18,
+          "package_height_cm": 10,
+          "dimensions_display": "26 × 18 × 10 cm"
+        },
+        {
+          "id": "5914914979668",
+          "sku_id": "5914914979668",
+          "seller_sku": "",
+          "label": "枫叶+帽子南瓜 / 3米20灯 （USB款常亮）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + hat pumpkin, 3 m 20 lights, USB steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Domestic current",
+              "value_id": "49713698"
+            }
+          ],
+          "price": 11,
+          "price_text": "¥11.00",
+          "available_quantity": 990,
+          "image_url": "",
+          "raw_weight": "118g",
+          "raw_text": "枫叶+帽子南瓜 / 3米20灯 （USB款常亮）",
+          "weight_g": 118,
+          "package_length_cm": 21,
+          "package_width_cm": 16,
+          "package_height_cm": 6.5,
+          "dimensions_display": "21 × 16 × 6.5 cm"
+        },
+        {
+          "id": "5914914979669",
+          "sku_id": "5914914979669",
+          "seller_sku": "",
+          "label": "枫叶+帽子南瓜 / 6米40灯（USB款常亮）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + hat pumpkin, 6 m 40 lights, USB steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "6 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Domestic current",
+              "value_id": "49713698"
+            }
+          ],
+          "price": 20.5,
+          "price_text": "¥20.50",
+          "available_quantity": 997,
+          "image_url": "",
+          "raw_weight": "200g",
+          "raw_text": "枫叶+帽子南瓜 / 6米40灯（USB款常亮）",
+          "weight_g": 200,
+          "package_length_cm": 26,
+          "package_width_cm": 18,
+          "package_height_cm": 10,
+          "dimensions_display": "26 × 18 × 10 cm"
+        },
+        {
+          "id": "5914914979670",
+          "sku_id": "5914914979670",
+          "seller_sku": "",
+          "label": "枫叶+立体南瓜 / 1.5米10灯 （2节常亮电池盒）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + 3D pumpkin, 1.5 m 10 lights, 2 AA battery box steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "1.5 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "10"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 3.5,
+          "price_text": "¥3.50",
+          "available_quantity": 992,
+          "image_url": "",
+          "raw_weight": "56g",
+          "raw_text": "枫叶+立体南瓜 / 1.5米10灯 （2节常亮电池盒）",
+          "weight_g": 56,
+          "package_length_cm": 18,
+          "package_width_cm": 8,
+          "package_height_cm": 4,
+          "dimensions_display": "18 × 8 × 4 cm"
+        },
+        {
+          "id": "5914914979671",
+          "sku_id": "5914914979671",
+          "seller_sku": "",
+          "label": "枫叶+立体南瓜 / 3米20灯（2节常亮电池盒）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + 3D pumpkin, 3 m 20 lights, 2 AA battery box steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 6.3,
+          "price_text": "¥6.30",
+          "available_quantity": 973,
+          "image_url": "",
+          "raw_weight": "100g",
+          "raw_text": "枫叶+立体南瓜 / 3米20灯（2节常亮电池盒）",
+          "weight_g": 100,
+          "package_length_cm": 18,
+          "package_width_cm": 10,
+          "package_height_cm": 5,
+          "dimensions_display": "18 × 10 × 5 cm"
+        },
+        {
+          "id": "5914914979672",
+          "sku_id": "5914914979672",
+          "seller_sku": "",
+          "label": "枫叶+立体南瓜 / 3米20灯 （3节电池盒带闪）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + 3D pumpkin, 3 m 20 lights, 3 AA battery box flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 6.8,
+          "price_text": "¥6.80",
+          "available_quantity": 999,
+          "image_url": "",
+          "raw_weight": "110g",
+          "raw_text": "枫叶+立体南瓜 / 3米20灯 （3节电池盒带闪）",
+          "weight_g": 110,
+          "package_length_cm": 18,
+          "package_width_cm": 10,
+          "package_height_cm": 5,
+          "dimensions_display": "18 × 10 × 5 cm"
+        },
+        {
+          "id": "5914914979673",
+          "sku_id": "5914914979673",
+          "seller_sku": "",
+          "label": "枫叶+立体南瓜 / 3米20灯 （3节电池盒+USB双用）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + 3D pumpkin, 3 m 20 lights, 3 AA battery box + USB dual use"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery/Domestic current",
+              "value_id": "54973049"
+            }
+          ],
+          "price": 7.3,
+          "price_text": "¥7.30",
+          "available_quantity": 997,
+          "image_url": "",
+          "raw_weight": "115g",
+          "raw_text": "枫叶+立体南瓜 / 3米20灯 （3节电池盒+USB双用）",
+          "weight_g": 115,
+          "package_length_cm": 18,
+          "package_width_cm": 10,
+          "package_height_cm": 5,
+          "dimensions_display": "18 × 10 × 5 cm"
+        },
+        {
+          "id": "5914914979674",
+          "sku_id": "5914914979674",
+          "seller_sku": "",
+          "label": "枫叶+立体南瓜 / 6米40灯（ 3节电池盒带闪）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + 3D pumpkin, 6 m 40 lights, 3 AA battery box flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "6 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 12.5,
+          "price_text": "¥12.50",
+          "available_quantity": 991,
+          "image_url": "",
+          "raw_weight": "210g",
+          "raw_text": "枫叶+立体南瓜 / 6米40灯（ 3节电池盒带闪）",
+          "weight_g": 210,
+          "package_length_cm": 20,
+          "package_width_cm": 12,
+          "package_height_cm": 6,
+          "dimensions_display": "20 × 12 × 6 cm"
+        },
+        {
+          "id": "5914914979675",
+          "sku_id": "5914914979675",
+          "seller_sku": "",
+          "label": "枫叶+立体南瓜 / 3米20灯 （USB款常亮）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + 3D pumpkin, 3 m 20 lights, USB steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Domestic current",
+              "value_id": "49713698"
+            }
+          ],
+          "price": 6.8,
+          "price_text": "¥6.80",
+          "available_quantity": 999,
+          "image_url": "",
+          "raw_weight": "100g",
+          "raw_text": "枫叶+立体南瓜 / 3米20灯 （USB款常亮）",
+          "weight_g": 100,
+          "package_length_cm": 18,
+          "package_width_cm": 10,
+          "package_height_cm": 5,
+          "dimensions_display": "18 × 10 × 5 cm"
+        },
+        {
+          "id": "5914914979676",
+          "sku_id": "5914914979676",
+          "seller_sku": "",
+          "label": "枫叶+立体南瓜 / 6米40灯（USB款常亮）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + 3D pumpkin, 6 m 40 lights, USB steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "6 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Domestic current",
+              "value_id": "49713698"
+            }
+          ],
+          "price": 12.5,
+          "price_text": "¥12.50",
+          "available_quantity": 998,
+          "image_url": "",
+          "raw_weight": "205g",
+          "raw_text": "枫叶+立体南瓜 / 6米40灯（USB款常亮）",
+          "weight_g": 205,
+          "package_length_cm": 20,
+          "package_width_cm": 12,
+          "package_height_cm": 6,
+          "dimensions_display": "20 × 12 × 6 cm"
+        },
+        {
+          "id": "5914914979677",
+          "sku_id": "5914914979677",
+          "seller_sku": "",
+          "label": "枫叶+圆南瓜 / 1.5米10灯 （2节常亮电池盒）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + round pumpkin, 1.5 m 10 lights, 2 AA battery box steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "1.5 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "10"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 3.5,
+          "price_text": "¥3.50",
+          "available_quantity": 995,
+          "image_url": "",
+          "raw_weight": "50g",
+          "raw_text": "枫叶+圆南瓜 / 1.5米10灯 （2节常亮电池盒）",
+          "weight_g": 50,
+          "package_length_cm": 18,
+          "package_width_cm": 8,
+          "package_height_cm": 4,
+          "dimensions_display": "18 × 8 × 4 cm"
+        },
+        {
+          "id": "5914914979678",
+          "sku_id": "5914914979678",
+          "seller_sku": "",
+          "label": "枫叶+圆南瓜 / 3米20灯（2节常亮电池盒）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + round pumpkin, 3 m 20 lights, 2 AA battery box steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 6.3,
+          "price_text": "¥6.30",
+          "available_quantity": 995,
+          "image_url": "",
+          "raw_weight": "90g",
+          "raw_text": "枫叶+圆南瓜 / 3米20灯（2节常亮电池盒）",
+          "weight_g": 90,
+          "package_length_cm": 18,
+          "package_width_cm": 10,
+          "package_height_cm": 4,
+          "dimensions_display": "18 × 10 × 4 cm"
+        },
+        {
+          "id": "5914914979679",
+          "sku_id": "5914914979679",
+          "seller_sku": "",
+          "label": "枫叶+圆南瓜 / 3米20灯 （3节电池盒带闪）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + round pumpkin, 3 m 20 lights, 3 AA battery box flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 6.8,
+          "price_text": "¥6.80",
+          "available_quantity": 990,
+          "image_url": "",
+          "raw_weight": "100g",
+          "raw_text": "枫叶+圆南瓜 / 3米20灯 （3节电池盒带闪）",
+          "weight_g": 100,
+          "package_length_cm": 18,
+          "package_width_cm": 10,
+          "package_height_cm": 4,
+          "dimensions_display": "18 × 10 × 4 cm"
+        },
+        {
+          "id": "5914914979680",
+          "sku_id": "5914914979680",
+          "seller_sku": "",
+          "label": "枫叶+圆南瓜 / 3米20灯 （3节电池盒+USB双用）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + round pumpkin, 3 m 20 lights, 3 AA battery box + USB dual use"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery/Domestic current",
+              "value_id": "54973049"
+            }
+          ],
+          "price": 7.3,
+          "price_text": "¥7.30",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "105g",
+          "raw_text": "枫叶+圆南瓜 / 3米20灯 （3节电池盒+USB双用）",
+          "weight_g": 105,
+          "package_length_cm": 18,
+          "package_width_cm": 10,
+          "package_height_cm": 4,
+          "dimensions_display": "18 × 10 × 4 cm"
+        },
+        {
+          "id": "5914914979681",
+          "sku_id": "5914914979681",
+          "seller_sku": "",
+          "label": "枫叶+圆南瓜 / 6米40灯（ 3节电池盒带闪）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + round pumpkin, 6 m 40 lights, 3 AA battery box flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "6 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 12.5,
+          "price_text": "¥12.50",
+          "available_quantity": 999,
+          "image_url": "",
+          "raw_weight": "190g",
+          "raw_text": "枫叶+圆南瓜 / 6米40灯（ 3节电池盒带闪）",
+          "weight_g": 190,
+          "package_length_cm": 20,
+          "package_width_cm": 12,
+          "package_height_cm": 5,
+          "dimensions_display": "20 × 12 × 5 cm"
+        },
+        {
+          "id": "5914914979682",
+          "sku_id": "5914914979682",
+          "seller_sku": "",
+          "label": "枫叶+圆南瓜 / 3米20灯 （USB款常亮）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + round pumpkin, 3 m 20 lights, USB steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Domestic current",
+              "value_id": "49713698"
+            }
+          ],
+          "price": 6.8,
+          "price_text": "¥6.80",
+          "available_quantity": 370,
+          "image_url": "",
+          "raw_weight": "90g",
+          "raw_text": "枫叶+圆南瓜 / 3米20灯 （USB款常亮）",
+          "weight_g": 90,
+          "package_length_cm": 18,
+          "package_width_cm": 10,
+          "package_height_cm": 4,
+          "dimensions_display": "18 × 10 × 4 cm"
+        },
+        {
+          "id": "5914914979683",
+          "sku_id": "5914914979683",
+          "seller_sku": "",
+          "label": "枫叶+圆南瓜 / 6米40灯（USB款常亮）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + round pumpkin, 6 m 40 lights, USB steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "6 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Domestic current",
+              "value_id": "49713698"
+            }
+          ],
+          "price": 12.5,
+          "price_text": "¥12.50",
+          "available_quantity": 990,
+          "image_url": "",
+          "raw_weight": "180g",
+          "raw_text": "枫叶+圆南瓜 / 6米40灯（USB款常亮）",
+          "weight_g": 180,
+          "package_length_cm": 20,
+          "package_width_cm": 12,
+          "package_height_cm": 5,
+          "dimensions_display": "20 × 12 × 5 cm"
+        },
+        {
+          "id": "5914914979684",
+          "sku_id": "5914914979684",
+          "seller_sku": "",
+          "label": "枫叶+小南瓜 / 1.5米10灯 （2节常亮电池盒）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + small pumpkin, 1.5 m 10 lights, 2 AA battery box steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "1.5 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "10"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 3.5,
+          "price_text": "¥3.50",
+          "available_quantity": 999,
+          "image_url": "",
+          "raw_weight": "61g",
+          "raw_text": "枫叶+小南瓜 / 1.5米10灯 （2节常亮电池盒）",
+          "weight_g": 61,
+          "package_length_cm": 18,
+          "package_width_cm": 8,
+          "package_height_cm": 4,
+          "dimensions_display": "18 × 8 × 4 cm"
+        },
+        {
+          "id": "5914914979685",
+          "sku_id": "5914914979685",
+          "seller_sku": "",
+          "label": "枫叶+小南瓜 / 3米20灯（2节常亮电池盒）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + small pumpkin, 3 m 20 lights, 2 AA battery box steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 6.3,
+          "price_text": "¥6.30",
+          "available_quantity": 986,
+          "image_url": "",
+          "raw_weight": "110g",
+          "raw_text": "枫叶+小南瓜 / 3米20灯（2节常亮电池盒）",
+          "weight_g": 110,
+          "package_length_cm": 18,
+          "package_width_cm": 10,
+          "package_height_cm": 4,
+          "dimensions_display": "18 × 10 × 4 cm"
+        },
+        {
+          "id": "5914914979686",
+          "sku_id": "5914914979686",
+          "seller_sku": "",
+          "label": "枫叶+小南瓜 / 3米20灯 （3节电池盒带闪）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + small pumpkin, 3 m 20 lights, 3 AA battery box flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 6.8,
+          "price_text": "¥6.80",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "枫叶+小南瓜 / 3米20灯 （3节电池盒带闪）",
+          "weight_g": 120,
+          "package_length_cm": 18,
+          "package_width_cm": 10,
+          "package_height_cm": 4,
+          "dimensions_display": "18 × 10 × 4 cm"
+        },
+        {
+          "id": "5914914979687",
+          "sku_id": "5914914979687",
+          "seller_sku": "",
+          "label": "枫叶+小南瓜 / 3米20灯 （3节电池盒+USB双用）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + small pumpkin, 3 m 20 lights, 3 AA battery box + USB dual use"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery/Domestic current",
+              "value_id": "54973049"
+            }
+          ],
+          "price": 7.3,
+          "price_text": "¥7.30",
+          "available_quantity": 1000,
+          "image_url": "",
+          "raw_weight": "125g",
+          "raw_text": "枫叶+小南瓜 / 3米20灯 （3节电池盒+USB双用）",
+          "weight_g": 125,
+          "package_length_cm": 18,
+          "package_width_cm": 10,
+          "package_height_cm": 4,
+          "dimensions_display": "18 × 10 × 4 cm"
+        },
+        {
+          "id": "5914914979688",
+          "sku_id": "5914914979688",
+          "seller_sku": "",
+          "label": "枫叶+小南瓜 / 6米40灯（ 3节电池盒带闪）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + small pumpkin, 6 m 40 lights, 3 AA battery box flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "6 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 12.5,
+          "price_text": "¥12.50",
+          "available_quantity": 998,
+          "image_url": "",
+          "raw_weight": "200g",
+          "raw_text": "枫叶+小南瓜 / 6米40灯（ 3节电池盒带闪）",
+          "weight_g": 200,
+          "package_length_cm": 20,
+          "package_width_cm": 12,
+          "package_height_cm": 5,
+          "dimensions_display": "20 × 12 × 5 cm"
+        },
+        {
+          "id": "5914914979689",
+          "sku_id": "5914914979689",
+          "seller_sku": "",
+          "label": "枫叶+小南瓜 / 3米20灯 （USB款常亮）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + small pumpkin, 3 m 20 lights, USB steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Domestic current",
+              "value_id": "49713698"
+            }
+          ],
+          "price": 6.8,
+          "price_text": "¥6.80",
+          "available_quantity": 990,
+          "image_url": "",
+          "raw_weight": "100g",
+          "raw_text": "枫叶+小南瓜 / 3米20灯 （USB款常亮）",
+          "weight_g": 100,
+          "package_length_cm": 18,
+          "package_width_cm": 10,
+          "package_height_cm": 4,
+          "dimensions_display": "18 × 10 × 4 cm"
+        },
+        {
+          "id": "5914914979690",
+          "sku_id": "5914914979690",
+          "seller_sku": "",
+          "label": "枫叶+小南瓜 / 6米40灯（USB款常亮）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + small pumpkin, 6 m 40 lights, USB steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "6 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Domestic current",
+              "value_id": "49713698"
+            }
+          ],
+          "price": 12.5,
+          "price_text": "¥12.50",
+          "available_quantity": 990,
+          "image_url": "",
+          "raw_weight": "190g",
+          "raw_text": "枫叶+小南瓜 / 6米40灯（USB款常亮）",
+          "weight_g": 190,
+          "package_length_cm": 20,
+          "package_width_cm": 12,
+          "package_height_cm": 5,
+          "dimensions_display": "20 × 12 × 5 cm"
+        },
+        {
+          "id": "6137933973777",
+          "sku_id": "6137933973777",
+          "seller_sku": "",
+          "label": "枫叶+切面南瓜 / 3米20灯（2节常亮电池盒）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + faceted pumpkin, 3 m 20 lights, 2 AA battery box steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 7.5,
+          "price_text": "¥7.50",
+          "available_quantity": 991,
+          "image_url": "",
+          "raw_weight": "77g",
+          "raw_text": "枫叶+切面南瓜 / 3米20灯（2节常亮电池盒）",
+          "weight_g": 77,
+          "package_length_cm": 22,
+          "package_width_cm": 12,
+          "package_height_cm": 6,
+          "dimensions_display": "22 × 12 × 6 cm"
+        },
+        {
+          "id": "6137933973778",
+          "sku_id": "6137933973778",
+          "seller_sku": "",
+          "label": "枫叶+切面南瓜 / 1.5米10灯 （2节常亮电池盒）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + faceted pumpkin, 1.5 m 10 lights, 2 AA battery box steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "1.5 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "10"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 4,
+          "price_text": "¥4.00",
+          "available_quantity": 972,
+          "image_url": "",
+          "raw_weight": "47g",
+          "raw_text": "枫叶+切面南瓜 / 1.5米10灯 （2节常亮电池盒）",
+          "weight_g": 47,
+          "package_length_cm": 18,
+          "package_width_cm": 9,
+          "package_height_cm": 3.5,
+          "dimensions_display": "18 × 9 × 3.5 cm"
+        },
+        {
+          "id": "6137933973779",
+          "sku_id": "6137933973779",
+          "seller_sku": "",
+          "label": "枫叶+切面南瓜 / 6米40灯（USB款常亮）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + faceted pumpkin, 6 m 40 lights, USB steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "6 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Domestic current",
+              "value_id": "49713698"
+            }
+          ],
+          "price": 15.5,
+          "price_text": "¥15.50",
+          "available_quantity": 988,
+          "image_url": "",
+          "raw_weight": "125g",
+          "raw_text": "枫叶+切面南瓜 / 6米40灯（USB款常亮）",
+          "weight_g": 125,
+          "package_length_cm": 23,
+          "package_width_cm": 13,
+          "package_height_cm": 8,
+          "dimensions_display": "23 × 13 × 8 cm"
+        },
+        {
+          "id": "6137933973780",
+          "sku_id": "6137933973780",
+          "seller_sku": "",
+          "label": "枫叶+切面南瓜 / 3米20灯 （3节电池盒带闪）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + faceted pumpkin, 3 m 20 lights, 3 AA battery box flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 8,
+          "price_text": "¥8.00",
+          "available_quantity": 978,
+          "image_url": "",
+          "raw_weight": "87g",
+          "raw_text": "枫叶+切面南瓜 / 3米20灯 （3节电池盒带闪）",
+          "weight_g": 87,
+          "package_length_cm": 22,
+          "package_width_cm": 12,
+          "package_height_cm": 6,
+          "dimensions_display": "22 × 12 × 6 cm"
+        },
+        {
+          "id": "6137933973781",
+          "sku_id": "6137933973781",
+          "seller_sku": "",
+          "label": "枫叶+切面南瓜 / 3米20灯 （3节电池盒+USB双用）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + faceted pumpkin, 3 m 20 lights, 3 AA battery box + USB dual use"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery/Domestic current",
+              "value_id": "54973049"
+            }
+          ],
+          "price": 8.5,
+          "price_text": "¥8.50",
+          "available_quantity": 978,
+          "image_url": "",
+          "raw_weight": "92g",
+          "raw_text": "枫叶+切面南瓜 / 3米20灯 （3节电池盒+USB双用）",
+          "weight_g": 92,
+          "package_length_cm": 22,
+          "package_width_cm": 12,
+          "package_height_cm": 6,
+          "dimensions_display": "22 × 12 × 6 cm"
+        },
+        {
+          "id": "6137933973782",
+          "sku_id": "6137933973782",
+          "seller_sku": "",
+          "label": "枫叶+切面南瓜 / 6米40灯（ 3节电池盒带闪）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + faceted pumpkin, 6 m 40 lights, 3 AA battery box flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "6 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Battery",
+              "value_id": "4491927"
+            }
+          ],
+          "price": 15.5,
+          "price_text": "¥15.50",
+          "available_quantity": 981,
+          "image_url": "",
+          "raw_weight": "144g",
+          "raw_text": "枫叶+切面南瓜 / 6米40灯（ 3节电池盒带闪）",
+          "weight_g": 144,
+          "package_length_cm": 23,
+          "package_width_cm": 13,
+          "package_height_cm": 8,
+          "dimensions_display": "23 × 13 × 8 cm"
+        },
+        {
+          "id": "6137933973783",
+          "sku_id": "6137933973783",
+          "seller_sku": "",
+          "label": "枫叶+切面南瓜 / 3米20灯 （USB款常亮）",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Maple leaf + faceted pumpkin, 3 m 20 lights, USB steady on"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3 m"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            },
+            {
+              "id": "POWER_SUPPLY_TYPE",
+              "name": "Power supply type",
+              "value_name": "Domestic current",
+              "value_id": "49713698"
+            }
+          ],
+          "price": 8.5,
+          "price_text": "¥8.50",
+          "available_quantity": 996,
+          "image_url": "",
+          "raw_weight": "68g",
+          "raw_text": "枫叶+切面南瓜 / 3米20灯 （USB款常亮）",
+          "weight_g": 68,
+          "package_length_cm": 22,
+          "package_width_cm": 12,
+          "package_height_cm": 6,
+          "dimensions_display": "22 × 12 × 6 cm"
+        }
+      ],
+      "category_prediction_query": "LED maple leaf and pumpkin string lights",
+      "attributes": [
+        {
+          "id": "BRAND",
+          "name": "Brand",
+          "value_name": "Generic"
+        },
+        {
+          "id": "LIGHT_TYPE",
+          "name": "Light type",
+          "value_name": "LED",
+          "value_id": "1123747"
+        },
+        {
+          "id": "POWER_SUPPLY_TYPE",
+          "name": "Power supply type",
+          "value_name": "Battery",
+          "value_id": "4491927"
+        },
+        {
+          "id": "AMBIENTS",
+          "name": "Ambients",
+          "value_name": "Indoor",
+          "value_id": "115340"
+        },
+        {
+          "id": "PRESENTATION_TYPE",
+          "name": "Presentation type",
+          "value_name": "String",
+          "value_id": "3955608"
+        },
+        {
+          "id": "INCLUDES_CELL_BATTERIES",
+          "name": "Includes cell batteries",
+          "value_name": "No",
+          "value_id": "242084"
+        },
+        {
+          "id": "WITH_REMOTE_CONTROL",
+          "name": "With remote control",
+          "value_name": "No",
+          "value_id": "242084"
+        },
+        {
+          "id": "CELL_BATTERY_TYPE",
+          "name": "Cell battery type",
+          "value_name": "AA",
+          "value_id": "6178424"
+        },
+        {
+          "id": "EMPTY_GTIN_REASON",
+          "name": "Empty GTIN reason",
+          "value_name": "The product does not have registered code",
+          "value_id": "17055160"
+        },
+        {
+          "id": "PACKAGE_HEIGHT",
+          "name": "Package height",
+          "value_name": "10 cm"
+        },
+        {
+          "id": "PACKAGE_WIDTH",
+          "name": "Package width",
+          "value_name": "10 cm"
+        },
+        {
+          "id": "PACKAGE_LENGTH",
+          "name": "Package length",
+          "value_name": "20 cm"
+        },
+        {
+          "id": "PACKAGE_WEIGHT",
+          "name": "Package weight",
+          "value_name": "110.9524 g"
+        }
+      ],
+      "missing_required_attributes": []
+    }
+  },
+  {
+    "id": 13088988,
+    "error": "自动映射已尝试 3 次：AI 变体选项 1 的属性不符合目标分类（属性ID重复：LENGTH=7 cm），未保存"
+  },
+  {
+    "id": 13088989,
+    "result": {
+      "category_id": "CBT399139",
+      "category_name": "Solar Lights",
+      "variations": [
+        {
+          "id": "6300340250298",
+          "sku_id": "6300340250298",
+          "seller_sku": "",
+          "label": "一拖五黑管鬼脸 / 常规",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "One drag five black tube ghost face"
+            },
+            {
+              "id": "COLOR",
+              "name": "Structure color",
+              "value_name": "Black",
+              "value_id": "52049"
+            }
+          ],
+          "price": 21.87,
+          "price_text": "¥21.87",
+          "available_quantity": 9886,
+          "image_url": "",
+          "raw_weight": "500g",
+          "raw_text": "一拖五黑管鬼脸 / 常规",
+          "weight_g": 500
+        },
+        {
+          "id": "6300340250299",
+          "sku_id": "6300340250299",
+          "seller_sku": "",
+          "label": "一拖五红白管鬼脸 / 常规",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "One drag five red and white tube ghost face"
+            },
+            {
+              "id": "COLOR",
+              "name": "Structure color",
+              "value_name": "Red",
+              "value_id": "51993"
+            }
+          ],
+          "price": 22.55,
+          "price_text": "¥22.55",
+          "available_quantity": 9999,
+          "image_url": "",
+          "raw_weight": "500g",
+          "raw_text": "一拖五红白管鬼脸 / 常规",
+          "weight_g": 500
+        }
+      ],
+      "category_prediction_query": "Solar ghost face garden light",
+      "attributes": [
+        {
+          "id": "BRAND",
+          "name": "Brand",
+          "value_name": "Generic",
+          "value_id": "35977846"
+        },
+        {
+          "id": "SALE_FORMAT",
+          "name": "Sale format",
+          "value_name": "Unit",
+          "value_id": "1359391"
+        },
+        {
+          "id": "EMPTY_GTIN_REASON",
+          "name": "Empty GTIN reason",
+          "value_name": "The product does not have registered code",
+          "value_id": "17055160"
+        },
+        {
+          "id": "SAT_KEY",
+          "name": "Sat key",
+          "value_name": "Does not exist in the catalog",
+          "value_id": "82021094"
+        },
+        {
+          "id": "MEASURE_UNIT_KEY",
+          "name": "Measure unit key",
+          "value_name": "Does not exist in the catalog",
+          "value_id": "82021108"
+        },
+        {
+          "id": "LIGHT_SOURCES_TYPES",
+          "name": "Light sources types",
+          "value_name": "LED",
+          "value_id": "7387210"
+        },
+        {
+          "id": "POWER_SUPPLY_TYPE",
+          "name": "Power supply type",
+          "value_name": "Solar energy",
+          "value_id": "38547771"
+        },
+        {
+          "id": "MOUNTING_PLACES",
+          "name": "Mounting places",
+          "value_name": "Floor",
+          "value_id": "963439"
+        },
+        {
+          "id": "MATERIALS",
+          "name": "Materials",
+          "value_name": "Plastic",
+          "value_id": "2748302"
+        },
+        {
+          "id": "INCLUDES_BULBS",
+          "name": "Includes bulbs",
+          "value_name": "Yes",
+          "value_id": "242085"
+        },
+        {
+          "id": "IS_WIRELESS",
+          "name": "Is wireless",
+          "value_name": "Yes",
+          "value_id": "242085"
+        },
+        {
+          "id": "PACKAGE_WEIGHT",
+          "name": "Package weight",
+          "value_name": "500 g"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Item condition",
+          "value_name": "New",
+          "value_id": "2230284"
+        },
+        {
+          "id": "IS_KIT",
+          "name": "Is kit",
+          "value_name": "No",
+          "value_id": "242084"
+        }
+      ],
+      "missing_required_attributes": [
+        {
+          "id": "PACKAGE_HEIGHT",
+          "name": "Package height"
+        },
+        {
+          "id": "PACKAGE_WIDTH",
+          "name": "Package width"
+        },
+        {
+          "id": "PACKAGE_LENGTH",
+          "name": "Package length"
+        }
+      ]
+    }
+  },
+  {
+    "id": 13088987,
+    "result": {
+      "category_id": "CBT116631",
+      "category_name": "Fairy Lights",
+      "variations": [
+        {
+          "id": "5759762912604",
+          "sku_id": "5759762912604",
+          "seller_sku": "",
+          "label": "方南瓜 / 2米20灯二节常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Square pumpkin 2m 20 lights two-section steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "2"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            }
+          ],
+          "price": 6,
+          "price_text": "¥6.00",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "方南瓜 / 2米20灯二节常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5759762912606",
+          "sku_id": "5759762912606",
+          "seller_sku": "",
+          "label": "方南瓜 / 3米30灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Square pumpkin 3m 30 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            }
+          ],
+          "price": 9.4,
+          "price_text": "¥9.40",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "方南瓜 / 3米30灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5759762912607",
+          "sku_id": "5759762912607",
+          "seller_sku": "",
+          "label": "方南瓜 / 5米50灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Square pumpkin 5m 50 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            }
+          ],
+          "price": 13,
+          "price_text": "¥13.00",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "方南瓜 / 5米50灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5759762912609",
+          "sku_id": "5759762912609",
+          "seller_sku": "",
+          "label": "圆南瓜 / 2米20灯二节常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Round pumpkin 2m 20 lights two-section steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "2"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            }
+          ],
+          "price": 6,
+          "price_text": "¥6.00",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "圆南瓜 / 2米20灯二节常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5759762912611",
+          "sku_id": "5759762912611",
+          "seller_sku": "",
+          "label": "圆南瓜 / 3米30灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Round pumpkin 3m 30 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            }
+          ],
+          "price": 9.4,
+          "price_text": "¥9.40",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "圆南瓜 / 3米30灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5759762912612",
+          "sku_id": "5759762912612",
+          "seller_sku": "",
+          "label": "圆南瓜 / 5米50灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Round pumpkin 5m 50 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            }
+          ],
+          "price": 13,
+          "price_text": "¥13.00",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "圆南瓜 / 5米50灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5759762912614",
+          "sku_id": "5759762912614",
+          "seller_sku": "",
+          "label": "大南瓜 / 2米20灯二节常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Large pumpkin 2m 20 lights two-section steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "2"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            }
+          ],
+          "price": 6.2,
+          "price_text": "¥6.20",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "大南瓜 / 2米20灯二节常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5759762912616",
+          "sku_id": "5759762912616",
+          "seller_sku": "",
+          "label": "大南瓜 / 3米30灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Large pumpkin 3m 30 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            }
+          ],
+          "price": 9.5,
+          "price_text": "¥9.50",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "大南瓜 / 3米30灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5759762912617",
+          "sku_id": "5759762912617",
+          "seller_sku": "",
+          "label": "大南瓜 / 5米50灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Large pumpkin 5m 50 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            }
+          ],
+          "price": 13.7,
+          "price_text": "¥13.70",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "大南瓜 / 5米50灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401319",
+          "sku_id": "5992618401319",
+          "seller_sku": "",
+          "label": "圆南瓜 / 5米50灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Round pumpkin 5m 50 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 16.2,
+          "price_text": "¥16.20",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "圆南瓜 / 5米50灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401320",
+          "sku_id": "5992618401320",
+          "seller_sku": "",
+          "label": "大南瓜 / 5米50灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Large pumpkin 5m 50 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 16.9,
+          "price_text": "¥16.90",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "大南瓜 / 5米50灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401321",
+          "sku_id": "5992618401321",
+          "seller_sku": "",
+          "label": "方南瓜 / 5米50灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Square pumpkin 5m 50 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 16.2,
+          "price_text": "¥16.20",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "方南瓜 / 5米50灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401322",
+          "sku_id": "5992618401322",
+          "seller_sku": "",
+          "label": "圆南瓜 / 4米40灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Round pumpkin 4m 40 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 15,
+          "price_text": "¥15.00",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "圆南瓜 / 4米40灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401323",
+          "sku_id": "5992618401323",
+          "seller_sku": "",
+          "label": "大南瓜 / 4米40灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Large pumpkin 4m 40 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 15.5,
+          "price_text": "¥15.50",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "大南瓜 / 4米40灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401324",
+          "sku_id": "5992618401324",
+          "seller_sku": "",
+          "label": "方南瓜 / 4米40灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Square pumpkin 4m 40 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 15,
+          "price_text": "¥15.00",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "方南瓜 / 4米40灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401325",
+          "sku_id": "5992618401325",
+          "seller_sku": "",
+          "label": "圆南瓜 / 4米40灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Round pumpkin 4m 40 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 13.9,
+          "price_text": "¥13.90",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "圆南瓜 / 4米40灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401326",
+          "sku_id": "5992618401326",
+          "seller_sku": "",
+          "label": "大南瓜 / 4米40灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Large pumpkin 4m 40 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 14.2,
+          "price_text": "¥14.20",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "大南瓜 / 4米40灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401327",
+          "sku_id": "5992618401327",
+          "seller_sku": "",
+          "label": "方南瓜 / 4米40灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Square pumpkin 4m 40 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 13.9,
+          "price_text": "¥13.90",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "方南瓜 / 4米40灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401328",
+          "sku_id": "5992618401328",
+          "seller_sku": "",
+          "label": "圆南瓜 / 4米40灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Round pumpkin 4m 40 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            }
+          ],
+          "price": 11.4,
+          "price_text": "¥11.40",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "圆南瓜 / 4米40灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401329",
+          "sku_id": "5992618401329",
+          "seller_sku": "",
+          "label": "大南瓜 / 4米40灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Large pumpkin 4m 40 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            }
+          ],
+          "price": 11.7,
+          "price_text": "¥11.70",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "大南瓜 / 4米40灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401330",
+          "sku_id": "5992618401330",
+          "seller_sku": "",
+          "label": "方南瓜 / 4米40灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Square pumpkin 4m 40 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            }
+          ],
+          "price": 11.4,
+          "price_text": "¥11.40",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "方南瓜 / 4米40灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401331",
+          "sku_id": "5992618401331",
+          "seller_sku": "",
+          "label": "圆南瓜 / 5米5灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Round pumpkin 5m 5 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "5"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 16.9,
+          "price_text": "¥16.90",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "圆南瓜 / 5米5灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401332",
+          "sku_id": "5992618401332",
+          "seller_sku": "",
+          "label": "大南瓜 / 5米5灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Large pumpkin 5m 5 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "5"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 17.6,
+          "price_text": "¥17.60",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "大南瓜 / 5米5灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401333",
+          "sku_id": "5992618401333",
+          "seller_sku": "",
+          "label": "方南瓜 / 5米5灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Square pumpkin 5m 5 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "5"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 16.9,
+          "price_text": "¥16.90",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "方南瓜 / 5米5灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401334",
+          "sku_id": "5992618401334",
+          "seller_sku": "",
+          "label": "圆南瓜 / 4米40灯USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Round pumpkin 4m 40 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            }
+          ],
+          "price": 10.6,
+          "price_text": "¥10.60",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "圆南瓜 / 4米40灯USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401335",
+          "sku_id": "5992618401335",
+          "seller_sku": "",
+          "label": "大南瓜 / 4米40灯USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Large pumpkin 4m 40 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            }
+          ],
+          "price": 10.9,
+          "price_text": "¥10.90",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "大南瓜 / 4米40灯USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401336",
+          "sku_id": "5992618401336",
+          "seller_sku": "",
+          "label": "方南瓜 / 4米40灯USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Square pumpkin 4m 40 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            }
+          ],
+          "price": 10.6,
+          "price_text": "¥10.60",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "方南瓜 / 4米40灯USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401337",
+          "sku_id": "5992618401337",
+          "seller_sku": "",
+          "label": "圆南瓜 / 5米50灯USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Round pumpkin 5m 50 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            }
+          ],
+          "price": 12.4,
+          "price_text": "¥12.40",
+          "available_quantity": 99998,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "圆南瓜 / 5米50灯USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401338",
+          "sku_id": "5992618401338",
+          "seller_sku": "",
+          "label": "大南瓜 / 5米50灯USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Large pumpkin 5m 50 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            }
+          ],
+          "price": 12.8,
+          "price_text": "¥12.80",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "大南瓜 / 5米50灯USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "5992618401339",
+          "sku_id": "5992618401339",
+          "seller_sku": "",
+          "label": "方南瓜 / 5米50灯USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Square pumpkin 5m 50 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            }
+          ],
+          "price": 12.4,
+          "price_text": "¥12.40",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "方南瓜 / 5米50灯USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6157157750927",
+          "sku_id": "6157157750927",
+          "seller_sku": "",
+          "label": "圆南瓜 / 3米30灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Round pumpkin 3m 30 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "圆南瓜 / 3米30灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6157157750928",
+          "sku_id": "6157157750928",
+          "seller_sku": "",
+          "label": "大南瓜 / 3米30灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Large pumpkin 3m 30 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 12.47,
+          "price_text": "¥12.47",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "大南瓜 / 3米30灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6157157750929",
+          "sku_id": "6157157750929",
+          "seller_sku": "",
+          "label": "方南瓜 / 3米30灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Square pumpkin 3m 30 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 12.35,
+          "price_text": "¥12.35",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "方南瓜 / 3米30灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6157157750930",
+          "sku_id": "6157157750930",
+          "seller_sku": "",
+          "label": "圆南瓜 / 3米30灯 USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Round pumpkin 3m 30 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            }
+          ],
+          "price": 8.55,
+          "price_text": "¥8.55",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "圆南瓜 / 3米30灯 USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6157157750931",
+          "sku_id": "6157157750931",
+          "seller_sku": "",
+          "label": "大南瓜 / 3米30灯 USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Large pumpkin 3m 30 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            }
+          ],
+          "price": 8.72,
+          "price_text": "¥8.72",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "大南瓜 / 3米30灯 USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6157157750932",
+          "sku_id": "6157157750932",
+          "seller_sku": "",
+          "label": "方南瓜 / 3米30灯 USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Square pumpkin 3m 30 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            }
+          ],
+          "price": 8.55,
+          "price_text": "¥8.55",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "方南瓜 / 3米30灯 USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6157157750933",
+          "sku_id": "6157157750933",
+          "seller_sku": "",
+          "label": "圆南瓜 / 1米10灯 二节常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Round pumpkin 1m 10 lights two-section steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "1"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "10"
+            }
+          ],
+          "price": 3.9,
+          "price_text": "¥3.90",
+          "available_quantity": 99981,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "圆南瓜 / 1米10灯 二节常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6157157750934",
+          "sku_id": "6157157750934",
+          "seller_sku": "",
+          "label": "大南瓜 / 1米10灯 二节常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Large pumpkin 1m 10 lights two-section steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "1"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "10"
+            }
+          ],
+          "price": 4.1,
+          "price_text": "¥4.10",
+          "available_quantity": 99997,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "大南瓜 / 1米10灯 二节常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6157157750935",
+          "sku_id": "6157157750935",
+          "seller_sku": "",
+          "label": "方南瓜 / 1米10灯 二节常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Square pumpkin 1m 10 lights two-section steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "1"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "10"
+            }
+          ],
+          "price": 3.9,
+          "price_text": "¥3.90",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "方南瓜 / 1米10灯 二节常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6157157750936",
+          "sku_id": "6157157750936",
+          "seller_sku": "",
+          "label": "圆南瓜 / 3米30灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Round pumpkin 3m 30 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "圆南瓜 / 3米30灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6157157750937",
+          "sku_id": "6157157750937",
+          "seller_sku": "",
+          "label": "大南瓜 / 3米30灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Large pumpkin 3m 30 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 13.5,
+          "price_text": "¥13.50",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "大南瓜 / 3米30灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6157157750938",
+          "sku_id": "6157157750938",
+          "seller_sku": "",
+          "label": "方南瓜 / 3米30灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Square pumpkin 3m 30 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 13.3,
+          "price_text": "¥13.30",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "方南瓜 / 3米30灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551399",
+          "sku_id": "6299771551399",
+          "seller_sku": "",
+          "label": "蜘蛛 / 5米50灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Spider 5m 50 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 16.9,
+          "price_text": "¥16.90",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "蜘蛛 / 5米50灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551400",
+          "sku_id": "6299771551400",
+          "seller_sku": "",
+          "label": "幽灵 / 5米50灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Ghost 5m 50 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 16.9,
+          "price_text": "¥16.90",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "幽灵 / 5米50灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551401",
+          "sku_id": "6299771551401",
+          "seller_sku": "",
+          "label": "蜘蛛 / 4米40灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Spider 4m 40 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 15.5,
+          "price_text": "¥15.50",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "蜘蛛 / 4米40灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551402",
+          "sku_id": "6299771551402",
+          "seller_sku": "",
+          "label": "幽灵 / 4米40灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Ghost 4m 40 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 15.5,
+          "price_text": "¥15.50",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "幽灵 / 4米40灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551403",
+          "sku_id": "6299771551403",
+          "seller_sku": "",
+          "label": "蜘蛛 / 3米30灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Spider 3m 30 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 12.47,
+          "price_text": "¥12.47",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "蜘蛛 / 3米30灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551404",
+          "sku_id": "6299771551404",
+          "seller_sku": "",
+          "label": "幽灵 / 3米30灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Ghost 3m 30 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 12.47,
+          "price_text": "¥12.47",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "幽灵 / 3米30灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551405",
+          "sku_id": "6299771551405",
+          "seller_sku": "",
+          "label": "蜘蛛 / 4米40灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Spider 4m 40 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 14.2,
+          "price_text": "¥14.20",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "蜘蛛 / 4米40灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551406",
+          "sku_id": "6299771551406",
+          "seller_sku": "",
+          "label": "幽灵 / 4米40灯USB遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Ghost 4m 40 lights USB remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 14.2,
+          "price_text": "¥14.20",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "幽灵 / 4米40灯USB遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551407",
+          "sku_id": "6299771551407",
+          "seller_sku": "",
+          "label": "蜘蛛 / 4米40灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Spider 4m 40 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            }
+          ],
+          "price": 13.7,
+          "price_text": "¥13.70",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "蜘蛛 / 4米40灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551408",
+          "sku_id": "6299771551408",
+          "seller_sku": "",
+          "label": "幽灵 / 4米40灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Ghost 4m 40 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            }
+          ],
+          "price": 13.7,
+          "price_text": "¥13.70",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "幽灵 / 4米40灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551409",
+          "sku_id": "6299771551409",
+          "seller_sku": "",
+          "label": "蜘蛛 / 3米30灯 USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Spider 3m 30 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            }
+          ],
+          "price": 8.72,
+          "price_text": "¥8.72",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "蜘蛛 / 3米30灯 USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551410",
+          "sku_id": "6299771551410",
+          "seller_sku": "",
+          "label": "幽灵 / 3米30灯 USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Ghost 3m 30 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            }
+          ],
+          "price": 8.72,
+          "price_text": "¥8.72",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "幽灵 / 3米30灯 USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551411",
+          "sku_id": "6299771551411",
+          "seller_sku": "",
+          "label": "蜘蛛 / 1米10灯 二节常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Spider 1m 10 lights two-section steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "1"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "10"
+            }
+          ],
+          "price": 4.1,
+          "price_text": "¥4.10",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "蜘蛛 / 1米10灯 二节常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551412",
+          "sku_id": "6299771551412",
+          "seller_sku": "",
+          "label": "幽灵 / 1米10灯 二节常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Ghost 1m 10 lights two-section steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "1"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "10"
+            }
+          ],
+          "price": 4.1,
+          "price_text": "¥4.10",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "幽灵 / 1米10灯 二节常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551413",
+          "sku_id": "6299771551413",
+          "seller_sku": "",
+          "label": "蜘蛛 / 3米30灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Spider 3m 30 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 13.5,
+          "price_text": "¥13.50",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "蜘蛛 / 3米30灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551414",
+          "sku_id": "6299771551414",
+          "seller_sku": "",
+          "label": "幽灵 / 3米30灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Ghost 3m 30 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 13.5,
+          "price_text": "¥13.50",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "幽灵 / 3米30灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551415",
+          "sku_id": "6299771551415",
+          "seller_sku": "",
+          "label": "蜘蛛 / 5米5灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Spider 5m 5 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "5"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 17.6,
+          "price_text": "¥17.60",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "蜘蛛 / 5米5灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551416",
+          "sku_id": "6299771551416",
+          "seller_sku": "",
+          "label": "幽灵 / 5米5灯防水遥控8功能",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Ghost 5m 5 lights waterproof remote 8 functions"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "5"
+            },
+            {
+              "id": "WITH_REMOTE_CONTROL",
+              "name": "With remote control",
+              "value_name": "Yes",
+              "value_id": "242085"
+            }
+          ],
+          "price": 17.6,
+          "price_text": "¥17.60",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "幽灵 / 5米5灯防水遥控8功能",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551417",
+          "sku_id": "6299771551417",
+          "seller_sku": "",
+          "label": "蜘蛛 / 3米30灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Spider 3m 30 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            }
+          ],
+          "price": 9.5,
+          "price_text": "¥9.50",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "蜘蛛 / 3米30灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551418",
+          "sku_id": "6299771551418",
+          "seller_sku": "",
+          "label": "幽灵 / 3米30灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Ghost 3m 30 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "3"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "30"
+            }
+          ],
+          "price": 9.5,
+          "price_text": "¥9.50",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "幽灵 / 3米30灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551419",
+          "sku_id": "6299771551419",
+          "seller_sku": "",
+          "label": "蜘蛛 / 5米50灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Spider 5m 50 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            }
+          ],
+          "price": 10.9,
+          "price_text": "¥10.90",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "蜘蛛 / 5米50灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551420",
+          "sku_id": "6299771551420",
+          "seller_sku": "",
+          "label": "幽灵 / 5米50灯三节带闪",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Ghost 5m 50 lights three-section flashing"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            }
+          ],
+          "price": 10.9,
+          "price_text": "¥10.90",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "幽灵 / 5米50灯三节带闪",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551421",
+          "sku_id": "6299771551421",
+          "seller_sku": "",
+          "label": "蜘蛛 / 4米40灯USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Spider 4m 40 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            }
+          ],
+          "price": 11.7,
+          "price_text": "¥11.70",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "蜘蛛 / 4米40灯USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551422",
+          "sku_id": "6299771551422",
+          "seller_sku": "",
+          "label": "幽灵 / 4米40灯USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Ghost 4m 40 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "4"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "40"
+            }
+          ],
+          "price": 11.7,
+          "price_text": "¥11.70",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "幽灵 / 4米40灯USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551423",
+          "sku_id": "6299771551423",
+          "seller_sku": "",
+          "label": "蜘蛛 / 5米50灯USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Spider 5m 50 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            }
+          ],
+          "price": 12.8,
+          "price_text": "¥12.80",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "蜘蛛 / 5米50灯USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551424",
+          "sku_id": "6299771551424",
+          "seller_sku": "",
+          "label": "幽灵 / 5米50灯USB常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Ghost 5m 50 lights USB steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "5"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "50"
+            }
+          ],
+          "price": 12.8,
+          "price_text": "¥12.80",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "幽灵 / 5米50灯USB常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551425",
+          "sku_id": "6299771551425",
+          "seller_sku": "",
+          "label": "蜘蛛 / 2米20灯二节常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Spider 2m 20 lights two-section steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "2"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            }
+          ],
+          "price": 6.2,
+          "price_text": "¥6.20",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "蜘蛛 / 2米20灯二节常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        },
+        {
+          "id": "6299771551426",
+          "sku_id": "6299771551426",
+          "seller_sku": "",
+          "label": "幽灵 / 2米20灯二节常亮",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "Ghost 2m 20 lights two-section steady"
+            },
+            {
+              "id": "LENGTH",
+              "name": "Length",
+              "value_name": "2"
+            },
+            {
+              "id": "LIGHTS_NUMBER",
+              "name": "Lights number",
+              "value_name": "20"
+            }
+          ],
+          "price": 6.2,
+          "price_text": "¥6.20",
+          "available_quantity": 99999,
+          "image_url": "",
+          "raw_weight": "120g",
+          "raw_text": "幽灵 / 2米20灯二节常亮",
+          "weight_g": 120,
+          "package_length_cm": 10,
+          "package_width_cm": 10,
+          "package_height_cm": 10,
+          "dimensions_display": "10 × 10 × 10 cm"
+        }
+      ],
+      "category_prediction_query": "Halloween LED string lights with pumpkin, spider, and ghost shapes",
+      "attributes": [
+        {
+          "id": "BRAND",
+          "name": "Brand",
+          "value_name": "Generic"
+        },
+        {
+          "id": "LIGHT_TYPE",
+          "name": "Light type",
+          "value_name": "LED",
+          "value_id": "1123747"
+        },
+        {
+          "id": "POWER_SUPPLY_TYPE",
+          "name": "Power supply type",
+          "value_name": "Battery/Domestic current",
+          "value_id": "54973049"
+        },
+        {
+          "id": "AMBIENTS",
+          "name": "Ambients",
+          "value_name": "Indoor",
+          "value_id": "115340"
+        },
+        {
+          "id": "PRESENTATION_TYPE",
+          "name": "Presentation type",
+          "value_name": "String",
+          "value_id": "3955608"
+        },
+        {
+          "id": "PACKAGE_HEIGHT",
+          "name": "Package height",
+          "value_name": "10 cm"
+        },
+        {
+          "id": "PACKAGE_WIDTH",
+          "name": "Package width",
+          "value_name": "10 cm"
+        },
+        {
+          "id": "PACKAGE_LENGTH",
+          "name": "Package length",
+          "value_name": "10 cm"
+        },
+        {
+          "id": "PACKAGE_WEIGHT",
+          "name": "Package weight",
+          "value_name": "120 g"
+        },
+        {
+          "id": "WITH_REMOTE_CONTROL",
+          "name": "With remote control",
+          "value_name": "Yes",
+          "value_id": "242085"
+        },
+        {
+          "id": "INCLUDES_CELL_BATTERIES",
+          "name": "Includes cell batteries",
+          "value_name": "No",
+          "value_id": "242084"
+        },
+        {
+          "id": "CELL_BATTERY_TYPE",
+          "name": "Cell battery type",
+          "value_name": "AA",
+          "value_id": "6178424"
+        },
+        {
+          "id": "EMPTY_GTIN_REASON",
+          "name": "Empty GTIN reason",
+          "value_name": "The product does not have registered code",
+          "value_id": "17055160"
+        }
+      ],
+      "missing_required_attributes": []
+    }
+  }
+]

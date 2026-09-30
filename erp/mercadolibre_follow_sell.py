@@ -144,6 +144,9 @@ def _api_message(response: requests.Response) -> str:
         return response.text[:1000]
     if not isinstance(payload, dict):
         return str(payload)[:1000]
+    summary = publication_failure_summary(payload)
+    if summary:
+        return f"{summary}；平台原始错误：{json.dumps(payload, ensure_ascii=False, default=str)}"[:2000]
     message = payload.get("message") or payload.get("error")
     details = payload.get("cause")
     if message and details:
@@ -1672,8 +1675,8 @@ def _user_product_family_name(source: Mapping[str, Any]) -> str:
     return family_name[:60]
 
 
-def _user_product_identity_signature(attributes, schema):
-    """Dependent measurements do not distinguish UPs in Mercado's identity."""
+def _user_product_identity_signature(attributes, schema, family_name=""):
+    """Build a distinct identity from parent attributes and the family name."""
     identity_ids = {
         str(a.get("id")) for a in schema
         if a.get("hierarchy") in {"PARENT_PK", "CHILD_PK"}
@@ -1685,7 +1688,10 @@ def _user_product_identity_signature(attributes, schema):
             continue
         value = attribute.get("value_id") or attribute.get("value_name") or attribute.get("values")
         values.append((aid, value))
-    return json.dumps(sorted(values, key=lambda a: a[0]), sort_keys=True, ensure_ascii=False)
+    return json.dumps(
+        {"family_name": str(family_name or ""), "attributes": sorted(values, key=lambda a: a[0])},
+        sort_keys=True, ensure_ascii=False,
+    )
 
 
 def build_user_product_family_payload(
@@ -1736,7 +1742,16 @@ def build_user_product_family_payload(
             attributes[str(attribute.get("id") or attribute.get("name") or "").upper()] = attribute
         raw_variation = source["variations"][index - 1]
         from erp.mercadolibre_source_store import _package_attributes
-        for attribute in _package_attributes(raw_variation):
+        # A supplier variation's weight_g/raw_weight is product weight, not
+        # verified packed weight. Only explicitly reviewed package_weight_g
+        # may override the parent listing's measured package weight.
+        package_measurements = {
+            "weight_g": raw_variation.get("package_weight_g"),
+            "package_length_cm": raw_variation.get("package_length_cm"),
+            "package_width_cm": raw_variation.get("package_width_cm"),
+            "package_height_cm": raw_variation.get("package_height_cm"),
+        }
+        for attribute in _package_attributes(package_measurements):
             attributes[attribute["id"]] = attribute
         child["attributes"] = list(attributes.values())
         if (any(raw_variation.get(key) for key in ("picture_ids", "images", "image", "image_url"))
@@ -1744,9 +1759,22 @@ def build_user_product_family_payload(
             raise MercadoLibreError(f"变体 {index} 的图片无法解析，请重新采集变体图片")
         if raw_variation.get("price") is not None:
             child["price"] = raw_variation["price"]
-        child["pictures"] = [
-            {"source": url} for url in variation.get("picture_ids") or []
-        ] or pictures
+        variation_picture_urls = list(variation.get("picture_ids") or [])
+        main_picture_url = str(pictures[0].get("source") or "") if pictures else ""
+        # AI-original rows carry a locally generated white-background cover.
+        # Keep it first even when the supplier exposes per-variation photos;
+        # otherwise those photos replace the clean cover and can put seller
+        # banners/text back in the marketplace's moderation thumbnail.
+        is_ai_white_cover = "-ai-white." in urlparse(main_picture_url).path.lower()
+        if is_ai_white_cover and variation_picture_urls:
+            ordered_urls = list(dict.fromkeys([main_picture_url, *variation_picture_urls]))
+            child["pictures"] = [
+                {"source": url} for url in ordered_urls[:MAX_PICTURES_PER_LISTING]
+            ]
+        else:
+            child["pictures"] = [
+                {"source": url} for url in variation_picture_urls
+            ] or pictures
         payload = build_user_product_payload(
             client, child, description, site_id=site_id,
             quantity=quantity, net_proceeds=net_proceeds,
@@ -1758,14 +1786,29 @@ def build_user_product_family_payload(
             a for a in payload["attributes"] if a.get("id") != "SELLER_SKU"
         ] + [sku]
         payload["available_quantity"] = variation["available_quantity"]
-        payload["family_name"] = family_name
+        # If a variation dimension is dependent in Mercado's live schema,
+        # it cannot uniquely identify a User Product in attributes. Include
+        # its actual value in the family name so otherwise-identical variants
+        # (for example capes with the same color but different lengths) stay
+        # separate instead of conflicting or sharing stock.
+        schema_by_id = {str(a.get("id") or ""): a for a in schema}
+        dependent_values = [
+            str(a.get("value_name") or "").strip()
+            for a in variation.get("attribute_combinations") or []
+            if schema_by_id.get(str(a.get("id") or ""), {}).get("hierarchy") == "CHILD_DEPENDENT"
+            and str(a.get("value_name") or "").strip()
+        ]
+        variant_family_name = family_name
+        if dependent_values:
+            suffix = " ".join(dict.fromkeys(dependent_values))
+            variant_family_name = f"{family_name[: max(1, 60 - len(suffix) - 1)].rstrip()} {suffix}"[:60]
+        payload["family_name"] = variant_family_name
         if payload["category_id"] != category_id:
             raise MercadoLibreError(f"变体 {index} 的目标类目与 family 不一致")
-        signature = _user_product_identity_signature(payload["attributes"], schema)
+        signature = _user_product_identity_signature(payload["attributes"], schema, variant_family_name)
         if signature in signatures:
             raise MercadoLibreError(
-                f"变体 {index} 缺少可区分属性：平台仅按 PARENT_PK/CHILD_PK 识别商品，"
-                "长度等从属属性不能区分变体；请将原始尺码映射到类目的 SIZE 等身份属性，不能合并库存"
+                f"变体 {index} 缺少可区分属性或商品族名称，不能合并库存"
             )
         signatures.add(signature)
         payloads.append(payload)
@@ -1788,8 +1831,11 @@ def publication_failure_summary(raw):
             codes.add(value)
     visit(raw)
     hints = []
-    if "restrictions_coliving" in codes:
-        hints.append("平台拒绝当前账号的刊登模式（restrictions_coliving / seller.unable_to_list）；需核对目标站点 User Products 开通状态并联系平台确认限制")
+    if "restrictions_coliving" in codes or "seller.unable_to_list" in codes:
+        restriction_codes = " / ".join(sorted(codes & {"restrictions_coliving", "seller.unable_to_list"}))
+        hints.append(f"美客多已限制该店铺上传商品，当前无法上架；请前往美客多卖家后台查看账户限制，联系平台解除限制后再重试（{restriction_codes}）")
+    if "local_rate_limited" in codes or any(code.startswith("integration.rate_limited.") for code in codes):
+        hints.append("平台刊登服务限流（429）；请稍后重试失败项，部分成功时先核对已创建商品，避免重复刊登")
     if "item.dimensions" in codes:
         hints.append("平台判定包装尺寸或重量不符合真实测量（item.dimensions）；请核实实际包装长宽高和重量")
     if "user_product.repeated.conflict" in codes:
@@ -1816,12 +1862,11 @@ def _user_product_family_result(raw: Any, expected: int, site_id: str) -> dict[s
         if (not isinstance(row, Mapping) or row.get("error")
                 or not site or site.get("error") or not site.get("item_id")):
             errors.append(f"变体 {index}: {json.dumps(row, ensure_ascii=False)}")
-    family_ids = {
-        str(row["siteless_family_id"]) for row in rows
-        if isinstance(row, Mapping) and row.get("siteless_family_id")
-    }
-    if len(family_ids) > 1:
-        errors.append("平台返回了多个 family，请检查变体的公共属性")
+    # A catalog may classify different parent-level attribute combinations
+    # as separate families even when submitted in one request. Every UP can
+    # still have been created successfully; validate each target site item
+    # above and preserve all returned family IDs instead of misreporting this
+    # valid response as a failed publication.
     if errors:
         summary = publication_failure_summary(raw)
         exc = MercadoLibreError("User Products family 刊登未全部成功：" + (summary or "; ".join(errors)))
@@ -2169,7 +2214,7 @@ def follow_sell(
                 status_code = None
             raise MercadoLibreError(
                 f"目标站点 {destination_site_id} 刊登失败："
-                f"{json.dumps(dict(embedded_error), ensure_ascii=False)}",
+                f"{publication_failure_summary(embedded_error) or json.dumps(dict(embedded_error), ensure_ascii=False)}",
                 status_code=status_code,
             )
     timings["publish"] = time.perf_counter() - stage_started

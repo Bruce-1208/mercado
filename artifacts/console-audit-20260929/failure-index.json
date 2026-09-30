@@ -1,0 +1,487 @@
+[
+  {
+    "test": "tests.test_bit_access_control.test_account_initialization_only_writes_when_upgrade_needed[none]",
+    "message": "AssertionError: assert True is ('none' != 'none')\n +  where True = <function ensure_workbench_user_table at 0x13f684900>()\n +    where <function ensure_workbench_user_table at 0x13f684900> = bit_interface.ensure_workbench_user_table",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_ai_video.test_ai_video_routes_use_central_api",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_appeal_report.test_appeal_record_captures_executor_hostname",
+    "message": "AssertionError: assert {'runtime_rol...ame': '', ...} == {'runtime_rol...: 'appeal-pc'}\n  \n  Omitting 3 identical items, use -vv to show\n  Left contains 2 more items:\n  {'agent_id': '', 'agent_name': ''}\n  Use -v to get more diff",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_appeal_stability.test_send_confirmation_requires_new_echo_and_empty_input",
+    "message": "AssertionError: assert '' == 'new'\n  \n  - new",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_appeal_stability.test_ai_appeal_summary_persists_complete_chat_json",
+    "message": "AssertionError: assert [] == [{'conversati...xt': '已收到'}]}]\n  \n  Right contains one more item: {'conversation_id': 'case-1', 'epoch': 'epoch-1', 'messages': [{'id': 'u1', 'role': 'user', 'text': '请复核'}, {'id': 'a1', 'role': 'assistant', 'text': '已收到'}]}\n  Use -v to get more diff",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_appeal_stability.test_stop_after_click_preserves_possible_submission",
+    "message": "Failed: DID NOT RAISE AppealExecutionError",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_collection_orchestration.CollectionOrchestrationTests.test_concurrent_reputation_page_does_not_switch_global_clash",
+    "message": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'Mock'",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_daily_task.test_shop_executor_sends_expected_form[\\u4fb5\\u6743-\\u4fb5\\u6743]",
+    "message": "AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]\n  \n  At index 0 diff: ('测试店铺', 'MX', '侵权', '测试话术', {'validate_open': True, 'window_id': 'window-id', 'appeal_copy_mode': '普通模式'}) != ('测试店铺', 'MX', '侵权', '测试话术', {'validate_open': True, 'window_id': 'window-id'})\n  Use -v to get more diff",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_daily_task.test_shop_executor_sends_expected_form[\\u7981\\u9650\\u552e-\\u7981\\u9650\\u552e]",
+    "message": "AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]\n  \n  At index 0 diff: ('测试店铺', 'MX', '禁限售', '测试话术', {'validate_open': True, 'window_id': 'window-id', 'appeal_copy_mode': '普通模式'}) != ('测试店铺', 'MX', '禁限售', '测试话术', {'validate_open': True, 'window_id': 'window-id'})\n  Use -v to get more diff",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_daily_task.test_shop_executor_sends_expected_form[\\u5ef6\\u8bef\\u7387-\\u5ef6\\u8bef]",
+    "message": "AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]\n  \n  At index 0 diff: ('测试店铺', 'MX', '延误', '测试话术', {'validate_open': True, 'window_id': 'window-id', 'appeal_copy_mode': '普通模式'}) != ('测试店铺', 'MX', '延误', '测试话术', {'validate_open': True, 'window_id': 'window-id'})\n  Use -v to get more diff",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_daily_task.test_shop_executor_sends_expected_form[\\u53d6\\u6d88\\u7387-\\u53d6\\u6d88\\u7387]",
+    "message": "AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]\n  \n  At index 0 diff: ('测试店铺', 'MX', '取消率', '测试话术', {'validate_open': True, 'window_id': 'window-id', 'appeal_copy_mode': '普通模式'}) != ('测试店铺', 'MX', '取消率', '测试话术', {'validate_open': True, 'window_id': 'window-id'})\n  Use -v to get more diff",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_daily_task.test_shop_executor_sends_expected_form[\\u6295\\u8bc9-\\u6295\\u8bc9]",
+    "message": "AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]\n  \n  At index 0 diff: ('测试店铺', 'MX', '投诉', '测试话术', {'validate_open': True, 'window_id': 'window-id', 'appeal_copy_mode': '普通模式'}) != ('测试店铺', 'MX', '投诉', '测试话术', {'validate_open': True, 'window_id': 'window-id'})\n  Use -v to get more diff",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_high_after_sales.test_high_after_sale_api_passes_filters",
+    "message": "assert 500 == 200\n +  where 500 = <WrapperTestResponse streamed [500 INTERNAL SERVER ERROR]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_high_profits.test_high_profit_api_passes_filters",
+    "message": "assert 500 == 200\n +  where 500 = <WrapperTestResponse streamed [500 INTERNAL SERVER ERROR]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_workbench_splits_collection_and_product_list_into_separate_modules",
+    "message": "assert b'\\xe5\\x95\\x86\\xe5\\x93\\x81\\xe9\\x87\\x87\\xe9\\x9b\\x86' in b'<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-09-15-console-ui-v3\">\\n<head>\\n    <meta charset=\"UTF-8\">\\...t\"></script>\\n<script src=\"/static/order-management-details.js?v=20260929-outbound-detail\"></script>\\n</body>\\n</html>'\n +  where b'\\xe5\\x95\\x86\\xe5\\x93\\x81\\xe9\\x87\\x87\\xe9\\x9b\\x86' = <built-in method encode of str object at 0x14589bfa0>('utf-8')\n +    where <built-in method encode of str object at 0x14589bfa0> = '商品采集'.encode\n +  and   b'<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-09-15-console-ui-v3\">\\n<head>\\n    <meta charset=\"UTF-8\">\\...t\"></script>\\n<script src=\"/static/order-management-details.js?v=20260929-outbound-detail\"></script>\\n</body>\\n</html>' = <WrapperTestResponse 1859444 bytes [200 OK]>.data",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_official_shipping_rate_endpoints_list_and_start_refresh",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_start_collection_requests_login_setup_cleanup_before_running",
+    "message": "assert 403 == 200\n +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_start_collection_reports_when_login_setup_cannot_close",
+    "message": "assert 403 == 409\n +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_playwright_login_setup_starts_background_window",
+    "message": "assert 403 == 200\n +  where 403 = <WrapperTestResponse 190 bytes [403 FORBIDDEN]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_start_collection_passes_selected_browser_to_worker",
+    "message": "assert 403 == 200\n +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_collection_list_and_batch_add_endpoints",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_management_category_endpoints_support_crud_assignment_and_filtering",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_retry_publish_records_starts_grouped_background_task",
+    "message": "assert 500 == 200\n +  where 500 = <WrapperTestResponse 207 bytes [500 INTERNAL SERVER ERROR]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_start_collection_builds_country_url_from_keyword_and_scope",
+    "message": "assert 403 == 200\n +  where 403 = <WrapperTestResponse 190 bytes [403 FORBIDDEN]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_product_list_filters_and_review_status_endpoint",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_bulk_product_content_update_endpoint",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_collection_and_product_delete_endpoints",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_batch_publish_endpoint_starts_background_task_for_selected_store",
+    "message": "assert 403 == 200\n +  where 403 = <WrapperTestResponse 190 bytes [403 FORBIDDEN]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_batch_publish_endpoint_builds_all_compatible_account_site_targets",
+    "message": "KeyError: 'data'",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_batch_publish_endpoint_can_select_targets_by_site_group",
+    "message": "KeyError: 'data'",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_group_publish_endpoint_applies_strategy_and_historical_account_ownership",
+    "message": "KeyError: 'data'",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_batch_publish_endpoint_rejects_unsupported_site",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_batch_publish_endpoint_moves_unapproved_product_to_collection",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_batch_publish_endpoint_moves_missing_weight_back_to_collection",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_batch_publish_endpoint_ignores_missing_weight_and_starts_valid_rows",
+    "message": "KeyError: 'data'",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_batch_publish_endpoint_moves_nonpositive_net_to_collection",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_batch_publish_endpoint_rejects_nonpositive_worker_count",
+    "message": "assert 403 == 400\n +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_interface_mercado_collection.test_batch_publish_endpoint_rejects_cross_site_for_local_store",
+    "message": "assert 500 == 400\n +  where 500 = <WrapperTestResponse streamed [500 INTERNAL SERVER ERROR]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_inventory.test_matched_order_product_carries_order_context_into_inventory",
+    "message": "IndexError: pop from empty list",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_login_remember.test_wsgi_server_owns_lock_and_starts_services_once",
+    "message": "AssertionError: assert ['lock-create...-served', ...] == ['lock-create...ock-released']\n  \n  At index 2 diff: 'lock-created' != 'services-started'\n  Left contains 3 more items, first extra item: 'pools-closed'\n  Use -v to get more diff",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_login_remember.test_login_uses_fixed_72_hour_permanent_session",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_login_remember.test_login_expiry_is_72_hours_even_when_account_name_is_not_remembered",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_mercado_applications.test_browser_routes_manage_apps_and_change_store_app",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_mercado_reputation.test_console_reputation_route_returns_normalized_data_without_token",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_mercado_reputation.test_reputation_open_browser_queues_on_selected_agent_and_reports_status",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_mercado_reputation.test_api_reputation_selected_refresh_validates_scope",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_mercado_reputation.test_api_reputation_uses_latest_database_rows_before_first_manual_refresh",
+    "message": "AssertionError: assert {'store_name'...ame': '', ...} == {'store_name'...': '未分组', ...}\n  \n  Omitting 9 identical items, use -vv to show\n  Differing items:\n  {'group_name': ''} != {'group_name': '未分组'}\n  {'salesperson': ''} != {'salesperson': '未分配'}\n  Use -v to get more diff",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_mercado_tokens.test_browser_routes_return_metadata_and_accept_management_actions",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_mysql_orders.test_order_details_are_limited_before_expensive_joins",
+    "message": "AssertionError: assert 'ORDER BY `ordered_at` DESC, `id` DESC LIMIT %s OFFSET %s' in 'CREATE TEMPORARY TABLE `tmp_mercado_order_page` AS SELECT scoped.`id` FROM `tmp_mercado_order_filter_source` AS scope...scoped.`country` = %s ORDER BY scoped.`ordered_at` DESC, scoped.`ordered_at` DESC, scoped.`id` DESC LIMIT %s OFFSET %s'",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_order_management.test_workbench_contains_order_management_ui",
+    "message": "assert b'\\xe6\\x89\\x93\\xe5\\x8c\\x85\\xe5\\x8d\\x95\\xe5\\x8f\\xb7\\xe5\\x92\\x8c\\xe5\\xad\\x90\\xe8\\xae\\xa2\\xe5\\x8d\\x95\\xe5\\x8f\\xb7\\xe9\\x83\\xbd\\xe6\\x94\\xaf\\xe6\\x8c\\x81\\xe6\\x90\\x9c\\xe7\\xb4\\xa2' in b'<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-09-15-console-ui-v3\">\\n<head>\\n    <meta charset=\"UTF-8\">\\...t\"></script>\\n<script src=\"/static/order-management-details.js?v=20260929-outbound-detail\"></script>\\n</body>\\n</html>'\n +  where b'\\xe6\\x89\\x93\\xe5\\x8c\\x85\\xe5\\x8d\\x95\\xe5\\x8f\\xb7\\xe5\\x92\\x8c\\xe5\\xad\\x90\\xe8\\xae\\xa2\\xe5\\x8d\\x95\\xe5\\x8f\\xb7\\xe9\\x83\\xbd\\xe6\\x94\\xaf\\xe6\\x8c\\x81\\xe6\\x90\\x9c\\xe7\\xb4\\xa2' = <built-in method encode of str object at 0x145a2ed90>('utf-8')\n +    where <built-in method encode of str object at 0x145a2ed90> = '打包单号和子订单号都支持搜索'.encode\n +  and   b'<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-09-15-console-ui-v3\">\\n<head>\\n    <meta charset=\"UTF-8\">\\...t\"></script>\\n<script src=\"/static/order-management-details.js?v=20260929-outbound-detail\"></script>\\n</body>\\n</html>' = <WrapperTestResponse 1865226 bytes [200 OK]>.data",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_order_management.test_order_management_displays_pack_number_without_exposing_child_number",
+    "message": "assert b\"copyOrderNumber('${encodedDisplayNumber}', this)\" in b'<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-09-15-console-ui-v3\">\\n<head>\\n    <meta charset=\"UTF-8\">\\...t\"></script>\\n<script src=\"/static/order-management-details.js?v=20260929-outbound-detail\"></script>\\n</body>\\n</html>'\n +  where b'<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-09-15-console-ui-v3\">\\n<head>\\n    <meta charset=\"UTF-8\">\\...t\"></script>\\n<script src=\"/static/order-management-details.js?v=20260929-outbound-detail\"></script>\\n</body>\\n</html>' = <WrapperTestResponse 1865226 bytes [200 OK]>.data",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_order_management.test_order_api_passes_filters_and_pagination",
+    "message": "AssertionError: expected call not found.\nExpected: db_list_orders(country='巴西', status='找货', salesperson='张三', group_name='精品组', search='2000014667', start_date='2026-08-01', end_date='2026-08-23', origin='token', freight_variance='', page=2, page_size=25)\nActual: db_list_orders(country='巴西', status='找货', salesperson='张三', group_name='精品组', search='2000014667', remark_search='', start_date='2026-08-01', end_date='2026-08-23', origin='token', freight_variance='', sort_by='ordered_at', sort_dir='desc', page=2, page_size=25)",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_order_management.test_bulk_update_orders_supports_status_and_complete_purchase_order",
+    "message": "AssertionError: expected call not found.\nExpected: bulk_update_orders(['20001', '20002'], operator_id=1, operator_name='测试用户', workflow_status='配货', purchase_order='CG-20260824-01', purchase_tracking='SF123456', logistics_company='shunfeng', purchase_cost='88.50', purchase_remark='采购备注')\nActual: bulk_update_orders(['20001', '20002'], allowed_token_ids=None, operator_id=1, operator_name='测试用户', workflow_status='配货', purchase_order='CG-20260824-01', purchase_tracking='SF123456', logistics_company='shunfeng', purchase_cost='88.50', purchase_remark='采购备注')",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_order_management.test_purchase_tracking_sync_rejects_selected_order_without_purchase_number",
+    "message": "AssertionError: assert '尚未填写采购订单号' in '所选订单均未填写采购订单号'",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_order_management.test_non_warehouse_cannot_manually_set_waiting_to_ship_status",
+    "message": "TypeError: Object of type MagicMock is not JSON serializable",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_order_sync.test_order_sync_reads_official_shipment_status_in_parallel",
+    "message": "TypeError: _enrich_order_shipment_statuses() missing 1 required positional argument: 'token_id'",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_order_sync.test_daily_refresh_reads_every_non_final_old_shipment",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_order_sync.test_mysql_bulk_update_changes_only_authorized_store_orders",
+    "message": "ValueError: 请选择有效的订单状态",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_store_link_video.test_upload_route_and_missing_file",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_bit_zying_desktop_export_mysql.test_filter_verification_retries_transient_empty_salesperson",
+    "message": "AttributeError: <module 'pywinauto' from '/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pywinauto/__init__.py'> has no attribute 'Desktop'",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_bit_zying_desktop_export_mysql.test_scaled_coordinates_follow_actual_window_size",
+    "message": "AttributeError: <module 'ctypes' from '/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/ctypes/__init__.py'> has no attribute 'windll'",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_browser_extension_mail.test_browser_extension_notification_routes",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_erp_mercadolibre_follow_sell.test_category_discovery_retries_with_deterministic_english_keywords",
+    "message": "AssertionError: assert 'lamp' in 'Water wave light light light light light light light'",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_erp_mercadolibre_follow_sell.test_category_name_is_safer_fallback_than_a_non_english_title",
+    "message": "AssertionError: assert '/categories/...72/attributes' == '/marketplace...covery/search'\n  \n  - /marketplace/domain_discovery/search\n  + /categories/CBT373472/attributes",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_erp_mercadolibre_follow_sell.test_category_fallback_does_not_escape_to_an_unrelated_title_prediction",
+    "message": "AssertionError: assert 'CBT457501' == 'CBT7093'\n  \n  - CBT7093\n  + CBT457501",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_erp_mercadolibre_follow_sell.test_follow_sell_uses_rules_without_calling_translator_for_brazil_destination",
+    "message": "AssertionError: assert 'Test product' == 'Producto de prueba'\n  \n  - Producto de prueba\n  + Test product",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_local_agent_interface.test_console_download_enroll_heartbeat_and_list",
+    "message": "FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/bl/tjvzqw4s2lx10s4pclxd4kgh0000gn/T/pytest-of-a11/pytest-125/test_console_download_enroll_h0/install-agent-forever.ps1'",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_local_agent_interface.test_console_renders_agent_as_default_appeal_execution_target",
+    "message": "assert b'id=\"download-local-agent\"' in b'<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-09-15-console-ui-v3\">\\n<head>\\n    <meta charset=\"UTF-8\">\\...t\"></script>\\n<script src=\"/static/order-management-details.js?v=20260929-outbound-detail\"></script>\\n</body>\\n</html>'\n +  where b'<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-09-15-console-ui-v3\">\\n<head>\\n    <meta charset=\"UTF-8\">\\...t\"></script>\\n<script src=\"/static/order-management-details.js?v=20260929-outbound-detail\"></script>\\n</body>\\n</html>' = <WrapperTestResponse 1859174 bytes [200 OK]>.data",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_local_agent_interface.test_daily_task_uses_agent_queue_and_reports_logs[appeal_types0]",
+    "message": "assert 403 == 200\n +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_local_agent_interface.test_daily_task_uses_agent_queue_and_reports_logs[appeal_types1]",
+    "message": "assert 403 == 200\n +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_local_agent_interface.test_daily_agent_rejects_unavailable_executor[agent-missing-capabilities0-None]",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_local_agent_interface.test_daily_agent_rejects_unavailable_executor[agent-old-capabilities1-None]",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_local_agent_interface.test_daily_agent_rejects_unavailable_executor[agent-offline-capabilities2-1]",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_local_agent_interface.test_task_operator_can_enroll_and_list_daily_agents",
+    "message": "FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/bl/tjvzqw4s2lx10s4pclxd4kgh0000gn/T/pytest-of-a11/pytest-125/test_task_operator_can_enroll_0/install-agent-forever.ps1'",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_local_agent_worker.test_daily_worker_runs_with_shared_process_controls[False]",
+    "message": "OSError: AUDIT_NETWORK_BLOCKED: unix socket disabled",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_local_agent_worker.test_daily_worker_runs_with_shared_process_controls[True]",
+    "message": "OSError: AUDIT_NETWORK_BLOCKED: unix socket disabled",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_local_agent_worker.test_daily_worker_releases_lock_on_business_failure",
+    "message": "OSError: AUDIT_NETWORK_BLOCKED: unix socket disabled",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_mercado_communications.test_pre_sale_aggregate_queries_stores_with_thread_pool",
+    "message": "assert 403 == 200\n +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_mercado_communications.test_customer_service_aggregate_queries_claim_stores_with_thread_pool",
+    "message": "assert 403 == 200\n +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_mercado_communications.test_customer_service_aggregate_keeps_single_store_failure_isolated",
+    "message": "assert 403 == 200\n +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_mercado_communications.test_customer_service_view_can_read_but_cannot_reply",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_mercado_communications.test_customer_service_view_can_read_pre_sale_summary",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_mercado_communications.test_customer_service_view_can_request_pre_sale_translation",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_mercado_communications.test_pre_sale_workbench_module_has_filters_table_pagination_and_reply",
+    "message": "assert '线程完成查询' in '<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-09-15-console-ui-v3\">\\n<head>\\n    <meta charset=\"UTF-8\">\\n...for(\\'static\\', filename=\\'order-management-details.js\\') }}?v=20260929-outbound-detail\"></script>\\n</body>\\n</html>\\n'",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_mercado_communications.test_customer_service_manager_can_send_claim_message",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_mercadolibre_category_tree.test_category_paths_use_official_hierarchy_and_cache",
+    "message": "KeyError: 0",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_mercadolibre_category_tree.test_saved_paths_survive_process_cache_reset",
+    "message": "AssertionError: saved paths should avoid downloading the full catalog",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_shipment_compensation.test_saved_records_recompute_stale_freight_and_use_same_filter_for_count_and_rows",
+    "message": "assert False\n +  where False = <built-in method endswith of str object at 0x12f91c000>((\"`wdr_source_type` = %s AND COALESCE((SELECT COALESCE((SELECT SUM(adjustment.amount) FROM JSON_TABLE(\\n        CASE WH...d_json, '$.shipment_id'))\\n        AND costs.token_id = zying_weight_dimensions_records.wdr_store_token_id), 0) <= %s \" + 'ORDER BY `wdr_freight_changed_at` DESC, `id` DESC LIMIT %s OFFSET %s'))\n +    where <built-in method endswith of str object at 0x12f91c000> = \"SELECT `order_number`, `record_json`, `execution_logs_json` , (SELECT costs.payload_json FROM mercado_shipment_costs ... ORDER BY COALESCE(NULLIF(TRIM(REPLACE(`order_time`, 'T', ' ')), ''), '0000-00-00') DESC, `id` DESC LIMIT %s OFFSET %s\".endswith",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_store_link_audit.test_operation_type_includes_existing_http_and_worker_records[http_request-/api/store-links/bulk-update/status-GET-query]",
+    "message": "assert 0 == 1\n +  where 0 = len([])",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_store_link_audit.test_operation_type_includes_existing_http_and_worker_records[http_request-/api/store-links/category-paths-POST-query]",
+    "message": "assert 0 == 1\n +  where 0 = len([])",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_workbench_runtime_interface.test_client_mode_skips_all_central_background_services",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_workbench_runtime_interface.test_test_server_mode_skips_all_central_background_services",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_workbench_runtime_interface.test_server_mode_starts_reputation_and_order_sync_schedulers",
+    "message": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)\")",
+    "contains_network_guard": true
+  },
+  {
+    "test": "tests.test_zeshun_browser_extension.test_manifest_is_chrome_edge_manifest_v3_and_declares_supported_sites",
+    "message": "AssertionError: assert '1.8.29' == '1.8.28'\n  \n  - 1.8.28\n  ?      ^\n  + 1.8.29\n  ?      ^",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_zeshun_browser_extension.test_integrated_ai_weight_price_is_read_only_from_other_terminals",
+    "message": "assert 400 == 200\n +  where 400 = <WrapperTestResponse streamed [400 BAD REQUEST]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_zeshun_browser_extension.test_collection_ai_endpoint_requires_execute_and_queues_for_current_actor",
+    "message": "assert 500 == 200\n +  where 500 = <WrapperTestResponse streamed [500 INTERNAL SERVER ERROR]>.status_code",
+    "contains_network_guard": false
+  },
+  {
+    "test": "tests.test_zeshun_product_batch.test_batch_limits_pagination_concurrency_stop_and_recovery",
+    "message": "subprocess.CalledProcessError: Command '['/Users/a11/Library/pnpm/bin/node', '-e', \"\\nconst fs = require('fs');\\nconst vm = require('vm');\\nconst assert = require('assert/strict');\\nvm.runInThisContext(fs.readFileSync(process.argv[1], 'utf8'));\\nconst pause = ms => new Promise(resolve => setTimeout(resolve, ms));\\nconst stored = {};\\nglobal.storageGet = async () => structuredClone(stored);\\nglobal.storageSet = async (_, value) => { Object.assign(stored, structuredClone(value)); };\\nglobal.authSession = async () => ({token:'test'});\\nlet sequence = 0, active = 0, peak = 0, uploads = [], reads = [], failUpload = false;\\nconst tabCreates = [], activations = [], listAttempts = new Map(), detailAttempts = new Map();\\nlet currentActiveTab = 99;\\nlet nextWindowId = 500, createdWindows = [], closedWindows = [];\\nconst origin = 'https://listado.mercadolibre.com.mx/';\\nconst tabs = new Map([[99, {id:99, url:origin+'page1', status:'complete'}]]);\\nglobal.chrome = {runtime:{getPlatformInfo:cb => cb({})}, windows:{\\n  create:async options => { const created={id:++nextWindowId, tabs:[]}; createdWindows.push({id:created.id,options}); return created; },\\n  update:async () => ({}),\\n  remove:async id => { closedWindows.push(id); }\\n}, tabs:{\\n  get:async id => { if(!tabs.has(id)) throw Error('Tab closed'); return tabs.get(id); },\\n  create:async options => {\\n    const {url} = options;\\n    const tab = {id:++sequence,url:'about:blank',pendingUrl:url,status:'loading'}; tabs.set(tab.id,tab);\\n    tabCreates.push({id:tab.id,...options});\\n    if(options.active) currentActiveTab=tab.id;\\n    if(/\\\\/(?:MLM|CBT)-/.test(url)) { active++; peak=Math.max(peak,active); }\\n    return tab;\\n  },\\n  update:async (id, changes) => {\\n    if(!tabs.has(id)) throw Error('Tab closed');\\n    if(changes.active) { currentActiveTab=id; activations.push(id); }\\n    return tabs.get(id);\\n  },\\n  remove:async id => { if(/\\\\/(?:MLM|CBT)-/.test(tabs.get(id)?.pendingUrl || tabs.get(id)?.url || '')) active--; tabs.delete(id); }\\n}};\\nconst item = (id, profile='china') => ({\\n  url:origin+(profile==='managed'?'CBT-':'MLM-')+id, key:String(id),\\n  eligible:['china','managed'].includes(profile), isUsOrigin:profile==='us',\\n  isChinaOrigin:profile==='china', isManaged:profile==='managed'\\n});\\nconst lists = {\\n  page1:{ok:true,page:1,international_selected:true,next_url:origin+'page2',items:[item(1)]},\\n  page2:{ok:true,page:2,international_selected:false,next_url:origin+'page3',items:[item(1),item(2,'us'),item(3,'unknown'),item(4,'managed'),item(5)]},\\n  page3:{ok:true,page:3,international_selected:true,next_url:origin+'page4',items:[item(5),item(6),item(7)]},\\n  page4:{ok:true,page:4,international_selected:false,next_url:'',items:[]},\\n};\\nglobal.sendTabMessage = async (id, message) => {\\n  const url = tabs.get(id).pendingUrl || tabs.get(id).url;\\n  if(message.type==='CHECK_ZYING_PLUGIN') return {ok:true,found:true,logged_in:true};\\n  if(message.type==='READ_PRODUCT_LIST') {\\n    reads.push(url);\\n    if(id!==99) {\\n      const attempt=(listAttempts.get(id)||0)+1; listAttempts.set(id,attempt);\\n      if(attempt<2) return {ok:false,error:'等待列表页加载'};\\n    }\\n    return lists[url.split('/').pop().split(INTERNATIONAL_FILTER)[0]];\\n  }\\n  const attempt=(detailAttempts.get(id)||0)+1; detailAttempts.set(id,attempt);\\n  if(attempt<3) return {ok:false,error:'等待商品详情加载'};\\n  await pause(5);\\n  const productId=url.split('/').pop();\\n  const blocked=productId==='MLM-2' ? ['overseas_warehouse','海外仓'] : productId==='MLM-3' ? ['local_warehouse','本土仓'] : null;\\n  return {ok:true,product:{source_item_id:productId,title:'Test',plugin_snapshot:{\\n    sales:Number(productId.match(/\\\\d+/)[0]) * 10,\\n    fulfillment_type:blocked?.[0] || (productId.startsWith('CBT-') ? 'semi_managed' : 'self_ship'),\\n    fulfillment_label:blocked?.[1] || (productId.startsWith('CBT-') ? '半托管' : '自发货'),\\n    fulfillment_eligible:!blocked\\n  }}};\\n};\\nglobal.uploadProduct = async (product, options) => {\\n  assert.equal(options.openConsole,false);\\n  await pause(15);\\n  if(failUpload) throw Error('Upload failed');\\n  uploads.push(product.source_item_id);\\n};\\nconst params = {max_items:4,concurrency:2};\\nasync function waitDone() { while(productBatchRun) await pause(5); return getProductBatchStatus(); }\\n(async () => {\\n  for(const [country,host] of Object.entries(PRODUCT_SEARCH_HOSTS)) {\\n    const url=new URL(productSearchUrl(country,'café & niños'));\\n    assert.equal(url.hostname,host); assert.match(decodeURIComponent(url.pathname),/^\\\\/café-&-niños_NoIndex_True_SHIPPING\\\\*ORIGIN_10215069$/);\\n  }\\n  assert.throws(()=>productSearchUrl('XX','toy'));\\n  assert.throws(()=>productSearchUrl('MLM','  '));\\n  assert.throws(()=>productBatchUrl('https://mercadolibre.com.mx.evil.test/'));\\n  assert.match(forceInternationalUrl(origin+'toy'),/SHIPPING\\\\*ORIGIN_10215069/);\\n  assert.equal(forceInternationalUrl(productSearchUrl('MLM','toy')),productSearchUrl('MLM','toy'));\\n  for(const change of [{concurrency:0},{concurrency:11},{concurrency:1.5},{max_items:''},{max_items:501}])\\n    assert.throws(()=>productBatchParams({...params,...change}));\\n  assert.throws(()=>productBatchParams({...params,min_sales:20,max_sales:10}));\\n  assert.equal(productBatchParams({...params,min_sales:20,max_sales:40}).min_sales,20);\\n  assert.equal(productBatchEligibility({plugin_snapshot:{fulfillment_type:'local_warehouse',fulfillment_label:'本土仓',fulfillment_eligible:false,sales:99}},productBatchParams(params)).eligible,false);\\n  const salesParams=productBatchParams({...params,min_sales:20,max_sales:40});\\n  assert.equal(productBatchEligibility({plugin_snapshot:{fulfillment_type:'self_ship',fulfillment_label:'自发货',fulfillment_eligible:true,sales:30}},salesParams).eligible,true);\\n  assert.equal(productBatchEligibility({plugin_snapshot:{fulfillment_type:'semi_managed',fulfillment_label:'半托管',fulfillment_eligible:true,sales:10}},salesParams).eligible,false);\\n  assert.equal(productBatchEligibility({plugin_snapshot:{fulfillment_type:'self_ship',fulfillment_label:'自发货',fulfillment_eligible:true,sales:null}},salesParams).eligible,false);\\n  const starts=await Promise.allSettled([startProductBatch({tab_id:99,params}),startProductBatch({tab_id:99,params})]);\\n  assert.equal(starts.filter(x=>x.status==='fulfilled').length,1);\\n  const state=await waitDone();\\n  assert.equal(state.phase,'completed'); assert.equal(state.candidate_count,7);\\n  assert.equal(state.execution_window,'new_edge_window'); assert.equal(createdWindows.length,1);\\n  assert.deepEqual(closedWindows,[createdWindows[0].id]);\\n  assert.equal(state.completed_count,4); assert.equal(state.processed_count,6); assert.equal(state.skipped,2);\\n  assert.deepEqual(uploads.sort(),['CBT-4','MLM-1','MLM-5','MLM-6']);\\n  assert.equal(peak,2); assert.equal(tabs.size,1);\\n  assert(!reads.some(url=>url.includes('page4'))); assert(tabs.has(99));\\n  const firstRunCreates=tabCreates.slice();\\n  const detailTabs=firstRunCreates.filter(tab=>/\\\\/(?:MLM|CBT)-/.test(tab.url));\\n  const listTabs=firstRunCreates.filter(tab=>!/\\\\/(?:MLM|CBT)-/.test(tab.url));\\n  assert(detailTabs.length>0); assert(listTabs.length>0);\\n  assert(detailTabs.every(tab=>tab.active===false));\\n  assert(detailTabs.every(tab=>activations.filter(id=>id===tab.id).length===1));\\n  assert(detailTabs.every(tab=>detailAttempts.get(tab.id)===3));\\n  assert(listTabs.every(tab=>tab.active===false));\\n  assert(listTabs.every(tab=>activations.filter(id=>id===tab.id).length===1));\\n  failUpload=true;\\n  await startProductBatch({tab_id:99,params:{...params,max_items:1}});\\n  const failed=await waitDone();\\n  assert.equal(failed.phase,'partial'); assert.equal(failed.failed_count,5);\\n  assert.equal(failed.completed_count,0); assert.equal(failed.last_error,'Upload failed');\\n  failUpload=false; uploads=[];\\n  await startProductBatch({tab_id:99,params});\\n  while(!active) await pause(1);\\n  await stopProductBatch();\\n  const stopped=await waitDone();\\n  assert.equal(stopped.phase,'stopped'); assert.equal(tabs.size,1);\\n  assert.equal(uploads.length,0);\\n  stored.productBatch={running:true,completed_count:5};\\n  const recovered=await getProductBatchStatus();\\n  assert.equal(recovered.phase,'interrupted'); assert.equal(recovered.completed_count,5);\\n})().catch(error=>{console.error(error);process.exitCode=1;});\\n\", '/Users/a11/mercado/browser_extension/zeshun_collector/product-batch.js']' returned non-zero exit status 1.",
+    "contains_network_guard": false
+  }
+]

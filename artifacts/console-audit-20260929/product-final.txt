@@ -1,0 +1,407 @@
+- banner:
+  - img "武汉泽顺 Logo"
+  - heading "武汉泽顺" [level=1]
+  - paragraph: WUHAN ZESHUN · 运营服务台
+  - button "收起或展开功能导航": ☰
+  - generic: 服务在线
+  - text: 企业筛选
+  - combobox "全局企业筛选":
+    - option "所有企业" [selected]
+    - option "武汉泽顺"
+  - button "通知": ♢
+  - link "⚙ 集成设置":
+    - /url: /settings/integrations
+    - generic: ⚙
+    - text: 集成设置
+  - link "下载泽顺插件":
+    - /url: /api/browser-extension/download
+    - generic: ↓
+    - text: 下载插件
+  - generic "下载本机 Agent":
+    - generic: ↓
+    - text: 下载 Agent
+  - generic: 管
+  - strong: 管理员
+  - generic: 超级管理员
+  - link "退出":
+    - /url: /logout
+- navigation "常用工作区":
+  - button "总览 ×"
+  - button "订单管理"
+  - button "库存管理"
+  - button "美客多跟卖采集"
+  - button "1688产品区"
+  - button "AI原创产品"
+  - button "产品列表"
+  - button "店铺授权"
+  - button "侵权检测"
+  - button "AI核重核价"
+  - button "Yandex 店铺"
+  - button "活动管理"
+  - button "侵权和权利人总览"
+  - button "任务模块"
+- main:
+  - complementary:
+    - paragraph: 工作台
+    - button "⌂ 总览":
+      - text: ⌂
+      - generic: 总览
+    - button "! 今日必办":
+      - text: "!"
+      - generic: 今日必办
+    - button "✓ 员工任务":
+      - text: ✓
+      - generic: 员工任务
+    - paragraph: 订单运营
+    - button "▤ 订单管理":
+      - text: ▤
+      - generic: 订单管理
+    - button "▥ 库存管理":
+      - text: ▥
+      - generic: 库存管理
+    - button "⌁ 订单分析":
+      - text: ⌁
+      - generic: 订单分析
+    - button "⚖ 重量尺寸变更记录":
+      - text: ⚖
+      - generic: 重量尺寸变更记录
+    - paragraph: 商品中心
+    - button "1688 1688产品区":
+      - text: "1688"
+      - generic: 1688产品区
+    - button "◇ 美客多跟卖采集":
+      - text: ◇
+      - generic: 美客多跟卖采集
+    - button "AI AI原创产品":
+      - text: AI
+      - generic: AI原创产品
+    - button "▶ AI视频生成":
+      - text: ▶
+      - generic: AI视频生成
+    - button "▦ 产品列表" [active]:
+      - text: ▦
+      - generic: 产品列表
+    - button "⚖ AI核重核价":
+      - text: ⚖
+      - generic: AI核重核价
+    - button "＄ 美客多运费标准":
+      - text: ＄
+      - generic: 美客多运费标准
+    - button "⇧ 产品上架记录":
+      - text: ⇧
+      - generic: 产品上架记录
+    - paragraph: 店铺管理
+    - button "◉ 店铺状态":
+      - text: ◉
+      - generic: 店铺状态
+    - button "⌘ 店铺授权":
+      - text: ⌘
+      - generic: 店铺授权
+    - button "↗ 店铺链接":
+      - text: ↗
+      - generic: 店铺链接
+    - button "≡ 店铺操作记录":
+      - text: ≡
+      - generic: 店铺操作记录
+    - button "◔ 店铺分析":
+      - text: ◔
+      - generic: 店铺分析
+    - button "Y Yandex 店铺":
+      - text: "Y"
+      - generic: Yandex 店铺
+    - paragraph: 客户服务
+    - button "? 售前问答":
+      - text: "?"
+      - generic: 售前问答
+    - button "✉ 售后处理":
+      - text: ✉
+      - generic: 售后处理
+    - paragraph: 营销与资金
+    - button "％ 活动管理":
+      - text: ％
+      - generic: 活动管理
+    - button "◎ 广告分析":
+      - text: ◎
+      - generic: 广告分析
+    - button "$ 资金管理":
+      - text: $
+      - generic: 资金管理
+    - paragraph: 自动化工具
+    - button "✓ 任务模块":
+      - text: ✓
+      - generic: 任务模块
+    - button "✦ 自动化 AI 申诉":
+      - text: ✦
+      - generic: 自动化 AI 申诉
+    - button "◫ 自动化申诉记录":
+      - text: ◫
+      - generic: 自动化申诉记录
+    - paragraph: 风控与合规
+    - button "禁 禁限售列表":
+      - text: 禁
+      - generic: 禁限售列表
+    - button "盾 侵权和权利人总览":
+      - text: 盾
+      - generic: 侵权和权利人总览
+    - button "规 违规商品总览":
+      - text: 规
+      - generic: 违规商品总览
+    - button "◎ 侵权检测":
+      - text: ◎
+      - generic: 侵权检测
+    - button "◆ 侵权知识库":
+      - text: ◆
+      - generic: 侵权知识库
+    - button "☆ 声誉数据":
+      - text: ☆
+      - generic: 声誉数据
+    - button "◎ API 声誉":
+      - text: ◎
+      - generic: API 声誉
+    - paragraph: 系统
+    - button "♙ 人员与权限":
+      - text: ♙
+      - generic: 人员与权限
+    - generic: ZS
+    - strong: 泽顺运营中心
+    - generic: v2.0 · 企业工作台
+  - text: ↻ ↓ ↻ ALL MX BR CL CO AR UY ◷ ◷ ◷ ◷
+  - generic: PRODUCT OPERATIONS
+  - heading "产品列表" [level=2]
+  - paragraph: 统一管理采集、同步和智赢导入的商品，集中完成审核、编辑与批量上架
+  - generic "产品处理流程":
+    - button "← 返回美客多跟卖采集":
+      - generic: ←
+      - text: 返回美客多跟卖采集
+    - generic: "01"
+    - text: 审核资料
+    - generic: ›
+    - generic: "02"
+    - text: 配置发布
+    - generic: ›
+    - generic: "03"
+    - text: 批量上架
+  - region "产品列表操作说明":
+    - button "▦ PRODUCT LIBRARY 产品资料库 按来源、产品分类、美客多分类、状态和收益组合筛选 查看商品 →":
+      - generic: ▦
+      - generic: PRODUCT LIBRARY
+      - strong: 产品资料库
+      - emphasis: 按来源、产品分类、美客多分类、状态和收益组合筛选
+      - generic: 查看商品 →
+    - button "✓ REVIEW QUEUE 审核工作区 批量修改审核状态，拦截不完整数据 筛选未审核 →":
+      - generic: ✓
+      - generic: REVIEW QUEUE
+      - strong: 审核工作区
+      - emphasis: 批量修改审核状态，拦截不完整数据
+      - generic: 筛选未审核 →
+    - button "⇧ PUBLISH CENTER 发布工作区 选择账号、分组和目标站点后批量刊登 配置上架 →":
+      - generic: ⇧
+      - generic: PUBLISH CENTER
+      - strong: 发布工作区
+      - emphasis: 选择账号、分组和目标站点后批量刊登
+      - generic: 配置上架 →
+  - generic: "03"
+  - generic: Product Library
+  - heading "产品资料库" [level=3]
+  - paragraph: 审核商品资料与收益，选择账号和目标站点完成批量上架
+  - generic: 数据不完整自动退回
+  - generic: 产品列表
+  - generic: 共 0 件
+  - searchbox "搜索产品标题或商品编号"
+  - button "分类管理"
+  - button "搜索 / 刷新"
+  - generic: 商品筛选条件
+  - generic: 支持产品分类、美客多分类、智赢分类、产品开发、审核、上架状态、实重状态和收益组合筛选
+  - generic: 产品分类
+  - combobox "产品分类":
+    - option "全部产品分类" [selected]
+    - option "未分类"
+  - generic: 美客多分类
+  - searchbox "美客多分类"
+  - generic: 智赢分类
+  - combobox "智赢分类":
+    - option "全部智赢分类" [selected]
+    - option "分类名称待同步"
+    - option "分类名称待同步"
+    - option "一马当先"
+    - option "体积重超重"
+    - option "侵权产品"
+    - option "半托管"
+    - option "合伙人原创区"
+    - option "圣诞娃娃"
+    - option "应援棒专区"
+    - option "张泽文原创/美客多原创"
+    - option "李超宇跟卖/墨西哥跟卖/8-30"
+    - option "李超宇跟卖/墨西哥跟卖/9-13"
+    - option "李超宇跟卖/墨西哥跟卖/9-14"
+    - option "李超宇跟卖/巴西跟卖/8-29"
+    - option "李超宇跟卖/巴西跟卖/9-12"
+    - option "李超宇跟卖/阿根廷跟卖/8-25"
+    - option "李超宇跟卖/阿根廷跟卖/9-12"
+    - option "武汉泽顺原创"
+    - option "武汉泽顺原创/兼职原创"
+    - option "武汉泽顺原创新区/百分之200上架"
+    - option "武汉泽顺跟卖"
+    - option "武汉泽顺跟卖/墨西哥"
+    - option "武汉泽顺跟卖/巴西"
+    - option "泽顺erp核价执行中"
+    - option "矩阵区"
+    - option "精品单选"
+    - option "精品单选/XZL"
+    - option "精品单选/XZL/确认上架"
+    - option "精品单选/周乐单选/2.跟卖已核价/墨西哥已核价未核重"
+    - option "精品单选/周乐单选/2.跟卖已核价/墨西哥已核价核重"
+    - option "自动化核重核价（程序执行中不要上品）/三区"
+    - option "自动化核重核价（程序执行中不要上品）/测试区"
+    - option "计泡200%上架"
+  - generic: 产品开发
+  - combobox "产品开发":
+    - option "全部产品开发" [selected]
+  - strong: 产品来源
+  - generic: 按数据进入方式快速区分
+  - generic "产品来源筛选":
+    - button "全 全部来源 显示所有产品":
+      - generic: 全
+      - strong: 全部来源
+      - generic: 显示所有产品
+    - button "采 美客多采集 关键词采集加入":
+      - generic: 采
+      - strong: 美客多采集
+      - generic: 关键词采集加入
+    - button "同 店铺同步 账号商品同步":
+      - generic: 同
+      - strong: 店铺同步
+      - generic: 账号商品同步
+    - button "智 智赢采集 智赢插件导入":
+      - generic: 智
+      - strong: 智赢采集
+      - generic: 智赢插件导入
+  - generic: 审核状态
+  - combobox "审核状态":
+    - option "全部审核状态" [selected]
+    - option "未审核"
+    - option "通过"
+    - option "疑似"
+    - option "侵权"
+    - option "风险"
+  - generic: 上架状态
+  - combobox "上架状态":
+    - option "全部上架状态" [selected]
+    - option "未上架"
+    - option "等待上架"
+    - option "上架中"
+    - option "上架成功"
+    - option "上架失败"
+  - generic: 实重状态
+  - combobox "实重状态":
+    - option "全部实重状态" [selected]
+    - option "实重可用"
+    - option "待补实际重量"
+  - generic: 实际重量（g）
+  - spinbutton
+  - spinbutton
+  - generic: 售价（原币）
+  - spinbutton
+  - spinbutton
+  - generic: 净收益（USD）
+  - spinbutton
+  - spinbutton
+  - generic: 采集 / 加入时间
+  - textbox
+  - generic: ◷ 开始时间
+  - textbox
+  - generic: ◷ 结束时间
+  - button "筛选"
+  - button "重置"
+  - checkbox "全选本页"
+  - text: 全选本页
+  - generic: 已选择 0 件
+  - combobox "选择要设置的运营分类":
+    - option "选择产品分类" [selected]
+    - option "移出分类"
+  - button "设置分类" [disabled]
+  - generic: 批量改为
+  - combobox "批量改为":
+    - option "通过" [selected]
+    - option "未审核"
+    - option "疑似"
+    - option "侵权"
+    - option "风险"
+  - button "更新审核状态" [disabled]
+  - generic: 仅“通过”状态可上架
+  - button "批量修改所选" [disabled]
+  - button "删除所选" [disabled]
+  - generic: "03"
+  - generic: 批量发布设置
+  - generic: 账号、分组和站点均支持勾选多项；分组即账号组
+  - generic: 发布方式
+  - combobox "发布方式":
+    - option "按账号" [selected]
+    - option "按分组（账号组）"
+  - generic: 上架账号
+  - button "请选择上架账号：请选择上架账号":
+    - generic: 请选择上架账号
+    - generic: ⌄
+  - generic: 目标站点
+  - button "请选择目标站点：墨西哥":
+    - generic: 墨西哥
+    - generic: "1"
+    - generic: ⌄
+  - generic: 库存
+  - spinbutton "库存": "500"
+  - generic: 本次上架比例（%）
+  - spinbutton "本次上架比例（%）": "100"
+  - generic: 定时上架时间（留空则立即）
+  - textbox "定时上架时间（留空则立即）"
+  - generic: 并发
+  - spinbutton "并发": "16"
+  - generic: 全局设置，自动保存
+  - status: 选择商品后配置发布账号与目标站点
+  - button "批量上架" [disabled]
+  - strong: 商品明细
+  - generic: 采集列表自动适配页面宽度，产品列表字段较多时可横向查看
+  - table:
+    - rowgroup:
+      - row "选择 主图 产品来源 泽顺业务员 智赢分类 产品开发 智赢状态 商品编号 标题 运营分类 原价 美元售价 重量 尺寸 计泡重 计费重量 分类佣金（Classic） 最新运费 净收益(USD) 审核 / 上架状态 采集 / 加入时间":
+        - columnheader "选择"
+        - columnheader "主图"
+        - columnheader "产品来源"
+        - columnheader "泽顺业务员"
+        - columnheader "智赢分类"
+        - columnheader "产品开发"
+        - columnheader "智赢状态"
+        - columnheader "商品编号"
+        - columnheader "标题"
+        - columnheader "运营分类"
+        - columnheader "原价"
+        - columnheader "美元售价"
+        - columnheader "重量"
+        - columnheader "尺寸"
+        - columnheader "计泡重"
+        - columnheader "计费重量"
+        - columnheader "分类佣金（Classic）"
+        - columnheader "最新运费"
+        - columnheader "净收益(USD)"
+        - columnheader "审核 / 上架状态"
+        - columnheader "采集 / 加入时间"
+    - rowgroup:
+      - row "正在读取数据库...":
+        - cell "正在读取数据库..."
+  - generic "产品列表分页":
+    - strong: 第 1 / 1 页
+    - generic: 本页 0 件 · 每页 500 件
+    - button "首页"
+    - button "上一页"
+    - text: 第
+    - spinbutton "第 页": "1"
+    - text: 页
+    - button "跳转"
+    - button "下一页"
+    - button "末页"
+    - text: 每页
+    - combobox "每页":
+      - option "100 件"
+      - option "200 件"
+      - option "500 件" [selected]
+      - option "1000 件"
+  - text: ✓ ✓ ✓ ◷ ◷ ◷ ◷ ✓ ✓ ✓ ✓ ✓ 展开 / 收起 展开 / 收起 收起 展开 展开 / 收起

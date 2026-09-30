@@ -660,7 +660,8 @@ def test_mark_deleted_preserves_unique_selected_records(monkeypatch):
     assert connection.committed is True
 
 
-def test_list_store_links_filters_site_and_defaults_to_sales_descending():
+@pytest.mark.parametrize("category_filter", ["Toys", "MLA2,MLM2"])
+def test_list_store_links_filters_site_and_defaults_to_sales_descending(category_filter):
     calls = []
 
     class Cursor:
@@ -729,7 +730,7 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
         site_id="mlm",
         group_name="运营一组",
         management_category_id="12",
-        mercado_category="Toys",
+        mercado_category=category_filter,
         page_size=25,
         connection_factory=Connection,
     )
@@ -749,13 +750,14 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
     assert "INNER JOIN (" in list_sql
     assert "links.`token_id` = %s AND links.`site_id` = %s" in list_sql
     assert "categorized_product.`management_category_id` = %s" in list_sql
-    assert "links.`category_id` = %s" in list_sql
+    assert ("links.`category_id` = %s" if category_filter == "Toys" else "links.`category_id` IN (%s, %s)") in list_sql
     assert "ORDER BY links.`sold_quantity` DESC" in list_sql
     assert result["rows"][0]["sales_14d"] == 7
     assert params[0] == "MLM"
-    assert params[1:3] == (12, "Toys")
-    assert params[3] == "+Bluetooth* +Headset*"
-    assert params[4:6] == (1, "MLM")
+    category_values = tuple(category_filter.split(","))
+    assert params[1:2 + len(category_values)] == (12, *category_values)
+    assert params[2 + len(category_values)] == "+Bluetooth* +Headset*"
+    assert params[3 + len(category_values):5 + len(category_values)] == (1, "MLM")
     assert params[-2:] == (25, 0)
     assert result["page_size"] == 25
     category_sql = next(sql for sql, _params in calls if "AS category_counts" in sql)

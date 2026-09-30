@@ -622,10 +622,12 @@ def _decorate_store_link_markers(rows: list[dict[str, Any]]) -> None:
     try:
         from erp.mercadolibre_promotion_store import PromotionStore
 
-        promotion_markers = PromotionStore().applied_item_keys(identities)
+        promotion_details = PromotionStore().applied_item_details(identities)
+        promotion_markers = set(promotion_details)
     except Exception:
         # Activity synchronization is an optional companion store.
         promotion_markers = set()
+        promotion_details = None
     # The ad-analysis module already keeps the last successful remote snapshot.
     # Use it as a read-only fallback so ads created before the marker store was
     # introduced are still visible when that snapshot is available.
@@ -648,6 +650,10 @@ def _decorate_store_link_markers(rows: list[dict[str, Any]]) -> None:
                 snapshot_ad_markers.add(ad_identity)
     except Exception:
         snapshot_ad_markers = set()
+    from bit.video_reviews import records as video_records
+    video_reviews = {}
+    for review in video_records([m.get("video_clip_uuid") for m in action_markers.values() if m.get("video_clip_uuid")]):
+        video_reviews.setdefault((review["token_id"], review["site_id"], review["item_id"]), review)
     for row in rows:
         identity = (
             int(row.get("token_id") or 0),
@@ -660,10 +666,16 @@ def _decorate_store_link_markers(rows: list[dict[str, Any]]) -> None:
         video_uploaded = bool(action.get("video_uploaded"))
         # Keep descriptive names and short aliases so API consumers can use the
         # response without knowing the UI's terminology.
+        row["enrolled_promotions"] = promotion_details.get(identity, []) if promotion_details is not None else None
         row["promotion_applied"] = promotion_applied
         row["activity_applied"] = promotion_applied
         row["advertising_enabled"] = advertising_enabled
         row["ad_enabled"] = advertising_enabled
+        review = video_reviews.get(identity) or {}
+        row["video_review_status"] = review.get("status", "UNDER_REVIEW" if video_uploaded else "")
+        row["video_review_label"] = review.get("status_label", "已上传待审核" if video_uploaded else "")
+        row["video_review_checked_at"] = review.get("checked_at", "")
+        row["video_review_error"] = review.get("error", "")
         row["video_uploaded"] = video_uploaded
         row["has_promotion"] = promotion_applied
         row["has_activity"] = promotion_applied
@@ -1509,10 +1521,16 @@ def list_store_links(
             "AND categorized_product.`management_category_id` = %s)"
         )
         values.append(normalized_category_id)
-    mercado_category = str(mercado_category or "").strip()[:255]
+    mercado_category = str(mercado_category or "").strip()
     if mercado_category:
-        conditions.append("links.`category_id` = %s")
-        values.append(mercado_category)
+        category_ids = list(dict.fromkeys(value.strip() for value in mercado_category.split(",") if value.strip()))
+        if not category_ids or len(category_ids) > 100 or any(len(value) > 64 for value in category_ids):
+            raise ValueError("美客多分类列表无效")
+        if len(category_ids) == 1:
+            conditions.append("links.`category_id` = %s")
+        else:
+            conditions.append("links.`category_id` IN (" + ", ".join(["%s"] * len(category_ids)) + ")")
+        values.extend(category_ids)
     search = str(search or "").strip()
     if search:
         # The listing table has more than one million rows. A leading-wildcard

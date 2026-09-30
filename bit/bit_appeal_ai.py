@@ -76,6 +76,7 @@ from bit.bit_mercado_limit import MERCADO_RATE_LIMIT_TEXT
 from bit.bit_download import download_relay_mail
 from bit import mercado_infraction_sync
 from bit.bit_db_api import (
+    get_ai_appeal_product_contexts,
     insert_ai_appeal_record,
     list_mercado_prohibited_listings,
     list_mercado_store_tokens,
@@ -3686,7 +3687,8 @@ def handle_infraction(
         try:
             if ai_script_mode:
                 generated = generate_ai_appeal_copy(
-                    "侵权", current_group, deepseek_api_key
+                    "侵权", current_group, deepseek_api_key,
+                    product_loader=lambda ids: get_ai_appeal_product_contexts(name, ids),
                 )
                 huashu = generated["message"]
                 print(
@@ -3786,7 +3788,8 @@ def handle_prohibited(
         try:
             if ai_script_mode:
                 generated = generate_ai_appeal_copy(
-                    "禁限售", current_group, deepseek_api_key
+                    "禁限售", current_group, deepseek_api_key,
+                    product_loader=lambda ids: get_ai_appeal_product_contexts(name, ids),
                 )
                 huashu = generated["message"]
                 print(

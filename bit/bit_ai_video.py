@@ -396,6 +396,12 @@ def _public_job(job: dict) -> dict:
             "credential_owner_id",
         }
     }
+    from bit.video_reviews import records
+    def upload_identity(row):
+        return (str(row.get("token_id") or ""), row.get("site_id"), row.get("item_id"), row.get("clip_uuid"))
+
+    reviews = {upload_identity(r): r for r in records([r.get("clip_uuid") for r in job.get("published") or []])}
+    result["published"] = [{**r, **reviews.get(upload_identity(r), {})} for r in job.get("published") or []]
     result["assets"] = assets
     result["provider_attempts"] = [
         {key: value for key, value in row.items() if key != "task_id"}
@@ -936,7 +942,7 @@ def _parse_job_datetime(value, label: str) -> datetime | None:
 
 
 def list_jobs(
-    limit: int = 30,
+    limit: int = 20,
     user_id=None,
     *,
     page: int = 1,
@@ -957,7 +963,7 @@ def list_jobs(
         page_number = max(1, int(page or 1))
     except (TypeError, ValueError):
         page_number = 1
-    page_size = max(1, min(30, int(limit or 30)))
+    page_size = max(1, min(20, int(limit or 20)))
     lower_bound = _parse_job_datetime(created_from, "开始时间")
     upper_bound = _parse_job_datetime(created_before, "结束时间")
     if lower_bound and upper_bound and upper_bound <= lower_bound:
@@ -2050,7 +2056,7 @@ def cover_path(job_id: str) -> Path:
     return path
 
 
-def publish_job(job_id: str, link_id: int) -> dict:
+def publish_job(job_id: str, link_id: int, actor: str = "") -> dict:
     from bit.bit_store_link_video import upload_store_link_video
 
     job = get_job(job_id)
@@ -2092,9 +2098,14 @@ def publish_job(job_id: str, link_id: int) -> dict:
             "item_id": result.get("item_id"),
             "clip_uuid": result.get("clip_uuid"),
             "published_at": _now_iso(),
+            "salesperson": actor,
+            **{key: result.get(key, "") for key in (
+                "store_name", "token_id", "site_id", "seller_id", "permalink", "title",
+            )},
+            "status": "UNDER_REVIEW",
         }
     )
-    job["published"] = published[-20:]
+    job["published"] = published
     job["publish_attempts"] = attempts[-20:]
     job["message"] = "视频已提交美客多，等待平台审核"
     _write_manifest(job)

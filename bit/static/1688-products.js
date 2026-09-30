@@ -123,7 +123,14 @@ function products1688Date(value) {
 
 function products1688SourceValue(row, key) {
   const original = products1688Original(row);
-  return Object.prototype.hasOwnProperty.call(original, key) ? original[key] : row[key];
+  const originalValue = original[key];
+  if (key === "price") {
+    const originalPrice = Number(originalValue);
+    if (Number.isFinite(originalPrice) && originalPrice > 0) return originalValue;
+    return row.source_purchase_price_cny ?? row.price ?? originalValue;
+  }
+  if (originalValue !== null && originalValue !== undefined && originalValue !== "") return originalValue;
+  return row[key] ?? originalValue;
 }
 
 function products1688Weight(row) {

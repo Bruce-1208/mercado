@@ -85,7 +85,7 @@ def _bounded_int(value: Any, label: str, *, minimum: int, maximum: int) -> int:
 
 
 class MercadoCommunicationsClient:
-    """Global Selling Questions、Messages 和 Claims 客户端。"""
+    """Global Selling seller notices、Questions、Messages 和 Claims 客户端。"""
 
     BASE_URL = "https://api.mercadolibre.com"
     QUESTION_STATUSES = frozenset((
@@ -238,6 +238,20 @@ class MercadoCommunicationsClient:
             return payload
 
         raise MercadoCommunicationError(f"{request_method} {path} 多次重试后仍失败")
+
+    def get_seller_notices(self, *, limit: int = 20, offset: int = 0) -> dict[str, Any]:
+        """Read currently active seller communications for this authorized user."""
+        result = self.request(
+            "GET",
+            "/communications/notices",
+            params={
+                "limit": _bounded_int(limit, "公告数量", minimum=1, maximum=50),
+                "offset": _bounded_int(offset, "公告偏移量", minimum=0, maximum=1_000_000),
+            },
+        )
+        if not isinstance(result, dict) or not isinstance(result.get("results", []), list):
+            raise MercadoCommunicationError("美客多公告接口返回格式错误", payload=result)
+        return result
 
     # 售前 Questions & Answers
     def search_questions(

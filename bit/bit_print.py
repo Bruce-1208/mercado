@@ -455,6 +455,29 @@ def _download_label(context, *, max_retries, retry_delay_seconds, stop_event, lo
     raise bit_order_labels.MercadoLabelError(str(last_error or "面单下载失败"))
 
 
+def _sync_printed_shipment_tracking_number(context, shipment_id, *, logger=None):
+    """Read and persist the tracking number after a label is generated."""
+
+    order_id = str(context.get("order_id") or "")
+    shipment_id = str(shipment_id or "").strip()
+    if not shipment_id:
+        return ""
+
+    try:
+        tracking_number = bit_order_labels.sync_shipment_tracking_number(
+            context, shipment_id
+        )
+        if not tracking_number:
+            _emit(logger, f"订单 {order_id} 面单已生成，Shipment 暂未返回国际运单号")
+            return ""
+
+        _emit(logger, f"订单 {order_id} 面单已生成，国际运单号已写回订单")
+        return tracking_number
+    except Exception as exc:
+        _emit(logger, f"订单 {order_id} 面单已生成，但国际运单号同步失败：{exc}")
+        return ""
+
+
 def _record_printed_orders(order_ids, operator_name="订单打印/API"):
     normalized = list(dict.fromkeys(str(value) for value in order_ids if str(value or "").strip()))
     recorded = 0
@@ -588,6 +611,9 @@ def _run_shop_job(
                 document_sink.append(content)
                 successful_shipments += 1
                 successful_orders.extend(str(row.get("order_id") or "") for row in shipment_orders)
+                _sync_printed_shipment_tracking_number(
+                    shipment_orders[0], shipment_id, logger=logger
+                )
             except PrintTaskStopped:
                 break
             except bit_order_labels.MercadoLabelUnavailable as exc:

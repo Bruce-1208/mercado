@@ -1,6 +1,7 @@
 import json
 import math
 import re
+import time
 from decimal import Decimal, InvalidOperation
 
 import requests
@@ -129,6 +130,10 @@ def validate_weight(task, config):
             "difference_g": str(difference), "tolerance_g": str(tolerance), "passed": True}
 
 
+class ModelServiceError(RuntimeError):
+    """Infrastructure failure, never evidence of an invalid product price."""
+
+
 class Models:
     def __init__(self, config, log):
         self.config = config
@@ -156,16 +161,38 @@ class Models:
         if key:
             headers["Authorization"] = "Bearer " + key
         # No automatic retry: calls have cost; failures remain reviewable.
-        response = requests.post(self.config["api_base_url"].rstrip("/") + "/chat/completions",
-                                 headers=headers, json=body, timeout=self.config["api_timeout_seconds"])
+        started = time.monotonic()
+        try:
+            response = requests.post(self.config["api_base_url"].rstrip("/") + "/chat/completions",
+                                     headers=headers, json=body, timeout=self.config["api_timeout_seconds"])
+        except requests.RequestException:
+            raise ModelServiceError("模型服务连接失败或超时，请检查执行电脑的网络与API地址") from None
         if not response.ok:
-            raise RuntimeError(f"模型请求失败 HTTP {response.status_code}（未记录密钥或响应正文）")
-        payload = response.json()
-        if payload["choices"][0].get("finish_reason") == "length":
-            raise ValueError("模型输出被截断")
-        answer = payload["choices"][0]["message"]["content"].strip()
-        self.log(f"模型 {model} 调用完成，Token用量 {json.dumps(payload.get('usage', {}), ensure_ascii=False)}")
-        return json.loads(answer) if json_output else answer
+            hint = "请检查执行电脑的API密钥、服务地址与模型权限" if response.status_code in (401, 403) else "请检查模型服务配置、配额或服务状态"
+            raise ModelServiceError(f"模型请求失败 HTTP {response.status_code}；{hint}（未记录密钥或响应正文）")
+        try:
+            payload = response.json()
+            choice = payload["choices"][0]
+            if choice.get("finish_reason") == "length":
+                raise ModelServiceError("模型输出被截断；已暂停，未生成商品结论")
+            answer = choice["message"]["content"]
+            if not isinstance(answer, str) or not answer.strip():
+                raise ModelServiceError("模型返回内容为空或格式无效；已暂停，未生成商品结论")
+            answer = answer.strip()
+        except ModelServiceError:
+            raise
+        except (ValueError, TypeError, KeyError, IndexError, AttributeError):
+            # A successful HTTP status does not make a malformed gateway or
+            # model response valid product evidence. Keep the item pending for
+            # service recovery instead of writing a price-anomaly conclusion.
+            raise ModelServiceError("模型服务返回格式无效；已暂停，未生成商品结论") from None
+        if json_output:
+            try:
+                answer = json.loads(answer)
+            except (ValueError, TypeError):
+                raise ModelServiceError("模型返回内容不是有效JSON；已暂停，未生成商品结论") from None
+        self.log(f"模型 {model} 调用完成，耗时 {time.monotonic() - started:.2f} 秒，Token用量 {json.dumps(payload.get('usage', {}), ensure_ascii=False)}")
+        return answer
 
     def match(self, task, candidate):
         if (not task.get("erp_sku") and self.config["workflow_mode"] == "legacy_consult") or not candidate.get("skus"):

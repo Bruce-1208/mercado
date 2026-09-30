@@ -1,0 +1,2041 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="34" failures="0" skipped="0" tests="34" time="41.788" timestamp="2026-09-29T23:39:34.091872+08:00" hostname="11deMac-mini.local"><testcase classname="" name="tests.test_algorithm_appeal" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_algorithm_appeal.py:9: in &lt;module&gt;
+    from bit import bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_appeal_polling" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_appeal_polling.py:3: in &lt;module&gt;
+    from bit import bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_access_control" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_access_control.py:7: in &lt;module&gt;
+    from bit import bit_db_api, bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_appeal_phrases" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_appeal_phrases.py:3: in &lt;module&gt;
+    from bit import bit_appeal_ai, bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_datetime_filters" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_datetime_filters.py:4: in &lt;module&gt;
+    from bit import bit_interface, bit_mysql, bit_order_sync
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_funds" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_funds.py:7: in &lt;module&gt;
+    from bit import bit_interface, bit_mercado_login, bit_mysql, bit_pago_info
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_high_after_sales" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_high_after_sales.py:7: in &lt;module&gt;
+    from bit import bit_db_api, bit_interface, bit_mysql
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_high_profits" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_high_profits.py:7: in &lt;module&gt;
+    from bit import bit_db_api, bit_interface, bit_mysql
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_infringement_knowledge" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_infringement_knowledge.py:5: in &lt;module&gt;
+    from bit import bit_db_api, bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_interface_appeal" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_interface_appeal.py:6: in &lt;module&gt;
+    from bit import bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_interface_mercado_collection" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_interface_mercado_collection.py:6: in &lt;module&gt;
+    import bit.bit_interface as workbench
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_interface_risk_check" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_interface_risk_check.py:7: in &lt;module&gt;
+    from bit import bit_db_api, bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_interface_zying_collection" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_interface_zying_collection.py:5: in &lt;module&gt;
+    from bit import bit_db_api, bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_inventory" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_inventory.py:5: in &lt;module&gt;
+    from bit import bit_interface, bit_inventory
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_login_remember" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_login_remember.py:4: in &lt;module&gt;
+    from bit import bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_mercado_applications" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_mercado_applications.py:3: in &lt;module&gt;
+    from bit import bit_db_api, bit_interface, bit_mysql, mercado_tokens
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_mercado_reputation" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_mercado_reputation.py:8: in &lt;module&gt;
+    from bit import bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_mercado_tokens" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_mercado_tokens.py:5: in &lt;module&gt;
+    from bit import bit_db_api, bit_interface, bit_mysql, mercado_tokens
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_order_management" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_order_management.py:5: in &lt;module&gt;
+    import bit.bit_interface as workbench
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_prohibited_listings" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_prohibited_listings.py:8: in &lt;module&gt;
+    import bit.bit_interface as workbench
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_bit_store_links" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_store_links.py:9: in &lt;module&gt;
+    import bit.bit_interface as workbench
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_commercial_hardening" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_commercial_hardening.py:5: in &lt;module&gt;
+    from bit import bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_local_agent_interface" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_local_agent_interface.py:7: in &lt;module&gt;
+    from bit import bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_local_agent_open_store" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_local_agent_open_store.py:4: in &lt;module&gt;
+    from bit import bit_interface, bit_reputation_info
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_local_agent_worker" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_local_agent_worker.py:7: in &lt;module&gt;
+    from bit import bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_local_executor_auth" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_local_executor_auth.py:10: in &lt;module&gt;
+    from bit import bit_db_api, bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_mercado_communications" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_mercado_communications.py:10: in &lt;module&gt;
+    from bit import bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_mercado_infraction_dashboard" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_mercado_infraction_dashboard.py:7: in &lt;module&gt;
+    from bit import bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_order_print_range" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_order_print_range.py:1: in &lt;module&gt;
+    from bit import bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_publish_concurrency" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_publish_concurrency.py:4: in &lt;module&gt;
+    from bit import bit_interface as web, bit_db_api
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_registration_agent_scope" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_registration_agent_scope.py:5: in &lt;module&gt;
+    from bit import bit_interface as web
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_weight_dimensions_agent_queue" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_weight_dimensions_agent_queue.py:3: in &lt;module&gt;
+    from bit import bit_interface as web
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_workbench_runtime_interface" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_workbench_runtime_interface.py:5: in &lt;module&gt;
+    from bit import bit_db_api, bit_interface
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase><testcase classname="" name="tests.test_yandex_workbench_integration" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/console-audit-20260929/guard/sitecustomize.py:9: in guarded_connect
+    raise OSError('AUDIT_NETWORK_BLOCKED: external/business connection disabled')
+E   OSError: AUDIT_NETWORK_BLOCKED: external/business connection disabled
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:312: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:47: in connect
+    return get_db_connection(kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:247: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (AUDIT_NETWORK_BLOCKED: external/business connection disabled)")
+
+The above exception was the direct cause of the following exception:
+tests/test_yandex_workbench_integration.py:6: in &lt;module&gt;
+    import bit.bit_interface as workbench
+bit/bit_interface.py:3368: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:37: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:281: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:334: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase></testsuite></testsuites>

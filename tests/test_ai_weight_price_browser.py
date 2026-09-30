@@ -951,6 +951,7 @@ def test_missing_card_id_reads_verified_detail_and_collects_each_product(page, t
     adapter = Browser(config, threading.Event(), store.log)
     monkeypatch.setattr(adapter, "page", lambda *args: page)
     monkeypatch.setattr(adapter, "release", lambda *args: None)
+    monkeypatch.setattr(adapter, "apply_pending_review_filter", lambda *args: None)
     monkeypatch.setattr(adapter, "apply_category", lambda *args: "全部分类")
     assert adapter.collect(store) == 1
     assert page.evaluate("window.clicked") == 2
@@ -973,6 +974,7 @@ def test_collect_starts_at_configured_item_on_first_selected_page(page, tmp_path
     adapter = Browser(config, threading.Event(), store.log)
     monkeypatch.setattr(adapter, "page", lambda *args: page)
     monkeypatch.setattr(adapter, "release", lambda *args: None)
+    monkeypatch.setattr(adapter, "apply_pending_review_filter", lambda *args: None)
     monkeypatch.setattr(adapter, "apply_category", lambda *args: "全部分类")
     assert adapter.collect(store) == 1
     scope = selection_key(config["run_selection"], config)
@@ -1170,3 +1172,247 @@ def test_write_fills_integer_dollar_net_proceeds_and_verifies_after_reload(page,
     assert before == [{"net_income_usd": "5", "weight_g": "400"}]
     assert page.locator("#cost").input_value() == "99"
     assert page.locator("#weight").input_value() == "450"
+
+
+def test_nested_zying_form_labels_do_not_break_writeback(page):
+    page.set_content('''<div id="root">
+      <div class="ant-form-item"><div class="ant-form-item-label">产品开发</div>
+        <div class="ant-form-item"><div class="ant-form-item-label">美工修图</div><input></div>
+      </div>
+      <div class="ant-form-item">
+        <div class="ant-form-item"><div class="ant-form-item-label">包装尺寸</div><input id="dimensions"></div>
+        <div class="ant-form-item"><div class="ant-form-item-label">产品级别</div>
+          <label><input type="radio" name="level">重点</label>
+        </div>
+      </div>
+    </div>''')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    root = page.locator('#root')
+    fields = adapter._zying_package_dimension_controls(root)
+    assert len(fields) == 1
+    assert fields[0].get_attribute('id') == 'dimensions'
+    adapter._set_zying_product_level(page, root)
+    assert adapter._verify_zying_product_level(root)
+
+
+def test_collection_skips_explicit_approved_card_without_opening_detail(page, tmp_path, monkeypatch):
+    page.set_content("""<li class="ant-pagination-item-active">1</li>
+      <div class="product-item"><div class="product-title">cup</div>
+      <div>审核状态：通过</div></div>""")
+    config = validate({})
+    config["run_selection"] = {"category": "", "start_page": 1, "end_page": 1}
+    store = Store(tmp_path)
+    adapter = Browser(config, threading.Event(), store.log)
+    monkeypatch.setattr(adapter, "page", lambda *args: page)
+    monkeypatch.setattr(adapter, "release", lambda *args: None)
+    monkeypatch.setattr(adapter, "apply_pending_review_filter", lambda *args: None)
+    monkeypatch.setattr(adapter, "apply_category", lambda *args: "全部分类")
+    monkeypatch.setattr(adapter, "erp_goods_id", lambda *args: pytest.fail("approved card opened"))
+    adapter.collect(store, on_task=lambda key: pytest.fail("approved card dispatched"))
+    assert store.list()["total"] == 0
+
+
+def test_collection_skips_approved_detail_and_reuses_pending_detail(page, tmp_path, monkeypatch):
+    product_detail_fixture(page)
+    page.evaluate("""() => {
+      document.querySelector('.curd-detail-wrap').insertAdjacentHTML('beforeend',
+        '<label id="status"><input type="radio" name="stat" checked><span>通过</span></label>');
+      const original = window.showProduct;
+      window.showProduct = (id,title) => {
+        original(id,title);
+        document.querySelector('#status span').textContent = id === 101 ? '通过' : '待审核';
+      };
+    }""")
+    config = validate({})
+    config["run_selection"] = {"category": "", "start_page": 1, "end_page": 1}
+    store = Store(tmp_path)
+    adapter = Browser(config, threading.Event(), store.log)
+    opens = []
+    monkeypatch.setattr(adapter, "page", lambda *args: opens.append(True) or page)
+    monkeypatch.setattr(adapter, "release", lambda *args: None)
+    monkeypatch.setattr(adapter, "apply_pending_review_filter", lambda *args: None)
+    monkeypatch.setattr(adapter, "apply_category", lambda *args: "全部分类")
+    processed = []
+    def process(key):
+        processed.append(key)
+        assert adapter.read_review_status(store.get(key)) == '待审核'
+    adapter.collect(store, on_task=process)
+    assert processed == ['102']
+    assert len(opens) == 1
+    assert page.evaluate('window.clicked') == 2
+    assert store.list()['total'] == 1
+    assert adapter.collection_page is None
+
+
+def test_current_detail_status_requires_exact_id(page):
+    product_detail_fixture(page)
+    page.evaluate("""() => {
+      showProduct(101, 'blue cup');
+      document.querySelector('.curd-detail-wrap').insertAdjacentHTML('beforeend',
+        '<label><input type="radio" name="stat" checked>通过</label>');
+    }""")
+    adapter = Browser(validate({}), threading.Event(), lambda *args: None)
+    assert adapter.current_detail_review_status(page, '102') == ''
+    assert adapter.current_detail_review_status(page, '101') == '通过'
+
+
+def test_collection_deduplicates_stable_id_without_merging_same_titles(page, tmp_path, monkeypatch):
+    page.set_content("""<li class="ant-pagination-item-active">1</li>""" + ''.join(
+        f'<div class="product-item"><span class="product-id">{key}</span>'
+        '<div class="product-title">same title</div><img class="product-pic" src="https://img.example/1.jpg"></div>'
+        for key in ['101', '101', '102']))
+    config = validate({})
+    config['run_selection'] = {'category': '', 'start_page': 1, 'end_page': 1}
+    store = Store(tmp_path)
+    adapter = Browser(config, threading.Event(), store.log)
+    monkeypatch.setattr(adapter, 'page', lambda *args: page)
+    monkeypatch.setattr(adapter, 'release', lambda *args: None)
+    monkeypatch.setattr(adapter, 'apply_pending_review_filter', lambda *args: None)
+    monkeypatch.setattr(adapter, 'apply_category', lambda *args: '全部分类')
+    processed = []
+    adapter.collect(store, on_task=processed.append)
+    assert processed == ['101', '102']
+
+
+def test_pending_filter_selects_list_and_preserves_detail_status(page):
+    page.set_content("""<select id="filter"><option value="">全部</option>
+      <option value="1000">通过</option><option value="3000">待审核</option></select>
+      <div class="curd-detail-wrap"><label><input type="radio" name="stat" checked>通过</label>
+      <label><input type="radio" name="stat">待审核</label></div>""")
+    adapter = Browser(validate({}), threading.Event(), lambda *args: None)
+    adapter.apply_pending_review_filter(page)
+    assert page.locator('#filter').input_value() == '3000'
+    assert adapter.review_status(page.locator('.curd-detail-wrap')) == '通过'
+
+
+def test_pending_filter_refuses_missing_control(page):
+    page.set_content('<div>全部产品</div>')
+    adapter = Browser(validate({}), threading.Event(), lambda *args, **kwargs: None)
+    with pytest.raises(ValueError, match='不会退回全部状态'):
+        adapter.apply_pending_review_filter(page, timeout=0)
+
+
+def test_pending_filter_supports_react_select(page):
+    page.set_content('<div class="ant-select">全部</div>')
+    page.evaluate("""() => {
+      const e=document.querySelector('.ant-select');
+      const props={value:'',options:[{value:1000,label:'通过'},{value:3000,label:'待审核'}]};
+      props.onChange=value=>{props.value=value;e.textContent='待审核';};
+      e.__reactFiber$test={memoizedProps:props};
+    }""")
+    adapter = Browser(validate({}), threading.Event(), lambda *args: None)
+    adapter.apply_pending_review_filter(page)
+    assert page.locator('.ant-select').inner_text() == '待审核'
+
+
+def test_pending_source_writeback_uses_id_not_old_page(page, monkeypatch):
+    adapter = Browser(validate({}), threading.Event(), lambda *args: None)
+    monkeypatch.setattr(adapter, 'value', lambda *args: '')
+    opened = []
+    monkeypatch.setattr(adapter, '_open_zying_product_by_id', lambda p,key: opened.append(key))
+    monkeypatch.setattr(adapter, 'apply_category', lambda *args: pytest.fail('obsolete page lookup'))
+    adapter.locate_erp_detail(page, {'erp_goods_id':'123', 'source_review_filter':'待审核', 'source_page':8})
+    assert opened == ['123']
+
+
+def test_pending_resume_rescans_instead_of_skipping_old_pages(page, tmp_path, monkeypatch):
+    from erp.ai_weight_price.config import selection_key
+    page.set_content('<li class="ant-pagination-item-active">1</li>'
+        '<div class="product-item"><span class="product-id">102</span>'
+        '<div class="product-title">remaining</div><img class="product-pic" src="https://img.example/1.jpg"></div>')
+    config = validate({})
+    config['run_selection'] = {'category': '', 'start_page': 1, 'end_page': 1}
+    config['run_id'] = 'same-run'
+    store = Store(tmp_path)
+    store.set_state('collection', {'scope': selection_key(config['run_selection'], config),
+        'page': 3, 'complete': False, 'run_id': 'same-run', 'review_filter': '待审核', 'cursor_found': True})
+    adapter = Browser(config, threading.Event(), store.log)
+    monkeypatch.setattr(adapter, 'page', lambda *args: page)
+    monkeypatch.setattr(adapter, 'release', lambda *args: None)
+    monkeypatch.setattr(adapter, 'apply_pending_review_filter', lambda *args: None)
+    monkeypatch.setattr(adapter, 'apply_category', lambda *args: '全部分类')
+    processed = []
+    adapter.collect(store, on_task=processed.append)
+    assert processed == ['102']
+
+
+@pytest.mark.parametrize("initial,delayed", [("", False), (1000, True), (3000, False)])
+def test_pending_filter_real_zying_custom_tabs(page, initial, delayed):
+    page.set_content('<div id="mount"></div>')
+    page.evaluate("""([initial,delayed]) => {
+      window.filterClicks=0;
+      const mount=()=>{
+        const e=document.querySelector('#mount');
+        e.innerHTML='<div class="tabs-Wrap"><div class="tab-Norm-Item">全部</div>'+
+          '<div class="tab-Norm-Item">通过</div><div class="tab-Norm-Item">待审核<div> (12)</div></div></div>';
+        const wrapper=e.firstChild;
+        const props={id:'stat',value:initial,data:[{label:'全部',value:''},
+          {label:'通过',value:1000},{label:'待审核',value:3000}]};
+        wrapper.__reactFiber$test={memoizedProps:{},return:{memoizedProps:props}};
+        wrapper.lastChild.onclick=()=>{window.filterClicks++;props.value=3000;};
+      };
+      if(delayed)setTimeout(mount,150);else mount();
+    }""", [initial, delayed])
+    adapter = Browser(validate({}), threading.Event(), lambda *args, **kwargs: None)
+    adapter.apply_pending_review_filter(page)
+    from erp.ai_weight_price.browser import PENDING_TABS_READ
+    assert page.locator('.tabs-Wrap').evaluate(PENDING_TABS_READ)['value'] == '3000'
+    assert page.evaluate('window.filterClicks') == (0 if initial == 3000 else 1)
+
+
+@pytest.mark.parametrize('hidden_style', ['display:none', 'visibility:hidden', 'opacity:0'])
+def test_review_detection_ignores_hidden_frame_ancestors_and_resumes(page, hidden_style):
+    adapter = Browser(validate({}), threading.Event(), lambda *args: None)
+    page.set_content(f'''<main>正常商品列表</main><div style="{hidden_style}">
+      <iframe srcdoc="<body>请按住滑块完成人机验证</body>"></iframe></div>''')
+    page.frames[1].wait_for_load_state()
+    adapter.check(page)
+    page.locator('div').evaluate("e => e.removeAttribute('style')")
+    with pytest.raises(CircuitOpen):
+        adapter.check(page)
+    # Successful verification often hides the existing frame instead of
+    # destroying it. The same browser check must now allow the resumed job.
+    page.locator('div').evaluate("e => e.style.opacity='0'")
+    adapter.check(page)
+
+
+def test_review_detection_checks_all_widgets_and_ignores_hidden_text_and_tooltips(page):
+    adapter = Browser(validate({}), threading.Event(), lambda *args: None)
+    page.set_content('''<div style="opacity:0"><p>安全验证</p></div>
+      <a title="安全验证">帮助中心</a>
+      <div id="nc_1_wrapper" style="display:none">滑动验证</div>
+      <div class="baxia-dialog" style="width:300px;height:100px">验证控件</div>''')
+    with pytest.raises(CircuitOpen):
+        adapter.check(page)
+    page.locator('.baxia-dialog').evaluate("e => e.style.opacity='0'")
+    adapter.check(page)
+
+
+def test_review_detection_ignores_nested_hidden_and_one_pixel_frames(page):
+    adapter = Browser(validate({}), threading.Event(), lambda *args: None)
+    page.set_content('<iframe style="opacity:0"></iframe><iframe style="width:1px;height:1px;border:0"></iframe>')
+    page.frames[1].set_content('<iframe></iframe>')
+    page.frames[-1].set_content('<body>安全验证</body>')
+    page.frames[2].set_content('<body>请完成安全验证</body>')
+    adapter.check(page)
+
+
+def test_erp_overlay_pauses_and_preserves_unknown_dialog(page, monkeypatch):
+    page.set_content('<div class="ant-modal-wrap"><button>确认删除</button></div>')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    retained = []
+    monkeypatch.setattr(adapter, 'retain', lambda p: retained.append(p))
+    with pytest.raises(CircuitOpen, match='弹窗遮挡'):
+        adapter._search_zying_product(page, '123')
+    assert retained == [page]
+    assert page.get_by_text('确认删除').is_visible()
+
+
+def test_missing_product_search_pauses_instead_of_skipping(page, monkeypatch):
+    page.set_content('<input placeholder="标题">')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    retained = []
+    monkeypatch.setattr(adapter, 'retain', lambda p: retained.append(p))
+    with pytest.raises(CircuitOpen, match='当前匹配 0 个'):
+        adapter._search_zying_product(page, '123')
+    assert retained == [page]

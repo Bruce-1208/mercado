@@ -47,6 +47,8 @@ def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
 
 INFRACTION_SYNC_LOCK_KEY = "mercado_official_infraction_sync_task"
 INFRACTION_AUTO_SYNC_HOURS = AUTO_SYNC_HOURS
+RIGHTS_HOLDER_TODO_REFRESH_HOURS = 1
+RIGHTS_HOLDER_TODO_REFRESH_SECONDS = RIGHTS_HOLDER_TODO_REFRESH_HOURS * 60 * 60
 INFRACTION_AUTO_RETRY_MINUTES = _env_int(
     "MERCADO_INFRACTION_AUTO_RETRY_MINUTES", 60, 5, 1440
 )
@@ -123,6 +125,8 @@ _BRAND_PROTECTION_PATTERNS = tuple(
 _state_guard = threading.RLock()
 _scheduler_guard = threading.Lock()
 _scheduler_thread: threading.Thread | None = None
+_rights_todo_scheduler_guard = threading.Lock()
+_rights_todo_scheduler_thread: threading.Thread | None = None
 _sync_state: dict[str, Any] = {
     "running": False,
     "task_id": "",
@@ -1136,6 +1140,78 @@ def _sync_store(record: dict) -> dict:
             _append_log(f"{record.get('display_name') or token_id} Token 已刷新，继续同步")
 
 
+def _sync_rights_holder_todo_store(record: dict) -> dict[str, Any]:
+    """Refresh the platform case statuses used by 今日必办 without a full overview sync."""
+    token_id = int(record["id"])
+    client, record = _client_and_token(record)
+    refreshed_after_unauthorized = False
+    while True:
+        try:
+            rows, truncated = _collect_rights_holder_records(
+                client,
+                record,
+                date_created_since="",
+            )
+            if truncated:
+                raise RuntimeError("权利人案件分页未完整读取，保留上次待办快照")
+            upsert_infraction_records(record, rows)
+            reconcile_infraction_snapshot(token_id, "rights_holder", rows)
+            return {"token_id": token_id, "store": record.get("display_name") or token_id, "count": len(rows)}
+        except Exception as exc:
+            if (
+                refreshed_after_unauthorized
+                or not _is_unauthorized_error(exc)
+                or not record.get("refresh_token")
+            ):
+                raise
+            refreshed = _refresh_token(token_id)
+            record = {**refreshed, "site_settings": record.get("site_settings") or []}
+            client = MercadoLibreClient(str(record.get("access_token") or ""))
+            refreshed_after_unauthorized = True
+            _append_log(f"{record.get('display_name') or token_id} Token 已刷新，继续更新待回复权利人")
+
+
+def _refresh_rights_holder_todos_once() -> dict[str, Any]:
+    """Refresh open rights-holder cases once, preserving snapshots on incomplete reads."""
+    if get_lock_owner(INFRACTION_SYNC_LOCK_KEY):
+        return {"started": False, "message": "官方侵权数据正在同步，稍后重试"}
+    task_lock = InterProcessLock(
+        INFRACTION_SYNC_LOCK_KEY,
+        owner="mercado_rights_holder_todo_sync",
+        metadata={"scope": "rights_holder_todo"},
+    )
+    if not task_lock.acquire(timeout=0):
+        return {"started": False, "message": "官方侵权数据正在同步，稍后重试"}
+    try:
+        records = _token_records()
+        worker_count = max(1, min(INFRACTION_STORE_WORKERS, len(records)))
+        _append_log(f"开始每小时待办刷新：读取 {len(records)} 家店铺的权利人案件状态")
+
+        def sync_one(record):
+            try:
+                result = run_capacity_store(
+                    "infractions", record["id"], _sync_rights_holder_todo_store, record,
+                )
+                _append_log(f"{result['store']} 待回复权利人已更新，共 {result['count']} 条平台案件记录")
+                return {"status": "success", **result}
+            except Exception as exc:
+                _append_log(f"{record.get('display_name') or record.get('id')} 待回复权利人更新失败：{exc}")
+                return {"status": "error", "token_id": int(record.get("id") or 0), "message": str(exc)}
+
+        with ThreadPoolExecutor(
+            max_workers=worker_count,
+            thread_name_prefix="meli-rights-todo",
+        ) as executor:
+            results = list(executor.map(sync_one, records))
+        return {
+            "started": True,
+            "results": results,
+            "failed_count": sum(row.get("status") != "success" for row in results),
+        }
+    finally:
+        task_lock.release()
+
+
 def _stop_requested(stop_event: Any = None) -> bool:
     try:
         return bool(stop_event is not None and stop_event.is_set())
@@ -1837,6 +1913,27 @@ def _auto_sync_loop() -> None:
         threading.Event().wait(INFRACTION_AUTO_CHECK_SECONDS)
 
 
+def _rights_holder_todo_auto_sync_loop() -> None:
+    while True:
+        attempt_started = time.monotonic()
+        retry_soon = False
+        try:
+            result = _refresh_rights_holder_todos_once()
+            retry_soon = (
+                not result.get("started")
+                or bool(result.get("failed_count"))
+            )
+        except Exception as exc:
+            _append_log(f"每小时待办刷新失败：{exc}")
+            retry_soon = True
+        if retry_soon:
+            delay = min(300, RIGHTS_HOLDER_TODO_REFRESH_SECONDS)
+        else:
+            elapsed = time.monotonic() - attempt_started
+            delay = max(1, RIGHTS_HOLDER_TODO_REFRESH_SECONDS - int(elapsed))
+        threading.Event().wait(delay)
+
+
 def start_official_infraction_auto_scheduler() -> bool:
     global _scheduler_thread
     with _scheduler_guard:
@@ -1851,10 +1948,27 @@ def start_official_infraction_auto_scheduler() -> bool:
         return True
 
 
+def start_rights_holder_todo_auto_scheduler() -> bool:
+    """Keep the actionable rights-holder cases on 今日必办 fresh each hour."""
+    global _rights_todo_scheduler_thread
+    with _rights_todo_scheduler_guard:
+        if _rights_todo_scheduler_thread and _rights_todo_scheduler_thread.is_alive():
+            return False
+        _rights_todo_scheduler_thread = threading.Thread(
+            target=_rights_holder_todo_auto_sync_loop,
+            name="mercado-rights-holder-todo-auto-sync",
+            daemon=True,
+        )
+        _rights_todo_scheduler_thread.start()
+        return True
+
+
 __all__ = [
     "AUTO_APPEAL_EXCLUDED_REASONS",
     "BRAND_PROTECTION_SUBGROUP",
     "INFRACTION_AUTO_SYNC_HOURS",
+    "RIGHTS_HOLDER_TODO_REFRESH_HOURS",
+    "start_rights_holder_todo_auto_scheduler",
     "PROHIBITED_REASON",
     "PROHIBITED_REASON_CODE",
     "backfill_infraction_images",

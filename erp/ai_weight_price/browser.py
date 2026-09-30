@@ -16,6 +16,20 @@ from .models import number
 from .pricing import sku_cost
 from .supplier_adapter import AUTO_FIELDS, DOM_SNAPSHOT, SupplierAdaptationError, verified_selectors
 
+# Playwright's is_visible() deliberately treats opacity:0 as visible. Risk
+# detection needs painted content, including all embedding iframe ancestors.
+RISK_VISIBLE = """element => {
+  if(!element||!element.getClientRects().length)return false;
+  const box=element.getBoundingClientRect();
+  if(box.width<=1||box.height<=1)return false;
+  for(let node=element;node;node=node.parentElement){
+    const style=getComputedStyle(node);
+    if(style.display==='none'||style.visibility==='hidden'||style.visibility==='collapse'||
+       Number(style.opacity)===0||style.contentVisibility==='hidden')return false;
+  }
+  return true;
+}"""
+
 # React keeps the DOM fiber pointer across updates. Its alternate may now be the
 # committed tree; reading the original memoizedProps can return the initial [].
 CATEGORY_PROPS = """element => {
@@ -47,6 +61,22 @@ CATEGORY_SET = """(element,wanted) => {
   const change=p.onChange||p['onUpdate:value'];if(typeof change!=='function')return false;
   change(selected.map(o=>o[f.value]),selected);return true;
 }""".replace("PROPS", CATEGORY_PROPS)
+
+PENDING_TABS_READ = """element => {
+  const key=Object.keys(element).find(k=>k.startsWith('__reactFiber$'));
+  let node=key?element[key]:null;
+  while(node){
+    let root=node;while(root.return)root=root.return;
+    const active=root.stateNode?.current&&root.stateNode.current!==root?(node.alternate||node):node;
+    const p=active.memoizedProps||{};
+    if(p.id==='stat'&&Array.isArray(p.data))return {
+      value:String(p.value??''),
+      options:p.data.map(o=>({value:String(o.value),label:String(o.label||'').trim()}))
+    };
+    node=node.return;
+  }
+  return null;
+}"""
 
 # These selectors are shared with the existing Zying detail collector. Product
 # cards do not always render an ID; the detail header shows the ERP product ID.
@@ -250,6 +280,7 @@ class Browser:
         self.pw = self.browser = None
         self.owned = []
         self.search_results = {}
+        self.collection_page = None
 
     def __enter__(self):
         from playwright.sync_api import sync_playwright
@@ -330,37 +361,46 @@ class Browser:
             raise
 
     def check_frame(self, frame):
+        ancestor = frame
+        while ancestor is not frame.page.main_frame:
+            embedding = ancestor.frame_element()
+            try:
+                if not embedding.evaluate(RISK_VISIBLE):
+                    return
+            finally:
+                embedding.dispose()
+            ancestor = ancestor.parent_frame
+            if ancestor is None:
+                return
         host = (urlsplit(frame.url).hostname or "").lower()
         if frame is frame.page.main_frame and host in ("login.taobao.com", "login.1688.com", "passport.1688.com"):
             raise CircuitOpen("1688需要登录；请在可见Edge中完成登录后返回控制台继续执行")
         risk = self.s["risk"]
-        if risk and frame.locator(risk).count() and frame.locator(risk).first.is_visible():
+        if risk and frame.locator(risk).evaluate_all(
+            "elements => elements.some(" + RISK_VISIBLE + ")"
+        ):
             raise CircuitOpen("1688出现验证码或人机审核；请在可见Edge中处理后返回控制台继续执行")
         # Check visible text nodes in-place and stop at the first match. Pulling
         # the complete body text across CDP made every upload poll serialize the
         # large 1688 home page and also increased false positives.
         text_risk = frame.locator("body").evaluate(r"""body => {
           const pattern=/操作[太过]?于?频繁|发言受限|发送[太过]?于?频繁|滑动验证|人机(?:审核|验证)|请(?:按住|拖动).*滑块|请完成.*验证|安全验证|访问受限/;
-          const visible=element=>{
-            if(!element||!element.getClientRects().length)return false;
-            const style=getComputedStyle(element);
-            return style.display!=='none'&&style.visibility!=='hidden'&&style.opacity!=='0';
-          };
+          const visible=(RISK_VISIBLE);
           const walker=document.createTreeWalker(body,NodeFilter.SHOW_TEXT);
           let inspected=0;
           for(let node=walker.nextNode();node&&inspected<4000;node=walker.nextNode(),inspected++){
             const value=String(node.nodeValue||'').replace(/\s+/g,' ').trim();
             if(value&&value.length<=240&&pattern.test(value)&&visible(node.parentElement))return true;
           }
-          const labelled=body.querySelectorAll('[aria-label],[title],input[value]');
+          const labelled=body.querySelectorAll('input[type="button"][value],input[type="submit"][value]');
           for(let index=0;index<labelled.length&&index<1000;index++){
             const element=labelled[index];
             if(!visible(element))continue;
-            const value=[element.getAttribute('aria-label'),element.title,element.value].filter(Boolean).join(' ');
+            const value=String(element.value||'');
             if(value.length<=240&&pattern.test(value))return true;
           }
           return false;
-        }""") if frame.locator("body").count() else False
+        }""".replace("RISK_VISIBLE", RISK_VISIBLE)) if frame.locator("body").count() else False
         if text_risk:
             raise CircuitOpen("1688出现登录、验证码或人机审核提示；请在可见Edge中处理后返回控制台继续执行")
 
@@ -560,6 +600,110 @@ class Browser:
         self.log("分类读取诊断：" + json.dumps({"url": page.url, "ready": data.get("ready"), "control": diagnostic}, ensure_ascii=False), level="ERROR")
         raise ValueError("智赢分类尚未加载完成或当前页面无分类，未更新分类列表。请确认商品列表页后重试")
 
+    def apply_pending_review_filter(self, page, timeout=12):
+        """Wait for the asynchronously mounted list filter before selecting it."""
+        deadline = time.monotonic() + timeout
+        while True:
+            self.check(page)
+            try:
+                return self._apply_pending_review_filter(page)
+            except ValueError as exc:
+                if "无法唯一定位智赢列表审核状态筛选" not in str(exc):
+                    raise
+                if time.monotonic() >= deadline:
+                    self.log("审核筛选识别失败：" + json.dumps({
+                        "tabs": page.locator(".tabs-Wrap:visible").all_inner_texts(),
+                        "select_count": page.locator("select:visible, .ant-select:visible").count(),
+                    }, ensure_ascii=False), level="ERROR")
+                    raise
+                if self.stop.wait(.25):
+                    raise Stopped("操作已停止")
+
+    def _apply_pending_review_filter(self, page):
+        """Select the list's pending filter, never a detail editor's status."""
+        tabs = []
+        for wrapper in page.locator(".tabs-Wrap:visible").all():
+            if wrapper.evaluate("e => !!e.closest('.curd-detail-wrap')"):
+                continue
+            data = wrapper.evaluate(PENDING_TABS_READ)
+            if data and any(o["label"] == PENDING_REVIEW_STATUS and o["value"] == "3000"
+                            for o in data["options"]):
+                tabs.append(wrapper)
+        if len(tabs) > 1:
+            raise ValueError("无法唯一定位智赢列表审核状态筛选：多个状态标签栏")
+        if tabs:
+            wrapper = tabs[0]
+            data = wrapper.evaluate(PENDING_TABS_READ)
+            if data["value"] != "3000":
+                # Real Zying renders labels and optional counts in custom divs.
+                target = wrapper.locator(".tab-Norm-Item").filter(
+                    has_text=re.compile(r"^\s*待审核(?:\s*[（(]?\s*\d+\s*[）)]?)?\s*$"))
+                if target.count() != 1:
+                    raise ValueError("无法唯一定位智赢列表审核状态筛选：待审核标签不唯一")
+                target.click()
+            deadline = time.monotonic() + 5
+            while True:
+                data = wrapper.evaluate(PENDING_TABS_READ)
+                if data and data["value"] == "3000":
+                    self.log("智赢列表已筛选待审核（stat=3000）；仅采集待审核商品")
+                    return
+                if time.monotonic() >= deadline:
+                    raise ValueError("智赢待审核标签点击后筛选值未变为3000，已停止采集")
+                if self.stop.wait(.1):
+                    raise Stopped("操作已停止")
+        controls = page.locator("select:visible, .ant-select:visible, input[type=radio]:visible")
+        candidates = []
+        for control in controls.all():
+            if control.evaluate("e => !!e.closest('.curd-detail-wrap')"):
+                continue
+            tag = control.evaluate("e => e.tagName.toLowerCase()")
+            if tag == "select":
+                labels = [text.strip() for text in control.locator("option").all_text_contents()]
+                if PENDING_REVIEW_STATUS in labels and "通过" in labels:
+                    candidates.append((control, "native"))
+            elif tag == "input":
+                label = control.evaluate("e => (e.closest('label')?.innerText||'').replace(/\\s+/g,'')")
+                if label == PENDING_REVIEW_STATUS:
+                    candidates.append((control, "radio"))
+            else:
+                data = control.evaluate(CATEGORY_READ)
+                labels = [option["label"] for option in data["options"]]
+                if PENDING_REVIEW_STATUS in labels and "通过" in labels:
+                    candidates.append((control, "react"))
+        if len(candidates) != 1:
+            raise ValueError("无法唯一定位智赢列表审核状态筛选，已停止；不会退回全部状态采集")
+        control, kind = candidates[0]
+        if kind == "native":
+            control.select_option(label=PENDING_REVIEW_STATUS)
+            verified = control.locator("option:checked").inner_text().strip() == PENDING_REVIEW_STATUS
+        elif kind == "radio":
+            control.check()
+            verified = control.is_checked()
+        else:
+            changed = control.evaluate("""element => {
+              const p=(PROPS)(element);if(!p)return false;
+              const label=p.fieldNames?.label||'label',value=p.fieldNames?.value||'value';
+              const options=p.options.filter(o=>String(o[label]).trim()==='待审核'&&!o.disabled);
+              const change=p.onChange||p['onUpdate:value'];
+              if(options.length!==1||typeof change!=='function')return false;
+              change(options[0][value],options[0]);return true;
+            }""".replace("PROPS", CATEGORY_PROPS))
+            verified = False
+            if changed:
+                deadline = time.monotonic() + 5
+                while True:
+                    data = control.evaluate(CATEGORY_READ)
+                    selected = str(data["value"])
+                    verified = any(o["label"] == PENDING_REVIEW_STATUS and o["value"] == selected
+                                   for o in data["options"])
+                    if verified or time.monotonic() >= deadline:
+                        break
+                    if self.stop.wait(.1):
+                        raise Stopped("操作已停止")
+        if not verified:
+            raise ValueError("智赢列表未确认切换为待审核，已停止采集")
+        self.log("智赢列表已筛选待审核；仅采集待审核商品")
+
     def apply_category(self, page, category):
         control = self.category_control(page)
         current = self.read_categories(page, control)
@@ -745,7 +889,15 @@ class Browser:
     def normalize_erp_id(value):
         return re.sub(r"^(?:产品编号|商品编号|产品ID|商品ID|ID)\s*[:：]?\s*", "", value, flags=re.I).strip()
 
+    def ensure_erp_modal_clear(self, page):
+        # An unknown modal may be an unsaved-changes confirmation. Never force
+        # a click through it or blindly confirm/discard the operator's edits.
+        if page.locator(".ant-modal-wrap:visible").count():
+            self.retain(page)
+            raise CircuitOpen("智赢弹窗遮挡操作，请人工处理当前弹窗后继续；当前商品和进度已保留")
+
     def erp_goods_id(self, page, row, record, timeout=20):
+        self.ensure_erp_modal_clear(page)
         selector = self.s["erp_id"]
         if selector:
             matches = row.locator(selector).count()
@@ -773,10 +925,12 @@ class Browser:
                 raise ValueError("智赢存在多个商品详情，无法确认产品编号，已停止采集")
             close = page.locator(".curd-detail-wrap:visible .crud-detail-close:visible")
             if before.get("root_count") == 1 and close.count() == 1:
+                self.ensure_erp_modal_clear(page)
                 close.click()
                 close_deadline = time.monotonic() + min(timeout, 3)
                 while True:
                     self.check(page)
+                    self.ensure_erp_modal_clear(page)
                     before = body.evaluate(ERP_DETAIL_ID_READ, record)
                     if before.get("root_count") == 0:
                         break
@@ -834,26 +988,34 @@ class Browser:
         scope = selection_key(selection, self.config)
         page = self.page(self.config["erp_list_url"])
         seen = set()
+        seen_goods = set()
+        self.collection_page = page
         # A terminated batch stores this checkpoint as JSON null. Older task
         # databases therefore still need the local fallback before using .get.
         checkpoint = store.state("collection", {}) or {}
-        resume_after = checkpoint.get("page", 0) if not checkpoint.get("complete") and checkpoint.get("scope") == scope else 0
-        cursor_found = not bool(start_product_id) or bool(resume_after)
+        pending_resume = (checkpoint.get("scope") == scope
+                          and checkpoint.get("run_id") == self.config.get("run_id")
+                          and checkpoint.get("review_filter") == PENDING_REVIEW_STATUS
+                          and not checkpoint.get("complete"))
+        # Pending pages shrink after approvals. Never skip a saved number of
+        # pages on resume: remaining products may have moved into those pages.
+        cursor_found = not bool(start_product_id) or bool(pending_resume and checkpoint.get("cursor_found"))
         selected_items = 0
         limit_reached = False
-        if not resume_after:
+        if not pending_resume:
             store.reset_scope(scope)
-        if resume_after:
-            store.log(f"从已保存的第 {resume_after} 页后续采集，前序页面只翻页、不重复提取")
+        if pending_resume:
+            store.log("续跑重新读取待审核范围；不沿用已缩短列表的旧页码")
         try:
             store.log(
                 "正在应用分类筛选，准备按起始产品编号连续读取"
                 if cursor_mode else
                 f"正在应用分类筛选，准备采集第 {selection['start_page']}–{selection['end_page']} 页"
             )
+            self.apply_pending_review_filter(page)
             category_label = self.apply_category(page, selection["category"])
             self.first_page(page)
-            first = max(1 if cursor_mode else selection["start_page"], resume_after + 1)
+            first = 1 if cursor_mode else selection["start_page"]
             start_item = int(selection.get("start_item") or 1)
             if cursor_mode:
                 store.log(
@@ -888,12 +1050,19 @@ class Browser:
                         continue
                     self.check(page)
                     raw = row.inner_text()
+                    # Only explicit status labels are evidence; a title containing
+                    # "通过" must never be interpreted as an approval status.
+                    status_match = re.search(r"(?m)^\s*(?:审核状态|商品状态)\s*[:：]\s*(待审核|通过|价格异常|屏蔽|风险)\s*$", raw)
+                    card_status = status_match[1] if status_match else ""
+                    if cursor_found and card_status and card_status != PENDING_REVIEW_STATUS:
+                        continue
                     image = self.value(row, "erp_image", "src", required=True)
                     record = {"title": self.value(row, "erp_title", required=True),
                               "main_image_url": urljoin(page.url, image),
                               "description": self.value(row, "erp_description") or raw,
                               "erp_sku": self.value(row, "erp_sku"), "raw_erp": raw,
                               "source_page": page_number, "source_index": item_index,
+                              "source_review_filter": PENDING_REVIEW_STATUS,
                               "source_category": selection["category"],
                               "source_category_label": category_label,
                               "zying_category_name": category_label}
@@ -913,14 +1082,28 @@ class Browser:
                         if key != start_product_id:
                             continue
                         cursor_found = True
+                        store.set_state("collection", {"scope": scope, "run_id": self.config.get("run_id"),
+                                                       "review_filter": PENDING_REVIEW_STATUS,
+                                                       "cursor_found": True, "complete": False})
                         store.log(f"已在智赢第 {page_number} 页定位起始产品 {start_product_id}", key)
+                    if key in seen_goods:
+                        continue
+                    seen_goods.add(key)
                     record["erp_goods_id"] = key
+                    # The ID fallback already opened and verified this detail.
+                    # Reject ineligible products before creating/requeuing tasks.
+                    live_status = card_status
+                    if not live_status:
+                        live_status = self.current_detail_review_status(page, key)
+                    if live_status and live_status != PENDING_REVIEW_STATUS:
+                        continue
                     added = store.add(record)
                     if not added:
                         # Existing tasks retain their decision/progress, but
                         # refresh the source position so a later run cannot be
                         # reordered by the original database creation time.
                         store.update(key, source_page=page_number, source_index=item_index,
+                                     source_review_filter=PENDING_REVIEW_STATUS,
                                      source_category=selection["category"],
                                      source_category_label=category_label,
                                      zying_category_name=category_label)
@@ -941,8 +1124,11 @@ class Browser:
                 store.log(f"ERP第 {page_number} 页采集完成，新增 {count} 条；已存在记录保留原进度")
                 store.set_state("collection", {"page": page_number, "signature": fingerprint, "at": time.time(),
                                                "url": self.config["erp_list_url"], "scope": scope,
-                                               "selection": selection, "complete": page_number == end_page or limit_reached})
-                store.export()
+                                               "selection": selection, "run_id": self.config.get("run_id"),
+                                               "review_filter": PENDING_REVIEW_STATUS, "cursor_found": cursor_found,
+                                               "complete": page_number == end_page or limit_reached})
+                if not on_task:
+                    store.export()
                 if limit_reached or page_number == end_page:
                     break
                 if not self.next_page(page, page_number):
@@ -955,6 +1141,7 @@ class Browser:
                 )
             return len(seen)
         finally:
+            self.collection_page = None
             self.release(page)
 
     def image_payload(self, task):
@@ -1431,6 +1618,11 @@ class Browser:
         current = self.value(page, "erp_edit_id")
         if self.normalize_erp_id(current) == task["erp_goods_id"]:
             return
+        if task.get("source_review_filter") == PENDING_REVIEW_STATUS:
+            # Pending pages shrink as products are approved. Stable ID search
+            # avoids relying on an obsolete page/card position for writeback.
+            self._open_zying_product_by_id(page, task["erp_goods_id"])
+            return
         self.apply_category(page, task.get("source_category", ""))
         self.first_page(page)
         target_page = int(task.get("source_page") or 1)
@@ -1644,6 +1836,7 @@ class Browser:
             raise ValueError(f"打开的智赢商品编号不匹配：目标 {product_id}，当前 {actual_id}")
 
     def _search_zying_product(self, page, product_id):
+        self.ensure_erp_modal_clear(page)
         selector = self.s.get("erp_product_id_search") or ""
         if selector:
             fields = page.locator(selector)
@@ -1658,7 +1851,8 @@ class Browser:
                 if re.search(r"产品编号|商品编号|产品ID|商品ID", details or ""):
                     visible_fields.append(field)
         if len(visible_fields) != 1:
-            raise ValueError(f"无法唯一定位智赢产品编号搜索框，请配置 erp_product_id_search（当前匹配 {len(visible_fields)} 个）")
+            self.retain(page)
+            raise CircuitOpen(f"无法唯一定位智赢产品编号搜索框，请配置 erp_product_id_search（当前匹配 {len(visible_fields)} 个）；已暂停，待人工核对页面后继续")
         visible_fields[0].fill(product_id)
         button_selector = self.s.get("erp_product_search_button") or ""
         if button_selector:
@@ -1682,6 +1876,14 @@ class Browser:
             raise ValueError(f"智赢产品搜索按钮匹配到 {len(buttons)} 个，请配置 erp_product_search_button")
         page.wait_for_timeout(500)
 
+    @staticmethod
+    def _zying_form_item_label(item):
+        # Nested form items belong to their own controls, not the outer group.
+        return item.evaluate("""element => Array.from(
+            element.querySelectorAll('.ant-form-item-label')
+        ).filter(label => label.closest('.ant-form-item') === element)
+         .map(label => label.innerText).join(' ')""")
+
     def _zying_package_dimension_controls(self, root):
         selector = self.s.get("erp_dimensions_input") or ""
         if selector:
@@ -1693,7 +1895,7 @@ class Browser:
         dimension_groups = []
         side_items = {"长": [], "宽": [], "高": []}
         for item in root.locator(".ant-form-item").all():
-            label = item.locator(".ant-form-item-label").inner_text() if item.locator(".ant-form-item-label").count() else ""
+            label = self._zying_form_item_label(item)
             label = re.sub(r"[：:*\s]", "", label)
             fields = [field for field in item.locator("input,textarea").all() if field.is_visible()]
             if not fields:
@@ -1726,7 +1928,7 @@ class Browser:
         else:
             items = []
             for item in root.locator(".ant-form-item").all():
-                label = item.locator(".ant-form-item-label").inner_text() if item.locator(".ant-form-item-label").count() else ""
+                label = self._zying_form_item_label(item)
                 if re.search(r"产品级别|产品等级|级别", label):
                     items.append(item)
             if len(items) != 1:
@@ -1761,7 +1963,7 @@ class Browser:
     def _verify_zying_product_level(self, root):
         items = []
         for item in root.locator(".ant-form-item").all():
-            label = item.locator(".ant-form-item-label").inner_text() if item.locator(".ant-form-item-label").count() else ""
+            label = self._zying_form_item_label(item)
             if re.search(r"产品级别|产品等级|级别", label):
                 items.append(item)
         if len(items) != 1:
@@ -1785,8 +1987,25 @@ class Browser:
             return True
         raise ValueError("智赢产品级别未回读为“重点”")
 
+    def current_detail_review_status(self, page, key):
+        """Reuse only a visible detail whose stable product ID matches."""
+        if page is None or page.is_closed():
+            return ""
+        roots = page.locator(".curd-detail-wrap:visible")
+        if roots.count() != 1:
+            return ""
+        if self.normalize_erp_id(self.value(page, "erp_edit_id")) != key:
+            return ""
+        try:
+            return self.review_status(roots)
+        except ValueError:
+            return ""
+
     def read_review_status(self, task):
         """Read the live Zying review status before any supplier/AI work."""
+        current = self.current_detail_review_status(self.collection_page, task["erp_goods_id"])
+        if current:
+            return current
         host = urlsplit(self.config["erp_list_url"]).hostname
         page = self.page(task.get("erp_edit_url") or self.config["erp_list_url"], host)
         try:

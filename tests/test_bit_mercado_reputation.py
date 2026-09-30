@@ -2,6 +2,7 @@ import re
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from bit import bit_db_api
 from bit import bit_interface
@@ -690,11 +691,12 @@ def test_reputation_button_opens_matching_bitbrowser_on_reputation_page(monkeypa
             "id": 1,
             "username": "tester",
             "display_name": "测试员",
+            "role_key": "super_admin",
         }
 
     response = client.post(
         "/api/reputation/22/open-browser",
-        json={"shop_name": "控制台店铺"},
+        json={"shop_name": "控制台店铺", "execution_target": "server"},
     )
 
     assert response.status_code == 200
@@ -711,6 +713,135 @@ def test_reputation_button_opens_matching_bitbrowser_on_reputation_page(monkeypa
     assert timeout == 10
     assert request.full_url.startswith("http://127.0.0.1:9222/json/new?")
     assert "global-selling.mercadolibre.com%2Freputation" in request.full_url
+
+
+def test_reputation_open_browser_queues_on_selected_agent_and_reports_status(monkeypatch):
+    enqueued = {}
+
+    class AgentStore:
+        def get_agent(self, agent_id, *, online_seconds):
+            assert agent_id == "office"
+            assert online_seconds > 0
+            return {
+                "agent_id": agent_id,
+                "name": "办公室电脑",
+                "online": True,
+                "capabilities": ["daily_task"],
+            }
+
+        def enqueue_job(self, job_id, agent_id, job_type, payload, **kwargs):
+            enqueued.update({
+                "job_id": job_id,
+                "agent_id": agent_id,
+                "job_type": job_type,
+                "payload": payload,
+                **kwargs,
+            })
+            return {"job_id": job_id}
+
+        def get_job(self, job_id):
+            assert job_id == enqueued["job_id"]
+            return {
+                "job_id": job_id,
+                "job_type": "open_store",
+                "created_by_id": 1,
+                "status": "success",
+                "message": "本机任务执行完成",
+                "result": {"status": "success", "message": "已打开控制台店铺的声誉页面"},
+            }
+
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {"rows": [{
+            "id": 22,
+            "display_name": "控制台店铺",
+            "nickname": "SELLER_22",
+        }]},
+    )
+    monkeypatch.setattr(bit_interface, "get_local_agent_store", AgentStore)
+    monkeypatch.setattr(
+        bit_interface,
+        "current_local_agent_bundle",
+        lambda: {"version": "bundle-test"},
+    )
+
+    client = bit_interface.app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["workbench_user"] = {
+            "id": 1,
+            "username": "tester",
+            "display_name": "测试员",
+            "role_key": "super_admin",
+            "is_platform_admin": True,
+        }
+
+    response = client.post(
+        "/api/reputation/22/open-browser",
+        json={
+            "shop_name": "控制台店铺",
+            "execution_target": "agent",
+            "agent_id": "office",
+        },
+    )
+
+    assert response.status_code == 202
+    payload = response.get_json()
+    assert payload["data"]["status"] == "queued"
+    assert payload["data"]["agent_name"] == "办公室电脑"
+    assert enqueued["agent_id"] == "office"
+    assert enqueued["job_type"] == "open_store"
+    assert enqueued["required_version"] == "bundle-test"
+    assert enqueued["payload"]["token_record"] == {
+        "id": 22,
+        "display_name": "控制台店铺",
+        "nickname": "SELLER_22",
+    }
+
+    status_response = client.get(
+        f"/api/reputation/open-store/{payload['data']['task_id']}"
+    )
+
+    assert status_response.status_code == 200
+    assert status_response.get_json()["data"] == {
+        "task_id": enqueued["job_id"],
+        "status": "success",
+        "running": False,
+        "message": "已打开控制台店铺的声誉页面",
+    }
+
+
+def test_reputation_open_browser_status_surfaces_agent_browser_error(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface,
+        "get_local_agent_store",
+        lambda: SimpleNamespace(get_job=lambda _job_id: {
+            "job_id": "open-store-error",
+            "job_type": "open_store",
+            "created_by_id": 1,
+            "status": "error",
+            "message": "本机业务进程异常退出：1",
+            "result": {
+                "status": "error",
+                "message": "未找到名称为“控制台店铺”的比特浏览器窗口",
+            },
+        }),
+    )
+    client = bit_interface.app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["workbench_user"] = {
+            "id": 1,
+            "username": "tester",
+            "display_name": "测试员",
+        }
+
+    response = client.get("/api/reputation/open-store/open-store-error")
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["status"] == "error"
+    assert response.get_json()["data"]["message"] == (
+        "未找到名称为“控制台店铺”的比特浏览器窗口"
+    )
 
 
 def test_full_refresh_keeps_successes_and_logs_failed_stores(monkeypatch):

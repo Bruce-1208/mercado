@@ -59,10 +59,19 @@ def upload_store_link_video(link_id, upload):
             f"在当前授权下的 {site_id} 站点物流类型，已停止上传，请核对店铺授权"
         )
     logistic_type = marketplaces[0]["logistic_type"]
+    # Check local persistence before performing the non-repeatable remote upload.
+    from bit.video_reviews import database, schema
+    with database() as db:
+        schema(db)
     result = client.upload_item_clip(
         cbt_item_id, upload.stream, filename,
         [{"site_id": site_id, "logistic_type": logistic_type}],
     )
+    from bit.video_reviews import record_upload
+    details = record_upload({**row, "permalink": item.get("permalink", ""),
+                             "title": item.get("title", ""), "seller_id": item.get("seller_id")},
+                            result, cbt_item_id, logistic_type)
+    result.update(details)
     try:
         from erp.mercadolibre_store_link_marker_store import mark_video_uploaded
 

@@ -238,7 +238,27 @@ body.zs-console .zs-filter-panel > :is(button, .order-filter-actions, .market-fi
 @media (max-width: 640px) {
     body.zs-console .sidebar { overflow: hidden; min-width: 0; }
     body.zs-console .sidebar-scroll { width: 100%; max-width: 100%; flex: 0 0 auto; }
-    body.zs-console .sidebar .tab-button { width: 41px; flex: 0 0 41px; }
+    /* Mobile navigation keeps readable labels, including after desktop collapse. */
+    body.zs-console .sidebar .tab-button { width: auto; flex: 0 0 auto; gap: 6px; padding-inline: 12px; }
+    body.zs-console .sidebar .nav-label { display: inline; overflow: visible; }
+    body.zs-console .sidebar-toggle { display: none; }
+    body.zs-console .topbar { position: static; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+    body.zs-console .brand { min-width: 0; }
+    body.zs-console .brand-copy { display: block; }
+    body.zs-console .topbar-tools { width: 100%; min-width: 0; flex-wrap: wrap; gap: 8px; }
+    body.zs-console .topbar-tools > * { flex-shrink: 0; }
+    body.zs-console .enterprise-filter { flex: 1 1 100%; min-width: 0; max-width: 100%; }
+    body.zs-console .enterprise-filter select { flex: 1; min-width: 0; max-width: 100%; }
+    body.zs-console .topbar-plugin-download { width: auto; color: #475569; gap: 4px; white-space: nowrap; }
+    body.zs-console .topbar-user { flex-wrap: wrap; }
+    body.zs-console .topbar-agent-download-menu { position: static; max-width: calc(100vw - 24px); }
+    body.zs-console .workspace-tabs { top: 0; }
+    body.zs-console .order-auto-state { white-space: normal; min-width: 0; max-width: 100%; }
+    body.zs-console .order-auto-state::before { flex-shrink: 0; }
+    body.zs-console button:is(.primary, .secondary, .danger) { flex-shrink: 0; white-space: nowrap; }
+    body.zs-console :is(.inventory-heading-actions, .inventory-toolbar-actions) { flex-wrap: wrap; }
+    body.zs-console :is(.inventory-heading-actions, .inventory-toolbar-actions) > button { flex: 1 0 auto; }
+    body.zs-console .tab-heading > :last-child:not(:first-child) { margin-left: 0; max-width: 100%; flex-wrap: wrap; }
     body.zs-console .zs-filter-panel,
     body.zs-console :is(#tab-prohibited-listings, #tab-risk-check) .zs-filter-panel { grid-template-columns: minmax(0, 1fr); padding: 12px; gap: 12px; }
     body.zs-console .zs-filter-panel :is(.search, .datetime-range-field) { grid-column: auto; }

@@ -132,3 +132,35 @@ def test_purchase_tracking_order_lookup_reads_selected_orders_in_one_query():
     assert "mercado_store_tokens" in sql
     assert params == ["20001", "20002", "missing"]
     connection.close.assert_called_once_with()
+
+
+def test_order_details_are_limited_before_expensive_joins():
+    connection = MagicMock()
+    cursor = connection.cursor.return_value.__enter__.return_value
+    cursor.fetchone.side_effect = [{"total": 1000}, {"amount": 42}]
+    cursor.fetchall.return_value = []
+    with (
+        patch("bit.bit_mysql.pymysql.connect", return_value=connection),
+        patch("bit.bit_mysql._ensure_mercado_synced_orders_table"),
+        patch("bit.bit_mysql._ensure_mercado_store_tokens_table"),
+        patch("bit.bit_mysql._ensure_mercado_store_site_settings_table"),
+        patch("erp.mercadolibre_profitability_cache.ensure_profitability_cache_tables"),
+        patch("erp.mercadolibre_store_link_store.ensure_store_link_table"),
+    ):
+        result = bit_mysql.list_orders(page=3, page_size=50, country="墨西哥")
+
+    queries = [call.args for call in cursor.execute.call_args_list]
+    page_query = next(args for args in queries if args[0].startswith(
+        "CREATE TEMPORARY TABLE `tmp_mercado_order_page` AS"
+    ))
+    assert page_query[1] == ["墨西哥", 50, 100]
+    assert "FROM `tmp_mercado_order_filter_source`" in page_query[0]
+    assert "ORDER BY `ordered_at` DESC, `id` DESC LIMIT %s OFFSET %s" in page_query[0]
+    detail_query = next(args[0] for args in queries if args[0].startswith("SELECT order_source.*"))
+    assert "INNER JOIN `tmp_mercado_order_page`" in detail_query
+    rate_query = next(args[0] for args in queries if "CREATE TEMPORARY TABLE `tmp_mercado_order_rate_keys` AS" in args[0])
+    assert "FROM `tmp_mercado_order_filter_source`" in rate_query
+    assert result["total"] == 1000
+    assert result["summary"]["amount"] == 42
+    assert result["pages"] == 20
+    connection.close.assert_called_once_with()

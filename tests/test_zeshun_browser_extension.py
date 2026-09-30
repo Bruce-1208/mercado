@@ -19,8 +19,8 @@ def test_manifest_is_chrome_edge_manifest_v3_and_declares_supported_sites():
     assert manifest["manifest_version"] == 3
     assert manifest["background"]["service_worker"] == "background.js"
     assert "default_popup" not in manifest["action"]
-    assert manifest["version"] == "1.8.24"
-    assert "v1.8.24 · 跟卖AI核查" in (EXTENSION / "popup.html").read_text(encoding="utf-8")
+    assert manifest["version"] == "1.8.28"
+    assert "v1.8.28" in (EXTENSION / "popup.html").read_text(encoding="utf-8")
     matches = manifest["content_scripts"][0]["matches"]
     assert any("mercadolibre.com.mx" in pattern for pattern in matches)
     assert any("mercadolivre.com.br" in pattern for pattern in matches)
@@ -136,7 +136,7 @@ def test_1688_search_results_expose_per_card_collection_buttons():
     assert 'chrome.runtime.sendMessage({type: "SUBMIT_PRODUCT", product})' in content
 
 
-def test_console_downloads_complete_zeshun_extension_package():
+def test_console_downloads_complete_zeshun_extension_package(tmp_path):
     import bit.bit_interface as workbench
 
     workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
@@ -149,18 +149,38 @@ def test_console_downloads_complete_zeshun_extension_package():
 
     assert response.status_code == 200
     assert response.headers["Content-Type"].startswith("application/zip")
-    assert response.headers["X-Zeshun-Extension-Version"] == "1.8.24"
+    assert response.headers["X-Zeshun-Extension-Version"] == workbench.browser_extension_version()
     assert "zeshun-collector-extension.zip" in response.headers["Content-Disposition"]
     with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
         names = set(archive.namelist())
-        assert "zeshun_collector/manifest.json" in names
-        assert "zeshun_collector/launcher.js" in names
-        assert "zeshun_collector/product-batch.js" in names
-        assert "zeshun_collector/content-1688.js" in names
-        assert "zeshun_collector/content-zying.js" in names
-        assert "zeshun_collector/zying-page.js" in names
-        assert "zeshun_collector/1688-page.js" in names
-        assert "zeshun_collector/README.md" in names
+        assert "manifest.json" in names
+        assert "launcher.js" in names
+        assert "product-batch.js" in names
+        assert "content-1688.js" in names
+        assert "content-zying.js" in names
+        assert "zying-page.js" in names
+        assert "1688-page.js" in names
+        assert "README.md" in names
+        assert names == set(workbench.BROWSER_EXTENSION_PACKAGE_FILES)
+        archive.extractall(tmp_path)
+        manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+        referenced = [manifest["background"]["service_worker"], manifest["options_page"]]
+        referenced.extend(manifest["icons"].values())
+        referenced.extend(manifest["action"]["default_icon"].values())
+        for script in manifest["content_scripts"]:
+            referenced.extend(script.get("js", []))
+            referenced.extend(script.get("css", []))
+        for resource in manifest["web_accessible_resources"]:
+            referenced.extend(resource["resources"])
+        assert all((tmp_path / filename).is_file() for filename in referenced)
+        for filename in names:
+            packaged = (tmp_path / filename).read_bytes()
+            if filename == "background.js":
+                assert b'const DOWNLOADED_ACCOUNT_CONFIG = {"bundleId":' in packaged
+                assert b'"username":"collector"' in packaged
+                assert b'"expiresAt":' in packaged
+            else:
+                assert packaged == (EXTENSION / filename).read_bytes()
 
 
 def test_console_topbar_exposes_extension_download():

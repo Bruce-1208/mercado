@@ -563,7 +563,39 @@ def _fetch_orders(client, seller_id, filters):
         yield order
 
 
-def _enrich_order_shipment_statuses(client, orders):
+def _shipment_dispatch_deadline(client, shipping_id):
+    """Read the authoritative ship-by time, with legacy fallback for old shipments."""
+
+    try:
+        sla = client.request(
+            "GET",
+            f"/marketplace/shipments/{shipping_id}/sla",
+        ) or {}
+        expected_date = str(sla.get("expected_date") or "").strip()
+        if expected_date:
+            return expected_date
+    except MercadoAPIError as exc:
+        if "401" in str(exc) or "access token" in str(exc).lower():
+            raise
+    except Exception:
+        pass
+
+    try:
+        lead_time = client.request(
+            "GET",
+            f"/marketplace/shipments/{shipping_id}/lead_time",
+        ) or {}
+        estimate = lead_time.get("estimated_delivery_time") or {}
+        return str(estimate.get("pay_before") or "").strip()
+    except MercadoAPIError as exc:
+        if "401" in str(exc) or "access token" in str(exc).lower():
+            raise
+    except Exception:
+        pass
+    return ""
+
+
+def _enrich_order_shipment_statuses(client, orders, token_id):
     """Attach the authoritative shipment lifecycle to order payloads."""
 
     shipping_ids = list(dict.fromkeys(
@@ -573,17 +605,37 @@ def _enrich_order_shipment_statuses(client, orders):
     ))
     if not shipping_ids:
         return {"shipments": 0, "failed": 0}
+
+    cached_deadlines = bit_mysql.get_mercado_shipping_deadlines(
+        token_id, shipping_ids
+    )
+
+    def fetch_shipment(worker, shipping_id):
+        detail = worker.get_shipment(shipping_id) or {}
+        dispatch_deadline = ""
+        status = str(detail.get("status") or "").strip().lower()
+        logistic = detail.get("logistic") or {}
+        logistic_type = str(
+            logistic.get("type") if isinstance(logistic, dict) else ""
+        ).strip().lower()
+        if (status in {"ready_to_ship", "handling"}
+                and logistic_type != "fulfillment"
+                and not cached_deadlines.get(shipping_id)):
+            dispatch_deadline = _shipment_dispatch_deadline(worker, shipping_id)
+        return {"detail": detail, "dispatch_deadline": dispatch_deadline}
+
     fetched = _parallel_api_results(
         client,
         shipping_ids,
-        lambda worker, shipping_id: worker.get_shipment(shipping_id),
+        fetch_shipment,
         workers_env="MERCADO_ORDER_STATUS_WORKERS",
         default_workers=8,
     )
     details = {}
+    dispatch_deadline_by_id = {}
     failed = 0
     for shipping_id in shipping_ids:
-        detail, error = fetched.get(
+        shipment, error = fetched.get(
             shipping_id,
             (None, RuntimeError("运单详情接口未返回结果")),
         )
@@ -596,7 +648,11 @@ def _enrich_order_shipment_statuses(client, orders):
             failed += 1
             _append_log(f"Shipment {shipping_id} 状态读取失败：{error}")
             continue
+        detail = shipment.get("detail") or {}
         details[shipping_id] = detail or {}
+        dispatch_deadline_by_id[shipping_id] = str(
+            shipment.get("dispatch_deadline") or ""
+        ).strip()
     for order in orders or ():
         shipping_id = str(
             ((order or {}).get("shipping") or {}).get("id") or ""
@@ -611,6 +667,12 @@ def _enrich_order_shipment_statuses(client, orders):
         order["_shipment_last_updated"] = str(
             detail.get("last_updated") or ""
         ).strip()
+        tracking_number = str(detail.get("tracking_number") or "").strip()
+        if tracking_number:
+            order["_shipment_tracking_number"] = tracking_number
+        dispatch_deadline = dispatch_deadline_by_id.get(shipping_id)
+        if dispatch_deadline:
+            order["_shipment_dispatch_deadline"] = dispatch_deadline
     return {"shipments": len(details), "failed": failed}
 
 
@@ -621,20 +683,38 @@ def _refresh_old_store_shipment_statuses(client, record, cutoff):
     display_name = str(record.get("display_name") or record.get("nickname") or token_id)
     shipping_ids = bit_mysql.list_mercado_shipment_status_candidates(token_id, cutoff)
     totals = {"shipments": 0, "orders": 0, "failed": 0}
+    cached_deadlines = bit_mysql.get_mercado_shipping_deadlines(
+        token_id, shipping_ids
+    )
     for start in range(0, len(shipping_ids), 50):
         if _recent_sync_due_event.is_set():
             return {**totals, "yielded": True}
         batch_ids = shipping_ids[start:start + 50]
+
+        def fetch_shipment(worker, shipping_id):
+            detail = worker.get_shipment(shipping_id) or {}
+            dispatch_deadline = ""
+            status = str(detail.get("status") or "").strip().lower()
+            logistic = detail.get("logistic") or {}
+            logistic_type = str(
+                logistic.get("type") if isinstance(logistic, dict) else ""
+            ).strip().lower()
+            if (status in {"ready_to_ship", "handling"}
+                    and logistic_type != "fulfillment"
+                    and not cached_deadlines.get(shipping_id)):
+                dispatch_deadline = _shipment_dispatch_deadline(worker, shipping_id)
+            return {"detail": detail, "dispatch_deadline": dispatch_deadline}
+
         fetched = _parallel_api_results(
             client,
             batch_ids,
-            lambda worker, shipping_id: worker.get_shipment(shipping_id),
+            fetch_shipment,
             workers_env="MERCADO_ORDER_STATUS_WORKERS",
             default_workers=8,
         )
         entries = []
         for shipping_id in batch_ids:
-            detail, error = fetched.get(
+            shipment, error = fetched.get(
                 shipping_id,
                 (None, RuntimeError("运单详情接口未返回结果")),
             )
@@ -652,11 +732,14 @@ def _refresh_old_store_shipment_statuses(client, record, cutoff):
                     "error": message,
                 })
                 continue
+            detail = shipment.get("detail") or {}
             entries.append({
                 "shipping_id": shipping_id,
-                "status": (detail or {}).get("status"),
-                "substatus": (detail or {}).get("substatus"),
-                "last_updated": (detail or {}).get("last_updated"),
+                "status": detail.get("status"),
+                "substatus": detail.get("substatus"),
+                "last_updated": detail.get("last_updated"),
+                "tracking_number": detail.get("tracking_number"),
+                "dispatch_deadline": shipment.get("dispatch_deadline"),
             })
         saved = bit_mysql.save_mercado_shipment_statuses(token_id, entries)
         totals["shipments"] += int(saved.get("shipments") or 0)
@@ -1280,7 +1363,7 @@ def _sync_store(
                 batch.append(order)
                 totals["fetched"] += 1
                 if len(batch) >= 50:
-                    _enrich_order_shipment_statuses(client, batch)
+                    _enrich_order_shipment_statuses(client, batch, token_id)
                     if enrich_images:
                         _enrich_order_images(client, batch)
                     result = bit_mysql.upsert_mercado_synced_orders(record, batch)
@@ -1301,7 +1384,7 @@ def _sync_store(
                             updated_count=int(_sync_state.get("updated_count") or 0) + int(result.get("updated") or 0),
                         )
             if batch:
-                _enrich_order_shipment_statuses(client, batch)
+                _enrich_order_shipment_statuses(client, batch, token_id)
                 if enrich_images:
                     _enrich_order_images(client, batch)
                 result = bit_mysql.upsert_mercado_synced_orders(record, batch)
@@ -1410,7 +1493,7 @@ def _sync_old_store_statuses(
             orders.append(order)
 
         if orders:
-            shipment_result = _enrich_order_shipment_statuses(client, orders)
+            shipment_result = _enrich_order_shipment_statuses(client, orders, token_id)
             page_failed += int(shipment_result.get("failed") or 0)
 
         result = (
@@ -1468,7 +1551,10 @@ def _sync_old_store_statuses(
             return {"store": display_name, "status": "paused", "yielded": True, **totals}
 
 
-def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
+def run_order_sync(
+    start_date="", end_date="", token_ids=None, mode="manual",
+    *, defer_automatic_print=False,
+):
     mode = _sync_mode(mode)
     records = _token_records(token_ids)
     start_text = end_text = ""
@@ -1627,16 +1713,29 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
         if failed == 0
         else f"同步完成，{failed} 家店铺失败"
     )
+    wait_for_auto_print = (
+        mode == "automatic" and bool(defer_automatic_print)
+        and final_status in ("completed", "partial")
+    )
     _state_update(
-        running=False,
-        status=final_status,
-        message=message,
-        current_store="",
-        finished_at=_now_text(),
+        running=wait_for_auto_print,
+        status="running" if wait_for_auto_print else final_status,
+        message=(
+            "订单同步完成，正在自动打印面单并同步国际运单号"
+            if wait_for_auto_print else message
+        ),
+        current_store="自动打印面单并同步国际运单号" if wait_for_auto_print else "",
+        finished_at="" if wait_for_auto_print else _now_text(),
         results=list(results),
     )
     _append_log(message)
-    return order_sync_status()
+    state = order_sync_status()
+    if wait_for_auto_print:
+        # This marker is only returned to the background coordinator. It is
+        # deliberately not stored in the status exposed to the web client.
+        state["_completion_status"] = final_status
+        state["_completion_message"] = message
+    return state
 
 
 def _run_background(start_date, end_date, token_ids, mode):
@@ -1654,13 +1753,38 @@ def _run_background(start_date, end_date, token_ids, mode):
         )
         return
     try:
-        run_order_sync(start_date, end_date, token_ids, mode)
+        sync_result = run_order_sync(
+            start_date,
+            end_date,
+            token_ids,
+            mode,
+            defer_automatic_print=(mode == "automatic"),
+        )
         with _state_guard:
-            final_status = str(_sync_state.get("status") or "")
+            final_status = str(
+                (sync_result or {}).get("_completion_status")
+                or _sync_state.get("status") or ""
+            )
+            final_message = str(
+                (sync_result or {}).get("_completion_message")
+                or _sync_state.get("message") or ""
+            )
             daily_run_date = str(_sync_state.get("daily_status_run_date") or "")
         if mode == "automatic" and final_status in ("completed", "partial"):
             auto_print_result = _run_automatic_order_print(token_ids)
-            _state_update(auto_print=auto_print_result)
+            print_summary = (
+                f"；自动打印 {int(auto_print_result.get('printed_order_count') or 0)} 单，"
+                f"生成 {int(auto_print_result.get('shipment_count') or 0)} 个面单"
+                if auto_print_result.get("status") == "completed" else ""
+            )
+            _state_update(
+                auto_print=auto_print_result,
+                running=False,
+                status=final_status,
+                message=final_message + print_summary,
+                current_store="",
+                finished_at=_now_text(),
+            )
         if mode == DAILY_STATUS_MODE and final_status in ("completed", "partial"):
             _state_update(
                 running=True,

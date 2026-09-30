@@ -238,3 +238,21 @@ def test_excel_preserves_ids_and_never_executes_product_text():
     assert sheet["A6"].value == "001234567890123456"
     assert sheet["B6"].data_type == "s"
     assert sheet["I6"].value is None and sheet["M6"].value is None
+
+
+def test_pipeline_exports_once_after_batch_and_persists_each_item(tmp_path, monkeypatch):
+    service, browser, config = setup(tmp_path, monkeypatch)
+    exported = []
+    export = service.store.export
+
+    def counted_export():
+        exported.append(service.store.counts()["success"])
+        return export()
+
+    monkeypatch.setattr(service.store, "export", counted_export)
+    lock = service.lock()
+    assert lock.acquire()
+    service.run(config, "pipeline", None, lock)
+    assert exported == [10]
+    assert Store(tmp_path).counts()["success"] == 10
+    assert (tmp_path / "reports" / "all.csv").exists()

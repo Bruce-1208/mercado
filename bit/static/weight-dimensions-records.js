@@ -3,6 +3,7 @@
 
     const columns = [
         ["time", "下单时间"], ["freight_changed_at", "运费变更时间"], ["image_url", "图片"], ["order_number", "编号"],
+        ["execution_logs", "更新历史"],
         ["salesperson", "业务员"], ["source", "来源"], ["company_store", "公司店铺"],
         ["product_id", "产品id"], ["category", "产品分类"], ["title", "标题"],
         ["shipment_id", "运单号"], ["tracking_number", "追踪号"], ["carrier", "运输商"],
@@ -12,8 +13,20 @@
         ["actual_freight", "实际运费"], ["freight_difference", "运费差值（实际-当前）"],
         ["marketplace_item_id", "美客多产品编号"], ["current_net_proceeds_usd", "本次净收益（USD）"],
         ["query_status", "查询状态"], ["query_error", "查询说明"],
-        ["execution_status", "执行状态"], ["execution_error", "执行说明"], ["execution_logs", "更新记录"]
+        ["zeshun_execution_status", "泽顺 ERP 执行状态"],
+        ["zying_execution_status", "智赢产品执行状态"], ["execution_error", "执行说明"]
     ];
+    const columnWidths = {
+        time: 148, freight_changed_at: 148, image_url: 76, order_number: 150,
+        salesperson: 92, source: 120, company_store: 130, product_id: 100,
+        category: 140, title: 220, shipment_id: 150, tracking_number: 150,
+        carrier: 100, region: 90, declared_weight_g: 126, declared_dimensions_cm: 148,
+        declared_freight: 112, actual_weight_g: 112, actual_dimensions_cm: 138,
+        actual_freight: 112, freight_difference: 142, marketplace_item_id: 150,
+        current_net_proceeds_usd: 144, query_status: 110, query_error: 240,
+        zeshun_execution_status: 150, zying_execution_status: 150,
+        execution_error: 240, execution_logs: 170,
+    };
     let recordTotal = 0;
     let pageRequest = 0;
     let renderSignature = "";
@@ -34,6 +47,75 @@
     let pollGeneration = 0;
     const selectedOrderNumbers = new Set();
     const $ = (id) => document.getElementById(id);
+    let historyRecord = null;
+    let historyPage = 1;
+    const historyPageSize = 50;
+
+    function historyStatus(entry, allEntries) {
+        const status = String(entry.status || "—");
+        if (!["进行中", "执行中"].includes(status) || !entry.execution_id) return status;
+        const entryTime = String(entry.time || "");
+        const target = String(entry.marketplace_item_id || entry.product_id ||
+            String(entry.message || "").match(/^链接 ([A-Z]{3}\d+)：/)?.[1] || "");
+        const hasFinalResult = allEntries.some(candidate => candidate && candidate !== entry &&
+            candidate.execution_id === entry.execution_id && candidate.stage === entry.stage &&
+            String(candidate.time || "") >= entryTime &&
+            (!target || !candidate.marketplace_item_id && !candidate.product_id ||
+                String(candidate.marketplace_item_id || candidate.product_id) === target) &&
+            ["成功", "失败", "跳过", "保存失败"].includes(String(candidate.status || "")));
+        return hasFinalResult ? "阶段已结束" : "执行中";
+    }
+    function historyValues(entry, allEntries) {
+        const message = String(entry.message || "");
+        const link = entry.marketplace_item_id || message.match(/^链接 ([A-Z]{3}\d+)：/)?.[1] || entry.product_id || "—";
+        const weight = entry.submitted_weight_g || message.match(/重量 ([\d.]+)g/)?.[1] || "—";
+        const dimensions = entry.submitted_dimensions_cm || (entry.dimensions_preserved ? "保留原尺寸" : "") || message.match(/尺寸 ([\d.x×]+)cm/)?.[1] || "—";
+        const net = entry.net_proceeds_usd ?? message.match(/净收益 USD ([\d.]+)/)?.[1] ?? "—";
+        return [entry.time || "—", entry.execution_id || "旧记录", link, entry.stage || "—",
+            weight, dimensions, net, historyStatus(entry, allEntries), entry.operator || "未记录", message || "—",
+            entry.site_name ? `${entry.site_name}${entry.site_id ? `（${entry.site_id}）` : ""}` : entry.site_id || "—",
+            entry.link_name || "—",
+            entry.salesperson || "—", entry.store_group || "—", entry.store_name || "—"];
+    }
+    function renderHistory() {
+        if (!historyRecord) return;
+        const query = String($("wdr-history-search").value || "").trim().toLowerCase();
+        const statusFilter = $("wdr-history-status").value;
+        const allEntries = (historyRecord.execution_logs || []).filter(entry => entry && typeof entry === "object");
+        const entries = allEntries.slice().reverse().filter(entry =>
+            (!statusFilter || historyStatus(entry, allEntries) === statusFilter) &&
+            (!query || historyValues(entry, allEntries).join(" ").toLowerCase().includes(query)));
+        const pages = Math.max(1, Math.ceil(entries.length / historyPageSize));
+        historyPage = Math.max(1, Math.min(historyPage, pages));
+        $("wdr-history-title").textContent = `更新历史记录表 · 订单 ${historyRecord.order_number}`;
+        $("wdr-history-summary").textContent = `共 ${entries.length} 条记录 · 第 ${historyPage} / ${pages} 页`;
+        $("wdr-history-prev").disabled = historyPage <= 1;
+        $("wdr-history-next").disabled = historyPage >= pages;
+        const body = $("wdr-history-body"); body.replaceChildren();
+        entries.slice((historyPage - 1) * historyPageSize, historyPage * historyPageSize).forEach(entry => {
+            const tr = document.createElement("tr");
+            historyValues(entry, allEntries).forEach((value, index) => {
+                const td = document.createElement("td");
+                td.textContent = String(value); td.title = String(value);
+                if (index === 7) {
+                    const result = historyStatus(entry, allEntries);
+                    td.className = result === "成功" ? "wdr-history-success" : result === "失败" ? "wdr-history-failure" : "";
+                }
+                tr.appendChild(td);
+            });
+            body.appendChild(tr);
+        });
+        if (!entries.length) {
+            const tr = document.createElement("tr"); const td = document.createElement("td");
+            td.colSpan = 15; td.textContent = query || statusFilter ? "没有符合条件的更新记录" : "此订单尚无更新记录";
+            tr.appendChild(td); body.appendChild(tr);
+        }
+    }
+    function openHistory(row) {
+        historyRecord = row; historyPage = 1;
+        $("wdr-history-search").value = ""; $("wdr-history-status").value = "";
+        renderHistory(); $("wdr-history-dialog").showModal();
+    }
 
     function status(message) { $("wdr-state").textContent = message; }
     function errorMessage(error) { return error && error.message ? error.message : String(error); }
@@ -82,8 +164,24 @@
         $("wdr-page-summary").textContent = `共 ${recordTotal} 条 · 第 ${page} / ${pageCount} 页`;
         $("wdr-page-prev").disabled = page <= 1;
         $("wdr-page-next").disabled = page >= pageCount;
-        const head = $("wdr-table").querySelector("thead");
-        const body = $("wdr-table").querySelector("tbody");
+        const table = $("wdr-table");
+        const head = table.querySelector("thead");
+        const body = table.querySelector("tbody");
+        let colgroup = table.querySelector("colgroup");
+        if (!colgroup) {
+            colgroup = document.createElement("colgroup");
+            table.insertBefore(colgroup, head);
+        }
+        colgroup.replaceChildren();
+        const selectColumn = document.createElement("col");
+        selectColumn.style.width = "44px";
+        colgroup.appendChild(selectColumn);
+        columns.forEach(([key]) => {
+            const col = document.createElement("col");
+            col.style.width = `${columnWidths[key] || 130}px`;
+            colgroup.appendChild(col);
+        });
+        table.style.width = `${44 + columns.reduce((total, [key]) => total + (columnWidths[key] || 130), 0)}px`;
         head.replaceChildren(); body.replaceChildren();
         const header = document.createElement("tr");
         const selectHead = document.createElement("th");
@@ -109,7 +207,7 @@
             render(currentRecords);
         });
         selectHead.appendChild(selectAll); header.appendChild(selectHead);
-        columns.forEach(([, label]) => { const th = document.createElement("th"); th.textContent = label; header.appendChild(th); });
+        columns.forEach(([, label]) => { const th = document.createElement("th"); th.textContent = label; th.title = label; header.appendChild(th); });
         head.appendChild(header);
         if (!currentRecords.length) {
             const tr = document.createElement("tr"); const td = document.createElement("td");
@@ -139,10 +237,18 @@
                 if (key === "image_url") {
                     const src = safeImageUrl(row[key]);
                     if (src) { const img = document.createElement("img"); img.src = src; img.alt = "产品图片"; img.loading = "lazy"; td.appendChild(img); } else td.textContent = "—";
-                } else if (key === "execution_logs") { td.className = "wdr-log-cell"; td.textContent = displayText(row, key); }
+                } else if (key === "execution_logs") {
+                    td.className = "wdr-log-cell";
+                    const button = document.createElement("button"); button.type = "button";
+                    button.textContent = `查看更新历史（${(row.execution_logs || []).length}）`;
+                    button.addEventListener("click", () => openHistory(row)); td.appendChild(button);
+                }
                 else td.textContent = displayText(row, key);
+                if (!["image_url", "execution_logs"].includes(key)) td.title = displayText(row, key);
                 if (["product_id", "marketplace_item_id", "declared_weight_g", "declared_dimensions_cm", "actual_weight_g", "actual_dimensions_cm"].includes(key) && !cellValue(row, key)) td.classList.add("wdr-warning");
-                if (key === "execution_status" && row[key]) td.className = row[key] === "完成" ? "wdr-success" : "wdr-warning";
+                if (["zeshun_execution_status", "zying_execution_status"].includes(key)) {
+                    td.className = row[key] === "成功" ? "wdr-success" : row[key] === "未执行" ? "" : "wdr-warning";
+                }
                 tr.appendChild(td);
             });
             body.appendChild(tr);
@@ -171,6 +277,9 @@
         currentRecords.forEach(row => {
             const key = String(row.order_number || "").trim();
             if (selectedOrderNumbers.has(key)) selectedRecords.set(key, row);
+            if (historyRecord && String(historyRecord.order_number) === key) {
+                historyRecord = row; renderHistory();
+            }
         });
         const signature = JSON.stringify([page, pageSize, recordTotal, currentRecords]);
         if (signature !== renderSignature) { renderSignature = signature; renderSelected(); }
@@ -210,7 +319,10 @@
                 if (data.status === "ready") { busy = false; status(data.message); updateButtons(); break; }
                 if (data.status === "failed") throw new Error(data.message || "订单读取失败");
             } else {
-                status(`${data.execute_message || "正在执行"}（${data.execute_processed || 0}/${data.execute_total || 0}）`);
+                const phase = data.execute_status === "queued" ? "排队中，Agent 尚未领取"
+                    : data.execute_status === "running" ? "执行中，正在处理"
+                        : "正在执行";
+                status(`${data.execute_message || phase}（${data.execute_processed || 0}/${data.execute_total || 0}）`);
                 if (data.execute_status === "completed") { busy = false; status(data.execute_message); updateButtons(); break; }
             }
             await new Promise((resolve) => window.setTimeout(resolve, 3000));
@@ -287,15 +399,16 @@
         try {
             const form = new FormData(); form.append("file", file);
             const data = await api("/api/weight-dimensions-records/upload", { method: "POST", body: form });
-            taskId = data.task_id; $("wdr-file-name").textContent = `${file.name}；正在后台查询包裹数据`; await poll("query");
+            taskId = data.task_id; $("wdr-file-name").textContent = `${file.name}；正在按单号补充已有订单`; await poll("query");
         } catch (error) { busy = false; status(`上传失败：${errorMessage(error)}`); updateButtons(); }
     }
     async function execute(action) {
         if (!taskId || busy) return;
         const rows = selectedRows(action);
         if (!allMatchingSelected && !rows.length) { alert(`请先选择可${action === "zeshun" ? "更新泽顺数据和链接" : "更新智赢产品"}的订单`); return; }
-        if (action === "zying" && !$("wdr-agent-id")?.value) { alert("请先选择在线的本机 Agent"); return; }
-        const label = action === "zeshun" ? "泽顺数据和链接" : "智赢产品";
+        const executionTarget = $("wdr-execution-target")?.value || "agent";
+        if (action === "zying" && executionTarget === "agent" && !$("wdr-agent-id")?.value) { alert("请先选择在线的本机 Agent"); return; }
+        const label = action === "zeshun" ? "泽顺数据和链接" : `智赢产品（${executionTarget === "server" ? "服务器执行，需服务器已登录智赢" : "本机 Agent"}）`;
         const selectionDescription = allMatchingSelected
             ? `筛选结果 ${recordTotal} 条（执行时自动跳过缺少商品关联、实际重量或已完成该操作的记录）`
             : `已选 ${rows.length} 条订单`;
@@ -303,7 +416,7 @@
         if (!window.confirm(`确认更新${selectionDescription}的${label}吗？${scope}`)) return;
         busyMode = "execute"; busy = true; updateButtons(); status(`正在提交${label}更新…`);
         try {
-            await api(`/api/weight-dimensions-records/${encodeURIComponent(taskId)}/execute`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({action, select_all_matching: allMatchingSelected, excluded_order_numbers: allMatchingSelected ? Array.from(excludedOrderNumbers) : [], order_numbers: allMatchingSelected ? [] : rows.map((row) => row.order_number), agent_id: $("wdr-agent-id")?.value || ""}) });
+            await api(`/api/weight-dimensions-records/${encodeURIComponent(taskId)}/execute`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({action, execution_target: executionTarget, select_all_matching: allMatchingSelected, excluded_order_numbers: allMatchingSelected ? Array.from(excludedOrderNumbers) : [], order_numbers: allMatchingSelected ? [] : rows.map((row) => row.order_number), agent_id: $("wdr-agent-id")?.value || ""}) });
             await poll("execute");
         } catch (error) { busy = false; status(`执行失败：${errorMessage(error)}`); updateButtons(); }
     }
@@ -319,6 +432,12 @@
     }
     document.addEventListener("DOMContentLoaded", () => {
         if (!($("wdr-upload") && $("wdr-table"))) return;
+        $("wdr-history-close").addEventListener("click", () => $("wdr-history-dialog").close());
+        $("wdr-history-dialog").addEventListener("close", () => { historyRecord = null; });
+        $("wdr-history-search").addEventListener("input", () => { historyPage = 1; renderHistory(); });
+        $("wdr-history-status").addEventListener("change", () => { historyPage = 1; renderHistory(); });
+        $("wdr-history-prev").addEventListener("click", () => { historyPage--; renderHistory(); });
+        $("wdr-history-next").addEventListener("click", () => { historyPage++; renderHistory(); });
         const start = new Date();
         start.setDate(start.getDate() - 6);
         start.setHours(0, 0, 0, 0);
@@ -336,6 +455,11 @@
         });
         $("wdr-zeshun-execute").addEventListener("click", () => execute("zeshun")); $("wdr-zying-execute").addEventListener("click", () => execute("zying"));
         $("wdr-agent-refresh").addEventListener("click", loadAgents);
+        $("wdr-execution-target")?.addEventListener("change", () => {
+            const server = $("wdr-execution-target").value === "server";
+            $("wdr-agent-id").disabled = server;
+            $("wdr-agent-refresh").disabled = server;
+        });
         $("wdr-export").addEventListener("click", () => { if (taskId) window.location.assign(`/api/weight-dimensions-records/${encodeURIComponent(taskId)}/export`); });
         const zone = $("wdr-dropzone");
         ["dragenter", "dragover"].forEach((eventName) => zone.addEventListener(eventName, (event) => { event.preventDefault(); zone.classList.add("wdr-drag-active"); }));

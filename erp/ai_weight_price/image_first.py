@@ -1,8 +1,21 @@
 """Image-first workflow: block unmatched products; retain weight when missing."""
 import time
+import logging
+from contextlib import contextmanager
+
+
+@contextmanager
+def timed_stage(key, stage):
+    started = time.monotonic()
+    try:
+        yield
+    finally:
+        logging.getLogger(__name__).info("核重核价耗时 商品=%s 阶段=%s 秒=%.2f",
+                                         key, stage, time.monotonic() - started)
+
 
 from .browser import CircuitOpen, NoExactMatch, SearchTimeout, Stopped, WritebackMismatch
-from .models import number, erp_value_equal, parse_dimensions_evidence, parse_weight_evidence
+from .models import ModelServiceError, number, erp_value_equal, parse_dimensions_evidence, parse_weight_evidence
 from .pricing import protect_net_income, usd_cost
 
 
@@ -46,8 +59,10 @@ def process(service, task, browser, models, config):
             }}]
             service.progress(key, f"商品 {key}：复用上次最佳匹配，直接核对1688变体")
         else:
-            candidates = browser.search_images(task)
-            approved, evidence = models.match_images(task, candidates)
+            with timed_stage(key, "1688搜图"):
+                candidates = browser.search_images(task)
+            with timed_stage(key, "AI图片匹配"):
+                approved, evidence = models.match_images(task, candidates)
         # Keep the strongest score even when the model rejects the candidate as
         # a non-match.  The UI should show why a product was rejected instead
         # of displaying a blank score for every below-threshold result.
@@ -55,10 +70,12 @@ def process(service, task, browser, models, config):
         store.update(key, image_match_evidence=evidence, match_evidence=[],
                      candidate_count=len(candidates),
                      image_match_confidence=max(image_scores, default=None))
+        score_messages = []
         for item in evidence:
             review = item["review"]
             verdict = "同款" if review.get("same_product") is True else "非同款"
-            store.log(f"候选图 {review['index']}：{verdict}，匹配分数 {review['confidence']:.2%}；{review.get('reason', '')}", key)
+            score_messages.append(f"候选图 {review['index']}：{verdict}，匹配分数 {review['confidence']:.2%}；{review.get('reason', '')}")
+        store.log_many(score_messages, key)
         # Preserve the top detail URL even when every image score is below the
         # approval threshold, so the operator can inspect the best lead from
         # the task list and retry after supplementing the ERP SKU.
@@ -91,7 +108,8 @@ def process(service, task, browser, models, config):
             key, "image_matched", "图片同款已确认；不匹配具体变体，读取当前1688链接的最高最终单价",
             page_url=candidate["url"],
         )
-        detail = browser.read_offer(task, candidate)
+        with timed_stage(key, "1688详情"):
+            detail = browser.read_offer(task, candidate)
         detail_url = detail.get("url") or candidate.get("url", "")
         # read_offer navigates to the real offer page even when the image-search
         # card itself only has an air.1688.com shell URL. Persist that resolved
@@ -175,6 +193,9 @@ def process(service, task, browser, models, config):
         return save_result(service, task, browser, config, "risk",
                            f"图片匹配成功；未匹配具体变体，已按{sku_count}个变体中的最高价回填净收益；最高价变体未提供可解析重量，保留原重量并把状态改为通过",
                            changes)
+    except ModelServiceError as exc:
+        store.log(str(exc), key, "ERROR")
+        raise CircuitOpen(str(exc) + "；已暂停，保留当前商品，不修改ERP价格、重量或审核状态") from exc
     except SearchTimeout as exc:
         save_result(service, store.get(key), browser, config, "risk",
                     str(exc) + "；未获得可回填结果，标记价格异常", {})
@@ -270,7 +291,8 @@ def save_result(service, task, browser, config, result, reason, changes):
             store.update(key, stage="writing", erp_before=old, erp_after=None, write_verified=False,
                          write_intent=attempt["intent"], write_history=history)
             store.log(f"回填前：重量 {old.get('weight_g')}g，净收益 ${old.get('net_income_usd')}，智赢状态 {old.get('review_status')}；计划修改：{changes}", key)
-        actual = browser.write_patch(task, changes, before_save)
+        with timed_stage(key, "ERP回写及校验"):
+            actual = browser.write_patch(task, changes, before_save)
         if attempt is None or not isinstance(actual, dict):
             raise ValueError("ERP未提供修改前后回读记录")
         for field in ("weight_g", "net_income_usd", "review_status", "dimensions_cm"):

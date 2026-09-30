@@ -16,10 +16,24 @@ def create_blueprint(service, authorize=None, agent_dispatch=None, server_execut
             if denied is not None:
                 return denied
         user = session.get("workbench_user") if authorize else None
-        is_admin = bool(user and (
-            user.get("is_platform_admin") or user.get("role_key") == "super_admin"
-        ))
-        service.bind_actor(user, view_all=is_admin)
+        is_admin = bool(user and user.get("role_key") == "super_admin")
+        can_view_all = is_admin or bool(user and user.get("role_key") == "enterprise_admin")
+        # Enterprise administrators can inspect everyone's work without
+        # gaining server-browser execution or cross-account write access.
+        service.bind_actor(user, view_all=is_admin or (can_view_all and request.method == "GET"))
+        g.awp_can_view_all = can_view_all
+        # Filtering is read-only and must never change the account used to
+        # dispatch browser actions or save settings.
+        owner = request.args.get("owner_user_id", "").strip()
+        if request.method == "GET" and owner and request.path in {
+            "/api/ai-weight-price/tasks", "/api/ai-weight-price/logs",
+            "/api/ai-weight-price/run-items", "/api/ai-weight-price/export",
+        }:
+            if not owner.isdigit() or int(owner) <= 0:
+                return jsonify(message="业务员编号无效"), 400
+            if not can_view_all and (not user or str(user.get("id")) != str(int(owner))):
+                return jsonify(message="只能查看本人的任务记录"), 403
+            service.store.set_actor({"id": int(owner)}, view_all=False)
         g.awp_is_admin = is_admin
         # Read-only task data is shared through the server store and must remain
         # available from every authenticated workbench. Browser automation still
@@ -133,6 +147,7 @@ def create_blueprint(service, authorize=None, agent_dispatch=None, server_execut
             agent_launch_available=bool(agent_dispatch),
             server_execution=server_execution,
             is_admin=bool(getattr(g, "awp_is_admin", False)),
+            can_view_all=bool(getattr(g, "awp_can_view_all", False)),
         )
 
     @bp.get("/api/ai-weight-price/status")
@@ -205,6 +220,10 @@ def create_blueprint(service, authorize=None, agent_dispatch=None, server_execut
                 service.store.set_state("categories", [])
             service.store.log("已保存核重核价配置")
         return jsonify(result)
+
+    @bp.get("/api/ai-weight-price/owners")
+    def owners():
+        return jsonify(options=service.store.owners())
 
     @bp.get("/api/ai-weight-price/tasks")
     def tasks():

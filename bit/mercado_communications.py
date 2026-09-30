@@ -162,6 +162,11 @@ def execute_store_communication(
             limit=data.get("limit", 50),
             offset=data.get("offset", 0),
         )
+    if normalized_action == "seller-notices":
+        return client.get_seller_notices(
+            limit=data.get("limit", 20),
+            offset=data.get("offset", 0),
+        )
     if normalized_action == "pre-sale-summary":
         item_id = str(data.get("item_id") or "").strip() or None
         user_id = str(data.get("user_id") or "").strip() or None

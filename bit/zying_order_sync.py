@@ -11,7 +11,23 @@ from urllib.parse import urlsplit
 
 ORDER_URL = "https://meli.zying.net/#/order"
 SEARCH_PLACEHOLDER = "订单、采购单、运单,多个编号可以逗号、空格分隔"
-SYNC_BATCH_SIZE = 5
+SYNC_BATCH_SIZE = 10
+SYNC_PROGRESS_TIMEOUT = 600
+
+
+def is_lookup_timeout(exc):
+    if isinstance(exc, TimeoutError):
+        return True
+    try:
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+    except ImportError:
+        return False
+    return isinstance(exc, PlaywrightTimeoutError)
+
+
+def timeout_outcome(exc):
+    return {"skip_reason": "智赢查询超时，已跳过并继续下一单：" + str(exc)[:200]}
+
 
 
 def clean(value):
@@ -185,7 +201,14 @@ class ZyingPage:
         outcomes = {}
 
         def search_group(group):
-            listing, too_many = self._search(group)
+            try:
+                listing, too_many = self._search(group)
+            except Exception as exc:
+                if not is_lookup_timeout(exc):
+                    raise
+                for row in group:
+                    outcomes[clean(row.get("id"))] = timeout_outcome(exc)
+                return
             if too_many:
                 if len(group) > 1:
                     middle = len(group) // 2
@@ -219,9 +242,15 @@ class ZyingPage:
             for internal_id, row_ids in matches_by_id.items():
                 try:
                     detail = self._detail(internal_id)
-                except ValueError as exc:
+                except Exception as exc:
+                    if is_lookup_timeout(exc):
+                        outcome = timeout_outcome(exc)
+                    elif isinstance(exc, ValueError):
+                        outcome = {"error": str(exc)}
+                    else:
+                        raise
                     for row_id in row_ids:
-                        outcomes[row_id] = {"error": str(exc)}
+                        outcomes[row_id] = outcome
                 else:
                     for row_id in row_ids:
                         outcomes[row_id] = {"detail": detail}
@@ -232,6 +261,8 @@ class ZyingPage:
 
     def lookup(self, row):
         outcome = self.lookup_many([row]).get(clean(row.get("id")), {})
+        if outcome.get("skip_reason"):
+            raise TimeoutError(outcome["skip_reason"])
         if outcome.get("error"):
             raise ValueError(outcome["error"])
         return outcome.get("detail")
@@ -241,14 +272,24 @@ def lookup_many(reader, rows):
     """Keep test/custom readers compatible while enabling the batched browser path."""
     method = getattr(reader, "lookup_many", None)
     if callable(method):
-        return method(rows)
+        try:
+            return method(rows)
+        except Exception as exc:
+            if not is_lookup_timeout(exc):
+                raise
+            return {clean(row.get("id")): timeout_outcome(exc) for row in rows}
     outcomes = {}
     for row in rows:
         row_id = clean(row.get("id"))
         try:
             outcomes[row_id] = {"detail": reader.lookup(row)}
-        except ValueError as exc:
-            outcomes[row_id] = {"error": str(exc)}
+        except Exception as exc:
+            if is_lookup_timeout(exc):
+                outcomes[row_id] = timeout_outcome(exc)
+            elif isinstance(exc, ValueError):
+                outcomes[row_id] = {"error": str(exc)}
+            else:
+                raise
     return outcomes
 
 
@@ -278,10 +319,28 @@ class SyncManager:
         self.lock = threading.RLock()
         self.jobs = {}
         self.running = False
+        self.active_state = None
         self.login_events = {}
+
+    def _release(self, state):
+        state["running"] = False
+        if self.active_state is state:
+            self.running = False
+            self.active_state = None
+
+    def _reap_stalled(self):
+        state = self.active_state
+        if not state:
+            return
+        limit = 960 if state.get("phase") == "waiting_login" else SYNC_PROGRESS_TIMEOUT
+        if time.time() - state.get("progress_at", state["started_at"]) <= limit:
+            return
+        state.update(stop_requested=True, phase="stopped", message="同步长时间无进度，已结束旧任务，可重新启动")
+        self._release(state)
 
     def status(self, owner):
         with self.lock:
+            self._reap_stalled()
             return copy.deepcopy(self.jobs.get(str(owner), {"running": False, "phase": "idle"}))
 
     def confirm_login(self, owner):
@@ -289,7 +348,7 @@ class SyncManager:
             state = self.jobs.get(str(owner), {})
             if not state.get("running") or state.get("phase") != "waiting_login":
                 raise ValueError("当前没有等待登录的同步任务，请重新启动同步")
-            state.update(phase="syncing", message="正在验证登录并同步订单")
+            state.update(phase="syncing", progress_at=time.time(), message="正在验证登录并同步订单")
             self.login_events[str(owner)].set()
         return self.status(owner)
 
@@ -297,30 +356,35 @@ class SyncManager:
         with self.lock:
             state = self.jobs.get(str(owner), {})
             if state.get("running"):
-                state.update(stop_requested=True, phase="stopping", message="正在结束任务")
+                state.update(stop_requested=True, phase="stopped", message="任务已结束")
                 self.login_events[str(owner)].set()
+                self._release(state)
         return self.status(owner)
 
     def start(self, owner, filters, options, reader, writer, browser_factory=open_reader):
         with self.lock:
+            self._reap_stalled()
             if self.running:
                 raise ValueError("智赢订单同步正在运行，请稍后再试")
             self.running = True
             state = {"started_at": time.time(), "running": True, "phase": "loading", "total": 0, "completed": 0,
                      "updated": 0, "skipped": 0, "failed": 0, "results": [], "message": "正在获取筛选范围内的全部订单"}
             self.jobs[str(owner)] = state
+            self.active_state = state
             login_event = threading.Event()
             self.login_events[str(owner)] = login_event
         def run():
             try:
                 rows = snapshot_orders(reader, filters, lambda: state.get("stop_requested"))
                 with self.lock:
-                    state.update(total=len(rows), phase="syncing", message="正在查询智赢采购信息")
+                    if state.get("stop_requested"):
+                        return
+                    state.update(total=len(rows), phase="syncing", progress_at=time.time(), message="正在查询智赢采购信息")
                 if rows and not state.get("stop_requested"):
                     with browser_factory(options) as browser:
                         if options.get("require_login"):
                             with self.lock:
-                                state.update(phase="waiting_login", message="已打开服务器 Edge，请登录智赢后点击确定登录")
+                                state.update(phase="waiting_login", progress_at=time.time(), message="已打开服务器 Edge，请登录智赢后点击确定登录")
                             if not login_event.wait(900):
                                 raise RuntimeError("等待登录超时，请重新启动同步")
                         for start in range(0, len(rows), SYNC_BATCH_SIZE):
@@ -337,26 +401,30 @@ class SyncManager:
                                 result = {"order_id": clean(row["id"]), "order_number": clean(row.get("order_number"))}
                                 try:
                                     outcome = outcomes.get(result["order_id"], {})
-                                    if outcome.get("error"):
-                                        raise ValueError(str(outcome["error"])[:300])
-                                    detail = outcome.get("detail")
-                                    changes = parse_purchase(detail, row) if detail else None
-                                    if changes is None:
-                                        result.update(status="skipped", message="未添加采购" if detail else "未找到对应订单")
+                                    if outcome.get("skip_reason"):
+                                        result.update(status="skipped", message=str(outcome["skip_reason"])[:300])
                                     else:
-                                        with self.lock:
-                                            if state.get("stop_requested"):
-                                                break
-                                            saved = writer(row["id"], changes)
-                                        if not saved or int(saved.get("matched") or 0) != 1:
-                                            raise ValueError("泽顺订单未成功匹配，未确认回填")
-                                        result.update(status="updated", message="已同步", **changes)
+                                        if outcome.get("error"):
+                                            raise ValueError(str(outcome["error"])[:300])
+                                        detail = outcome.get("detail")
+                                        changes = parse_purchase(detail, row) if detail else None
+                                        if changes is None:
+                                            result.update(status="skipped", message="未添加采购" if detail else "未找到对应订单")
+                                        else:
+                                            with self.lock:
+                                                if state.get("stop_requested"):
+                                                    break
+                                                saved = writer(row["id"], changes)
+                                            if not saved or int(saved.get("matched") or 0) != 1:
+                                                raise ValueError("泽顺订单未成功匹配，未确认回填")
+                                            result.update(status="updated", message="已同步", **changes)
                                 except Exception as exc:
                                     result.update(status="failed", message=str(exc)[:300])
                                 with self.lock:
                                     state[result["status"]] += 1
                                     state["completed"] += 1
                                     state["results"].append(result)
+                                    state["progress_at"] = time.time()
                 with self.lock:
                     state.update(phase="stopped" if state.get("stop_requested") else "completed",
                                  message="任务已结束" if state.get("stop_requested") else ("同步完成" if rows else "当前筛选没有订单"))
@@ -366,14 +434,13 @@ class SyncManager:
                                  message="任务已结束" if state.get("stop_requested") else str(exc)[:300])
             finally:
                 with self.lock:
-                    state["running"] = False
-                    self.running = False
+                    self._release(state)
         thread = threading.Thread(target=run, name="zying-order-sync", daemon=True)
         try:
             thread.start()
         except Exception:
             with self.lock:
-                self.running = False
+                self._release(state)
                 state.update(running=False, phase="failed", message="同步线程启动失败")
             raise
         return self.status(owner)
@@ -499,8 +566,27 @@ class AgentSync:
     def job(self, store, owner):
         if owner is None:
             return None
-        jobs = store.list_jobs(job_type="zying_order_sync", created_by_id=owner, limit=1)
-        job = jobs[0] if jobs else None
+        with self.lock:
+            jobs = store.list_jobs(job_type="zying_order_sync", created_by_id=owner, limit=1)
+            job = jobs[0] if jobs else None
+            if job and job["status"] in {"running", "stopping"}:
+                state = dict(job.get("result") or {})
+                now = time.time()
+                # Heartbeats renew updated_at even when the browser is stuck.
+                # Give legacy jobs without a progress timestamp one grace period.
+                progress_at = state.get("progress_at")
+                if progress_at is None:
+                    state["progress_at"] = now
+                    job = store.append_event(job["job_id"], job["agent_id"],
+                        status=job["status"], message=job.get("message"), result=state)
+                    progress_at = now
+                limit = 960 if state.get("phase") == "waiting_login" else SYNC_PROGRESS_TIMEOUT
+                if state.get("phase") in {"failed", "stopped", "completed"} or now - progress_at > limit:
+                    message = "同步已结束或长时间无进度，已释放旧任务，可重新启动"
+                    store.request_cancel(job["job_id"])
+                    state.update(phase="stopped", stop_requested=True, message=message)
+                    job = store.append_event(job["job_id"], job["agent_id"],
+                        status="stopped", message=message, result=state)
         if job and manager.status(owner).get("started_at", 0) > job.get("created_at", 0):
             return None
         return job
@@ -519,6 +605,7 @@ class AgentSync:
         return state
 
     def save(self, store, job, state):
+        state["progress_at"] = time.time()
         store.append_event(job["job_id"], job["agent_id"], status="running",
                            message=state.get("message"), result=state)
 
@@ -534,7 +621,7 @@ class AgentSync:
         elif action in {"row", "rows"}:
             if state.get("phase") != "syncing":
                 raise ValueError("请先确认登录")
-            entries = ([{"order_id": data.get("order_id"), "detail": data.get("detail"), "error": data.get("error")}]
+            entries = ([{"order_id": data.get("order_id"), "detail": data.get("detail"), "error": data.get("error"), "skip_reason": data.get("skip_reason")}]
                        if action == "row" else data.get("rows"))
             if not isinstance(entries, list) or not entries or len(entries) > SYNC_BATCH_SIZE:
                 raise ValueError("同步结果批次格式异常")
@@ -559,17 +646,20 @@ class AgentSync:
                     continue
                 result = {"order_id": row_id, "order_number": clean(row.get("order_number"))}
                 try:
-                    if entry.get("error"):
-                        raise ValueError(str(entry["error"])[:300])
-                    detail = entry.get("detail")
-                    changes = parse_purchase(detail, row) if detail else None
-                    if changes is None:
-                        result.update(status="skipped", message="未添加采购" if detail else "未找到对应订单")
+                    if entry.get("skip_reason"):
+                        result.update(status="skipped", message=str(entry["skip_reason"])[:300])
                     else:
-                        saved = writer(row_id, changes, job)
-                        if not saved or int(saved.get("matched") or 0) != 1:
-                            raise ValueError("泽顺订单未成功匹配，未确认回填")
-                        result.update(status="updated", message="已同步", **changes)
+                        if entry.get("error"):
+                            raise ValueError(str(entry["error"])[:300])
+                        detail = entry.get("detail")
+                        changes = parse_purchase(detail, row) if detail else None
+                        if changes is None:
+                            result.update(status="skipped", message="未添加采购" if detail else "未找到对应订单")
+                        else:
+                            saved = writer(row_id, changes, job)
+                            if not saved or int(saved.get("matched") or 0) != 1:
+                                raise ValueError("泽顺订单未成功匹配，未确认回填")
+                            result.update(status="updated", message="已同步", **changes)
                 except Exception as exc:
                     result.update(status="failed", message=str(exc)[:300])
                 state[result["status"]] += 1
@@ -591,7 +681,7 @@ def run_agent_sync(job, stop_event, request_api=None, browser_factory=open_reade
     path = "/api/local-agents/zying-sync/" + job["job_id"]
     def call(**data):
         timeout = 180 if data.get("action") in {"row", "rows"} else 60
-        return request_api("POST", path, json=data, timeout=timeout)
+        return request_api("POST", path, json={**data, "compact": True}, timeout=timeout)
     rows = job["payload"]["rows"]
     state = {}
     if stop_event.is_set():
@@ -609,7 +699,7 @@ def run_agent_sync(job, stop_event, request_api=None, browser_factory=open_reade
                 raise RuntimeError("等待登录超时，请重新启动同步")
             state = call(action="control")
         for start in range(0, len(rows), SYNC_BATCH_SIZE):
-            state = call(action="control")
+            # Login and each result response already include the stop state.
             if state.get("stop") or stop_event.is_set():
                 stop_event.set()
                 return state

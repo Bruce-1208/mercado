@@ -71,3 +71,23 @@ def test_daily_worker_releases_lock_on_business_failure(monkeypatch, tmp_path):
     with pytest.raises(RuntimeError, match="business failed"):
         run_daily_task({"mode": "once"}, threading.Event(), job_file)
     assert released == [True]
+
+
+def test_worker_log_handles_windows_gbk_product_titles(monkeypatch):
+    import io
+    buffer = io.BytesIO()
+    stream = io.TextIOWrapper(buffer, encoding="gbk")
+    monkeypatch.setattr(local_agent_worker.sys, "stdout", stream)
+    local_agent_worker._write_log("商品：Niño 🎒")
+    stream.flush()
+    assert "商品：Ni" in buffer.getvalue().decode("gbk")
+
+
+def test_awp_failed_run_exits_nonzero_and_preserves_result(monkeypatch, tmp_path):
+    job = tmp_path / "job.json"
+    job.write_text(json.dumps({"job_type": "ai_weight_price"}), encoding="utf-8")
+    monkeypatch.setattr(local_agent_worker, "_watch_cancel", lambda *a: None)
+    monkeypatch.setattr(local_agent_worker, "run_ai_weight_price", lambda *a: {
+        "run_error": "browser failed", "run": {"outcome": "failed"}})
+    assert local_agent_worker.main(["--job-file", str(job), "--cancel-file", str(tmp_path / "cancel")]) == 1
+    assert json.loads(job.with_name("result.json").read_text())["run_error"] == "browser failed"

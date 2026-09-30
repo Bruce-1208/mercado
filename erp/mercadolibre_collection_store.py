@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import hashlib
 import re
 import threading
@@ -60,6 +61,7 @@ PRODUCT_REVIEW_STATUSES = {
 PRODUCT_PUBLISH_RECORD_STATUSES = {"pending", "publishing", "published", "failed"}
 PRODUCT_PUBLISH_RETRYABLE_STATUSES = {"pending", "publishing", "failed"}
 PRODUCT_PUBLISH_FILTER_STATUSES = PRODUCT_PUBLISH_RECORD_STATUSES | {"unpublished"}
+PRODUCT_PUBLISH_RATE_LIMIT_RETRY_HOURS = 2
 ZYING_PROFITABILITY_SOURCE = "zying_collection"
 COLLECTION_WORKFLOW_COLUMN_DEFINITIONS = (
     ("review_status", "VARCHAR(32) NOT NULL DEFAULT 'unreviewed' AFTER `added_to_products`"),
@@ -90,6 +92,15 @@ def _connect() -> Any:
     from bit.bit_mysql import config, pymysql
 
     return pymysql.connect(**config)
+
+
+def _connect_list() -> Any:
+    """Separate bounded read connections; do not change write job timeouts."""
+    from bit.bit_mysql import config, pymysql
+
+    return pymysql.connect(**dict(
+        config, connect_timeout=3, read_timeout=10, write_timeout=5,
+    ))
 
 
 def _now() -> str:
@@ -228,25 +239,50 @@ def _mirror_zying_snapshot_fields(row: Mapping[str, Any]) -> dict[str, Any]:
         result["title_pt"] = str(result["ai_original"].get("title_pt") or "")
         result["description_es"] = str(result["ai_original"].get("description_es") or "")
         result["description_pt"] = str(result["ai_original"].get("description_pt") or "")
-        from erp.ai_original_products import suggested_ai_original_net_proceeds
-
-        max_variant_price, suggested_net = suggested_ai_original_net_proceeds(
-            result["original_1688"].get("variations")
+        from erp.ai_original_products import (
+            ai_original_price_bounds_cny,
+            suggested_ai_original_net_proceeds,
         )
-        result["source_variation_max_price_cny"] = max_variant_price
+
+        variations = result["original_1688"].get("variations")
+        variation_min, variation_max = ai_original_price_bounds_cny(variations)
+        raw_product_price = result["original_1688"].get("price")
+        product_min, _ = ai_original_price_bounds_cny([], fallback_price=raw_product_price)
+        if product_min is None:
+            raw_product_price = result.get("price")
+            product_min, _ = ai_original_price_bounds_cny([], fallback_price=raw_product_price)
+        result["source_purchase_price_cny"] = (
+            product_min if product_min is not None else variation_min
+        )
+        max_price, suggested_net = suggested_ai_original_net_proceeds(
+            variations, fallback_price=raw_product_price
+        )
+        result["source_variation_max_price_cny"] = variation_max
+        result["source_net_calculation_price_cny"] = max_price
+        result["suggested_net_price_basis"] = (
+            "sku" if variation_max is not None else "product_price" if max_price is not None else ""
+        )
         result["suggested_net_proceeds_usd"] = suggested_net
         plugin = snapshot.get("plugin_snapshot") or {}
         result["collector_salesperson"] = str(plugin.get("created_by") or "").removeprefix("浏览器插件：").strip()
         result["generator_salesperson"] = str(result["ai_original"].get("generated_by") or "").strip()
-        return result
-    if source_type != "zying":
+        result["salesperson"] = str(
+            result.get("salesperson") or plugin.get("salesperson")
+            or result["collector_salesperson"] or result["generator_salesperson"] or ""
+        ).strip()
         return result
     snapshot = _loads(result.get("source_snapshot_json"), {})
-    plugin_snapshot = (
-        snapshot.get("plugin_snapshot") if isinstance(snapshot, dict) else {}
-    )
+    if not isinstance(snapshot, dict):
+        snapshot = {}
+    plugin_snapshot = snapshot.get("plugin_snapshot")
     if not isinstance(plugin_snapshot, dict):
         plugin_snapshot = {}
+    result["salesperson"] = str(
+        result.get("salesperson") or snapshot.get("salesperson")
+        or plugin_snapshot.get("salesperson") or plugin_snapshot.get("created_by") or ""
+    ).removeprefix("浏览器插件：").strip()
+    if source_type != "zying":
+        return result
     for field in (
         "zying_category_id",
         "zying_category",
@@ -462,12 +498,17 @@ def _migrate_collection_tables(cursor: Any) -> None:
         CREATE TABLE IF NOT EXISTS `{MANAGEMENT_CATEGORY_TABLE}` (
             `id` BIGINT NOT NULL AUTO_INCREMENT,
             `name` VARCHAR(64) NOT NULL,
+            `listing_ratio_percent` DECIMAL(10,4) NOT NULL DEFAULT 100.0000,
             `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`),
             UNIQUE KEY `uniq_erp_meli_management_category_name` (`name`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
+    )
+    _ensure_column(
+        cursor, MANAGEMENT_CATEGORY_TABLE, "listing_ratio_percent",
+        "DECIMAL(10,4) NOT NULL DEFAULT 100.0000 AFTER `name`",
     )
     cursor.execute(
         f"""
@@ -488,6 +529,7 @@ def _migrate_collection_tables(cursor: Any) -> None:
             `published_item_id` VARCHAR(64) NULL,
             `failure_reason` TEXT NULL,
             `result_json` LONGTEXT NULL,
+            `auto_retry_started_at` DATETIME NULL,
             `created_by` VARCHAR(128) NULL,
             `started_at` DATETIME NULL,
             `finished_at` DATETIME NULL,
@@ -512,6 +554,10 @@ def _migrate_collection_tables(cursor: Any) -> None:
     )
     _ensure_column(
         cursor, TASK_TABLE, "worker_count", "INT NOT NULL DEFAULT 0 AFTER `requested_count`"
+    )
+    _ensure_column(
+        cursor, PUBLISH_RECORD_TABLE, "auto_retry_started_at",
+        "DATETIME NULL AFTER `result_json`",
     )
     _ensure_column(
         cursor, TASK_TABLE, "elapsed_seconds", "INT NOT NULL DEFAULT 0 AFTER `failed_count`"
@@ -707,8 +753,10 @@ def _collection_schema_is_current(cursor: Any) -> bool:
         (PRODUCT_TABLE, "infringement_reason"),
         (PRODUCT_TABLE, "infringement_checked_at"),
         (MANAGEMENT_CATEGORY_TABLE, "name"),
+        (MANAGEMENT_CATEGORY_TABLE, "listing_ratio_percent"),
         (PUBLISH_RECORD_TABLE, "failure_reason"),
         (PUBLISH_RECORD_TABLE, "result_json"),
+        (PUBLISH_RECORD_TABLE, "auto_retry_started_at"),
     }
     cursor.execute(
         """
@@ -1565,17 +1613,35 @@ def _list_rows(
             where.append(f"{expression} LIKE %s")
             params.append("%" + str(owner).strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
-    connection = (connection_factory or _connect)()
+    started = time.monotonic()
+    timings = {}
+    stage = "connect"
+    stage_started = started
+    connection = None
+
+    def mark(next_stage):
+        nonlocal stage, stage_started
+        now = time.monotonic()
+        timings[stage] = round((now - stage_started) * 1000, 1)
+        stage, stage_started = next_stage, now
+
     try:
+        connection = (connection_factory or _connect_list)()
+        mark("schema")
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
-            cursor.execute(f"SELECT COUNT(*) AS total FROM `{table}` {where_sql}", tuple(params))
+            mark("count")
+            cursor.execute(f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ COUNT(*) AS total FROM `{table}` {where_sql}", tuple(params))
             total = int((cursor.fetchone() or {}).get("total") or 0)
+            mark("page")
             selected_fields = (
-                f"`{table}`.*, category.`name` AS `management_category_name`"
+                f"`{table}`.*, category.`name` AS `management_category_name`, "
+                "category.`listing_ratio_percent` AS `management_category_listing_ratio_percent`"
             )
             from_sql = (
-                f"`{table}` LEFT JOIN `{MANAGEMENT_CATEGORY_TABLE}` AS category "
+                f"(SELECT * FROM `{table}` {where_sql} "
+                f"ORDER BY `id` DESC LIMIT %s OFFSET %s) AS `{table}` "
+                f"LEFT JOIN `{MANAGEMENT_CATEGORY_TABLE}` AS category "
                 f"ON category.`id` = `{table}`.`management_category_id`"
             )
             if table == COLLECTION_TABLE:
@@ -1587,19 +1653,40 @@ def _list_rows(
                     f" LEFT JOIN `{TASK_TABLE}` AS collection_task "
                     f"ON collection_task.`id` = `{table}`.`task_id`"
                 )
+            else:
+                selected_fields += (
+                    ", TRIM(REPLACE(COALESCE((SELECT collection_task.`created_by` "
+                    f"FROM `{COLLECTION_TABLE}` AS product_collection_item "
+                    f"INNER JOIN `{TASK_TABLE}` AS collection_task "
+                    "ON collection_task.`id` = product_collection_item.`task_id` "
+                    f"WHERE product_collection_item.`id` = `{table}`.`collection_item_id` "
+                    "LIMIT 1), ''), '浏览器插件：', '')) AS `salesperson`"
+                )
             cursor.execute(
-                f"SELECT {selected_fields} FROM {from_sql} "
-                f"{where_sql} ORDER BY `{table}`.`id` DESC LIMIT %s OFFSET %s",
+                f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ {selected_fields} FROM {from_sql} "
+                f"ORDER BY `{table}`.`id` DESC",
                 tuple(params + [limit, offset]),
             )
+            raw_rows = cursor.fetchall()
+            mark("decode")
             rows = [
                 _mirror_zying_snapshot_fields(_json_safe_row(row))
-                for row in cursor.fetchall()
+                for row in raw_rows
             ]
+        mark("commit")
         connection.commit()
+        mark("complete")
         return {"total": total, "rows": rows}
     finally:
-        connection.close()
+        mark("cleanup")
+        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+        logging.log(
+            logging.WARNING if elapsed_ms >= 2000 or "complete" not in timings else logging.INFO,
+            "mercado_list_query table=%s limit=%s offset=%s elapsed_ms=%s stages_ms=%s",
+            table, limit, offset, elapsed_ms, timings,
+        )
+        if connection is not None:
+            connection.close()
 
 
 def list_collection_items(**kwargs: Any) -> dict[str, Any]:
@@ -1810,7 +1897,8 @@ def list_management_categories(
             ensure_collection_tables(cursor)
             cursor.execute(
                 f"""
-                SELECT category.`id`, category.`name`, category.`created_at`,
+                SELECT category.`id`, category.`name`, category.`listing_ratio_percent`,
+                       category.`created_at`,
                        category.`updated_at`,
                        (SELECT COUNT(*) FROM `{COLLECTION_TABLE}` AS collection_item
                         WHERE collection_item.`management_category_id` = category.`id`)
@@ -1834,12 +1922,24 @@ def list_management_categories(
         connection.close()
 
 
+def _normalize_management_category_listing_ratio(value: Any = 100) -> Decimal:
+    try:
+        ratio = Decimal("100" if value in (None, "") else str(value))
+    except Exception as exc:
+        raise ValueError("分类上架比例必须是数字") from exc
+    if not ratio.is_finite() or ratio <= 0 or ratio > 10000:
+        raise ValueError("分类上架比例必须大于 0 且不超过 10000%")
+    return ratio.quantize(Decimal("0.0001"))
+
+
 def create_management_category(
     name: str,
+    listing_ratio_percent: Any = 100,
     *,
     connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     normalized_name = _normalize_management_category_name(name)
+    normalized_ratio = _normalize_management_category_listing_ratio(listing_ratio_percent)
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
@@ -1851,12 +1951,17 @@ def create_management_category(
             if cursor.fetchone():
                 raise ValueError("分类名称已存在")
             cursor.execute(
-                f"INSERT INTO `{MANAGEMENT_CATEGORY_TABLE}` (`name`) VALUES (%s)",
-                (normalized_name,),
+                f"INSERT INTO `{MANAGEMENT_CATEGORY_TABLE}` "
+                "(`name`, `listing_ratio_percent`) VALUES (%s, %s)",
+                (normalized_name, normalized_ratio),
             )
             category_id = int(cursor.lastrowid)
         connection.commit()
-        return {"id": category_id, "name": normalized_name}
+        return {
+            "id": category_id,
+            "name": normalized_name,
+            "listing_ratio_percent": float(normalized_ratio),
+        }
     except BaseException:
         connection.rollback()
         raise
@@ -1867,6 +1972,7 @@ def create_management_category(
 def update_management_category(
     category_id: int,
     name: str,
+    listing_ratio_percent: Any = None,
     *,
     connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
@@ -1877,6 +1983,10 @@ def update_management_category(
     if normalized_id <= 0:
         raise ValueError("运营分类编号无效")
     normalized_name = _normalize_management_category_name(name)
+    normalized_ratio = (
+        None if listing_ratio_percent is None
+        else _normalize_management_category_listing_ratio(listing_ratio_percent)
+    )
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
@@ -1888,10 +1998,17 @@ def update_management_category(
             )
             if cursor.fetchone():
                 raise ValueError("分类名称已存在")
-            cursor.execute(
-                f"UPDATE `{MANAGEMENT_CATEGORY_TABLE}` SET `name` = %s WHERE `id` = %s",
-                (normalized_name, normalized_id),
-            )
+            if normalized_ratio is None:
+                cursor.execute(
+                    f"UPDATE `{MANAGEMENT_CATEGORY_TABLE}` SET `name` = %s WHERE `id` = %s",
+                    (normalized_name, normalized_id),
+                )
+            else:
+                cursor.execute(
+                    f"UPDATE `{MANAGEMENT_CATEGORY_TABLE}` SET `name` = %s, "
+                    "`listing_ratio_percent` = %s WHERE `id` = %s",
+                    (normalized_name, normalized_ratio, normalized_id),
+                )
             changed = int(cursor.rowcount or 0)
             if changed == 0:
                 cursor.execute(
@@ -1901,7 +2018,10 @@ def update_management_category(
                 if not cursor.fetchone():
                     raise KeyError("运营分类不存在")
         connection.commit()
-        return {"id": normalized_id, "name": normalized_name, "changed": changed}
+        return {
+            "id": normalized_id, "name": normalized_name, "changed": changed,
+            **({"listing_ratio_percent": float(normalized_ratio)} if normalized_ratio is not None else {}),
+        }
     except BaseException:
         connection.rollback()
         raise
@@ -2404,6 +2524,90 @@ def get_product_publish_records_by_ids(
             rows = [_json_safe_row(row) for row in cursor.fetchall()]
         connection.commit()
         return rows
+    finally:
+        connection.close()
+
+
+def claim_due_rate_limited_product_publish_records(
+    *,
+    now: datetime | None = None,
+    limit: int = 50,
+    connection_factory: Callable[[], Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Claim current rate-limit failures whose two-hour retry interval elapsed."""
+    current_time = now or datetime.now().replace(microsecond=0)
+    due_before = current_time - timedelta(hours=PRODUCT_PUBLISH_RATE_LIMIT_RETRY_HOURS)
+    normalized_limit = max(1, min(int(limit or 50), 500))
+    rate_limit_predicates = (
+        "LOWER(COALESCE(records.`failure_reason`, '')) LIKE %s",
+        "LOWER(COALESCE(records.`failure_reason`, '')) LIKE %s",
+        "COALESCE(records.`failure_reason`, '') LIKE %s",
+        "LOWER(COALESCE(records.`result_json`, '')) LIKE %s",
+        "LOWER(COALESCE(records.`result_json`, '')) LIKE %s",
+        "(LOWER(COALESCE(records.`failure_reason`, '')) LIKE %s AND "
+        "(LOWER(COALESCE(records.`failure_reason`, '')) LIKE '%get /%' OR "
+        "LOWER(COALESCE(records.`failure_reason`, '')) LIKE '%post /%' OR "
+        "LOWER(COALESCE(records.`failure_reason`, '')) LIKE '%put /%' OR "
+        "LOWER(COALESCE(records.`failure_reason`, '')) LIKE '%delete /%'))",
+    )
+    rate_limit_patterns = (
+        "%local_rate_limited%",
+        "%integration.rate_limited.%",
+        "%平台刊登服务限流%",
+        '%"platform_rate_limited":true%',
+        '%"platform_rate_limited": true%',
+        "% 失败 (http 429)%",
+    )
+    connection = (connection_factory or _connect)()
+    claimed: list[dict[str, Any]] = []
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"""
+                SELECT records.* FROM `{PUBLISH_RECORD_TABLE}` AS records
+                WHERE records.`status` = 'failed'
+                  AND records.`product_item_id` IS NOT NULL
+                  AND ({' OR '.join(rate_limit_predicates)})
+                  AND COALESCE(records.`finished_at`, records.`updated_at`, records.`created_at`) <= %s
+                  AND (records.`auto_retry_started_at` IS NULL
+                       OR records.`auto_retry_started_at` <= %s)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM `{PUBLISH_RECORD_TABLE}` AS newer
+                      WHERE newer.`product_item_id` = records.`product_item_id`
+                        AND newer.`token_id` = records.`token_id`
+                        AND newer.`site_id` = records.`site_id`
+                        AND newer.`id` > records.`id`
+                  )
+                ORDER BY COALESCE(records.`finished_at`, records.`updated_at`, records.`created_at`),
+                         records.`id`
+                LIMIT %s FOR UPDATE
+                """,
+                tuple(rate_limit_patterns) + (
+                    due_before.strftime("%Y-%m-%d %H:%M:%S"),
+                    due_before.strftime("%Y-%m-%d %H:%M:%S"),
+                    normalized_limit,
+                ),
+            )
+            rows = list(cursor.fetchall() or [])
+            claimed_at = current_time.strftime("%Y-%m-%d %H:%M:%S")
+            for row in rows:
+                record_id = int(row.get("id") or 0)
+                cursor.execute(
+                    f"UPDATE `{PUBLISH_RECORD_TABLE}` "
+                    "SET `auto_retry_started_at` = %s "
+                    "WHERE `id` = %s AND `status` = 'failed'",
+                    (claimed_at, record_id),
+                )
+                if int(cursor.rowcount or 0) == 1:
+                    updated = dict(row)
+                    updated["auto_retry_started_at"] = current_time
+                    claimed.append(_json_safe_row(updated))
+        connection.commit()
+        return claimed
+    except BaseException:
+        connection.rollback()
+        raise
     finally:
         connection.close()
 
@@ -3481,6 +3685,7 @@ def upsert_zying_products_to_products(
                 "product_developer_id": record.get("product_developer_id") or "",
                 "product_developer_name": record.get("product_developer_name") or "",
                 "zying_status": record.get("zying_status") or "",
+                "salesperson": record.get("salesperson") or plugin_snapshot.get("salesperson") or "",
             }
         )
         snapshot["plugin_snapshot"] = plugin_snapshot
@@ -3667,6 +3872,14 @@ def upsert_pulled_store_links_to_products(
         )):
             skipped += 1
             continue
+        record_site_id = str(record.get("site_id") or "").strip().upper()
+        site_setting = next(
+            (
+                setting for setting in token.get("site_settings") or []
+                if str(setting.get("site_id") or "").strip().upper() == record_site_id
+            ),
+            {},
+        )
         snapshot = {
             "source": source,
             "description": {},
@@ -3675,6 +3888,8 @@ def upsert_pulled_store_links_to_products(
                 "source_type": "pulled",
                 "store_name": record.get("store_name"),
                 "site_id": record.get("site_id"),
+                "token_id": token.get("id"),
+                "salesperson": str(site_setting.get("salesperson") or "").strip(),
             },
         }
         net_proceeds = source.get("net_proceeds") or {}
@@ -3851,10 +4066,29 @@ def get_product_items_by_ids(
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             cursor.execute(
-                f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` IN ({placeholders}) ORDER BY `id` ASC",
+                f"""
+                SELECT product_item.*,
+                       management_category.`name` AS `management_category_name`,
+                       management_category.`listing_ratio_percent`
+                           AS `management_category_listing_ratio_percent`,
+                       TRIM(REPLACE(COALESCE(NULLIF(collection_task.`created_by`, ''), ''),
+                           '浏览器插件：', '')) AS `salesperson`
+                FROM `{PRODUCT_TABLE}` AS product_item
+                LEFT JOIN `{MANAGEMENT_CATEGORY_TABLE}` AS management_category
+                  ON management_category.`id` = product_item.`management_category_id`
+                LEFT JOIN `{COLLECTION_TABLE}` AS collection_item
+                  ON collection_item.`id` = product_item.`collection_item_id`
+                LEFT JOIN `{TASK_TABLE}` AS collection_task
+                  ON collection_task.`id` = collection_item.`task_id`
+                WHERE product_item.`id` IN ({placeholders})
+                ORDER BY product_item.`id` ASC
+                """,
                 tuple(ids),
             )
-            rows = [_json_safe_row(row) for row in cursor.fetchall()]
+            rows = [
+                _mirror_zying_snapshot_fields(_json_safe_row(row))
+                for row in cursor.fetchall()
+            ]
         connection.commit()
         return rows
     finally:

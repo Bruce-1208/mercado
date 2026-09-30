@@ -712,3 +712,75 @@ def test_image_matching_rejects_invalid_scores(monkeypatch, score):
     monkeypatch.setattr(model, 'call', lambda *a: {'matches': [{'index': 1, 'same_product': True, 'confidence': score}]})
     with pytest.raises(ValueError, match='置信度无效'):
         model.match_images({'main_image_url': 'https://img.example/1.jpg'}, [{'main_image_url': 'https://img.example/2.jpg'}])
+
+
+@pytest.mark.parametrize('status', [400, 401, 403, 429, 500, 503])
+def test_model_service_http_failure_pauses_without_erp_write(tmp_path, monkeypatch, status):
+    from types import SimpleNamespace
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    service.store.add({'erp_goods_id': '1', 'title': '测试商品',
+                       'main_image_url': 'https://img.example/1.jpg'})
+    browser.records['1'] = {'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '待审核'}
+    original = dict(browser.records['1'])
+    monkeypatch.setattr('erp.ai_weight_price.models.requests.post',
+                        lambda *a, **kw: SimpleNamespace(ok=False, status_code=status))
+    with pytest.raises(CircuitOpen, match=f'HTTP {status}'):
+        service.complete_one('1', browser, Models(config, lambda *a: None), config)
+    assert browser.records['1'] == original
+    assert not any(op[0] == 'save' for op in browser.operations)
+    assert service.store.get('1')['status'] == 'pending'
+
+
+def test_model_network_error_does_not_expose_request_details(monkeypatch):
+    import requests
+    from erp.ai_weight_price.models import ModelServiceError
+    def fail(*a, **kw):
+        raise requests.ConnectionError('private endpoint and credentials')
+    monkeypatch.setattr('erp.ai_weight_price.models.requests.post', fail)
+    with pytest.raises(ModelServiceError) as caught:
+        Models(validate({}), lambda *a: None).call('qwen-test', 'test')
+    assert 'private' not in str(caught.value)
+
+
+def test_model_auth_failure_retains_batch_current_item(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    service.models_factory = lambda *args: Models(config, lambda *a: None)
+    monkeypatch.setattr('erp.ai_weight_price.models.requests.post',
+                        lambda *a, **kw: SimpleNamespace(ok=False, status_code=401))
+    lock = service.lock()
+    assert lock.acquire()
+    service.run(config, 'pipeline', None, lock)
+    assert service.store.state('run')['outcome'] == 'blocked'
+    assert 'HTTP 401' in service.store.state('circuit')['reason']
+    assert service.store.state('pipeline_current')['task_id'] == '1'
+    assert browser.operations == [('collect', '1'), ('image', '1')]
+    assert browser.records['1']['review_status'] == '待审核'
+    assert service.store.get('1')['status'] == 'pending'
+
+
+@pytest.mark.parametrize('response_kind', [
+    'gateway_html', 'missing_choices', 'missing_content', 'invalid_json', 'truncated',
+])
+def test_invalid_model_response_is_service_failure_not_product_evidence(monkeypatch, response_kind):
+    from types import SimpleNamespace
+    from erp.ai_weight_price.models import ModelServiceError
+
+    class Response:
+        ok = True
+        status_code = 200
+
+        def json(self):
+            if response_kind == 'gateway_html':
+                raise ValueError('not JSON')
+            if response_kind == 'missing_choices':
+                return {}
+            if response_kind == 'missing_content':
+                return {'choices': [{'message': {}}]}
+            if response_kind == 'invalid_json':
+                return {'choices': [{'message': {'content': 'not-json'}}]}
+            return {'choices': [{'finish_reason': 'length', 'message': {'content': '{}'}}]}
+
+    monkeypatch.setattr('erp.ai_weight_price.models.requests.post', lambda *a, **kw: Response())
+    with pytest.raises(ModelServiceError, match='暂停'):
+        Models(validate({}), lambda *a: None).call('qwen-test', 'test', json_output=True)

@@ -67,7 +67,7 @@ _OPERATION_ACTIONS = {
 }
 OPERATION_TYPES = {
     "sync": "店铺同步", "update": "链接修改", "delete": "链接删除",
-    "advertising": "广告操作", "video": "视频上传", "query": "查询与状态读取", "other": "其他操作",
+    "advertising": "广告操作", "video": "视频上传", "other": "其他操作",
 }
 
 
@@ -100,14 +100,18 @@ def _utc_history_bound(value):
 def history(before_id=None, limit=100, trace_id=None, operation_type=None,
             salesperson=None, created_after=None, created_before=None):
     limit = max(1, min(int(limit), 500))
-    if operation_type and operation_type not in OPERATION_TYPES:
+    # ``query`` remains accepted as a retired filter for older clients, but
+    # history() excludes that category so no read entry can be displayed.
+    if operation_type and operation_type not in OPERATION_TYPES and operation_type != "query":
         raise ValueError("无效的操作类型")
     created_after = _utc_history_bound(created_after)
     created_before = _utc_history_bound(created_before)
     if created_after and created_before and created_after >= created_before:
         raise ValueError("操作开始时间必须早于结束时间")
     category_sql = _operation_type_sql()
-    clauses, params = [], []
+    # Keep legacy read records out of the operation journal view as well as
+    # stopping new read requests from being recorded below.
+    clauses, params = [f"({category_sql}) != 'query'"], []
     if operation_type:
         clauses.append(f"({category_sql}) = ?")
         params.append(operation_type)
@@ -200,6 +204,10 @@ def install_request_audit(app):
     @app.before_request
     def begin_store_link_request():
         if not (request.path.startswith("/api/store-links") or request.path.startswith("/api/db/store-links")) or request.path.endswith("/operation-logs"):
+            return
+        # Operation history is for changes. GET/HEAD/OPTIONS and category-paths
+        # requests only read data, so they should not create audit entries.
+        if request.method in {"GET", "HEAD", "OPTIONS"} or request.path.endswith("/category-paths"):
             return
         g.store_link_audit_token = _context.set({"trace_id": uuid.uuid4().hex, "actor": {k: v for k, v in (session.get("workbench_user") or {"type": "service_or_anonymous"}).items() if k in {"id", "username", "display_name", "type"}}, "method": request.method, "path": request.path, "remote_addr": request.remote_addr})
         forwarded = trusted_forwarded_context(request)

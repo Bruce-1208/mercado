@@ -57,6 +57,7 @@ def _headers():
 def _request(method, path, **kwargs):
     url = f"{DB_API_BASE_URL}{path}"
     timeout = kwargs.pop("timeout", 60)
+    max_attempts = kwargs.pop("max_attempts", None)
     headers = _headers()
     if path.startswith("/api/db/store-links"):
         from erp.store_link_audit import forwarding_headers
@@ -65,7 +66,17 @@ def _request(method, path, **kwargs):
         headers.pop("Content-Type", None)
     # Only reads can be replayed safely. A timed-out POST may already have
     # created a task or written a record on the server.
-    attempts = 3 if method.upper() in {"GET", "HEAD"} else 1
+    body = kwargs.get("json")
+    awp_read = (method.upper() == "POST" and path == "/api/db/ai-weight-price/store"
+                and isinstance(body, dict) and body.get("method") in {
+                    "state", "get", "list", "counts", "logs", "has_run_item",
+                    "run_report", "run_items", "run_counts", "execution_snapshot", "owners",
+                    "agent_snapshot",
+                })
+    awp_snapshot = awp_read and body.get("method") == "agent_snapshot"
+    attempts = (2 if awp_snapshot else 3) if method.upper() in {"GET", "HEAD"} or awp_read else 1
+    if max_attempts is not None:
+        attempts = max(1, min(attempts, int(max_attempts)))
     for attempt in range(attempts):
         try:
             response = DB_API_SESSION.request(method, url, headers=headers, timeout=timeout, **kwargs)
@@ -85,6 +96,11 @@ def _request(method, path, **kwargs):
             continue
         break
 
+    if response.status_code in (502, 503, 504):
+        raise RuntimeError(
+            f"数据库服务暂时不可用（HTTP {response.status_code}）：{path}；"
+            "请等待服务恢复后继续任务。写入结果可能未确认，不自动重复提交。"
+        )
     try:
         payload = response.json()
     except ValueError as e:
@@ -141,7 +157,7 @@ def create_ai_video_job(uploads, form):
 
 
 def list_ai_video_jobs(
-    limit=30,
+    limit=20,
     user_id=None,
     *,
     page=None,
@@ -250,15 +266,15 @@ def update_ai_video_settings(changes, user_id=None):
     )
 
 
-def publish_ai_video_job(job_id, link_id):
+def publish_ai_video_job(job_id, link_id, actor=""):
     if DB_MODE == "mysql":
         from bit.bit_ai_video import publish_job
 
-        return publish_job(job_id, int(link_id))
+        return publish_job(job_id, int(link_id), actor=actor)
     return _request(
         "POST",
         f"/api/db/ai-videos/jobs/{job_id}/publish",
-        json={"link_id": int(link_id)},
+        json={"link_id": int(link_id), "actor": actor},
         timeout=(30, 360),
     )
 
@@ -628,10 +644,10 @@ def insert_zying_product_info(product_list):
     return (data or {}).get("count", 0)
 
 
-def save_weight_dimensions_records(rows, refresh=False):
+def save_weight_dimensions_records(rows, refresh=False, enrich_only=False):
     if DB_MODE == "mysql":
-        return _local_call("save_weight_dimensions_records", rows, refresh=refresh)
-    return _request("POST", "/api/db/weight-dimensions-records", json={"rows": rows or [], "refresh": refresh})
+        return _local_call("save_weight_dimensions_records", rows, refresh=refresh, **({"enrich_only": True} if enrich_only else {}))
+    return _request("POST", "/api/db/weight-dimensions-records", json={"rows": rows or [], "refresh": refresh, "enrich_only": enrich_only})
 
 
 def get_weight_dimensions_record_order_numbers(order_numbers):
@@ -957,6 +973,9 @@ def list_orders(
     page_size=200,
     store_ids=None,
     salespeople=None,
+    remark_search="",
+    sort_by="ordered_at",
+    sort_dir="desc",
 ):
     normalized_store_ids = [int(value) for value in store_ids or [] if str(value or "").isdigit()]
     normalized_salespeople = [
@@ -968,6 +987,9 @@ def list_orders(
         "salesperson": salesperson or "",
         "group_name": group_name or "",
         "search": search or "",
+        "remark_search": remark_search or "",
+        "sort_by": sort_by or "ordered_at",
+        "sort_dir": sort_dir or "desc",
         "start_date": start_date or "",
         "end_date": end_date or "",
         "origin": origin or "",
@@ -1420,14 +1442,16 @@ def get_prohibited_listing_sync_status():
     return _request("GET", "/api/db/prohibited-listings/sync/status")
 
 
-def bulk_update_orders(order_ids, operator_id=None, operator_name="", **changes):
+def bulk_update_orders(order_ids, operator_id=None, operator_name="", allowed_token_ids=None, **changes):
     payload = {"order_ids": [str(value) for value in order_ids or []]}
     for field in (
         "workflow_status", "purchase_order", "purchase_tracking",
-        "logistics_company", "purchase_cost", "purchase_remark",
+        "logistics_company", "purchase_cost", "purchase_remark", "order_remark",
     ):
         if field in changes:
             payload[field] = changes.get(field)
+    if allowed_token_ids is not None:
+        payload["allowed_token_ids"] = list(allowed_token_ids)
     payload["operator_id"] = operator_id
     payload["operator_name"] = str(operator_name or "")
     if DB_MODE == "mysql":
@@ -1567,10 +1591,10 @@ def insert_ai_appeal_record(record, timeout=10):
     return _request("POST", "/api/db/ai-appeal-records", timeout=timeout, json={"record": record or {}})
 
 
-def get_ai_appeal_records(limit=100):
+def get_ai_appeal_records(limit=100, appeal_copy_mode=""):
     if DB_MODE == "mysql":
-        return _local_call("get_ai_appeal_records", limit)
-    return _request("GET", "/api/db/ai-appeal-records", params={"limit": limit})
+        return _local_call("get_ai_appeal_records", limit, appeal_copy_mode=appeal_copy_mode)
+    return _request("GET", "/api/db/ai-appeal-records", params={"limit": limit, "appeal_copy_mode": appeal_copy_mode})
 
 
 def list_appeal_phrases():
@@ -2250,9 +2274,10 @@ def list_mercado_collection_items(
     review_status="", publish_status="",
     weight_min=None, weight_max=None, price_min=None, price_max=None,
     net_proceeds_min=None, net_proceeds_max=None, date_from="", date_to="",
-    exclude_added=False, management_category_id=None,
+    exclude_added=False, management_category_id=None, weight_status="",
 ):
     params = {
+        "weight_status": str(weight_status or "").strip().lower(),
         "search": search,
         "limit": limit,
         "offset": offset,
@@ -2277,7 +2302,7 @@ def list_mercado_collection_items(
         )
     path = "/api/db/mercado-collection/items"
     try:
-        return _request("GET", path, params=params)
+        return _request("GET", path, params=params, timeout=(3, 25), max_attempts=1)
     except RuntimeError as exc:
         if not _collection_route_missing(exc, path):
             raise
@@ -2318,9 +2343,10 @@ def list_mercado_product_items(
     price_max=None, net_proceeds_min=None, net_proceeds_max=None,
     date_from="", date_to="", management_category_id=None,
     mercado_category="", zying_category="", product_developer_id="", token_ids=None,
-    collector_salesperson="", generator_salesperson="",
+    collector_salesperson="", generator_salesperson="", weight_status="",
 ):
     params = {
+        "weight_status": str(weight_status or "").strip().lower(),
         "search": search,
         "limit": limit,
         "offset": offset,
@@ -2359,7 +2385,7 @@ def list_mercado_product_items(
     try:
         return _request(
             "GET", path,
-            params=params,
+            params=params, timeout=(3, 25), max_attempts=1,
         )
     except RuntimeError as exc:
         if not _collection_route_missing(exc, path):
@@ -2461,25 +2487,35 @@ def list_mercado_management_categories():
         return _collection_store_call("list_management_categories")
 
 
-def create_mercado_management_category(name):
-    payload = {"name": str(name or "")}
+def create_mercado_management_category(name, listing_ratio_percent=100):
+    payload = {
+        "name": str(name or ""),
+        "listing_ratio_percent": listing_ratio_percent,
+    }
     if DB_MODE == "mysql":
-        return _collection_store_call("create_management_category", payload["name"])
+        return _collection_store_call(
+            "create_management_category", payload["name"], payload["listing_ratio_percent"]
+        )
     path = "/api/db/mercado-management-categories"
     try:
         return _request("POST", path, json=payload)
     except RuntimeError as exc:
         if not _collection_route_missing(exc, path):
             raise
-        return _collection_store_call("create_management_category", payload["name"])
+        return _collection_store_call(
+            "create_management_category", payload["name"], payload["listing_ratio_percent"]
+        )
 
 
-def update_mercado_management_category(category_id, name):
+def update_mercado_management_category(category_id, name, listing_ratio_percent=None):
     normalized_id = int(category_id)
     payload = {"name": str(name or "")}
+    if listing_ratio_percent is not None:
+        payload["listing_ratio_percent"] = listing_ratio_percent
     if DB_MODE == "mysql":
         return _collection_store_call(
-            "update_management_category", normalized_id, payload["name"]
+            "update_management_category", normalized_id, payload["name"],
+            payload.get("listing_ratio_percent"),
         )
     path = f"/api/db/mercado-management-categories/{normalized_id}"
     try:
@@ -2488,7 +2524,8 @@ def update_mercado_management_category(category_id, name):
         if not _collection_route_missing(exc, path):
             raise
         return _collection_store_call(
-            "update_management_category", normalized_id, payload["name"]
+            "update_management_category", normalized_id, payload["name"],
+            payload.get("listing_ratio_percent"),
         )
 
 
@@ -3239,3 +3276,21 @@ def publish_workers(value=None):
 
 def employee_tasks(payload):
     return _mercado_action_center_call("employee_tasks", payload)
+
+
+def get_order_product_detail(order_ids, product_id, allowed_token_ids=None):
+    if DB_MODE == "mysql":
+        from bit.order_product_details import get_order_product_detail as read
+        return read(order_ids, product_id, allowed_token_ids)
+    return _request("POST", "/api/db/orders/product-detail", json={
+        "order_ids": order_ids, "product_id": product_id,
+        "allowed_token_ids": None if allowed_token_ids is None else list(allowed_token_ids),
+    })
+
+
+def get_ai_appeal_product_contexts(shop_name, product_ids):
+    if DB_MODE == "mysql":
+        from bit.bit_ai_appeal_copy import fetch_store_product_contexts
+        return fetch_store_product_contexts(shop_name, product_ids)
+    return _request("POST", "/api/db/ai-appeal-product-contexts", timeout=120,
+                    json={"shop_name": shop_name, "product_ids": product_ids})

@@ -22,6 +22,7 @@ import time
 import traceback
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 from io import BytesIO
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -139,7 +140,7 @@ from datetime import datetime, timedelta, timezone
 # from db_pool import get_db_connection  # 确保你的连接池文件在这个目录下
 
 
-WORKBENCH_REMEMBER_HOURS = 6
+WORKBENCH_REMEMBER_HOURS = 72
 WORKBENCH_SECRET_KEY_FILE = CURRENT_DIR / "runtime_locks" / "workbench_secret.key"
 
 
@@ -408,6 +409,7 @@ DAILY_AGENT_DB_GET_PATHS = frozenset({
     "/api/db/appeal-phrases/random",
 })
 DAILY_AGENT_DB_POST_PATHS = frozenset({
+    "/api/db/ai-appeal-product-contexts",
     "/api/db/official-infractions/live/jobs",
     "/api/db/official-infractions/live",
     "/api/db/ai-appeal-records",
@@ -2519,7 +2521,7 @@ BROWSER_EXTENSION_PACKAGE_FILES = (
 )
 
 
-def build_browser_extension_package(extension_dir=None):
+def build_browser_extension_package(extension_dir=None, downloaded_account=None):
     """Build a clean Chrome/Edge unpacked-extension package in memory."""
     source_dir = Path(extension_dir or BROWSER_EXTENSION_DIR)
     buffer = BytesIO()
@@ -2528,7 +2530,22 @@ def build_browser_extension_package(extension_dir=None):
             path = source_dir / filename
             if not path.is_file():
                 raise FileNotFoundError(f"泽顺插件缺少文件：{filename}")
-            archive.writestr(f"zeshun_collector/{filename}", path.read_bytes())
+            content = path.read_bytes()
+            if filename == "background.js" and downloaded_account:
+                marker = b"const DOWNLOADED_ACCOUNT_CONFIG = null;"
+                if marker not in content:
+                    raise ValueError("泽顺插件缺少下载账号配置位置")
+                config_json = json.dumps(
+                    downloaded_account, ensure_ascii=True, separators=(",", ":")
+                ).encode("ascii")
+                content = content.replace(
+                    marker,
+                    b"const DOWNLOADED_ACCOUNT_CONFIG = " + config_json + b";",
+                    1,
+                )
+            # Keep manifest.json at the archive root: extraction tools commonly
+            # create their own enclosing directory, which users load in Chrome/Edge.
+            archive.writestr(filename, content)
     buffer.seek(0)
     return buffer
 
@@ -3001,6 +3018,8 @@ def _required_workbench_permissions(path, method):
             if path.endswith("/execute") and method == "POST"
             else ("order_analysis.view",)
         )
+    if path == "/api/orders/outbound/confirm":
+        return ("order_print.execute",)
     if path == "/api/orders/print":
         return ("order_print.execute",) if method == "POST" else ("order_print.view",)
     if path.startswith("/api/orders/zying-sync/"):
@@ -3064,6 +3083,8 @@ def _required_workbench_permissions(path, method):
             else ("infractions.view",)
         )
     if path.startswith("/api/reputation/"):
+        if path.startswith("/api/reputation/open-store/"):
+            return ("reputation.execute",)
         return (
             ("reputation.execute",)
             if method == "POST"
@@ -3206,9 +3227,42 @@ def workbench_user_can_use_agent(agent, user=None):
     user = user if user is not None else get_current_workbench_user()
     if not user or not agent:
         return False
-    if not workbench_user_own_store_only(user):
+    if user.get("role_key") == "super_admin":
         return True
-    return bool(user.get("id")) and int(agent.get("owner_user_id") or 0) == int(user["id"])
+    owner_id = int(agent.get("owner_user_id") or 0)
+    if user.get("role_key") != "enterprise_admin":
+        return bool(user.get("id")) and owner_id == int(user["id"])
+    organization = str(user.get("organization_key") or "").strip()
+    if not organization or not owner_id:
+        return False
+    if owner_id == int(user.get("id") or 0):
+        return True
+    owners = getattr(g, "agent_owner_organizations", None) if has_request_context() else None
+    if owners is None:
+        owners = {
+            int(row["id"]): str(row.get("organization_key") or "").strip()
+            for row in (_workbench_backend("list_workbench_users") or [])
+        }
+        if has_request_context():
+            g.agent_owner_organizations = owners
+    return owners.get(owner_id) == organization
+
+
+@app.before_request
+def enforce_server_execution_permission():
+    """Reject explicit server execution centrally, including query-string targets."""
+    if not request.path.startswith("/api/") or request.path.startswith(("/api/db/", "/api/local-agents/")):
+        return None
+    user = get_current_workbench_user()
+    if not user or user.get("role_key") == "super_admin":
+        return None
+    data = request.get_json(silent=True)
+    targets = request.args.getlist("execution_target")
+    if isinstance(data, dict):
+        targets.append(data.get("execution_target"))
+    if any(str(target or "").strip().lower() == "server" for target in targets):
+        return jsonify({"status": "error", "message": "只有超级管理员可以使用服务器执行，请选择 Agent", "required_role": "super_admin"}), 403
+    return None
 
 
 @app.before_request
@@ -3216,19 +3270,32 @@ def enforce_local_agent_owner():
     if not request.path.startswith("/api/") or request.path.startswith(("/api/db/", "/api/local-agents/")):
         return None
     user = get_current_workbench_user()
-    if not workbench_user_own_store_only(user):
+    if not user or user.get("role_key") == "super_admin":
         return None
     data = request.get_json(silent=True)
     agent_ids = request.args.getlist("agent_id")
     if isinstance(data, dict) and data.get("agent_id"):
         agent_ids.append(data["agent_id"])
+    if request.path in {"/api/tasks/daily/status", "/api/tasks/daily/stop"}:
+        payload = data if isinstance(data, dict) else {}
+        target = payload.get("execution_target") or request.args.get("execution_target")
+        if target != "agent" and not RUNTIME_SETTINGS.is_client:
+            return jsonify({"status": "error", "message": "只有超级管理员可以查看或操作服务器任务"}), 403
+        task_id = payload.get("task_id") or request.args.get("task_id")
+        if task_id and target == "agent":
+            try:
+                job = get_local_agent_store().get_job(task_id)
+            except ValueError:
+                job = None
+            if job:
+                agent_ids.append(job.get("agent_id"))
     for agent_id in agent_ids:
         try:
             agent = get_local_agent_store().get_agent(agent_id)
         except ValueError:
             agent = None
         if not workbench_user_can_use_agent(agent, user):
-            return jsonify({"status": "error", "message": "只能调用本人绑定的本地 Agent，请从当前账号重新下载并注册 Agent"}), 403
+            return jsonify({"status": "error", "message": "当前账号无权调用此 Agent，请选择本人或本公司授权范围内的 Agent"}), 403
     return None
 
 
@@ -3369,7 +3436,8 @@ AI_WEIGHT_PRICE_STORE_METHODS = frozenset({
     "log", "logs", "state", "set_state", "save_run", "clear_run", "record_run_item",
     "has_run_item", "run_report", "run_items", "get", "add", "update", "exception", "skip",
     "list", "counts", "run_counts", "reset_scope", "include_in_scope", "quota", "reserve",
-    "sent", "recover", "csv", "export",
+    "sent", "recover", "csv", "export", "log_many", "record_progress", "record_visual_event", "execution_snapshot", "owners",
+    "agent_snapshot", "apply_agent_batch", "reserve_for_agent",
 })
 
 
@@ -3730,6 +3798,8 @@ _mercado_publish_state = {
 }
 _mercado_publish_schedule_start_lock = threading.Lock()
 _mercado_publish_schedule_thread = None
+_mercado_rate_limit_retry_last_scan = 0.0
+_mercado_rate_limit_retry_scan_interval = 60.0
 _fund_collect_stop_event = None
 _order_analysis_import_lock = threading.Lock()
 # 每次点击“启动”都会创建任务实例；同一执行主机的互斥由 daily_task
@@ -8440,12 +8510,35 @@ def api_weight_dimensions_records_saved():
         return jsonify({"status": "error", "message": f"读取已保存记录失败：{exc}"}), 500
 
 
+def _weight_dimensions_agent_job(job_id):
+    store = get_local_agent_store()
+    job = store.get_job(job_id)
+    if not job or job.get("status") != "queued":
+        return job
+    waiting = [item for item in store.list_jobs(agent_id=job["agent_id"], limit=500)
+               if item.get("job_id") != job_id
+               and (item.get("status") in {"running", "stopping"}
+                    or (item.get("status") == "queued"
+                        and not item.get("cancel_requested")
+                        and (item.get("created_at", 0), item["job_id"])
+                        < (job.get("created_at", 0), job_id)))]
+    if waiting:
+        waiting.sort(key=lambda item: (item.get("status") == "queued", item.get("created_at", 0)))
+        first = waiting[0]
+        labels = {"daily_task": "每日任务", "zying_order_sync": "智赢订单同步",
+                  "ai_weight_price": "核重核价/智赢更新", "appeal": "申诉任务"}
+        name = labels.get(first.get("job_type"), first.get("job_type") or "其他任务")
+        job = dict(job, message=f"智赢更新排队中，前方 {len(waiting)} 个任务；"
+                   f"{name}（{first['job_id']}）占用队列，完成后自动执行")
+    return job
+
+
 @app.route("/api/weight-dimensions-records/latest", methods=["GET"])
 @login_required
 def api_weight_dimensions_records_latest():
     user = get_current_workbench_user()
     def agent_job_provider(job_id):
-        return get_local_agent_store().get_job(job_id)
+        return _weight_dimensions_agent_job(job_id)
 
     data = weight_dimensions_records.latest_task_status(
         _weight_dimensions_task_owner(user), agent_job_provider=agent_job_provider,
@@ -8485,7 +8578,7 @@ def api_weight_dimensions_records_export_all():
 def api_weight_dimensions_records_status(task_id):
     try:
         def agent_job_provider(job_id):
-            return get_local_agent_store().get_job(job_id)
+            return _weight_dimensions_agent_job(job_id)
 
         data = weight_dimensions_records.task_status(
             task_id, _weight_dimensions_task_owner(get_current_workbench_user()),
@@ -8515,6 +8608,9 @@ def api_weight_dimensions_records_execute(task_id):
             return jsonify({"status": "error", "message": "excluded_order_numbers 必须是数组"}), 400
         select_all_matching = bool(data.get("select_all_matching"))
         agent_id = str(data.get("agent_id") or "").strip()
+        execution_target = str(data.get("execution_target") or "agent").strip().lower()
+        if execution_target not in {"agent", "server"}:
+            raise ValueError("执行位置无效")
 
         def dispatch_zying(rows):
             if not agent_id:
@@ -8523,9 +8619,10 @@ def api_weight_dimensions_records_execute(task_id):
                 "weight-dimensions-update",
                 {"agent_id": agent_id, "records": rows},
             )
-            payload = response.get_json(silent=True) if hasattr(response, "get_json") else response
+            response = app.make_response(response)
+            payload = response.get_json(silent=True)
             if not isinstance(payload, dict) or payload.get("status") != "success":
-                raise ValueError(str((payload or {}).get("message") or "智赢 Agent 任务提交失败"))
+                raise ValueError(str((payload.get("message") if isinstance(payload, dict) else "") or "智赢 Agent 任务提交失败"))
             return str(((payload.get("data") or {}).get("task_id") or "")).strip()
 
         data = weight_dimensions_records.start_execute(
@@ -8535,7 +8632,7 @@ def api_weight_dimensions_records_execute(task_id):
             select_all_matching=select_all_matching,
             excluded_order_numbers=excluded_order_numbers,
             erp_browser_factory=ai_weight_price_service.weight_dimensions_browser,
-            agent_dispatch=dispatch_zying if action == "zying" else None,
+            agent_dispatch=dispatch_zying if action == "zying" and execution_target == "agent" else None,
         )
         return jsonify({"status": "success", "data": data}), 202
     except KeyError as exc:
@@ -8725,10 +8822,13 @@ def _order_list_query_params(args):
         "salesperson": salespeople[0] if len(salespeople) == 1 else "",
         "group_name": str(args.get("group_name") or "").strip(),
         "search": str(args.get("search") or "").strip(),
+        "remark_search": str(args.get("remark_search") or "").strip(),
         "start_date": str(args.get("start_date") or "").strip(),
         "end_date": str(args.get("end_date") or "").strip(),
         "origin": str(args.get("origin") or "").strip(),
         "freight_variance": str(args.get("freight_variance") or "").strip(),
+        "sort_by": str(args.get("sort_by") or "ordered_at").strip(),
+        "sort_dir": str(args.get("sort_dir") or "desc").strip(),
         "page": _parse_int_param(args, "page", 1, 1, 1000000),
         "page_size": _parse_int_param(args, "page_size", 200, 10, 200),
     }
@@ -8908,7 +9008,11 @@ def api_zying_order_sync_agent_step(job_id):
             return bit_db_api.bulk_update_orders([order_id],
                 operator_id=job.get("created_by_id"), operator_name=job.get("created_by_name") or "", **changes)
         try:
-            state = agent_sync.step(store, job, request.get_json(silent=True) or {}, write)
+            data = request.get_json(silent=True) or {}
+            state = agent_sync.step(store, job, data, write)
+            if data.get("compact") is True:
+                # The Agent only needs counters/control, not the growing history.
+                state = {key: value for key, value in state.items() if key != "results"}
             return jsonify({"status": "success", "data": state})
         except ValueError as exc:
             return jsonify({"status": "error", "message": str(exc)}), 400
@@ -9002,6 +9106,71 @@ def api_order_sync_options():
         return jsonify({"status": "error", "message": f"读取授权店铺失败：{exc}"}), 502
 
 
+@app.route('/api/orders/product-detail', methods=['GET'])
+@login_required
+def api_order_product_detail():
+    try:
+        data = bit_db_api.get_order_product_detail(
+            request.args.getlist("order_id"), request.args.get("product_id"),
+            _authorized_token_ids_for_user(),
+        )
+        response = jsonify({"status": "success", "data": data})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        logging.exception("订单产品详情读取失败")
+        return jsonify({"status": "error", "message": "平台商品详情读取失败，请稍后重试"}), 502
+
+
+@app.route('/api/db/orders/product-detail', methods=['POST'])
+@internal_api_required
+def api_db_order_product_detail():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    from bit.order_product_details import get_order_product_detail
+    payload = request.get_json(silent=True) or {}
+    try:
+        data = get_order_product_detail(payload.get("order_ids"), payload.get("product_id"), payload.get("allowed_token_ids"))
+        return jsonify({"status": "success", "data": data})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+def _order_warehouse_operator(user):
+    return bool(user and (
+        user.get("role_key") in {"warehouse", "super_admin", "enterprise_admin"}
+        or workbench_user_has_permission(user, "inventory.execute")
+    ))
+
+
+@app.route('/api/orders/outbound/confirm', methods=['POST'])
+@login_required
+def api_confirm_order_outbound():
+    user = session.get("workbench_user") or {}
+    if not _order_warehouse_operator(user):
+        return jsonify({"status": "error", "message": "只有仓库人员或有出入库权限的账号可以确认出库"}), 403
+    data = request.get_json(silent=True) or {}
+    order_ids = data.get("order_ids") or []
+    if not isinstance(order_ids, list):
+        return jsonify({"status": "error", "message": "order_ids 必须是数组"}), 422
+    try:
+        result = bit_db_api.bulk_update_orders(
+            order_ids, workflow_status="转运-已出库",
+            allowed_token_ids=_authorized_token_ids_for_user(),
+            operator_id=user.get("id"),
+            operator_name=user.get("display_name") or user.get("username") or "",
+        )
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("确认订单出库失败")
+        return jsonify({"status": "error", "message": "确认出库失败，请稍后重试"}), 502
+
+
 @app.route('/api/orders/bulk-update', methods=['POST'])
 @login_required
 def api_bulk_update_orders():
@@ -9012,19 +9181,17 @@ def api_bulk_update_orders():
     changes = {}
     for field in (
         "workflow_status", "purchase_order", "purchase_tracking",
-        "logistics_company", "purchase_cost", "purchase_remark",
+        "logistics_company", "purchase_cost", "purchase_remark", "order_remark",
     ):
         if field in data:
             changes[field] = data.get(field)
     user = session.get("workbench_user") or {}
-    if str(changes.get("workflow_status") or "").strip() == "待发":
-        return jsonify({
-            "status": "error",
-            "message": "待发状态只能由仓库人员打印美客多面单后自动设置",
-        }), 403
+    if changes.get("workflow_status") == "转运-已出库" and not _order_warehouse_operator(user):
+        return jsonify({"status": "error", "message": "只有仓库人员或有出入库权限的账号可以确认出库"}), 403
     try:
         result = bit_db_api.bulk_update_orders(
             order_ids,
+            allowed_token_ids=_authorized_token_ids_for_user(),
             operator_id=user.get("id"),
             operator_name=user.get("display_name") or user.get("username") or "",
             **changes,
@@ -9050,23 +9217,20 @@ def _selected_purchase_tracking_rows(order_ids):
             normalized_ids.append(order_id)
     if not normalized_ids:
         raise ValueError("请至少选择一个订单")
-    if len(normalized_ids) > 100:
-        raise ValueError("单次最多同步 100 个订单")
-
     rows = bit_db_api.get_purchase_tracking_orders(normalized_ids) or []
     by_id = {str(row.get("order_id") or ""): row for row in rows}
     result = []
-    missing = []
+    unavailable = [order_id for order_id in normalized_ids if order_id not in by_id]
+    if unavailable:
+        preview = "、".join(unavailable[:5])
+        suffix = " 等" if len(unavailable) > 5 else ""
+        raise ValueError(f"订单 {preview}{suffix} 不存在或无权访问")
     for order_id in normalized_ids:
         purchase_order = str((by_id.get(order_id) or {}).get("purchase_order") or "").strip()
-        if not purchase_order:
-            missing.append(order_id)
-        else:
+        if purchase_order:
             result.append({"order_id": order_id, "purchase_order": purchase_order})
-    if missing:
-        preview = "、".join(missing[:5])
-        suffix = " 等" if len(missing) > 5 else ""
-        raise ValueError(f"订单 {preview}{suffix} 尚未填写采购订单号")
+    if not result:
+        raise ValueError("所选订单均未填写采购订单号")
     return result
 
 
@@ -9180,7 +9344,7 @@ def api_print_orders_pdf():
         print_log_error = str(exc) or exc.__class__.__name__
         logging.exception("美客多面单已生成，但打印记录写入失败")
     workflow_status_error = ""
-    if user.get("role_key") == "warehouse" and successful_order_ids:
+    if successful_order_ids and _order_warehouse_operator(user):
         try:
             bit_db_api.bulk_update_orders(
                 successful_order_ids,
@@ -9192,7 +9356,7 @@ def api_print_orders_pdf():
             # Keep the valid PDF available even when the status audit write is
             # temporarily unavailable; the response header lets the UI retry.
             workflow_status_error = str(exc) or exc.__class__.__name__
-            logging.exception("仓库人员面单已生成，但待发状态写入失败")
+            logging.exception("面单已生成，但待发状态写入失败")
     response = send_file(
         BytesIO(result["content"]),
         mimetype="application/pdf",
@@ -9218,8 +9382,10 @@ def api_print_orders_pdf():
     )
     if print_log_error:
         response.headers["X-Mercado-Print-Log"] = "failed"
-    if workflow_status_error:
-        response.headers["X-Mercado-Workflow-Status"] = "failed"
+    response.headers["X-Mercado-Workflow-Status"] = (
+        "failed" if workflow_status_error else
+        "updated" if successful_order_ids and _order_warehouse_operator(user) else "unchanged"
+    )
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -9657,6 +9823,7 @@ def api_store_analysis():
             start_date, end_date, metric=metric, salesperson=salesperson,
             group_name=group_name, token_id=token_id,
             category_level=category_level,
+            refresh=str(request.args.get("refresh") or "").strip().lower() in ("1", "true", "yes"),
             allowed_token_ids=_authorized_token_ids_for_user(),
         )
     except (ValueError, TypeError) as exc:
@@ -9861,7 +10028,7 @@ def api_ai_video_jobs():
     if request.method == "POST":
         return _ai_video_create_response()
     try:
-        limit = _parse_int_param(request.args, "limit", 30, 1, 30)
+        limit = _parse_int_param(request.args, "limit", 20, 1, 20)
         current_id = _current_account_user_id()
         if not any(key in request.args for key in (
             "page", "creator_id", "created_from", "created_before"
@@ -9969,6 +10136,12 @@ def api_ai_video_asset(job_id, asset_id):
     return response
 
 
+@app.route('/ai-videos/<job_id>/details')
+@login_required
+def ai_video_details(job_id):
+    return render_template('ai_video_details.html', job_id=job_id)
+
+
 @app.route('/api/ai-videos/jobs/<job_id>', methods=['GET', 'PATCH', 'DELETE'])
 @login_required
 def api_ai_video_job(job_id):
@@ -9997,7 +10170,7 @@ def api_ai_video_publish(job_id):
         if link_id <= 0:
             raise ValueError("请先关联一条在售的店铺链接")
         logging.info("AI 视频上传开始：job_id=%s link_id=%s actor=%s", job_id, link_id, actor)
-        data = bit_db_api.publish_ai_video_job(job_id, link_id)
+        data = bit_db_api.publish_ai_video_job(job_id, link_id, actor=actor)
     except ValueError as exc:
         logging.warning(
             "AI 视频上传校验失败：job_id=%s link_id=%s actor=%s reason=%s",
@@ -10122,7 +10295,7 @@ def api_db_ai_video_jobs():
             except ValueError as exc:
                 return jsonify({"status": "error", "message": "生成者范围无效"}), 400
         data = bit_ai_video.list_jobs(
-            _parse_int_param(request.args, "limit", 30, 1, 30),
+            _parse_int_param(request.args, "limit", 20, 1, 20),
             user_id=request.args.get("user_id"),
             page=_parse_int_param(request.args, "page", 1, 1, 1000000),
             allowed_user_ids=allowed_user_ids,
@@ -10207,7 +10380,7 @@ def api_db_ai_video_publish(job_id):
         if link_id <= 0:
             raise ValueError("请先关联一条在售的店铺链接")
         logging.info("服务端 AI 视频上传开始：job_id=%s link_id=%s", job_id, link_id)
-        data = bit_ai_video.publish_job(job_id, link_id)
+        data = bit_ai_video.publish_job(job_id, link_id, actor=str(payload.get("actor") or ""))
     except ValueError as exc:
         logging.warning(
             "服务端 AI 视频上传校验失败：job_id=%s link_id=%s reason=%s",
@@ -11068,7 +11241,8 @@ def api_daily_task_status():
             data = daily_agent_task_snapshot(job, include_log=True)
         else:
             tasks = [daily_agent_task_snapshot(job) for job in
-                     get_local_agent_store().list_jobs(job_type="daily_task", limit=500)]
+                     get_local_agent_store().list_jobs(job_type="daily_task", limit=500)
+                     if workbench_user_can_use_agent(get_local_agent_store().get_agent(job.get("agent_id")))]
             data = {"tasks": tasks, "running": any(task["running"] for task in tasks),
                     "running_count": sum(task["running"] for task in tasks), "total_count": len(tasks)}
         return jsonify({"status": "success", "data": data})
@@ -11955,8 +12129,6 @@ def _mark_ai_weight_price_agent_cancelled(actor, *, terminate=False):
     """Publish cancellation immediately because the Agent monitor may kill the worker."""
     with ai_weight_price_service.store.actor_scope(actor, view_all=False):
         run = ai_weight_price_service.store.state("run", {}) or {}
-        if run.get("outcome") != "running":
-            return
         run_id = run.get("run_id")
         if terminate:
             ai_weight_price_service.store.clear_run(run_id)
@@ -11969,6 +12141,8 @@ def _mark_ai_weight_price_agent_cancelled(actor, *, terminate=False):
             ):
                 ai_weight_price_service.store.set_state(key, value)
             ai_weight_price_service.store.log("Agent 任务已终止并清空本次批次数据")
+            return
+        if run.get("outcome") != "running":
             return
         ai_weight_price_service.store.set_state("stop_requested", True)
         ai_weight_price_service.store.set_state(
@@ -12017,23 +12191,24 @@ def enqueue_local_agent_ai_weight_price(action, data):
 
     store = get_local_agent_store()
     try:
-        agent_id = normalize_agent_id(data.get("agent_id"))
-        agent = store.get_agent(agent_id, online_seconds=LOCAL_AGENT_ONLINE_SECONDS)
+        agent_id = ("" if action in {"stop", "terminate"} and not data.get("agent_id")
+                    else normalize_agent_id(data.get("agent_id")))
+        agent = store.get_agent(agent_id, online_seconds=LOCAL_AGENT_ONLINE_SECONDS) if agent_id else None
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     if agent and not workbench_user_can_use_agent(agent):
         return jsonify({"status": "error", "message": "只能调用本人绑定的本地 Agent"}), 403
-    if not agent or not agent.get("online"):
-        return jsonify({"status": "error", "message": "所选 Agent 不在线，请启动 Agent 并刷新电脑"}), 409
-    if "ai_weight_price" not in agent.get("capabilities", ()):
-        return jsonify({"status": "error", "message": "请将所选电脑的 Agent 更新至支持核重核价的版本"}), 409
 
     user = get_current_workbench_user() or {}
     user_id = user.get("id")
     is_admin = bool(user.get("is_platform_admin") or user.get("role_key") == "super_admin")
-    active_jobs = _ai_weight_price_active_jobs(store, agent_id)
+    # Queue records can remain running after a worker disappears. Reconcile
+    # leases before using them to reject a new operation, just as the Agent
+    # list and daily-task endpoints do. Live leases remain protected.
+    store.reap_expired_jobs()
+    active_jobs = _ai_weight_price_active_jobs(store, agent_id) if agent_id else []
     active_user_jobs = [
-        job for job in store.list_jobs(job_type="ai_weight_price", limit=500)
+        job for job in store.list_jobs(job_type="ai_weight_price", created_by_id=user_id, limit=500)
         if job.get("status") in {"queued", "running", "stopping"}
         and str(job.get("created_by_id") or "") == str(user_id or "")
     ]
@@ -12064,26 +12239,41 @@ def enqueue_local_agent_ai_weight_price(action, data):
     # enqueueing a second job would never be claimed while the browser worker
     # is occupied.
     if action in {"stop", "terminate"}:
-        job = active_jobs[0] if active_jobs else None
+        # The UI batch can outlive its queue job (worker exit, lease expiry,
+        # completed/paused batch). Cleanup must not require a live workstation.
+        # If the user changed the selected workstation, control their existing
+        # job rather than clearing state underneath that worker.
+        job = next((item for item in active_jobs
+                    if str(item.get("created_by_id") or "") == str(user_id or "")), None)
+        job = job or (active_user_jobs[0] if active_user_jobs else None)
+        if job is None and is_admin and active_jobs:
+            job = active_jobs[0]
+        actor = {
+            "id": user_id,
+            "username": user.get("username") or "",
+            "display_name": user.get("display_name") or user.get("username") or "",
+        }
         if not job:
-            return jsonify({"status": "error", "message": "当前 Agent 没有正在运行的核重核价任务"}), 409
+            lock = ai_weight_price_service.lock()
+            if lock.read_owner() and not lock._is_stale():
+                return jsonify({"status": "error", "message": "服务器仍有浏览器任务运行，请选择服务器执行位置停止"}), 409
+            _mark_ai_weight_price_agent_cancelled(actor, terminate=action == "terminate")
+            return jsonify({
+                "status": "success", "data": {"running": False, "cleared": action == "terminate"},
+                "message": ("本次残留批次已终止并清空；历史商品与登录状态已保留"
+                            if action == "terminate" else "任务已停止，当前进度已保留"),
+            })
+        # An administrator may stop a selected Agent's other-owner job. State
+        # and cancellation markers must belong to that job's account.
+        actor = {**actor, **((job.get("payload") or {}).get("actor") or {}),
+                 "id": job.get("created_by_id") or user_id}
         if action == "terminate":
-            actor = {
-                "id": user_id,
-                "username": user.get("username") or "",
-                "display_name": user.get("display_name") or user.get("username") or "",
-            }
             with ai_weight_price_service.store.actor_scope(actor, view_all=False):
                 ai_weight_price_service.store.set_state(
                     "agent_terminate_requested", job["job_id"]
                 )
             _mark_ai_weight_price_agent_cancelled(actor, terminate=True)
         else:
-            actor = {
-                "id": user_id,
-                "username": user.get("username") or "",
-                "display_name": user.get("display_name") or user.get("username") or "",
-            }
             _mark_ai_weight_price_agent_cancelled(actor, terminate=False)
         store.request_cancel(job["job_id"])
         updated = store.get_job(job["job_id"])
@@ -12098,10 +12288,21 @@ def enqueue_local_agent_ai_weight_price(action, data):
             "message": message,
         })
 
+    if not agent or not agent.get("online"):
+        return jsonify({"status": "error", "message": "所选 Agent 不在线，请启动 Agent 并刷新电脑"}), 409
+    if "ai_weight_price" not in agent.get("capabilities", ()):
+        return jsonify({"status": "error", "message": "请将所选电脑的 Agent 更新至支持核重核价的版本"}), 409
+
     if active_jobs:
+        blocking = active_jobs[0]
+        job_action = (blocking.get("payload") or {}).get("action") or "未知操作"
+        job_status = {"queued": "等待领取", "running": "已领取，等待执行完成",
+                      "stopping": "已请求停止，等待 Agent 确认"}.get(blocking.get("status"), "未知状态")
         return jsonify({
             "status": "error",
-            "message": "当前 Agent 已有核重核价操作正在执行，请先停止或等待完成",
+            "message": (f"Agent 队列仍占用：{job_action}（{job_status}），任务 {blocking['job_id']}；"
+                        "可点击终止取消该任务。若电脑实际空闲，请重启 Agent 以重新同步会话状态"),
+            "data": {"blocking_job": ai_weight_price_agent_task_snapshot(blocking)},
         }), 409
     if action == "retry" and not str(data.get("task_id") or "").strip():
         return jsonify({"status": "error", "message": "重试任务缺少商品编号"}), 400
@@ -13904,7 +14105,7 @@ def api_mercado_collection_ai_weight_price():
             target = str(data.get("execution_target") or "agent").strip().lower()
             if target not in {"agent", "server"}:
                 raise ValueError("核查执行位置无效")
-            if target == "server" and not (user.get("is_platform_admin") or user.get("role_key") == "super_admin"):
+            if target == "server" and user.get("role_key") != "super_admin":
                 return jsonify(status="error", message="仅超级管理员可以选择服务器 Edge"), 403
             api_key = browser_extension_models.get_api_key(int(user.get("id") or 0), "dashscope", app.secret_key)
             if not api_key:
@@ -14125,7 +14326,9 @@ def api_mercado_management_categories():
             result = db_list_mercado_management_categories()
         else:
             data = request.get_json(silent=True) or {}
-            result = db_create_mercado_management_category(data.get("name", ""))
+            result = db_create_mercado_management_category(
+                data.get("name", ""), data.get("listing_ratio_percent", 100)
+            )
         return jsonify({"status": "success", "data": result})
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -14143,7 +14346,8 @@ def api_mercado_management_category(category_id):
         else:
             data = request.get_json(silent=True) or {}
             result = db_update_mercado_management_category(
-                category_id, data.get("name", "")
+                category_id, data.get("name", ""),
+                data.get("listing_ratio_percent"),
             )
         return jsonify({"status": "success", "data": result})
     except ValueError as exc:
@@ -14476,6 +14680,243 @@ def _claim_and_start_due_mercado_product_publish():
     return True
 
 
+def _claim_and_start_due_mercado_rate_limit_retries():
+    """Retry only due rate-limit failures, preserving each record's target."""
+    global _mercado_rate_limit_retry_last_scan
+    now_monotonic = time.monotonic()
+    if now_monotonic - _mercado_rate_limit_retry_last_scan < _mercado_rate_limit_retry_scan_interval:
+        return False
+    _mercado_rate_limit_retry_last_scan = now_monotonic
+
+    from erp.mercadolibre_collection_store import (
+        claim_due_rate_limited_product_publish_records,
+    )
+
+    # Claim and reserve the shared publisher state together, so a manual or
+    # scheduled publish cannot start between the DB claim and this retry.
+    with _mercado_publish_lock:
+        if _mercado_publish_state.get("running"):
+            return False
+        records = claim_due_rate_limited_product_publish_records(limit=50)
+        if not records:
+            return False
+        batch_id = f"rate-limit-retry-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}"
+        _mercado_publish_state.update({
+            "running": True,
+            "batch_id": batch_id,
+            "schedule_id": None,
+            "scheduled_at": "",
+            "status": "preparing",
+            "message": f"正在准备自动重试 {len(records)} 条平台限流失败记录",
+            "selection_mode": "rate_limit_retry",
+            "group_publish_mode": "",
+            "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "finished_at": "",
+            "processed_count": 0,
+            "published_count": 0,
+            "failed_count": 0,
+            "results": [],
+        })
+
+    try:
+        from erp.mercadolibre_batch_publish import site_discount_rate
+        from erp.mercadolibre_translation import (
+            marketplace_site_name,
+            normalize_marketplace_site,
+        )
+
+        product_ids = list(dict.fromkeys(
+            int(record.get("product_item_id") or 0)
+            for record in records
+            if int(record.get("product_item_id") or 0) > 0
+        ))
+        products = db_get_mercado_product_items_by_ids(product_ids)
+        product_by_id = {
+            int(row.get("id") or 0): dict(row) for row in products
+        }
+        token_rows = list(
+            (bit_db_api.list_mercado_store_tokens() or {}).get("rows") or []
+        )
+        token_by_id = {
+            int(row.get("id") or 0): dict(row)
+            for row in token_rows if int(row.get("id") or 0) > 0
+        }
+        grouped_targets: dict[tuple[int, str, int, float, int], dict[str, Any]] = {}
+        seen_targets = set()
+        for record in records:
+            product_id = int(record.get("product_item_id") or 0)
+            token_id = int(record.get("token_id") or 0)
+            product = product_by_id.get(product_id)
+            token = token_by_id.get(token_id)
+            if not product or not token:
+                logging.warning(
+                    "跳过平台限流自动重试：记录对应产品或授权店铺不存在 record_id=%s product_id=%s token_id=%s",
+                    record.get("id"), product_id, token_id,
+                )
+                continue
+            try:
+                site_id = normalize_marketplace_site(record.get("site_id") or "")
+            except (TypeError, ValueError) as exc:
+                logging.warning(
+                    "跳过平台限流自动重试：历史站点无效 record_id=%s error=%s",
+                    record.get("id"), exc,
+                )
+                continue
+            token_site_id = str(token.get("site_id") or "").strip().upper()
+            if token_site_id and token_site_id != "CBT" and token_site_id != site_id:
+                logging.warning(
+                    "跳过平台限流自动重试：授权店铺站点与记录不匹配 record_id=%s token_id=%s record_site=%s token_site=%s",
+                    record.get("id"), token_id, site_id, token_site_id,
+                )
+                continue
+            target_identity = (product_id, token_id, site_id)
+            if target_identity in seen_targets:
+                continue
+            seen_targets.add(target_identity)
+            quantity = int(record.get("quantity") or 1)
+            if quantity < 1 or quantity > 9999:
+                logging.warning(
+                    "跳过平台限流自动重试：历史库存无效 record_id=%s quantity=%s",
+                    record.get("id"), quantity,
+                )
+                continue
+            saved_result = record.get("result_json") or {}
+            if not isinstance(saved_result, dict):
+                try:
+                    saved_result = json.loads(str(saved_result))
+                except (TypeError, ValueError):
+                    saved_result = {}
+            calculation = (
+                saved_result.get("net_proceeds_calculation")
+                if isinstance(saved_result, dict) else {}
+            )
+            raw_ratio = (
+                calculation.get("listing_ratio_percent")
+                or calculation.get("ai_original_ratio_percent")
+                if isinstance(calculation, dict) else None
+            )
+            try:
+                parsed_ratio = Decimal("100" if raw_ratio in (None, "") else str(raw_ratio))
+            except (TypeError, ValueError, ArithmeticError):
+                logging.warning(
+                    "跳过平台限流自动重试：上架比例无效 record_id=%s",
+                    record.get("id"),
+                )
+                continue
+            if not parsed_ratio.is_finite() or parsed_ratio <= 0 or parsed_ratio > 10000:
+                continue
+            net_proceeds_ratio = float(parsed_ratio)
+            if str(product.get("source_type") or "").strip().lower() == "ai_original":
+                try:
+                    ai_completion_user_id = int(
+                        saved_result.get("ai_completion_user_id") or 0
+                    )
+                except (TypeError, ValueError):
+                    ai_completion_user_id = 0
+            else:
+                ai_completion_user_id = 0
+            key = (token_id, site_id, quantity, net_proceeds_ratio, ai_completion_user_id)
+            target = grouped_targets.get(key)
+            if target is None:
+                try:
+                    discount_rate = float(site_discount_rate(token, site_id))
+                except (TypeError, ValueError) as exc:
+                    logging.warning(
+                        "跳过平台限流自动重试：历史站点价格设置无效 record_id=%s error=%s",
+                        record.get("id"), exc,
+                    )
+                    continue
+                target = {
+                    "token_id": token_id,
+                    "store_name": str(
+                        token.get("display_name") or token.get("nickname")
+                        or record.get("store_name") or token_id
+                    ),
+                    "site_id": site_id,
+                    "site_name": marketplace_site_name(site_id),
+                    "discount_rate": discount_rate,
+                    "quantity": quantity,
+                    "net_proceeds_ratio": net_proceeds_ratio,
+                    "ai_model_user_id": ai_completion_user_id,
+                    "product_rows": [],
+                }
+                grouped_targets[key] = target
+            target["product_rows"].append(product)
+
+        targets = list(grouped_targets.values())
+        requested_count = sum(len(target["product_rows"]) for target in targets)
+        if not targets:
+            message = "平台限流自动重试未启动：没有可用的商品与账号站点组合"
+            _mercado_publish_state_update(
+                running=False,
+                status="error",
+                message=message,
+                requested_count=0,
+                finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            )
+            return False
+
+        token_ids = list(dict.fromkeys(int(target["token_id"]) for target in targets))
+        site_ids = list(dict.fromkeys(str(target["site_id"]) for target in targets))
+        worker_count = min(max(1, int(bit_db_api.publish_workers())), requested_count)
+        with _mercado_publish_lock:
+            _mercado_publish_state.update({
+                "status": "running",
+                "message": f"平台限流失败记录自动重试 {requested_count} 件产品",
+                "token_id": token_ids[0] if len(token_ids) == 1 else None,
+                "token_ids": token_ids,
+                "group_names": [],
+                "store_name": (
+                    targets[0]["store_name"] if len(targets) == 1
+                    else f"{len(token_ids)} 个账号"
+                ),
+                "site_id": site_ids[0] if len(site_ids) == 1 else "",
+                "site_ids": site_ids,
+                "site_name": (
+                    targets[0]["site_name"] if len(site_ids) == 1
+                    else f"{len(site_ids)} 个站点"
+                ),
+                "target_count": len(targets),
+                "completed_target_count": 0,
+                "skipped_target_count": 0,
+                "quantity": targets[0]["quantity"] if len(targets) == 1 else 0,
+                "worker_count": worker_count,
+                "requested_count": requested_count,
+                "processed_count": 0,
+                "published_count": 0,
+                "failed_count": 0,
+                "skipped_published_count": 0,
+                "elapsed_seconds": 0,
+                "average_seconds_per_item": 0,
+                "items_per_minute": 0,
+                "estimated_remaining_seconds": 0,
+                "current_item_id": "",
+                "results": [],
+            })
+        thread = threading.Thread(
+            target=_run_mercado_product_publish_targets,
+            args=([], targets, 1, worker_count, batch_id, "平台限流自动重试", 0),
+            kwargs={"ai_model_user_id": 0},
+            name=f"mercado-publish-{batch_id}",
+            daemon=True,
+        )
+        thread.start()
+        logging.info(
+            "已启动 Mercado 平台限流自动重试：records=%s products=%s targets=%s",
+            len(records), requested_count, len(targets),
+        )
+        return True
+    except Exception as exc:
+        logging.exception("准备 Mercado 平台限流失败记录自动重试失败")
+        _mercado_publish_state_update(
+            running=False,
+            status="error",
+            message=f"平台限流自动重试启动失败：{exc}"[:2000],
+            finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        )
+        return False
+
+
 def start_mercado_product_publish_scheduler():
     """Recover and run durable, one-shot product publish schedules."""
     global _mercado_publish_schedule_thread
@@ -14496,7 +14937,9 @@ def start_mercado_product_publish_scheduler():
                 logging.exception("恢复 Mercado 定时上架任务失败")
             while True:
                 try:
-                    _claim_and_start_due_mercado_product_publish()
+                    scheduled_started = _claim_and_start_due_mercado_product_publish()
+                    if not scheduled_started:
+                        _claim_and_start_due_mercado_rate_limit_retries()
                 except Exception:
                     logging.exception("检查 Mercado 定时上架队列失败")
                 time.sleep(1)
@@ -14598,19 +15041,21 @@ def _run_mercado_product_publish_targets(
 ):
     from erp.mercadolibre_batch_publish import publish_product_batch
 
-    ai_completion_options = {}
-    if ai_model_user_id:
+    def ai_completion_options_for_user(model_user_id):
+        if not model_user_id:
+            return {}
         from AI_Agent.deepseek import DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
         provider = ("dashscope" if "aliyuncs.com" in DEEPSEEK_BASE_URL
                     else "openai" if "openai.com" in DEEPSEEK_BASE_URL else "deepseek")
+
         def completion_chat(messages, **kwargs):
             from erp.ai_original_products import _listing_json_chat
             kwargs["api_key"] = browser_extension_models.get_api_key(
-                ai_model_user_id, provider, app.secret_key
+                model_user_id, provider, app.secret_key
             ) or None
             return _listing_json_chat(model=DEEPSEEK_MODEL, base_url=DEEPSEEK_BASE_URL)(messages, **kwargs)
 
-        ai_completion_options = {
+        return {
             "chat": completion_chat, "base_url": DEEPSEEK_BASE_URL, "model": DEEPSEEK_MODEL,
         }
 
@@ -14650,6 +15095,10 @@ def _run_mercado_product_publish_targets(
         site_id = str(target.get("site_id") or "")
         site_name = str(target.get("site_name") or site_id)
         store_name = str(target.get("store_name") or token_id)
+        target_ai_model_user_id = int(
+            target.get("ai_model_user_id") or ai_model_user_id or 0
+        )
+        ai_completion_options = ai_completion_options_for_user(target_ai_model_user_id)
         discount_rate = float(target.get("discount_rate") or 0)
         target_net_proceeds_ratio = float(
             target.get("net_proceeds_ratio", net_proceeds_ratio) or 100
@@ -14731,7 +15180,23 @@ def _run_mercado_product_publish_targets(
                     batch_id=target_batch_id,
                     created_by=str(created_by),
                     create_records=db_create_mercado_product_publish_records,
-                    update_record=db_update_mercado_product_publish_record,
+                    update_record=lambda record_id, **changes: db_update_mercado_product_publish_record(
+                        record_id,
+                        **(
+                            {
+                                **changes,
+                                "result": {
+                                    **dict(changes.get("result") or {}),
+                                    "ai_completion_user_id": target_ai_model_user_id,
+                                },
+                            }
+                            if (
+                                changes.get("status") == "failed"
+                                and isinstance(changes.get("result"), dict)
+                            )
+                            else changes
+                        ),
+                    ),
                     existing_user_product_ids=existing_user_product_ids,
                     ai_completion_options=ai_completion_options,
                 )
@@ -14924,9 +15389,9 @@ def api_publish_mercado_products():
                 "100" if raw_net_proceeds_ratio in (None, "") else str(raw_net_proceeds_ratio)
             )
         except (TypeError, ValueError, ArithmeticError) as exc:
-            raise ValueError("AI 原创净收益比例必须是数字") from exc
+            raise ValueError("本次上架比例必须是数字") from exc
         if not net_proceeds_ratio.is_finite() or net_proceeds_ratio <= 0 or net_proceeds_ratio > 10000:
-            raise ValueError("AI 原创净收益比例必须大于 0 且不超过 10000%")
+            raise ValueError("本次上架比例必须大于 0 且不超过 10000%")
         scheduled_at_db, scheduled_at_iso = _parse_mercado_publish_schedule_time(
             data.get("scheduled_at")
         )
@@ -15270,11 +15735,7 @@ def api_publish_mercado_products():
                     if group_publish_mode == "polling"
                     else ""
                 )
-                + (
-                    f"AI 原创净收益按 {float(net_proceeds_ratio):g}% × 店铺站点比例计算；"
-                    if any(str(row.get("source_type") or "").strip().lower() == "ai_original" for row in rows)
-                    else "各组合按对应站点折扣计算净收益；"
-                )
+                + f"售价按分类比例 × 店铺站点比例 × 上架比例 {float(net_proceeds_ratio):g}% 计算；"
                 + (
                     f"；已忽略并移回采集列表 {moved_to_collection_count} 件不可上架商品"
                     if moved_to_collection_count else ""
@@ -15540,23 +16001,25 @@ def api_retry_mercado_product_publish_records():
             if quantity < 1 or quantity > 9999:
                 raise ValueError("历史记录中的上架库存无效")
             product = product_by_id[int(record.get("product_item_id") or 0)]
-            net_proceeds_ratio = 100.0
-            if str(product.get("source_type") or "").strip().lower() == "ai_original":
-                saved_result = record.get("result_json") or {}
-                if not isinstance(saved_result, dict):
-                    try:
-                        saved_result = json.loads(str(saved_result))
-                    except (TypeError, ValueError):
-                        saved_result = {}
-                calculation = saved_result.get("net_proceeds_calculation") if isinstance(saved_result, dict) else {}
-                raw_ratio = calculation.get("ai_original_ratio_percent") if isinstance(calculation, dict) else None
+            saved_result = record.get("result_json") or {}
+            if not isinstance(saved_result, dict):
                 try:
-                    parsed_ratio = Decimal("100" if raw_ratio in (None, "") else str(raw_ratio))
-                except (TypeError, ValueError, ArithmeticError) as exc:
-                    raise ValueError("历史记录中的 AI 原创净收益比例无效") from exc
-                if not parsed_ratio.is_finite() or parsed_ratio <= 0 or parsed_ratio > 10000:
-                    raise ValueError("历史记录中的 AI 原创净收益比例无效")
-                net_proceeds_ratio = float(parsed_ratio)
+                    saved_result = json.loads(str(saved_result))
+                except (TypeError, ValueError):
+                    saved_result = {}
+            calculation = saved_result.get("net_proceeds_calculation") if isinstance(saved_result, dict) else {}
+            raw_ratio = (
+                calculation.get("listing_ratio_percent")
+                or calculation.get("ai_original_ratio_percent")
+                if isinstance(calculation, dict) else None
+            )
+            try:
+                parsed_ratio = Decimal("100" if raw_ratio in (None, "") else str(raw_ratio))
+            except (TypeError, ValueError, ArithmeticError) as exc:
+                raise ValueError("历史记录中的上架比例无效") from exc
+            if not parsed_ratio.is_finite() or parsed_ratio <= 0 or parsed_ratio > 10000:
+                raise ValueError("历史记录中的上架比例无效")
+            net_proceeds_ratio = float(parsed_ratio)
             group_key = (token_id, site_id, quantity, net_proceeds_ratio)
             target = grouped_targets.setdefault(group_key, {
                 "token_id": token_id,
@@ -15806,6 +16269,7 @@ def api_db_mercado_products():
         ai_status=str(request.args.get("ai_status") or "").strip(),
         review_status=str(request.args.get("review_status") or "").strip(),
         publish_status=str(request.args.get("publish_status") or "").strip(),
+        weight_status=str(request.args.get("weight_status") or "").strip(),
         weight_min=str(request.args.get("weight_min") or "").strip(),
         weight_max=str(request.args.get("weight_max") or "").strip(),
         price_min=str(request.args.get("price_min") or "").strip(),
@@ -15828,10 +16292,6 @@ def api_db_mercado_products():
             int(value) for value in request.args.getlist("token_ids")
             if str(value or "").isdigit() and int(value) > 0
         ] if "token_ids" in request.args else None,
-        filter_token_ids=[
-            int(value) for value in request.args.getlist("filter_token_ids")
-            if str(value or "").isdigit() and int(value) > 0
-        ],
     )
     return jsonify({"status": "success", "data": result})
 
@@ -16248,10 +16708,20 @@ def api_db_latest_order_print_records():
     })
 
 
+@app.route('/api/services/health', methods=['GET'])
+@login_required
+def api_services_health():
+    from bit.service_health import service_snapshot
+    response = jsonify({"status": "success", "data": service_snapshot(_yandex_console_health)})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.route('/api/db/health', methods=['GET'])
 @internal_api_required
 def api_db_health():
-    """Let clients verify that they reached the database-owning process."""
+    """Let clients verify the database-owning process and a real query."""
+    from bit.service_health import probe, database_probe
     blocked = reject_db_api_client_mode()
     if blocked:
         return blocked
@@ -16261,6 +16731,7 @@ def api_db_health():
             "role": "server",
             "database_host": mysql_config.get("host"),
             "connection_pool": pool_status(),
+            "database_probe": probe("业务数据库", database_probe, ""),
         },
     })
 
@@ -16908,7 +17379,7 @@ def api_db_weight_dimensions_records():
     rows = data.get("rows") or []
     if not isinstance(rows, list):
         return jsonify({"status": "error", "message": "rows 必须是数组"}), 400
-    return jsonify({"status": "success", "data": db_save_weight_dimensions_records(rows, refresh=bool(data.get("refresh")))})
+    return jsonify({"status": "success", "data": db_save_weight_dimensions_records(rows, refresh=bool(data.get("refresh")), enrich_only=bool(data.get("enrich_only")))})
 
 
 @app.route('/api/db/weight-dimensions-changes', methods=['GET'])
@@ -17380,7 +17851,9 @@ def api_db_mercado_management_categories():
             result = db_list_mercado_management_categories()
         else:
             data = request.get_json(silent=True) or {}
-            result = db_create_mercado_management_category(data.get("name", ""))
+            result = db_create_mercado_management_category(
+                data.get("name", ""), data.get("listing_ratio_percent", 100)
+            )
         return jsonify({"status": "success", "data": result})
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -17398,7 +17871,8 @@ def api_db_mercado_management_category(category_id):
         else:
             data = request.get_json(silent=True) or {}
             result = db_update_mercado_management_category(
-                category_id, data.get("name", "")
+                category_id, data.get("name", ""),
+                data.get("listing_ratio_percent"),
             )
         return jsonify({"status": "success", "data": result})
     except ValueError as exc:
@@ -17886,13 +18360,14 @@ def api_db_bulk_update_orders():
     changes = {}
     for field in (
         "workflow_status", "purchase_order", "purchase_tracking",
-        "logistics_company", "purchase_cost", "purchase_remark",
+        "logistics_company", "purchase_cost", "purchase_remark", "order_remark",
     ):
         if field in data:
             changes[field] = data.get(field)
     try:
         result = bit_order_sync.bit_mysql.bulk_update_mercado_orders(
             order_ids,
+            allowed_token_ids=data.get("allowed_token_ids"),
             operator_id=data.get("operator_id"),
             operator_name=data.get("operator_name") or "",
             **changes,
@@ -18081,6 +18556,25 @@ def api_db_insert_appeal_chat_record():
     return jsonify({"status": "success", "data": {"id": record_id}})
 
 
+@app.route('/api/db/ai-appeal-product-contexts', methods=['POST'])
+@internal_api_required
+def api_db_ai_appeal_product_contexts():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    from bit.bit_ai_appeal_copy import fetch_store_product_contexts
+    payload = request.get_json(silent=True) or {}
+    try:
+        if not isinstance(payload.get("product_ids"), list):
+            raise ValueError("product_ids 必须是数组")
+        rows = fetch_store_product_contexts(payload.get("shop_name"), payload["product_ids"])
+        return jsonify({"status": "success", "data": rows})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        return jsonify({"status": "error", "message": "申诉商品授权资料读取失败，请检查店铺授权及商品可访问状态"}), 502
+
+
 @app.route('/api/db/ai-appeal-records', methods=['POST'])
 @internal_api_required
 def api_db_insert_ai_appeal_record():
@@ -18102,7 +18596,7 @@ def api_db_get_ai_appeal_records():
     if blocked:
         return blocked
     limit = request.args.get("limit", 100)
-    return jsonify({"status": "success", "data": db_get_ai_appeal_records(limit)})
+    return jsonify({"status": "success", "data": db_get_ai_appeal_records(limit, appeal_copy_mode=request.args.get("appeal_copy_mode", ""))})
 
 
 @app.route('/api/db/appeal-phrases', methods=['GET', 'POST'])
@@ -18317,7 +18811,7 @@ def api_db_resolve_window_anomaly():
 def api_ai_appeal_records():
     try:
         limit = request.args.get("limit", 100)
-        data = enrich_ai_appeal_records(db_get_ai_appeal_records(limit))
+        data = enrich_ai_appeal_records(db_get_ai_appeal_records(limit, appeal_copy_mode=request.args.get("appeal_copy_mode", "")))
         data = _filter_store_rows_for_user(
             data,
             store_keys=("shop_name", "store_name", "店铺名"),
@@ -19919,6 +20413,231 @@ def api_mercado_pre_sale_aggregate():
     return response
 
 
+OVERVIEW_MERCADO_NOTICES_CACHE_SECONDS = 180
+_overview_mercado_notices_cache_lock = threading.Lock()
+_overview_mercado_notices_cache = {}
+
+
+def _mercado_notice_plain_text(value, *, max_length=500):
+    text = re.sub(r"<[^>]*>", " ", str(value or ""))
+    text = html.unescape(text)
+    return re.sub(r"\s+", " ", text).strip()[:max_length]
+
+
+def _mercado_notice_timestamp(value):
+    text = str(value or "").strip()
+    if not text:
+        return 0.0
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.timestamp()
+    except (TypeError, ValueError, OverflowError):
+        return 0.0
+
+
+def _mercado_notice_category(notice):
+    category = str(notice.get("category") or "").strip().upper()
+    if not category:
+        tags = notice.get("tags")
+        if isinstance(tags, list):
+            category = next(
+                (str(tag.get("type") or "").strip().upper()
+                 for tag in tags if isinstance(tag, dict) and tag.get("type")),
+                "",
+            )
+    return {
+        "ALERT": "重要提醒",
+        "NEW": "规则与动态",
+        "RELEASE": "功能更新",
+        "PUBLICITY": "促销活动",
+        "MODAL": "平台通知",
+        "OPPORTUNITY": "培训活动",
+    }.get(category, "美客多公告")
+
+
+def _merge_mercado_seller_notices(store_results, stores_by_id, *, limit=6):
+    merged = {}
+    for token_id, page in store_results:
+        for notice in page.get("results") or []:
+            if not isinstance(notice, dict):
+                continue
+            title = _mercado_notice_plain_text(
+                notice.get("title") or notice.get("label"), max_length=240
+            )
+            if not title:
+                continue
+            created_at = str(notice.get("from_date") or "").strip()[:64]
+            notice_id = str(notice.get("id") or "").strip()
+            key = notice_id or (title.casefold(), created_at[:10])
+            current = merged.get(key)
+            normalized = {
+                "id": notice_id,
+                "title": title,
+                "description": _mercado_notice_plain_text(notice.get("description")),
+                "from_date": created_at,
+                "category_label": _mercado_notice_category(notice),
+                "highlighted": bool(notice.get("highlighted")),
+                "action_url": "",
+                "action_text": "查看公告",
+            }
+            actions = notice.get("actions")
+            if isinstance(actions, list):
+                for action in actions:
+                    if not isinstance(action, dict):
+                        continue
+                    action_url = str(action.get("link") or "").strip()
+                    if action_url.startswith(("https://", "http://")):
+                        normalized["action_url"] = action_url[:2048]
+                        normalized["action_text"] = (
+                            _mercado_notice_plain_text(action.get("text"), max_length=60)
+                            or "查看公告"
+                        )
+                        break
+            if current is None:
+                merged[key] = {**normalized, "_token_ids": {int(token_id)}}
+            else:
+                current["_token_ids"].add(int(token_id))
+                if _mercado_notice_timestamp(created_at) > _mercado_notice_timestamp(
+                    current.get("from_date")
+                ):
+                    store_ids = current["_token_ids"]
+                    merged[key] = {**normalized, "_token_ids": store_ids}
+
+    store_names = {
+        int(token_id): str(
+            store.get("display_name") or store.get("nickname") or f"店铺 {token_id}"
+        )
+        for token_id, store in stores_by_id.items()
+    }
+    rows = []
+    for item in merged.values():
+        token_ids = item.pop("_token_ids", set())
+        rows.append({
+            **item,
+            "store_names": [store_names[token_id] for token_id in sorted(token_ids)
+                            if token_id in store_names],
+        })
+    rows.sort(key=lambda row: _mercado_notice_timestamp(row.get("from_date")), reverse=True)
+    return rows[:limit]
+
+
+@app.route("/api/overview/mercado-notices", methods=["GET"])
+@login_required
+def api_overview_mercado_notices():
+    from bit.mercado_official_news import get_official_news
+
+    try:
+        data = get_official_news(force_refresh=request.args.get("refresh") == "1")
+        response = jsonify({"status": "success", "data": data})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception:
+        logging.exception("读取美客多官方新闻失败")
+        return jsonify({"status": "error", "message": "官方新闻暂不可用，请稍后刷新"}), 502
+
+
+@app.route("/api/reputation/mercado-notices", methods=["GET"])
+@login_required
+def api_reputation_mercado_notices():
+    try:
+        token_data = _filter_mercado_tokens_for_user(
+            bit_db_api.list_mercado_store_tokens() or {}
+        )
+        stores = []
+        for row in token_data.get("rows") or []:
+            if not isinstance(row, dict):
+                continue
+            token_id = int(row.get("id") or 0)
+            enabled = row.get("enabled", True)
+            if isinstance(enabled, str):
+                enabled = enabled.strip().casefold() not in ("", "0", "false", "no", "off")
+            if token_id > 0 and bool(enabled):
+                stores.append({**row, "id": token_id})
+        stores_by_id = {int(store["id"]): store for store in stores}
+        cache_key = tuple(
+            (token_id, str(store.get("display_name") or store.get("nickname") or ""))
+            for token_id, store in sorted(stores_by_id.items())
+        )
+        force_refresh = request.args.get("refresh") == "1"
+        if stores and not force_refresh:
+            with _overview_mercado_notices_cache_lock:
+                cached = _overview_mercado_notices_cache.get(cache_key)
+            if cached and cached[0] > time.monotonic():
+                response = jsonify({"status": "success", "data": dict(cached[1])})
+                response.headers["Cache-Control"] = "no-store"
+                return response
+
+        def fetch_store_notices(store):
+            page = bit_db_api.execute_mercado_store_communication(
+                int(store["id"]),
+                "seller-notices",
+                {"limit": 20, "offset": 0},
+            ) or {}
+            if not isinstance(page, dict) or not isinstance(page.get("results", []), list):
+                raise ValueError("美客多店铺提醒接口返回格式错误")
+            return int(store["id"]), page
+
+        store_results = []
+        failures = []
+        if stores:
+            with ThreadPoolExecutor(
+                max_workers=min(8, len(stores)),
+                thread_name_prefix="overview-mercado-notices",
+            ) as executor:
+                future_stores = {
+                    executor.submit(fetch_store_notices, store): store
+                    for store in stores
+                }
+                for future in as_completed(future_stores):
+                    store = future_stores[future]
+                    try:
+                        store_results.append(future.result())
+                    except Exception as exc:
+                        failures.append({
+                            "store_name": str(
+                                store.get("display_name") or store.get("nickname") or store["id"]
+                            ),
+                            "message": str(exc)[:240],
+                        })
+
+        store_results.sort(key=lambda item: item[0])
+        notices = _merge_mercado_seller_notices(
+            store_results, stores_by_id, limit=6
+        )
+        data = {
+            "notices": notices,
+            "total_stores": len(stores),
+            "success_stores": len(store_results),
+            "failed_stores": len(failures),
+            "failures": failures,
+            "fetched_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        }
+        if stores and not failures:
+            with _overview_mercado_notices_cache_lock:
+                _overview_mercado_notices_cache[cache_key] = (
+                    time.monotonic() + OVERVIEW_MERCADO_NOTICES_CACHE_SECONDS,
+                    data,
+                )
+                now_monotonic = time.monotonic()
+                expired_keys = [
+                    key for key, value in _overview_mercado_notices_cache.items()
+                    if value[0] <= now_monotonic
+                ]
+                for key in expired_keys:
+                    _overview_mercado_notices_cache.pop(key, None)
+        response = jsonify({"status": "success", "data": data})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception:
+        logging.exception("读取声誉数据美客多店铺提醒失败")
+        return jsonify({
+            "status": "error",
+            "message": "读取美客多最新店铺提醒失败，请稍后重试",
+        }), 502
+
+
 def _query_customer_service_claims_store(
     token_id, filters, required_rows, status_filter=""
 ):
@@ -20182,14 +20901,20 @@ def _open_mercado_claim_browser(
     claim_id="",
     shop_name_hint="",
     target_url="",
+    token_record=None,
 ):
     """按 Mercado 授权店铺名称实时匹配并打开 BitBrowser 窗口。"""
     identifier = int(token_id)
-    token_rows = list((bit_db_api.list_mercado_store_tokens() or {}).get("rows") or [])
-    token = next(
-        (row for row in token_rows if int(row.get("id") or 0) == identifier),
-        None,
-    )
+    if token_record is None:
+        token_rows = list((bit_db_api.list_mercado_store_tokens() or {}).get("rows") or [])
+        token = next(
+            (row for row in token_rows if int(row.get("id") or 0) == identifier),
+            None,
+        )
+    else:
+        token = dict(token_record or {})
+        if int(token.get("id") or 0) != identifier:
+            token = None
     if not token:
         raise KeyError("店铺授权不存在")
 
@@ -20208,36 +20933,37 @@ def _open_mercado_claim_browser(
     window_id = ""
     matched_name = ""
     errors = []
-    configured_windows = [
-        row for row in list_shop_configs(include_ignored=True)
-        if isinstance(row, dict)
-    ]
     for candidate in candidate_names:
-        exact_matches = [
-            row for row in configured_windows
-            if str(row.get("shop_name") or "").strip() == candidate
-        ]
-        if not exact_matches:
-            folded_candidate = candidate.casefold()
+        if token_record is None:
+            configured_windows = [
+                row for row in list_shop_configs(include_ignored=True)
+                if isinstance(row, dict)
+            ]
             exact_matches = [
                 row for row in configured_windows
-                if str(row.get("shop_name") or "").strip().casefold()
-                == folded_candidate
+                if str(row.get("shop_name") or "").strip() == candidate
             ]
-        configured_ids = list(dict.fromkeys(
-            str(row.get("window_id") or "").strip()
-            for row in exact_matches
-            if str(row.get("window_id") or "").strip()
-        ))
-        if len(configured_ids) == 1:
-            window_id = configured_ids[0]
-            matched_name = candidate
-            break
-        if len(configured_ids) > 1:
-            errors.append(
-                f"店铺“{candidate}”绑定了多个比特浏览器窗口，请先保留唯一绑定"
-            )
-            continue
+            if not exact_matches:
+                folded_candidate = candidate.casefold()
+                exact_matches = [
+                    row for row in configured_windows
+                    if str(row.get("shop_name") or "").strip().casefold()
+                    == folded_candidate
+                ]
+            configured_ids = list(dict.fromkeys(
+                str(row.get("window_id") or "").strip()
+                for row in exact_matches
+                if str(row.get("window_id") or "").strip()
+            ))
+            if len(configured_ids) == 1:
+                window_id = configured_ids[0]
+                matched_name = candidate
+                break
+            if len(configured_ids) > 1:
+                errors.append(
+                    f"店铺“{candidate}”绑定了多个比特浏览器窗口，请先保留唯一绑定"
+                )
+                continue
         try:
             window_id = getBrowserIdByName(candidate)
             matched_name = candidate
@@ -20318,10 +21044,95 @@ def api_open_mercado_claim_browser(token_id):
 @login_required
 def api_open_reputation_browser(token_id):
     data = request.get_json(silent=True) or {}
+    execution_target = str(data.get("execution_target") or "agent").strip().lower()
+    if execution_target not in {"agent", "server"}:
+        return jsonify({"status": "error", "message": "请选择 Agent 或服务器"}), 400
+    user = get_current_workbench_user() or {}
+    if execution_target == "server" and user.get("role_key") != "super_admin":
+        return jsonify({
+            "status": "error",
+            "message": "仅超级管理员可以使用服务器资源打开比特浏览器",
+        }), 403
     try:
+        token_data = _filter_mercado_tokens_for_user(
+            bit_db_api.list_mercado_store_tokens() or {}, user
+        )
+        token = next(
+            (row for row in token_data.get("rows") or ()
+             if int(row.get("id") or 0) == int(token_id)),
+            None,
+        )
+        if not token:
+            return jsonify({
+                "status": "error",
+                "message": "店铺授权不存在或当前账号无权访问",
+            }), 404
+
+        aliases = list(dict.fromkeys(
+            str(value or "").strip()
+            for value in (token.get("display_name"), token.get("nickname"))
+            if str(value or "").strip()
+        ))
+        requested_name = str(data.get("shop_name") or "").strip()
+        shop_name_hint = next(
+            (alias for alias in aliases if alias.casefold() == requested_name.casefold()),
+            "",
+        )
+
+        if execution_target == "agent":
+            store = get_local_agent_store()
+            agent_id = normalize_agent_id(data.get("agent_id"))
+            agent = store.get_agent(agent_id, online_seconds=LOCAL_AGENT_ONLINE_SECONDS)
+            if agent and not workbench_user_can_use_agent(agent, user):
+                return jsonify({"status": "error", "message": "只能调用本人绑定的本地 Agent"}), 403
+            if not agent or not agent.get("online"):
+                return jsonify({"status": "error", "message": "所选 Agent 不在线，请刷新电脑列表或启动 Agent"}), 409
+            if "daily_task" not in agent.get("capabilities", ()):
+                return jsonify({"status": "error", "message": "所选 Agent 版本不支持浏览器任务，请更新后重试"}), 409
+
+            task_id = secrets.token_hex(16)
+            payload = {
+                "token_id": int(token_id),
+                "token_record": {
+                    "id": int(token_id),
+                    "display_name": str(token.get("display_name") or ""),
+                    "nickname": str(token.get("nickname") or ""),
+                },
+                "shop_name_hint": shop_name_hint,
+                "agent_name": agent.get("name") or agent_id,
+            }
+            try:
+                store.enqueue_job(
+                    task_id,
+                    agent_id,
+                    "open_store",
+                    payload,
+                    required_version=current_local_agent_bundle()["version"],
+                    created_by_id=user.get("id"),
+                    created_by_name=user.get("display_name") or user.get("username") or "",
+                )
+            except Exception as exc:
+                logging.exception("创建本机 Agent 店铺打开任务失败")
+                return jsonify({
+                    "status": "error",
+                    "message": f"创建 Agent 任务失败：{exc}",
+                }), 409
+            response = jsonify({
+                "status": "success",
+                "data": {
+                    "task_id": task_id,
+                    "status": "queued",
+                    "shop_name": str(token.get("display_name") or shop_name_hint),
+                    "agent_name": agent.get("name") or agent_id,
+                },
+                "message": f"已提交到 {agent.get('name') or agent_id}，正在排队打开店铺",
+            })
+            response.headers["Cache-Control"] = "no-store"
+            return response, 202
+
         result = _open_mercado_claim_browser(
             token_id,
-            shop_name_hint=data.get("shop_name"),
+            shop_name_hint=shop_name_hint,
             target_url=bit_reputation_info.REPUTATION_URL,
         )
         response = jsonify({
@@ -20341,6 +21152,40 @@ def api_open_reputation_browser(token_id):
             "status": "error",
             "message": f"打开比特浏览器声誉页面失败：{exc}",
         }), 502
+
+
+@app.route('/api/reputation/open-store/<task_id>', methods=['GET'])
+@login_required
+def api_open_reputation_browser_status(task_id):
+    user = get_current_workbench_user() or {}
+    try:
+        job = get_local_agent_store().get_job(task_id)
+    except (KeyError, ValueError):
+        job = None
+    if not job or job.get("job_type") != "open_store":
+        return jsonify({"status": "error", "message": "打开店铺任务不存在"}), 404
+    if (
+        str(job.get("created_by_id")) != str(user.get("id"))
+        and user.get("role_key") != "super_admin"
+    ):
+        return jsonify({"status": "error", "message": "无权查看此任务"}), 403
+    result = job.get("result") or {}
+    running = job.get("status") not in TERMINAL_JOB_STATUSES
+    message = str(
+        result.get("message") or job.get("message")
+        or ("等待本机 Agent 接收" if job.get("status") == "queued" else "正在打开店铺")
+    )
+    response = jsonify({
+        "status": "success",
+        "data": {
+            "task_id": job.get("job_id"),
+            "status": result.get("status") if not running else job.get("status"),
+            "running": running,
+            "message": message,
+        },
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route(
@@ -20503,6 +21348,7 @@ def index():
         'index.html',
         current_user=user,
         can_change_task_workers=workbench_user_can_change_task_workers(user),
+        can_confirm_order_outbound=_order_warehouse_operator(user),
         mercado_authorization=mercado_tokens.authorization_info(),
         runtime_role=RUNTIME_SETTINGS.role,
     )
@@ -20670,7 +21516,7 @@ def api_account_integration_webhook_test():
 @app.route("/login")
 def login_page():
     if session.get("workbench_user"):
-        return redirect(url_for("index"))
+        return redirect("/mercado/today")
     return render_template("login.html")
 
 
@@ -20742,12 +21588,6 @@ def api_login():
     data = request.get_json(silent=True) or request.form
     username = str(data.get("username", "")).strip()
     password = str(data.get("password", ""))
-    remember = str(data.get("remember", "")).strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
     if not username or not password:
         return jsonify({"status": "error", "message": "请输入账号和密码"}), 400
 
@@ -20761,13 +21601,13 @@ def api_login():
         return jsonify({"status": "error", "message": "账号或密码错误"}), 401
 
     session.clear()
-    session.permanent = remember
+    session.permanent = True
     session["workbench_user"] = user
     return jsonify({
         "status": "success",
         "data": session["workbench_user"],
-        "remember": remember,
-        "expires_in": WORKBENCH_REMEMBER_HOURS * 60 * 60 if remember else None,
+        "remember": True,
+        "expires_in": WORKBENCH_REMEMBER_HOURS * 60 * 60,
     })
 
 
@@ -20850,8 +21690,20 @@ def api_browser_extension_login():
 @login_required
 def api_browser_extension_download():
     try:
-        package = build_browser_extension_package()
-    except (OSError, FileNotFoundError) as exc:
+        user = get_current_workbench_user() or {}
+        issued_at = int(time.time())
+        package = build_browser_extension_package(downloaded_account={
+            "bundleId": secrets.token_urlsafe(24),
+            "token": create_browser_extension_token(user),
+            "user": {
+                "id": int(user.get("id") or 0),
+                "username": str(user.get("username") or ""),
+                "display_name": str(user.get("display_name") or user.get("username") or ""),
+            },
+            "issuedAt": issued_at * 1000,
+            "expiresAt": (issued_at + WORKBENCH_REMEMBER_HOURS * 60 * 60) * 1000,
+        })
+    except (OSError, ValueError) as exc:
         logging.exception("生成泽顺插件安装包失败")
         return jsonify({"status": "error", "message": str(exc)}), 500
     response = send_file(
@@ -22793,7 +23645,7 @@ def start_prohibited_listing_scheduler_bootstrap():
 
 
 def start_official_infraction_scheduler_bootstrap():
-    """Start the 12-hour official infringement scheduler."""
+    """Start official infringement and hourly rights-holder todo schedulers."""
 
     if bit_db_api.DB_MODE != "mysql":
         return None
@@ -22804,6 +23656,11 @@ def start_official_infraction_scheduler_bootstrap():
             logging.info(
                 "官方侵权数据自动同步已启动：每 %s 小时同步一次",
                 mercado_infraction_sync.INFRACTION_AUTO_SYNC_HOURS,
+            )
+            mercado_infraction_sync.start_rights_holder_todo_auto_scheduler()
+            logging.info(
+                "今日必办权利人案件自动同步已启动：每 %s 小时刷新一次",
+                mercado_infraction_sync.RIGHTS_HOLDER_TODO_REFRESH_HOURS,
             )
         except Exception:
             logging.exception("启动官方侵权数据自动同步失败")
@@ -22898,6 +23755,8 @@ def start_interface_background_services():
     start_interrupted_collection_recovery()
     start_mercado_product_publish_scheduler()
     start_store_link_scheduler_bootstrap()
+    from bit.video_reviews import start_scheduler as start_video_review_scheduler
+    start_video_review_scheduler()
     start_prohibited_listing_scheduler_bootstrap()
     start_official_infraction_scheduler_bootstrap()
     start_api_reputation_scheduler_bootstrap()

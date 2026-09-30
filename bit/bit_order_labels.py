@@ -116,6 +116,37 @@ def _download_one(context, *, max_attempts=4, timeout=30):
     return shipment_id, content
 
 
+def sync_shipment_tracking_number(context, shipment_id):
+    """Read and persist the shipment tracking number after label generation."""
+
+    context = dict(context or {})
+    token_id = int(context.get("token_id") or 0)
+    shipment_id = str(shipment_id or "").strip()
+    if not token_id or not shipment_id:
+        return ""
+
+    client = MercadoLibreClient(str(context.get("access_token") or ""))
+    try:
+        detail = client.get_shipment(shipment_id) or {}
+    except MercadoAPIError as exc:
+        if not _is_invalid_token_error(exc) or not context.get("refresh_token"):
+            raise
+        refreshed = _refresh_store_token(token_id)
+        client = MercadoLibreClient(str((refreshed or {}).get("access_token") or ""))
+        detail = client.get_shipment(shipment_id) or {}
+
+    returned_shipment_id = str(detail.get("id") or "").strip()
+    if returned_shipment_id and returned_shipment_id != shipment_id:
+        raise ValueError(f"Shipment 接口返回了不匹配的运单 {returned_shipment_id}")
+    tracking_number = str(detail.get("tracking_number") or "").strip()[:255]
+    if tracking_number:
+        bit_mysql.save_mercado_shipment_tracking_numbers(
+            token_id,
+            [{"shipping_id": shipment_id, "tracking_number": tracking_number}],
+        )
+    return tracking_number
+
+
 def _merge_pdfs(documents):
     if len(documents) == 1:
         return documents[0]
@@ -217,6 +248,16 @@ def download_order_labels(order_ids):
             printed_shipments.append(shipment_id)
             printed_order_ids.extend(group_order_ids)
             documents.append(content)
+            try:
+                tracking_number = sync_shipment_tracking_number(group[0], shipment_id)
+                if not tracking_number:
+                    warnings.append(
+                        f"Shipment {shipment_id} 面单已生成，但接口暂未返回国际运单号"
+                    )
+            except Exception as tracking_exc:
+                warnings.append(
+                    f"Shipment {shipment_id} 面单已生成，但国际运单号同步失败：{tracking_exc}"
+                )
 
     if not documents:
         summary = []

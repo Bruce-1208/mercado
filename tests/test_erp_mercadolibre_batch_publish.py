@@ -19,7 +19,6 @@ def test_batch_publish_continues_after_an_item_failure_and_records_each_state():
     state_calls = []
     record_create_calls = []
     record_update_calls = []
-    simultaneous = threading.Barrier(2)
     thread_ids = set()
 
     def fake_follow_sell(client, source_url, **kwargs):
@@ -29,7 +28,6 @@ def test_batch_publish_continues_after_an_item_failure_and_records_each_state():
         assert kwargs["destination_site_id"] == "MLB"
         assert kwargs["net_proceeds"] in (9.5, 19.0)
         thread_ids.add(threading.get_ident())
-        simultaneous.wait(timeout=2)
         if "MLM222" in source_url:
             raise RuntimeError("category rejected")
         return {"result": {"id": "CBT999"}}
@@ -84,11 +82,36 @@ def test_batch_publish_continues_after_an_item_failure_and_records_each_state():
     )
 
 
+def test_successful_probe_allows_remaining_products_to_run_concurrently():
+    rows = _rows()
+    rows.append({**rows[1], "id": 13, "source_url": "https://example/MLM333"})
+    probe_finished = threading.Event()
+    simultaneous = threading.Barrier(2)
+
+    def publish(_client, source_url, **_kwargs):
+        if source_url.endswith("MLM111"):
+            probe_finished.set()
+        else:
+            assert probe_finished.is_set()
+            simultaneous.wait(timeout=2)
+        return {"result": {"id": "CBT999"}}
+
+    with patch.object(batch_publish, "_token_record", return_value={"access_token": "secret"}), patch.object(
+        batch_publish, "follow_sell", side_effect=publish
+    ):
+        result = batch_publish.publish_product_batch(
+            rows, token_id=7, workers=3, client=object(),
+            update_state=lambda *_args, **_kwargs: None,
+        )
+    assert result["published_count"] == 3
+
+
 def test_account_listing_restriction_stops_remaining_items():
     calls = []
 
     def blocked_follow_sell(*_args, **_kwargs):
         calls.append(True)
+        time.sleep(0.05)  # Let a concurrent first wave expose the race.
         raise RuntimeError(
             '目标站点刊登失败: seller.unable_to_list; restrictions_coliving'
         )
@@ -102,7 +125,7 @@ def test_account_listing_restriction_stops_remaining_items():
             _rows(),
             token_id=7,
             site_id="MLB",
-            workers=1,
+            workers=8,
             update_state=lambda *_args, **_kwargs: None,
             client=object(),
         )
@@ -110,7 +133,7 @@ def test_account_listing_restriction_stops_remaining_items():
     assert len(calls) == 1
     assert result["published_count"] == 0
     assert result["failed_count"] == 2
-    assert "账号刊登已暂停" in result["results"][1]["message"]
+    assert "本批次后续商品已停止上传" in result["results"][1]["message"]
 
 
 def test_batch_publish_validates_quantity_before_contacting_store():

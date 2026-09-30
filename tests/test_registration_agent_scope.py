@@ -145,3 +145,43 @@ def test_legacy_signed_heartbeat_migrates_owner(member_console, monkeypatch):
                            json={"agent_id": "legacy-agent", "name": "old pc"})
     assert response.status_code == 200
     assert store.get_agent("legacy-agent")["owner_user_id"] == user["id"]
+
+
+def test_enterprise_admin_agent_scope_uses_owner_company(member_console, monkeypatch):
+    user, store, client = member_console
+    user.update(role_key="enterprise_admin")
+    monkeypatch.setattr(web, "_workbench_backend", lambda *args: [
+        {"id": 72, "organization_key": "wuhan-zeshun"},
+        {"id": 73, "organization_key": "other-company"},
+    ])
+    monkeypatch.setattr(web, "_filter_store_rows_for_user", lambda data, **kw: data)
+    for name, owner in (("own", 71), ("company", 72), ("foreign", 73), ("unowned", None)):
+        store.heartbeat(name, name=name, owner_user_id=owner, capabilities=["appeal"])
+    response = client.get("/api/execution-agents")
+    assert response.status_code == 200
+    assert {a["agent_id"] for a in response.json["data"]["agents"]} == {"own", "company"}
+    assert client.post("/api/run_shensu", json={"execution_target": "agent", "agent_id": "foreign"}).status_code == 403
+    user.update(role_key="super_admin")
+    assert len(client.get("/api/execution-agents").json["data"]["agents"]) == 4
+
+
+@pytest.mark.parametrize("role", ["member", "enterprise_admin", "operator"])
+def test_non_super_admin_cannot_request_server_execution(member_console, role):
+    user, _, client = member_console
+    user.update(role_key=role, is_platform_admin=True)
+    assert client.post("/api/run_shensu", json={"execution_target": "server"}).status_code == 403
+    assert client.get("/api/tasks/daily/status?execution_target=server").status_code == 403
+    assert client.get("/api/tasks/daily/status").status_code == 403
+
+
+def test_daily_jobs_follow_agent_visibility(member_console):
+    _, store, client = member_console
+    for name, owner in (("own", 71), ("other", 72)):
+        store.heartbeat(name, name=name, owner_user_id=owner, capabilities=["daily_task"])
+        store.enqueue_job(name + "-job", name, "daily_task", {})
+    response = client.get("/api/tasks/daily/status?execution_target=agent")
+    assert response.status_code == 200
+    assert response.json["data"]["total_count"] == 1
+    assert client.get("/api/tasks/daily/status?execution_target=agent&task_id=other-job").status_code == 403
+    assert client.post("/api/tasks/daily/stop", json={"execution_target": "agent", "task_id": "other-job"}).status_code == 403
+    assert store.get_job("other-job")["status"] == "queued"

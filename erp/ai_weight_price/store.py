@@ -7,6 +7,8 @@ import os
 import re
 import sqlite3
 import time
+import threading
+import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
@@ -61,6 +63,7 @@ MYSQL_TABLES = {
     "state": "erp_ai_weight_price_state",
     "runs": "erp_ai_weight_price_runs",
     "run_items": "erp_ai_weight_price_run_items",
+    "agent_receipts": "erp_ai_weight_price_agent_receipts",
 }
 
 
@@ -93,6 +96,7 @@ def _mysql_sql(sql):
     sql = sql.replace("json_extract(t.payload,'$.title')", "JSON_UNQUOTE(JSON_EXTRACT(t.payload,'$.title'))")
     sql = sql.replace("json_extract(ri.payload,'$.title')", "JSON_UNQUOTE(JSON_EXTRACT(ri.payload,'$.title'))")
     sql = sql.replace("json_extract(ri.payload,'$.status')", "JSON_UNQUOTE(JSON_EXTRACT(ri.payload,'$.status'))")
+    sql = sql.replace("json_extract(r.payload,'$.owner_user_id')", "JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.owner_user_id'))")
     sql = sql.replace("json_extract(payload,'$.source_page')", "JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_page'))")
     sql = sql.replace("json_extract(payload,'$.source_index')", "JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_index'))")
     sql = sql.replace("json_extract(payload,'$.owner_user_id')", "JSON_UNQUOTE(JSON_EXTRACT(payload,'$.owner_user_id'))")
@@ -100,6 +104,7 @@ def _mysql_sql(sql):
                       "CAST(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_page')) AS UNSIGNED)")
     sql = sql.replace("CAST(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_index')) AS INTEGER)",
                       "CAST(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_index')) AS UNSIGNED)")
+    sql = sql.replace("json_extract(payload,'$.owner_display_name')", "JSON_UNQUOTE(JSON_EXTRACT(payload,'$.owner_display_name'))")
     for source, target in MYSQL_TABLES.items():
         sql = re.sub(rf"(?<![A-Za-z0-9_]){re.escape(source)}(?![A-Za-z0-9_])",
                      f"`{target}`", sql)
@@ -193,6 +198,10 @@ def _create_mysql_schema(db):
           PRIMARY KEY(run_id, erp_goods_id), KEY run_items_order(run_id, sequence)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
+    db.execute("""CREATE TABLE IF NOT EXISTS agent_receipts (
+      agent_id VARCHAR(191) NOT NULL, event_id VARCHAR(64) NOT NULL, applied_at DOUBLE NOT NULL,
+      PRIMARY KEY(agent_id,event_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""")
 
 
 def _ensure_mysql_schema(db):
@@ -233,6 +242,7 @@ class Store:
         self.path = self.root / "tasks.sqlite3" if self.backend == "sqlite" else None
         self.connection_factory = connection_factory
         self._actor_context = ContextVar(f"ai_weight_price_actor_{id(self)}", default=None)
+        self._transaction_local = threading.local()
         self.dirty = True
         self.read_only = False
         if self.backend == "sqlite":
@@ -258,6 +268,8 @@ class Store:
                 CREATE TABLE IF NOT EXISTS runs (run_id TEXT PRIMARY KEY, payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS run_items (run_id TEXT NOT NULL, erp_goods_id TEXT NOT NULL,
                   sequence INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(run_id, erp_goods_id));
+                CREATE TABLE IF NOT EXISTS agent_receipts (agent_id TEXT NOT NULL, event_id TEXT NOT NULL,
+                  applied_at REAL NOT NULL, PRIMARY KEY(agent_id,event_id));
             """)
                 event_columns = {row[1] for row in db.execute("PRAGMA table_info(events)").fetchall()}
                 if "owner_user_id" not in event_columns:
@@ -278,6 +290,10 @@ class Store:
 
     @contextmanager
     def connect(self):
+        active = getattr(getattr(self, "_transaction_local", None), "db", None)
+        if active is not None:
+            yield active
+            return
         if self.backend == "sqlite":
             db = sqlite3.connect(self.path, timeout=15)
             db.row_factory = sqlite3.Row
@@ -407,6 +423,154 @@ class Store:
         with self.connect() as db:
             db.execute("INSERT INTO events(at,level,task_id,message,owner_user_id,owner_name) VALUES(?,?,?,?,?,?)",
                        (time.time(), level, task_id, str(message), actor.get("id"), actor.get("display_name", "")))
+
+    @_retry_mysql_transaction
+    def log_many(self, messages, task_id=None, level="INFO"):
+        """Persist one group of audit messages in one transaction/RPC."""
+        actor = self.actor() or {}
+        with self.connect() as db:
+            for message in messages:
+                db.execute("INSERT INTO events(at,level,task_id,message,owner_user_id,owner_name) VALUES(?,?,?,?,?,?)",
+                           (time.time(), level, task_id, str(message), actor.get("id"), actor.get("display_name", "")))
+
+    def execution_snapshot(self, key):
+        """Read fresh controls and the product in one remote round trip."""
+        stopped = self.state("stop_requested", False)
+        circuit = self.state("circuit")
+        return {"stop_requested": stopped, "circuit": circuit,
+                "task": None if stopped or circuit else self.get(key)}
+
+    def record_progress(self, key, message):
+        self.set_state("run", {**self.state("run", {}), "current_task_id": key, "message": message})
+        self.log(message, key)
+
+    def record_visual_event(self, key, event):
+        """Keep history processing on the server instead of seven remote calls.
+
+        Do not retry this composite operation: an individual write may already
+        have committed. Each underlying store operation retains its own policy.
+        """
+        task = self.get(key)
+        run_id = self.state("run", {}).get("run_id")
+        event = {**event, "run_id": run_id}
+        history = [*(task.get("visual_history") or []), event]
+        self.update(key, visual_history=history)
+        self.set_state("visual_progress", {"task_id": key, "title": task["title"],
+                       "main_image_url": task.get("main_image_url", ""),
+                       "steps": [e for e in history if e.get("run_id") == run_id][-40:]})
+        self.record_progress(key, event["message"])
+
+    @_retry_mysql_transaction
+    def agent_snapshot(self, since=0):
+        """Return an account-scoped snapshot or task delta in one request."""
+        actor = self.actor()
+        if not actor or actor.get("view_all"):
+            raise ValueError("Agent快照需要绑定业务员账号")
+        user_id = actor["id"]
+        prefix = f"user:{user_id}:"
+        since = max(0.0, float(since or 0))
+        with self.connect() as db:
+            task_rows = db.execute(
+                "SELECT * FROM tasks WHERE json_extract(payload,'$.owner_user_id')=? AND updated_at>? ORDER BY created_at",
+                (user_id, since),
+            ).fetchall()
+            states = db.execute("SELECT `key`,value FROM state WHERE `key` LIKE ?", (prefix + "%",)).fetchall()
+            state_by_key = {row["key"][len(prefix):]: json.loads(row["value"]) for row in states}
+            current_run = state_by_key.get("run") or {}
+            run_ids = list(dict.fromkeys(
+                str(run_id) for run_id in (current_run.get("run_id"), state_by_key.get("latest_run_id"))
+                if run_id
+            ))
+            if run_ids:
+                marks = ",".join("?" for _ in run_ids)
+                run_rows = db.execute(
+                    "SELECT run_id,payload FROM runs WHERE run_id IN (" + marks + ") "
+                    "AND json_extract(payload,'$.owner_user_id')=?",
+                    [*run_ids, user_id],
+                ).fetchall()
+                run_items = db.execute(
+                    "SELECT ri.run_id,ri.erp_goods_id,ri.sequence,ri.payload FROM run_items ri "
+                    "JOIN runs r ON r.run_id=ri.run_id WHERE ri.run_id IN (" + marks + ") "
+                    "AND json_extract(r.payload,'$.owner_user_id')=? ORDER BY ri.run_id,ri.sequence",
+                    [*run_ids, user_id],
+                ).fetchall()
+            else:
+                run_rows, run_items = [], []
+            collections = db.execute("SELECT ci.scope,ci.erp_goods_id,ci.page FROM collection_items ci "
+                "JOIN tasks t ON t.erp_goods_id=ci.erp_goods_id "
+                "WHERE json_extract(t.payload,'$.owner_user_id')=?", (user_id,)).fetchall()
+            merchants = db.execute("SELECT m.* FROM merchants m JOIN tasks t ON t.erp_goods_id=m.task_id "
+                "WHERE json_extract(t.payload,'$.owner_user_id')=?", (user_id,)).fetchall()
+        return {
+            "tasks": [{**json.loads(row["payload"]), "erp_goods_id": row["erp_goods_id"],
+                       "status": row["status"], "stage": row["stage"],
+                       "created_at": row["created_at"], "updated_at": row["updated_at"]}
+                      for row in task_rows],
+            "states": [{"key": row["key"][len(prefix):], "value": json.loads(row["value"])} for row in states],
+            "runs": [json.loads(row["payload"]) for row in run_rows],
+            "run_items": [{"run_id": row["run_id"], "erp_goods_id": row["erp_goods_id"],
+                           "sequence": row["sequence"], "payload": json.loads(row["payload"])} for row in run_items],
+            "collections": [dict(row) for row in collections],
+            "merchants": [dict(row) for row in merchants],
+            "server_time": time.time(),
+        }
+
+    @_retry_mysql_transaction
+    def apply_agent_batch(self, agent_id, events):
+        """Atomically apply and receipt a batch of local-first Agent events."""
+        if not self.actor() or self.actor().get("view_all"):
+            raise ValueError("Agent同步需要绑定业务员账号")
+        allowed = {
+            "log", "log_many", "set_state", "save_run", "clear_run", "record_run_item",
+            "add", "update", "exception", "skip", "reset_scope", "include_in_scope",
+            "recover", "sent", "record_progress", "record_visual_event",
+        }
+        applied = []
+        self._transaction_local.db = None
+        try:
+            with self.connect() as db:
+                self._transaction_local.db = db
+                for event in events:
+                    event_id = str(event.get("event_id") or "")
+                    method = str(event.get("method") or "")
+                    args, kwargs = event.get("args") or [], event.get("kwargs") or {}
+                    event_actor = event.get("actor") or {}
+                    if not event_id or method not in allowed or not isinstance(args, list) or not isinstance(kwargs, dict):
+                        raise ValueError("Agent同步事件格式无效")
+                    if int(event_actor.get("id") or 0) != self.actor()["id"]:
+                        raise ValueError("Agent同步账号不匹配")
+                    exists = db.execute("SELECT 1 FROM agent_receipts WHERE agent_id=? AND event_id=?",
+                                        (str(agent_id), event_id)).fetchone()
+                    if exists:
+                        applied.append(event_id)
+                        continue
+                    with self.actor_scope(event_actor):
+                        getattr(self, method)(*args, **kwargs)
+                    db.execute("INSERT INTO agent_receipts VALUES(?,?,?)",
+                               (str(agent_id), event_id, time.time()))
+                    applied.append(event_id)
+        finally:
+            self._transaction_local.db = None
+        return {"applied": applied}
+
+    @_retry_mysql_transaction
+    def owners(self):
+        actor = self.actor()
+        if actor and not actor.get("view_all"):
+            return [{"id": actor["id"], "name": actor["display_name"]}]
+        with self.connect() as db:
+            tasks = db.execute("SELECT DISTINCT json_extract(payload,'$.owner_user_id') AS id, "
+                               "json_extract(payload,'$.owner_display_name') AS name FROM tasks").fetchall()
+            events = db.execute("SELECT DISTINCT owner_user_id AS id, owner_name AS name FROM events").fetchall()
+        result = {}
+        for row in [*events, *tasks]:
+            try:
+                key = int(row["id"])
+            except (ValueError, TypeError):
+                continue
+            if key > 0:
+                result[key] = {"id": key, "name": row["name"] or result.get(key, {}).get("name") or str(key)}
+        return sorted(result.values(), key=lambda row: (row["name"], row["id"]))
 
     @_retry_mysql_transaction
     def logs(self, after=0, limit=200):
@@ -698,8 +862,18 @@ class Store:
         """Reserve before clicking Send. Never refund an ambiguous delivery."""
         now = time.time() if now is None else now
         with self.connect() as db:
-            db.execute("BEGIN IMMEDIATE")
-            if db.execute("SELECT 1 FROM state WHERE key='circuit' AND value!='null'").fetchone():
+            if self.backend == "mysql":
+                # A single locked row serializes global quota and interval
+                # checks across concurrent Agent transactions. InnoDB's
+                # ordinary SELECT snapshot alone does not provide that guard.
+                lock_key = "__awp_merchant_reservation_lock__"
+                db.execute("INSERT INTO state VALUES(?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)",
+                           (lock_key, "true"))
+                db.execute("SELECT `key` FROM state WHERE `key`=? FOR UPDATE", (lock_key,))
+            else:
+                db.execute("BEGIN IMMEDIATE")
+            if db.execute("SELECT 1 FROM state WHERE key=? AND value!='null'",
+                          (self._state_key("circuit"),)).fetchone():
                 return "circuit"
             if db.execute("SELECT 1 FROM merchants WHERE merchant_id=?", (task["merchant_id"],)).fetchone():
                 return "duplicate"
@@ -712,7 +886,7 @@ class Store:
             if waiting >= min(2, config["max_waiting"]):
                 return "waiting"
             row = db.execute("SELECT * FROM tasks WHERE erp_goods_id=?", (task["erp_goods_id"],)).fetchone()
-            if not row or row["status"] != "pending":
+            if not row or row["status"] != "pending" or not self._may_view(self.decode(row)):
                 return "status"
             db.execute("INSERT INTO merchants VALUES(?,?,?,?,NULL,?,?)",
                        (task["merchant_id"], task["erp_goods_id"], business_day(now), now, conversation_url, message))
@@ -726,6 +900,22 @@ class Store:
         return "ok"
 
     @_retry_mysql_transaction
+    def reserve_for_agent(self, task, config, message, conversation_url, baseline, now=None):
+        """Synchronously reserve an irreversible merchant message for an Agent.
+
+        This is the one business write that must stay centralized: two Agents
+        must not both pass merchant de-duplication, interval, or daily-limit
+        checks and click Send before their asynchronous outboxes meet.
+        """
+        result = self.reserve(task, config, message, conversation_url, baseline, now)
+        if result != "ok":
+            return {"result": result}
+        with self.connect() as db:
+            row = db.execute("SELECT * FROM tasks WHERE erp_goods_id=?", (task["erp_goods_id"],)).fetchone()
+            merchant = db.execute("SELECT * FROM merchants WHERE merchant_id=?", (task["merchant_id"],)).fetchone()
+        return {"result": result, "task": self.decode(row), "merchant": dict(merchant) if merchant else None}
+
+    @_retry_mysql_transaction
     def sent(self, task_id, now=None):
         now = time.time() if now is None else now
         with self.connect() as db:
@@ -735,8 +925,14 @@ class Store:
 
     @_retry_mysql_transaction
     def recover(self):
+        owner_clause, owner_args = self._owner_filter()
+        where = "status!='exception' AND stage IN ('send_reserved','writing')"
+        args = []
+        if owner_clause:
+            where += " AND " + owner_clause
+            args.extend(owner_args)
         with self.connect() as db:
-            rows = db.execute("SELECT erp_goods_id,stage FROM tasks WHERE status!='exception' AND stage IN ('send_reserved','writing')").fetchall()
+            rows = db.execute("SELECT erp_goods_id,stage FROM tasks WHERE " + where, args).fetchall()
         for row in rows:
             self.exception(row["erp_goods_id"], "上次操作中断，发送或保存结果不确定，请人工核对", row["stage"])
 
@@ -784,10 +980,11 @@ class Store:
 
 
 REMOTE_METHODS = frozenset({
+    "agent_snapshot", "apply_agent_batch", "reserve_for_agent",
     "log", "logs", "state", "set_state", "save_run", "clear_run", "record_run_item",
     "has_run_item", "run_report", "run_items", "get", "add", "update", "exception", "skip",
     "list", "counts", "run_counts", "reset_scope", "include_in_scope", "quota", "reserve",
-    "sent", "recover", "csv", "export",
+    "sent", "recover", "csv", "export", "log_many", "record_progress", "record_visual_event", "execution_snapshot", "owners",
 })
 
 
@@ -830,19 +1027,24 @@ class RemoteStore:
     def _call(self, method, *args, **kwargs):
         from bit.bit_db_api import _request
 
+        started = time.monotonic()
         try:
             value = _request(
                 "POST",
                 "/api/db/ai-weight-price/store",
                 json={"method": method, "args": list(args), "kwargs": kwargs,
                       "actor": self.actor()},
-                timeout=120,
+                timeout=30 if method == "agent_snapshot" else 120,
             )
         except RuntimeError as exc:
             message = str(exc)
             if "任务不存在" in message or "执行批次不存在" in message:
                 raise KeyError(message) from exc
             raise ValueError(message) from exc
+        finally:
+            elapsed = time.monotonic() - started
+            if elapsed >= 1:
+                logger.warning("核重核价慢存储请求 method=%s seconds=%.2f", method, elapsed)
         if isinstance(value, dict) and value.get("__bytes__"):
             return base64.b64decode(value["__bytes__"])
         return value
@@ -853,7 +1055,290 @@ class RemoteStore:
         return lambda *args, **kwargs: self._call(name, *args, **kwargs)
 
 
+class AgentStore:
+    """Durable local-first AWP store with an asynchronous, idempotent outbox."""
+    WRITE_METHODS = frozenset({
+        "log", "log_many", "set_state", "save_run", "clear_run", "record_run_item",
+        "add", "update", "exception", "skip", "reset_scope", "include_in_scope",
+        "recover", "sent", "record_progress", "record_visual_event",
+    })
+
+    def __init__(self, root, *, sync_interval=0.75):
+        self.root = Path(root)
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.local = Store(self.root)
+        self.remote = RemoteStore(self.root)
+        self.sync_interval = max(.1, float(sync_interval))
+        self._wake = threading.Event()
+        self._stop = threading.Event()
+        self._thread_lock = threading.Lock()
+        self._thread = None
+        self._sync_error = ""
+        self._bootstrapped_actor_id = None
+        with self.local.connect() as db:
+            db.execute("""CREATE TABLE IF NOT EXISTS agent_outbox (
+                sequence INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT UNIQUE NOT NULL,
+                payload TEXT NOT NULL, created_at REAL NOT NULL)""")
+
+    @property
+    def backend(self):
+        return "agent-local-first"
+
+    @property
+    def path(self):
+        return self.local.path
+
+    @property
+    def dirty(self):
+        return self.local.dirty
+
+    @dirty.setter
+    def dirty(self, value):
+        self.local.dirty = value
+
+    @property
+    def storage_description(self):
+        return "Agent本地SQLite（后台同步服务器）"
+
+    def set_actor(self, actor, *, view_all=None):
+        normalized = self.local.set_actor(actor, view_all=view_all)
+        self.remote.set_actor(actor, view_all=view_all)
+        if normalized and self._bootstrapped_actor_id != normalized["id"]:
+            self._bootstrap(normalized)
+            self._bootstrapped_actor_id = normalized["id"]
+        if self.pending_sync_count():
+            self._ensure_sync_thread()
+        return normalized
+
+    def actor(self):
+        return self.local.actor()
+
+    @contextmanager
+    def actor_scope(self, actor, *, view_all=None):
+        with self.local.actor_scope(actor, view_all=view_all):
+            with self.remote.actor_scope(actor, view_all=view_all):
+                yield
+
+    def _bootstrap(self, actor):
+        if not actor:
+            raise ValueError("Agent本地核价存储缺少业务员账号")
+        with self.actor_scope(actor):
+            # A small overlap closes the race with a server transaction that
+            # began just before the previous snapshot finished reading.
+            cursor = float(self.local.state("agent_snapshot_cursor", 0) or 0)
+            since = max(0.0, cursor - 60.0)
+        if self.pending_sync_count():
+            self._ensure_sync_thread()
+            if not self.flush(2):
+                if cursor:
+                    logger.warning("Agent有未同步改动，暂用本地快照继续；pending=%s",
+                                   self.pending_sync_count())
+                    return
+                raise RuntimeError("Agent首次启动仍有未同步改动，且无法确认中心库快照")
+        try:
+            snapshot = self.remote._call("agent_snapshot", since)
+        except Exception:
+            if cursor:
+                logger.warning("中心库快照暂不可用，沿用Agent本地快照；pending=%s",
+                               self.pending_sync_count(), exc_info=True)
+                return
+            raise
+        with self.actor_scope(actor):
+            local = self.local
+            with local.connect() as db:
+                local._transaction_local.db = db
+                try:
+                    for task in snapshot.get("tasks", []):
+                        record = dict(task)
+                        key = str(record.pop("erp_goods_id"))
+                        status, stage = record.pop("status", "pending"), record.pop("stage", "collected")
+                        created_at = record.pop("created_at", time.time())
+                        updated_at = record.pop("updated_at", created_at)
+                        db.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?) "
+                            "ON CONFLICT(erp_goods_id) DO UPDATE SET status=excluded.status,stage=excluded.stage,"
+                            "payload=excluded.payload,created_at=excluded.created_at,updated_at=excluded.updated_at",
+                            (key, status, stage, json.dumps(record, ensure_ascii=False), created_at, updated_at))
+                    for run in snapshot.get("runs", []):
+                        local.save_run(run)
+                    for item in snapshot.get("run_items", []):
+                        payload = dict(item["payload"])
+                        key = str(item["erp_goods_id"])
+                        details = {k: v for k, v in payload.items()
+                                   if k not in {"erp_goods_id", "owner_user_id", "owner_username", "owner_display_name"}}
+                        local.record_run_item(item["run_id"], key, **details)
+                    for item in snapshot.get("collections", []):
+                        scope = str(item["scope"])
+                        prefix = f"user:{actor['id']}:"
+                        if scope.startswith(prefix):
+                            scope = scope[len(prefix):]
+                        db.execute("INSERT OR REPLACE INTO collection_items VALUES(?,?,?)",
+                                   (local._scope_key(scope), item["erp_goods_id"], item["page"]))
+                    for item in snapshot.get("merchants", []):
+                        db.execute("INSERT OR REPLACE INTO merchants VALUES(?,?,?,?,?,?,?)",
+                            (item["merchant_id"], item["task_id"], item["day"], item["reserved_at"],
+                             item.get("sent_at"), item.get("conversation_url"), item.get("message", "")))
+                    # Import account state last because save_run updates latest_run_id.
+                    for item in snapshot.get("states", []):
+                        local.set_state(item["key"], item.get("value"))
+                    local.set_state("agent_snapshot_cursor", snapshot.get("server_time", time.time()))
+                    local.set_state("agent_snapshot_loaded", True)
+                finally:
+                    local._transaction_local.db = None
+
+    def _enqueue(self, db, method, args, kwargs):
+        actor = self.actor() or {}
+        event_id = uuid.uuid4().hex
+        event = {"event_id": event_id, "method": method, "args": list(args), "kwargs": kwargs,
+                 "actor": {"id": actor.get("id"), "username": actor.get("username", ""),
+                           "display_name": actor.get("display_name", "")}}
+        db.execute("INSERT INTO agent_outbox(event_id,payload,created_at) VALUES(?,?,?)",
+                   (event_id, json.dumps(event, ensure_ascii=False), time.time()))
+        self._ensure_sync_thread()
+        self._wake.set()
+
+    def _sync_once(self):
+        with self.local.connect() as db:
+            rows = db.execute("SELECT sequence,event_id,payload FROM agent_outbox ORDER BY sequence LIMIT 100").fetchall()
+        if not rows:
+            return 0
+        events, batch_rows = [], []
+        actor_id = None
+        for row in rows:
+            event = json.loads(row["payload"])
+            current_actor_id = int((event.get("actor") or {}).get("id") or 0)
+            if actor_id is not None and current_actor_id != actor_id:
+                break
+            actor_id = current_actor_id
+            events.append(event)
+            batch_rows.append(row)
+        if not events or not actor_id:
+            raise RuntimeError("Agent待同步事件缺少有效业务员账号")
+        agent_id = (os.environ.get("BIT_EXECUTION_AGENT_ID") or
+                    os.environ.get("BIT_EXECUTION_HOSTNAME") or "local-agent")
+        with self.remote.actor_scope(events[0]["actor"]):
+            result = self.remote._call("apply_agent_batch", agent_id, events)
+        acknowledged = set((result or {}).get("applied", []))
+        ids = [row["event_id"] for row in batch_rows if row["event_id"] in acknowledged]
+        if ids:
+            marks = ",".join("?" for _ in ids)
+            with self.local.connect() as db:
+                db.execute(f"DELETE FROM agent_outbox WHERE event_id IN ({marks})", ids)
+        return len(ids)
+
+    def _sync_loop(self):
+        failures = 0
+        idle_since = None
+        while not self._stop.is_set():
+            try:
+                count = self._sync_once()
+                if count:
+                    failures = 0
+                    idle_since = None
+                    continue
+                if idle_since is None:
+                    idle_since = time.monotonic()
+                if time.monotonic() - idle_since >= 5:
+                    with self._thread_lock:
+                        if self._thread is threading.current_thread():
+                            if self.pending_sync_count():
+                                idle_since = None
+                            else:
+                                self._thread = None
+                                return
+                self._wake.wait(self.sync_interval)
+                self._wake.clear()
+            except Exception as exc:
+                failures += 1
+                self._sync_error = str(exc)
+                delay = min(30, .5 * (2 ** min(failures, 6)))
+                logger.warning("AI核重核价Agent后台同步失败，pending=%s backoff=%.1fs：%s",
+                               self.pending_sync_count(), delay, exc)
+                self._stop.wait(delay)
+
+    def _ensure_sync_thread(self):
+        with self._thread_lock:
+            if self._thread is None or not self._thread.is_alive():
+                self._thread = threading.Thread(target=self._sync_loop, name="awp-agent-outbox", daemon=True)
+                self._thread.start()
+
+    def flush(self, timeout=10):
+        deadline = time.monotonic() + max(0, timeout)
+        self._ensure_sync_thread()
+        self._wake.set()
+        while time.monotonic() < deadline:
+            with self.local.connect() as db:
+                pending = db.execute("SELECT COUNT(*) FROM agent_outbox").fetchone()[0]
+            if not pending:
+                return True
+            self._wake.set()
+            time.sleep(.05)
+        return False
+
+    def close(self, timeout=5):
+        self.flush(timeout)
+        self._stop.set()
+        self._wake.set()
+        if self._thread is not None:
+            self._thread.join(timeout=min(1, timeout))
+
+    def pending_sync_count(self):
+        with self.local.connect() as db:
+            return int(db.execute("SELECT COUNT(*) FROM agent_outbox").fetchone()[0])
+
+    def reserve(self, task, config, message, conversation_url, baseline, now=None):
+        """Use the central atomic reservation before clicking Send."""
+        response = self.remote.reserve_for_agent(
+            task, config, message, conversation_url, baseline, now=now,
+        )
+        if not isinstance(response, dict):
+            return response
+        result = response.get("result")
+        if result == "ok":
+            reserved_task = response.get("task") or {}
+            key = str(reserved_task.get("erp_goods_id") or task.get("erp_goods_id") or "")
+            if not key:
+                raise RuntimeError("服务器已预留商家消息，但未返回商品编号")
+            with self.local.connect() as db:
+                record = dict(reserved_task)
+                status = record.pop("status", "waiting_merchant_reply")
+                stage = record.pop("stage", "send_reserved")
+                created_at = record.pop("created_at", time.time())
+                updated_at = record.pop("updated_at", now or time.time())
+                record.pop("erp_goods_id", None)
+                db.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?) "
+                    "ON CONFLICT(erp_goods_id) DO UPDATE SET status=excluded.status,stage=excluded.stage,"
+                    "payload=excluded.payload,created_at=excluded.created_at,updated_at=excluded.updated_at",
+                    (key, status, stage, json.dumps(record, ensure_ascii=False), created_at, updated_at))
+                merchant = response.get("merchant")
+                if merchant:
+                    db.execute("INSERT OR REPLACE INTO merchants VALUES(?,?,?,?,?,?,?)",
+                        (merchant["merchant_id"], merchant["task_id"], merchant["day"], merchant["reserved_at"],
+                         merchant.get("sent_at"), merchant.get("conversation_url"), merchant.get("message", "")))
+            self.local.dirty = True
+        return result
+
+    def __getattr__(self, name):
+        if name == "pending_sync_count":
+            return self.pending_sync_count
+        if name not in REMOTE_METHODS:
+            return getattr(self.local, name)
+        function = getattr(self.local, name)
+        if name not in self.WRITE_METHODS:
+            return function
+
+        def write(*args, **kwargs):
+            with self.local.connect() as db:
+                self.local._transaction_local.db = db
+                try:
+                    result = function(*args, **kwargs)
+                    self._enqueue(db, name, args, kwargs)
+                    return result
+                finally:
+                    self.local._transaction_local.db = None
+        return write
+
+
 __all__ = [
-    "CHINA", "COMPLETED", "REMOTE_METHODS", "RemoteStore", "STATUSES", "Store",
+    "AgentStore", "CHINA", "COMPLETED", "REMOTE_METHODS", "RemoteStore", "STATUSES", "Store",
     "business_day",
 ]

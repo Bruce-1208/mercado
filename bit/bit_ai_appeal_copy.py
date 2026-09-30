@@ -78,6 +78,66 @@ def fetch_product_contexts(product_ids, *, session=None, timeout=15):
     return contexts
 
 
+def fetch_store_product_contexts(shop_name, product_ids):
+    """Read facts on the server with the selected store's OAuth authorization."""
+    from bit import bit_mysql
+    from bit.mercado_infraction_sync import _client_and_token, _refresh_token, _is_unauthorized_error
+    from mercado_api.client import MercadoAPIError
+
+    product_ids = normalize_product_ids(product_ids)
+    if not product_ids or len(product_ids) > MAX_PRODUCTS_PER_APPEAL:
+        raise ValueError("AI话术模式每次需要 1 至 3 个产品")
+    if any(not re.fullmatch(r"[A-Z]{3}\d+", item_id) for item_id in product_ids):
+        raise ValueError("商品编号无效")
+    name = str(shop_name or "").strip()
+    matches = [row for row in (bit_mysql.list_mercado_store_tokens() or {}).get("rows", [])
+               if name and name in {str(row.get("display_name") or "").strip(),
+                                    str(row.get("nickname") or "").strip()}
+               and row.get("enabled", True)]
+    if len(matches) != 1:
+        raise ValueError("无法唯一匹配申诉店铺授权，请检查店铺名称和授权状态")
+    token = bit_mysql.get_mercado_store_token(matches[0]["id"])
+    client, token = _client_and_token(token, timeout=15)
+    refreshed = False
+
+    def read(path):
+        nonlocal client, refreshed
+        try:
+            return client.request("GET", path, max_attempts=1)
+        except MercadoAPIError as exc:
+            if refreshed or not _is_unauthorized_error(exc) or not token.get("refresh_token"):
+                raise
+            refreshed = True
+            client, _ = _client_and_token(_refresh_token(int(token["id"])), timeout=15)
+            return client.request("GET", path, max_attempts=1)
+
+    contexts = []
+    for product_id in product_ids:
+        try:
+            item = read(f"/marketplace/items/{product_id}")
+            title = str(item.get("title") or "").strip()
+            if not title:
+                raise ValueError("商品标题为空")
+            try:
+                description = read(f"/items/{product_id}/description")
+            except MercadoAPIError as exc:
+                # A removed listing can have a title but no description resource.
+                # Only an explicit 404 means absent; auth/network errors still fail.
+                if "失败 (404):" not in str(exc):
+                    raise
+                description = {}
+
+            contexts.append({
+                "product_id": product_id,
+                "title": title,
+                "description": str(description.get("plain_text") or description.get("text") or "")[:MAX_DESCRIPTION_CHARS],
+            })
+        except Exception:
+            # Never echo provider request bodies or store credentials to agents.
+            raise RuntimeError(f"产品 {product_id} 的授权资料读取失败，请检查店铺授权及商品可访问状态") from None
+    return contexts
+
+
 def _clean_model_text(value):
     if not isinstance(value, str):
         raise RuntimeError("DeepSeek 返回的话术格式无效")

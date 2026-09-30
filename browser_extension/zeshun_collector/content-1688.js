@@ -5,7 +5,7 @@
   // extension is reloaded.  Expose a version marker so the background worker
   // can reload that tab before starting a new search instead of silently
   // running stale search logic alongside this copy.
-  const CONTENT_VERSION = "1.8.22";
+  const CONTENT_VERSION = "1.8.29";
   const previousListener = globalThis.__zeshun1688ContentListener;
   if (globalThis.__zeshun1688ContentVersion === CONTENT_VERSION && previousListener &&
       chrome.runtime.onMessage.hasListener?.(previousListener)) return;
@@ -253,7 +253,8 @@
     const normalized = sets.map(list => list.map(item => {
       const label = aiWeightPriceDecode(item.specAttrs);
       const price = [item.discountPrice, item.currentPrice, item.priceNum, item.price]
-        .find(value => /^\d+(?:\.\d+)?$/.test(String(value ?? "").trim()) && Number(value) > 0);
+        .map(value => ({raw: value, amount: aiWeightPriceNumber(value)}))
+        .find(entry => entry.amount !== null && entry.amount > 0);
       const stock = item.canBookCount ?? item.availableQuantity ?? item.stock ?? item.quantity;
       const image = item.imageUrl ?? item.imgUrl ?? item.image ?? item.pictureUrl;
       return {
@@ -261,8 +262,10 @@
         seller_sku: String(item.skuCode ?? item.sku ?? item.sellerSku ?? ""),
         label,
         attribute_combinations: aiWeightPriceVariationAttributes(label),
-        price: aiWeightPriceNumber(price),
-        price_text: price === undefined ? "" : `¥${price}`,
+        price: price?.amount ?? null,
+        price_text: price
+          ? (typeof price.raw === "string" ? price.raw : `¥${price.amount}`)
+          : "",
         available_quantity: stock !== undefined && stock !== null && stock !== "" && Number.isFinite(Number(stock)) ? Number(stock) : null,
         image_url: typeof image === "string" ? absoluteImage(image) : "",
         label_weight: String(label).match(/(?:重量|毛重|净重)?[^\d]{0,8}(\d+(?:\.\d+)?)\s*(kg|公斤|千克|g|克|斤)\b/i)?.[0] || ""

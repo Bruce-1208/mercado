@@ -23,22 +23,32 @@
     @media(max-width:900px){.metrics{grid-template-columns:repeat(2,1fr)}.task-controls{grid-template-columns:1fr 1fr}.task-controls textarea{grid-column:1/-1}.event{grid-template-columns:1fr 1fr}.event-error{grid-column:1/-1}}
     @media(max-width:560px){.shell{padding:18px 12px 40px}.top{align-items:flex-start;flex-direction:column}h1{font-size:24px}.metrics{gap:8px}.metric{padding:13px}.metric strong{font-size:21px}.panel{padding:13px}.task-head{display:block}.task-controls{grid-template-columns:1fr}.task-controls textarea{grid-column:auto}.event{grid-template-columns:1fr}.event-error{grid-column:auto}}
   </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20260930-unified1">
 </head>
-<body>
+<body class="zs-standalone">
   <main class="shell">
     <header class="top">
       <div><div class="eyebrow">MERCADO LIBRE · DAILY OPERATIONS</div><h1>今日必须处理</h1><div class="subtitle">集中查看需要跟进的订单、物流、消息、索赔和商品。</div></div>
       <div class="toolbar"><span class="user">{{ current_user.display_name or current_user.username }}</span>{% if current_user.role_key in ['super_admin', 'enterprise_admin'] %}<button class="button" type="button" onclick="location.href='/employee-tasks'">管理员工任务</button>{% endif %}<button class="button" type="button" onclick="location.href='/'">返回工作台</button><button class="button primary" type="button" id="refresh">刷新待办</button></div>
     </header>
     <div class="error" id="error"></div>
+    <section class="panel toolbar" aria-label="店铺内容筛选">
+      <label>业务员 <select id="salesperson"><option value="">全部业务员</option></select></label>
+      <label>店铺组 <select id="group_name"><option value="">全部店铺组</option></select></label>
+      <span class="hint">筛选采购、运营待办、权利人案件及通知记录。</span>
+    </section>
     {% include '_employee_tasks_panel.html' %}
+    <section class="panel">
+      <div class="heading"><h2>采购必办（<span id="purchase-count">—</span>）</h2><span class="hint">按订单创建时间计算；处理明细追加到订单备注。</span></div>
+      <div class="task-list" id="purchase-tasks"><div class="empty">正在读取采购必办…</div></div>
+    </section>
     <section class="metrics">
       <div class="metric"><span>待处理</span><strong id="count-open">—</strong></div>
       <div class="metric danger"><span>已逾期</span><strong id="count-overdue">—</strong></div>
       <div class="metric warning"><span>高优先级 / 紧急</span><strong id="count-urgent">—</strong></div>
     </section>
     <section class="panel">
-      <div class="heading"><h2>待回复权利人（<span id="rights-count">—</span>）</h2><span class="hint">按回复截止时间排序；请使用对应店铺账号回复。</span></div>
+      <div class="heading"><h2>待回复权利人（<span id="rights-count">—</span>）</h2><span class="hint">按回复截止时间排序；平台案件状态和页面每小时自动刷新。</span></div>
       <div class="task-list" id="rights-cases"><div class="empty">正在读取待回复案件…</div></div>
     </section>
     <section class="panel">
@@ -54,7 +64,10 @@
   <script src="{{ url_for('static', filename='employee-tasks.js') }}" defer></script>
   <script>
     const canExecute = {{ can_execute | tojson }};
+    const autoRefreshMs = 60 * 60 * 1000;
     let actionData = {rows: [], events: []};
+    let loadInProgress = false;
+    let lastLoadedAt = 0;
     const $ = id => document.getElementById(id);
     function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
     function safeHref(value) { const path = String(value || '/'); return path.startsWith('/') && !path.startsWith('//') ? path : '/'; }
@@ -73,6 +86,7 @@
         <details class="history"><summary>处理记录（${(task.logs||[]).length}）</summary><ol>${logs||'<li>暂无处理记录</li>'}</ol></details>
       </article>`;
     }
+    const purchaseTopics = new Set(['purchase_order_missing_24h','purchase_tracking_missing_48h','order_not_in_transit_7d','procurement_tracking_stalled']);
     function renderTasks() {
       const rights=actionData.rights_holder_replies||[];
       $('rights-count').textContent=rights.length;
@@ -85,6 +99,10 @@
       if(filter==='active') rows=rows.filter(row=>row.status!=='resolved');
       if(filter==='overdue') rows=rows.filter(row=>row.overdue&&row.status!=='resolved');
       if(filter==='urgent') rows=rows.filter(row=>['urgent','high'].includes(row.priority)&&row.status!=='resolved');
+      const purchaseRows=rows.filter(row=>purchaseTopics.has(row.topic));
+      $('purchase-count').textContent=purchaseRows.length;
+      $('purchase-tasks').innerHTML=purchaseRows.length?purchaseRows.map(taskCard).join(''):'<div class="empty">当前筛选下没有采购必办。</div>';
+      rows=rows.filter(row=>!purchaseTopics.has(row.topic));
       $('tasks').innerHTML=rows.length?rows.map(taskCard).join(''):'<div class="empty">当前筛选下没有待办。收到新通知或刷新订单、活动数据后，相关异常会出现在这里。</div>';
       const open=(actionData.rows||[]).filter(row=>row.status!=='resolved');
       $('count-open').textContent=open.length;
@@ -98,14 +116,22 @@
       $('events').innerHTML=rows.map(event=>`<div class="event"><span>${escapeHtml(dateLabel(event.received_at))}</span><span><b>${escapeHtml(statusLabel(event.status))}</b><div class="small">${Number(event.attempts||0)} 次处理</div></span><span>${escapeHtml(event.topic||'')}<div class="small">${escapeHtml(event.store_name||'')}</div></span><code>${escapeHtml(event.resource||'')}</code><span>${event.last_error?`<div class="event-error">${escapeHtml(event.last_error)}</div>`:''}${canExecute&&['retry','dead'].includes(event.status)?`<button class="button" type="button" onclick="replayEvent(${Number(event.id)},this)">重放</button>`:''}</span></div>`).join('');
     }
     async function loadData() {
+      if (loadInProgress) return;
+      loadInProgress = true;
       $('error').style.display='none'; $('refresh').disabled=true;
       try {
         const includeClosed=$('filter').value==='all';
-        const response=await fetch(`/api/mercado/today/tasks${includeClosed?'?include_closed=1':''}`,{credentials:'same-origin'}); const payload=await response.json();
+        const params=new URLSearchParams({include_closed:includeClosed?'1':'0',salesperson:$('salesperson').value,group_name:$('group_name').value});
+        const response=await fetch(`/api/mercado/today/tasks?${params}`,{credentials:'same-origin'}); const payload=await response.json();
         if(!response.ok||payload.status!=='success') throw new Error(payload.message||`请求失败 (${response.status})`);
-        actionData=payload.data||{rows:[],events:[]}; renderTasks(); renderEvents();
-      } catch(error) { $('error').textContent=`加载失败：${error.message||error}`; $('error').style.display='block'; $('tasks').innerHTML='<div class="empty">暂时无法读取待办，请稍后重试。</div>'; $('rights-count').textContent='—'; $('rights-cases').innerHTML='<div class="empty">暂时无法读取待回复案件，请稍后重试。</div>'; }
-      finally {$('refresh').disabled=false;}
+        actionData=payload.data||{rows:[],events:[]};
+        for(const [key,label] of [['salesperson','全部业务员'],['group_name','全部店铺组']]) {
+          const select=$(key), value=select.value;
+          select.innerHTML=`<option value="">${label}</option>`+(actionData.filter_options?.[key]||[]).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join(''); select.value=value;
+        }
+        renderTasks(); renderEvents(); lastLoadedAt=Date.now();
+      } catch(error) { $('error').textContent=`加载失败：${error.message||error}`; $('error').style.display='block'; $('purchase-count').textContent='—'; $('purchase-tasks').innerHTML='<div class="empty">暂时无法读取采购必办，请稍后重试。</div>'; $('tasks').innerHTML='<div class="empty">暂时无法读取待办，请稍后重试。</div>'; $('rights-count').textContent='—'; $('rights-cases').innerHTML='<div class="empty">暂时无法读取待回复案件，请稍后重试。</div>'; }
+      finally {loadInProgress=false; $('refresh').disabled=false;}
     }
     async function saveTask(id,button) {
       const card=button.closest('[data-task-id]'); const body={owner:card.querySelector('[data-role=owner]').value,status:card.querySelector('[data-role=status]').value,due_at:card.querySelector('[data-role=due]').value||null,note:card.querySelector('[data-role=note]').value};
@@ -118,7 +144,12 @@
       try {const response=await fetch(`/api/mercado/today/events/${id}/replay`,{method:'POST',credentials:'same-origin'});const result=await response.json();if(!response.ok||result.status!=='success')throw new Error(result.message||'重放失败');showToast('通知已加入重试队列');await loadData();}
       catch(error){showToast(error.message||'重放失败');}finally{button.disabled=false;}
     }
+    for(const key of ['salesperson','group_name']) $(key).addEventListener('change',loadData);
     $('refresh').addEventListener('click',loadData); $('filter').addEventListener('change',loadData); loadData();
+    setInterval(() => { if (!document.hidden) loadData(); }, autoRefreshMs);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && Date.now() - lastLoadedAt >= autoRefreshMs) loadData();
+    });
   </script>
 </body>
 </html>

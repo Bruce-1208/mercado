@@ -105,7 +105,7 @@ let weightDimensionsPollTimer = null;
 let purchaseTrackingState = null;
 let purchaseTrackingPollTimer = null;
 const productBatchFields = Object.fromEntries([
-  "country", "keyword", "tab", "max-items", "concurrency", "min-sales", "max-sales"
+  "country", "keyword", "tab", "max-items", "concurrency-mode", "min-sales", "max-sales"
 ].map(name => [name, document.getElementById(`product-${name}`)]));
 const productBatchStart = document.getElementById("product-batch-start");
 const productBatchStop = document.getElementById("product-batch-stop");
@@ -160,12 +160,15 @@ async function initializeYandexOptions() {
 function productBatchSelection() {
   const params = {};
   for (const [field, key, label, max] of [
-    ["max-items", "max_items", "采集数量", 500], ["concurrency", "concurrency", "并发数", 10]
+    ["max-items", "max_items", "采集数量", 500]
   ]) {
     const value = Number(productBatchFields[field].value);
     if (!Number.isInteger(value) || value < 1 || value > max) throw new Error(`${label}须为 1–${max} 的整数`);
     params[key] = value;
   }
+  const concurrencyMode = productBatchFields["concurrency-mode"].value;
+  params.concurrency_mode = concurrencyMode;
+  params.concurrency = concurrencyMode === "gentle" ? 1 : 5;
   for (const [field, key, label] of [
     ["min-sales", "min_sales", "最低销量"], ["max-sales", "max_sales", "最高销量"]
   ]) {
@@ -194,7 +197,8 @@ function syncProductBatchControls() {
 
 function renderProductBatch(state = {}) {
   productBatchState = state;
-  document.getElementById("product-batch-status").textContent = state.message || "等待启动";
+  document.getElementById("product-batch-status").textContent = (state.message || "等待启动") +
+    (state.phase === "paused" && state.retry_at ? `（剩余 ${Math.max(0, Math.ceil((state.retry_at - Date.now()) / 1000))} 秒）` : "");
   const requested = Number(state.params?.max_items || 0);
   const candidates = Number(state.candidate_count || 0);
   const processed = Number(state.processed_count || 0);
@@ -202,12 +206,18 @@ function renderProductBatch(state = {}) {
   const failed = Number(state.failed_count || 0);
   document.getElementById("product-batch-summary").textContent =
     `页数 ${state.current_page || 0} · 候选 ${candidates} · 已处理 ${processed} · 成功 ${success} · 失败 ${failed} · 跳过 ${state.skipped || 0}` +
-    (state.last_error ? `\n最近失败：${state.last_error}` : "");
+    (state.last_error ? `\n最近失败：${state.last_error}` : "") +
+    (state.last_skip ? `\n最近跳过：${state.last_skip}` : "");
   const elapsed = Math.max(0, Math.floor(((state.finished_at || Date.now()) - Number(state.started_at || Date.now())) / 1000));
   const clock = [Math.floor(elapsed / 3600), Math.floor((elapsed % 3600) / 60), elapsed % 60]
     .map(value => String(value).padStart(2, "0")).join(":");
+  const selectedMode = productBatchFields["concurrency-mode"].value || "normal";
+  const displayMode = state.running ? (state.params?.concurrency_mode || "normal") : selectedMode;
+  const displayConcurrency = state.running
+    ? Number(state.params?.concurrency || (displayMode === "gentle" ? 1 : 5))
+    : (displayMode === "gentle" ? 1 : 5);
   document.getElementById("product-batch-current").textContent =
-    `当前商品 ${state.current_item_id || "-"} · 并发 ${state.params?.concurrency || 0} · 耗时 ${clock}`;
+    `当前商品 ${state.current_item_id || "-"} · ${displayMode === "gentle" ? "缓和模式" : "普通模式"} · ${displayConcurrency} 个采集进程 · 耗时 ${clock}`;
   document.getElementById("product-batch-progress").style.width =
     `${Math.min(100, Math.round(processed * 100 / Math.max(requested, candidates, 1)))}%`;
   syncProductBatchControls();
@@ -307,6 +317,7 @@ function showResult(message, kind) {
 }
 
 function showMode(mode) {
+  if (mode === "weight-price" || mode === "weight-dimensions") mode = "product";
   const yandex = mode === "yandex";
   const zying = mode === "zying";
   const zyingInfringement = mode === "zying-infringement";
@@ -361,7 +372,7 @@ async function refreshState() {
       (response.compatibilityMode ? "（兼容模式）" : "");
     authStatus.className = "auth-line logged-in";
   } else {
-    authStatus.textContent = "泽顺账号：未登录，请先打开设置登录";
+    authStatus.textContent = "泽顺账号：未登录，请在设置登录，或从控制台重新下载插件";
     authStatus.className = "auth-line";
   }
   collectButton.disabled = !detailPage || !authenticated || !productDetailZyingLoggedIn;
@@ -857,7 +868,10 @@ function syncWeightDimensionsControls() {
   const eligible = records.filter(row => row.can_execute);
   const active = ["queued", "running"].includes(String(task.execute_status || ""));
   weightDimensionsStartButton.disabled = !authenticated || weightDimensionsBusy || task.status !== "ready" || !eligible.length || active || task.execute_status === "completed";
-  weightDimensionsStartButton.textContent = weightDimensionsBusy ? "正在启动…" : active ? "更新进行中…" : task.execute_status === "completed" ? "本批次已执行" : "更新查询成功产品";
+  weightDimensionsStartButton.textContent = weightDimensionsBusy ? "正在启动…"
+    : task.execute_status === "queued" ? "排队中…"
+      : task.execute_status === "running" ? "更新进行中…"
+        : task.execute_status === "completed" ? "本批次已执行" : "更新查询成功产品";
 }
 
 function renderWeightDimensionsStatus(task = {}) {
@@ -869,7 +883,7 @@ function renderWeightDimensionsStatus(task = {}) {
   const executeStatus = String(task.execute_status || "idle");
   if (queryStatus === "ready") {
     weightDimensionsStatus.textContent = ["queued", "running"].includes(executeStatus)
-      ? `${task.execute_message || "正在执行智赢产品更新"}（${task.execute_processed || 0}/${task.execute_total || 0}）`
+      ? `${task.execute_message || (executeStatus === "queued" ? "等待本机 Agent 领取任务" : "正在更新智赢产品")}（${task.execute_processed || 0}/${task.execute_total || 0}）`
       : task.execute_status === "completed"
         ? (task.execute_message || "本批次执行完成")
         : `${task.message || "订单查询完成"}；可以启动重量尺寸更新`;
@@ -1290,6 +1304,9 @@ zyingInfringementStopButton.addEventListener("click", async () => {
 for (const field of Object.values(productBatchFields)) {
   field.addEventListener("change", () => {
     saveProductBatchOptions().catch(error => showResult(error.message, "error"));
+    if (field === productBatchFields["concurrency-mode"] && !productBatchState.running) {
+      renderProductBatch(productBatchState);
+    }
     if (field === productBatchFields.tab) checkProductZyingStatus();
   });
 }

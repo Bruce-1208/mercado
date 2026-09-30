@@ -304,9 +304,9 @@ class PromotionStore:
             ).fetchall()
         return [self._row(row) for row in rows]
 
-    def applied_item_keys(
+    def applied_item_details(
         self, keys: Iterable[tuple[int, str, str]]
-    ) -> set[tuple[int, str, str]]:
+    ) -> dict[tuple[int, str, str], list[dict[str, Any]]]:
         """Return listing identities currently enrolled in a synced activity."""
         normalized = []
         for token_id, site_id, item_id in keys or ():
@@ -322,11 +322,7 @@ class PromotionStore:
                 normalized.append(identity)
         normalized = list(dict.fromkeys(normalized))
         if not normalized:
-            return set()
-        clauses = " OR ".join(
-            "(p.token_id=? AND p.site_id=? AND i.item_id=?)" for _ in normalized
-        )
-        params = [value for identity in normalized for value in identity]
+            return {}
         # Candidate means that the platform is offering the product the chance
         # to enroll; it is deliberately excluded from the applied marker.
         applied_statuses = (
@@ -334,21 +330,34 @@ class PromotionStore:
             "started", "active", "approved",
         )
         status_sql = ",".join("?" for _ in applied_statuses)
-        params.extend(applied_statuses)
+        result = {}
         with self._connect() as db:
-            rows = db.execute(
-                f"""
-                SELECT DISTINCT p.token_id, p.site_id, i.item_id
-                FROM promotions AS p
-                INNER JOIN promotion_items AS i ON i.promotion_fk=p.id
-                WHERE ({clauses}) AND LOWER(i.status_raw) IN ({status_sql})
-                """,
-                params,
-            ).fetchall()
-        return {
-            (int(row["token_id"]), str(row["site_id"]), str(row["item_id"]).upper())
-            for row in rows
-        }
+            # Bound SQLite expression depth and parameter count for large pages.
+            for offset in range(0, len(normalized), 200):
+                batch = normalized[offset:offset + 200]
+                clauses = " OR ".join(
+                    "(p.token_id=? AND p.site_id=? AND i.item_id=?)" for _ in batch
+                )
+                params = [value for identity in batch for value in identity]
+                rows = db.execute(
+                    f"""SELECT p.token_id, p.site_id, i.item_id,
+                        p.id AS promotion_fk, p.promotion_id, p.name, p.promotion_type,
+                        i.status_raw, i.price, i.currency_id, i.last_synced_at
+                    FROM promotions p JOIN promotion_items i ON i.promotion_fk=p.id
+                    WHERE ({clauses}) AND LOWER(i.status_raw) IN ({status_sql})
+                    ORDER BY p.id, i.id""",
+                    params + list(applied_statuses),
+                ).fetchall()
+                for row in rows:
+                    detail = dict(row)
+                    identity = (detail.pop("token_id"), detail.pop("site_id"), detail.pop("item_id"))
+                    result.setdefault(identity, []).append(detail)
+        return result
+
+    def applied_item_keys(
+        self, keys: Iterable[tuple[int, str, str]]
+    ) -> set[tuple[int, str, str]]:
+        return set(self.applied_item_details(keys))
 
     def all_applied_item_keys(
         self,

@@ -17,7 +17,11 @@ def test_ai_script_mode_groups_three_products_and_records_generated_copy(monkeyp
     monkeypatch.setattr(bit_appeal_ai, "get_appeal_log_records", lambda: [])
     monkeypatch.setattr(bit_appeal_ai, "_appeal_pause", lambda *args: None)
 
-    def generate(appeal_type, product_ids, api_key):
+    monkeypatch.setattr(bit_appeal_ai, "get_ai_appeal_product_contexts",
+                        lambda name, ids: {"shop": name, "ids": ids})
+
+    def generate(appeal_type, product_ids, api_key, *, product_loader):
+        assert product_loader(product_ids) == {"shop": "测试店铺", "ids": product_ids}
         generated_groups.append((appeal_type, list(product_ids), api_key))
         return {
             "message": "产品编号：" + "、".join(product_ids) + "\n请按实际用途人工复核。",

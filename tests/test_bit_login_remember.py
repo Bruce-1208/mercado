@@ -15,14 +15,14 @@ def _authenticated_user():
     }
 
 
-def test_login_page_contains_six_hour_remember_option():
+def test_login_page_explains_fixed_72_hour_session():
     template = Path(bit_interface.app.template_folder, "login.html").read_text(
         encoding="utf-8"
     )
 
     assert 'id="remember-login"' in template
-    assert "记住账号密码" in template
-    assert "6 小时内自动登录" in template
+    assert "记住账号" in template
+    assert "登录状态固定 72 小时" in template
     assert 'autocomplete="username"' in template
     assert 'autocomplete="current-password"' in template
     assert "zeshun-remembered-username" in template
@@ -148,7 +148,7 @@ def test_wsgi_server_uses_bounded_production_options(monkeypatch):
     assert kwargs["clear_untrusted_proxy_headers"] is True
 
 
-def test_remembered_login_uses_six_hour_permanent_session(monkeypatch):
+def test_login_uses_fixed_72_hour_permanent_session(monkeypatch):
     monkeypatch.setattr(
         bit_interface,
         "authenticate_workbench_user",
@@ -164,9 +164,9 @@ def test_remembered_login_uses_six_hour_permanent_session(monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["remember"] is True
-    assert response.get_json()["expires_in"] == 6 * 60 * 60
+    assert response.get_json()["expires_in"] == 72 * 60 * 60
     assert "Expires=" in response.headers.get("Set-Cookie", "")
-    assert bit_interface.app.permanent_session_lifetime == timedelta(hours=6)
+    assert bit_interface.app.permanent_session_lifetime == timedelta(hours=72)
     assert bit_interface.app.config["SESSION_REFRESH_EACH_REQUEST"] is False
     with client.session_transaction() as flask_session:
         assert flask_session.permanent is True
@@ -177,7 +177,7 @@ def test_remembered_login_uses_six_hour_permanent_session(monkeypatch):
     assert login_page.headers["Location"].endswith("/")
 
 
-def test_login_without_remember_keeps_browser_session_cookie(monkeypatch):
+def test_login_expiry_is_72_hours_even_when_account_name_is_not_remembered(monkeypatch):
     monkeypatch.setattr(
         bit_interface,
         "authenticate_workbench_user",
@@ -192,11 +192,11 @@ def test_login_without_remember_keeps_browser_session_cookie(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.get_json()["remember"] is False
-    assert response.get_json()["expires_in"] is None
-    assert "Expires=" not in response.headers.get("Set-Cookie", "")
+    assert response.get_json()["remember"] is True
+    assert response.get_json()["expires_in"] == 72 * 60 * 60
+    assert "Expires=" in response.headers.get("Set-Cookie", "")
     with client.session_transaction() as flask_session:
-        assert flask_session.permanent is False
+        assert flask_session.permanent is True
 
 
 def test_generated_session_secret_is_reused(monkeypatch, tmp_path):

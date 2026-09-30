@@ -438,6 +438,25 @@ class LocalAgentStore:
         agent_id = normalize_agent_id(agent_id)
         now = time.time() if now is None else float(now)
         with self._connect() as connection:
+            # Serialize the check and insert across web processes and double
+            # clicks. HTTP preflight checks alone cannot enforce exclusivity.
+            if str(job_type).strip() == "ai_weight_price":
+                connection.execute("BEGIN IMMEDIATE")
+                if created_by_id is not None:
+                    existing = connection.execute(
+                        "SELECT job_id FROM local_agent_jobs WHERE job_type = 'ai_weight_price' "
+                        "AND created_by_id = ? AND status IN ('queued', 'running', 'stopping') LIMIT 1",
+                        (created_by_id,),
+                    ).fetchone()
+                    if existing:
+                        raise ValueError("每个账号同时只能启动一个核重核价任务，请先终止或等待当前任务完成")
+                occupied = connection.execute(
+                    "SELECT job_id FROM local_agent_jobs WHERE job_type = 'ai_weight_price' "
+                    "AND agent_id = ? AND status IN ('queued', 'running', 'stopping') LIMIT 1",
+                    (agent_id,),
+                ).fetchone()
+                if occupied:
+                    raise ValueError("所选 Agent 已有核重核价任务，请先终止或等待完成")
             connection.execute(
                 """
                 INSERT INTO local_agent_jobs (

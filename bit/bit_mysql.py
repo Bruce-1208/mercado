@@ -8,6 +8,8 @@ import random
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
+from bit.order_workflow import GROUPS as ORDER_WORKFLOW_GROUPS, STATUSES as ORDER_WORKFLOW_STATUSES, display_status_sql as order_workflow_sql, effective_status as order_effective_status, procurement_status
+
 import pymysql as _pymysql_driver
 
 from bit.workbench_runtime import bootstrap_runtime
@@ -2244,6 +2246,8 @@ def _ensure_mercado_synced_orders_table(cursor):
             `workflow_status` VARCHAR(32) NULL,
             `purchase_order` VARCHAR(255) NULL,
             `purchase_tracking` VARCHAR(255) NULL,
+            `platform_tracking_number` VARCHAR(255) NULL,
+            `shipping_deadline` DATETIME NULL,
             `logistics_company` VARCHAR(64) NULL,
             `purchase_cost` DECIMAL(20, 4) NULL,
             `purchase_remark` TEXT NULL,
@@ -2264,6 +2268,8 @@ def _ensure_mercado_synced_orders_table(cursor):
     _ensure_column(cursor, "mercado_synced_orders", "workflow_status", "VARCHAR(32) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "purchase_order", "VARCHAR(255) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "purchase_tracking", "VARCHAR(255) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "platform_tracking_number", "VARCHAR(255) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "shipping_deadline", "DATETIME NULL")
     _ensure_column(cursor, "mercado_synced_orders", "logistics_company", "VARCHAR(64) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "purchase_cost", "DECIMAL(20, 4) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "purchase_remark", "TEXT NULL")
@@ -2279,6 +2285,7 @@ def _ensure_mercado_synced_orders_table(cursor):
     _ensure_column(cursor, "mercado_synced_orders", "quoted_freight_weight_g", "DECIMAL(20, 4) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "quoted_freight_source", "VARCHAR(64) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "quoted_freight_checked_at", "DATETIME NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "order_remark", "TEXT NULL")
     _ensure_column(cursor, "mercado_synced_orders", "image_source", "VARCHAR(32) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "image_checked_at", "DATETIME NULL")
     _ensure_column(cursor, "mercado_synced_orders", "image_last_error", "TEXT NULL")
@@ -2611,14 +2618,14 @@ def upsert_mercado_synced_orders(token_record, orders):
                 ) ON DUPLICATE KEY UPDATE
                     `token_id` = VALUES(`token_id`), `shop_name` = VALUES(`shop_name`),
                     `seller_id` = VALUES(`seller_id`), `site_id` = VALUES(`site_id`),
-                    `country` = VALUES(`country`), `status` = VALUES(`status`),
-                    `status_label` = VALUES(`status_label`), `status_detail` = VALUES(`status_detail`),
+                    `country` = VALUES(`country`),
                     `workflow_status` = CASE
-                        WHEN VALUES(`status`) IN (
-                            'shipped', 'delivered', 'not_delivered', 'cancelled',
-                            'invalid', 'partially_refunded', 'refunded'
-                        ) AND `workflow_status` = '待发' THEN NULL
-                        ELSE `workflow_status` END,
+                        WHEN LOWER(COALESCE(`status`, '')) = 'delivered' THEN '交付'
+                        WHEN LOWER(COALESCE(`status`, '')) IN ('shipped', 'not_delivered')
+                             AND COALESCE(`workflow_status`, '') NOT IN ('交付','已发-异常','问题-物流退件','取消-发货后')
+                        THEN '已发-在途中' ELSE `workflow_status` END,
+                    `status` = VALUES(`status`),
+                    `status_label` = VALUES(`status_label`), `status_detail` = VALUES(`status_detail`),
                     `date_created` = VALUES(`date_created`), `date_closed` = VALUES(`date_closed`),
                     `last_updated` = VALUES(`last_updated`), `currency_id` = VALUES(`currency_id`),
                     `amount_currency_id` = VALUES(`amount_currency_id`),
@@ -2665,6 +2672,39 @@ def upsert_mercado_synced_orders(token_record, orders):
                 """,
                 rows,
             )
+            cursor.execute(
+                f"UPDATE `mercado_synced_orders` AS synced "
+                f"SET synced.`workflow_status` = {order_workflow_sql('synced')} "
+                f"WHERE synced.`order_id` IN ({placeholders})",
+                order_ids,
+            )
+            shipment_metadata = []
+            for order in orders:
+                tracking_number = str(
+                    order.get("_shipment_tracking_number") or ""
+                ).strip()[:255]
+                shipping_deadline = _mercado_order_datetime(
+                    order.get("_shipment_dispatch_deadline")
+                )
+                if tracking_number or shipping_deadline:
+                    shipment_metadata.append((
+                        tracking_number or None,
+                        shipping_deadline,
+                        str(order["id"]),
+                        token_id,
+                    ))
+            if shipment_metadata:
+                cursor.executemany(
+                    """
+                    UPDATE `mercado_synced_orders`
+                    SET `platform_tracking_number` = COALESCE(
+                            NULLIF(%s, ''), `platform_tracking_number`
+                        ),
+                        `shipping_deadline` = COALESCE(%s, `shipping_deadline`)
+                    WHERE `order_id` = %s AND `token_id` = %s
+                    """,
+                    shipment_metadata,
+                )
             bit_inventory.reconcile_inventory_order_reservations(
                 cursor, order_ids, ensure_tables=False
             )
@@ -3064,7 +3104,8 @@ def list_mercado_after_sale_order_contexts(token_id, resource_ids):
 def list_orders(
     country="", status="", salesperson="", group_name="", search="", start_date="", end_date="",
     origin="", freight_variance="", page=1, page_size=200, store_ids=None, salespeople=None,
-    freight_checked_from="", freight_checked_to="",
+    freight_checked_from="", freight_checked_to="", remark_search="",
+    sort_by="ordered_at", sort_dir="desc",
 ):
     """分页查询当前已授权店铺的 Token 同步订单。"""
     page = max(1, int(page or 1))
@@ -3076,6 +3117,13 @@ def list_orders(
     start_date, end_date = (str(value or "").strip() for value in (start_date, end_date))
     freight_checked_from = str(freight_checked_from or "").strip()
     freight_checked_to = str(freight_checked_to or "").strip()
+    sort_by = str(sort_by or "ordered_at").strip().lower()
+    if sort_by not in {"ordered_at", "amount", "balance", "cost", "profit", "profit_rate"}:
+        raise ValueError("订单排序字段无效")
+    sort_dir = str(sort_dir or "desc").strip().lower()
+    if sort_dir not in {"asc", "desc"}:
+        raise ValueError("订单排序方向无效")
+    sort_sql_dir = "ASC" if sort_dir == "asc" else "DESC"
     start_at, end_exclusive = _filter_datetime_bounds(start_date, end_date)
     freight_start_at, freight_end_exclusive = _filter_datetime_bounds(
         freight_checked_from, freight_checked_to,
@@ -3130,8 +3178,10 @@ def list_orders(
             clauses.append(f"{column('country')} = %s")
             params.append(country)
         if include_status and status:
-            clauses.append(f"{column('status')} = %s")
-            params.append(status)
+            status_groups = {'@' + name: values for name, values in ORDER_WORKFLOW_GROUPS.items()}
+            selected_statuses = status_groups.get(status, [status])
+            clauses.append(f"{column('status')} IN ({','.join(['%s'] * len(selected_statuses))})")
+            params.extend(selected_statuses)
         if include_origin and origin:
             clauses.append(f"{column('data_origin')} = %s")
             params.append(origin)
@@ -3191,9 +3241,9 @@ def list_orders(
                     f"AND {quoted} - {actual} > 0.01"
                 )
             elif freight_variance == "pending_actual":
-                clauses.append(f"{quoted} IS NOT NULL AND {actual} IS NULL")
+                clauses.append(f"{actual} IS NULL")
             elif freight_variance == "pending_quote":
-                clauses.append(f"{quoted} IS NULL AND {actual} IS NOT NULL")
+                clauses.append(f"{quoted} IS NULL")
         if start_at:
             clauses.append(f"{column('ordered_at')} >= %s")
             params.append(start_at.strftime("%Y-%m-%d %H:%M:%S"))
@@ -3206,17 +3256,21 @@ def list_orders(
         if freight_end_exclusive:
             clauses.append(f"{column('freight_checked_at')} < %s")
             params.append(freight_end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
+        if remark_search:
+            clauses.append(f"{column('order_remark')} LIKE %s")
+            params.append(f"%{str(remark_search).strip()}%")
         if search:
             pattern = f"%{search}%"
             clauses.append(
                 f"(CAST({column('id')} AS CHAR) LIKE %s OR "
                 f"{column('order_number')} LIKE %s OR {column('purchase_order')} LIKE %s OR "
-                f"{column('purchase_tracking')} LIKE %s OR {column('product_id')} LIKE %s OR "
+                f"{column('purchase_tracking')} LIKE %s OR "
+                f"{column('platform_tracking_number')} LIKE %s OR {column('product_id')} LIKE %s OR "
                 f"{column('title')} LIKE %s OR {column('buyer')} LIKE %s OR "
                 f"{column('purchase_remark')} LIKE %s OR {column('remark')} LIKE %s OR "
-                f"{column('shop_name')} LIKE %s)"
+                f"{column('shop_name')} LIKE %s OR {column('order_remark')} LIKE %s)"
             )
-            params.extend([pattern] * 10)
+            params.extend([pattern] * 12)
         return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
 
     def json_value(value):
@@ -3260,56 +3314,12 @@ def list_orders(
                 "CASE WHEN LOWER(COALESCE(synced.`status`, '')) = 'ready_to_ship' "
                 "THEN '待打印' ELSE synced.`status_label` END"
             )
-            display_status_sql = (
-                "CASE WHEN synced.`workflow_status` = '待发' "
-                "AND LOWER(COALESCE(synced.`status`, '')) IN ("
-                "'shipped', 'delivered', 'not_delivered', 'cancelled', "
-                "'invalid', 'partially_refunded', 'refunded') "
-                f"THEN {platform_status_sql} "
-                f"ELSE COALESCE(NULLIF(synced.`workflow_status`, ''), {platform_status_sql}) END"
-            )
+            display_status_sql = order_workflow_sql('synced')
             # Resolve historical rates per distinct currency/day instead of once per
             # order.  A full order set contains tens of thousands of rows but only a
             # small number of currency/day pairs, so this removes most correlated
             # history lookups without changing the nearest-previous-date rule.
             rate_key_table = "`tmp_mercado_order_rate_keys`"
-            cursor.execute(f"DROP TEMPORARY TABLE IF EXISTS {rate_key_table}")
-            cursor.execute(
-                f"""
-                CREATE TEMPORARY TABLE {rate_key_table} AS
-                SELECT pairs.`currency_id`, pairs.`order_date`,
-                       (
-                           SELECT historical_rate.`id`
-                           FROM `{DAILY_EXCHANGE_RATE_TABLE}` AS historical_rate
-                           WHERE historical_rate.`from_currency_id` = pairs.`currency_id`
-                             AND historical_rate.`to_currency_id` = 'USD'
-                             AND historical_rate.`rate_date` <= pairs.`order_date`
-                           ORDER BY historical_rate.`rate_date` DESC
-                           LIMIT 1
-                       ) AS `daily_rate_id`,
-                       (
-                           SELECT historical_cny_rate.`id`
-                           FROM `{DAILY_EXCHANGE_RATE_TABLE}` AS historical_cny_rate
-                           WHERE historical_cny_rate.`from_currency_id` = 'USD'
-                             AND historical_cny_rate.`to_currency_id` = 'CNY'
-                             AND historical_cny_rate.`rate_date` <= pairs.`order_date`
-                           ORDER BY historical_cny_rate.`rate_date` DESC
-                           LIMIT 1
-                       ) AS `cny_daily_rate_id`
-                FROM (
-                    SELECT DISTINCT {currency_sql} AS `currency_id`,
-                                    {order_date_sql} AS `order_date`
-                    FROM `mercado_synced_orders` AS synced
-                    INNER JOIN `mercado_store_tokens` AS stores
-                      ON stores.`id` = synced.`token_id`
-                ) AS pairs
-                WHERE pairs.`order_date` IS NOT NULL
-                """
-            )
-            cursor.execute(
-                f"ALTER TABLE {rate_key_table} "
-                f"ADD PRIMARY KEY (`currency_id`, `order_date`)"
-            )
             order_rate_sql = (
                 f"CASE WHEN {currency_sql} <> 'USD' "
                 "AND UPPER(COALESCE(synced.`currency_id`, '')) = 'USD' "
@@ -3373,6 +3383,9 @@ def list_orders(
                            synced.`paid_amount` AS `paid_amount_usd`,
                            COALESCE(synced.`purchase_cost`, 0) AS `cost`, synced.`purchase_order`,
                            synced.`purchase_tracking`, synced.`logistics_company`,
+                           synced.`platform_tracking_number`,
+                           DATE_ADD(synced.`shipping_deadline`, INTERVAL 8 HOUR)
+                               AS `shipping_deadline`,
                            synced.`purchase_remark`, synced.`shipping_id` AS `platform_shipping_id`,
                            ROUND({cny_income_sql} - COALESCE(synced.`purchase_cost`, 0), 2)
                                AS `profit`,
@@ -3392,7 +3405,7 @@ def list_orders(
                            ROUND({freight_usd_sql}, 2) AS `actual_freight_usd`,
                            CASE WHEN ({freight_local_sql}) IS NULL THEN 1 ELSE 0 END
                                AS `freight_missing`,
-                           synced.`status_detail` AS `remark`,
+                           synced.`order_remark`, synced.`status_detail` AS `remark`,
                            synced.`country`,
                            synced.`buyer_name` AS `buyer`, {currency_sql} AS `currency_id`,
                            UPPER(COALESCE(NULLIF(synced.`currency_id`, ''), {currency_sql}))
@@ -3446,7 +3459,8 @@ def list_orders(
                                ELSE 1
                            END AS `cny_exchange_rate_missing`,
                            DATE_ADD(synced.`last_updated`, INTERVAL 8 HOUR) AS `last_updated`
-                    FROM `mercado_synced_orders` AS synced
+                    FROM `tmp_mercado_order_page` AS selected_page
+                    STRAIGHT_JOIN `mercado_synced_orders` AS synced ON synced.`order_id` = selected_page.`id`
                     INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id`
                     LEFT JOIN `mercado_store_site_settings` AS site_settings
                       ON site_settings.`token_id` = synced.`token_id`
@@ -3469,23 +3483,35 @@ def list_orders(
             # Counts and facets only need searchable/filterable fields.  Keep their
             # temporary table deliberately narrow; pricing is calculated once for the
             # summary and only for the 200 rows returned by the current page.
+            search_columns = ""
+            if search:
+                search_columns = """
+                    NULLIF(JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, '$.pack_id')), 'null') AS `order_number`,
+                    synced.`purchase_order`, synced.`purchase_tracking`, synced.`platform_tracking_number`,
+                    synced.`product_id`, synced.`title`, synced.`buyer_name` AS `buyer`,
+                    synced.`purchase_remark`, synced.`status_detail` AS `remark`,
+                """
+            remark_column = "synced.`order_remark`," if search or remark_search else ""
+            source_date_clauses, source_date_params = [], []
+            if start_at:
+                source_date_clauses.append("synced.`date_created` >= %s")
+                source_date_params.append((start_at - timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S"))
+            if end_exclusive:
+                source_date_clauses.append("synced.`date_created` < %s")
+                source_date_params.append((end_exclusive - timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S"))
+            source_date_where = " WHERE " + " AND ".join(source_date_clauses) if source_date_clauses else ""
             filter_source_sql = f"""
                 (
                     SELECT synced.`order_id` AS `id`,
-                           NULLIF(
-                               JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, '$.pack_id')),
-                               'null'
-                           ) AS `order_number`,
+                           {search_columns}
                            synced.`token_id` AS `store_id`,
                            DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR) AS `ordered_at`,
                            site_settings.`salesperson`, site_settings.`group_name`,
                            synced.`shop_name`, 'token' AS `data_origin`,
                            {display_status_sql}
                                AS `status`,
-                           synced.`purchase_order`, synced.`purchase_tracking`,
-                           synced.`product_id`, synced.`title`,
-                           synced.`buyer_name` AS `buyer`, synced.`purchase_remark`,
-                           synced.`status_detail` AS `remark`, synced.`country`,
+                           {remark_column}
+                           synced.`country`,
                            synced.`freight_checked_at`,
                            synced.`shipping_id` AS `platform_shipping_id`,
                            {currency_sql} AS `currency_id`, {order_date_sql} AS `order_date`,
@@ -3515,6 +3541,7 @@ def list_orders(
                     LEFT JOIN `mercado_store_site_settings` AS site_settings
                       ON site_settings.`token_id` = synced.`token_id`
                      AND site_settings.`site_id` = synced.`site_id`
+                    {source_date_where}
                 ) AS `order_filter_source`
             """
             base_where_sql, base_params = build_where(
@@ -3530,11 +3557,48 @@ def list_orders(
             cursor.execute(
                 f"CREATE TEMPORARY TABLE {order_filter_table} AS "
                 f"SELECT * FROM {filter_source_sql}{base_where_sql}",
-                base_params,
+                [*source_date_params, *base_params],
             )
             cursor.execute(
                 f"ALTER TABLE {order_filter_table} "
-                f"ADD PRIMARY KEY (`id`), ADD KEY `idx_ordered_at` (`ordered_at`, `id`)"
+                f"ADD PRIMARY KEY (`id`), ADD KEY `idx_ordered_at` (`ordered_at`, `id`), "
+                f"ADD KEY `idx_status_ordered` (`status`, `ordered_at`, `id`)"
+            )
+            where_sql, params = build_where()
+            cursor.execute(f"DROP TEMPORARY TABLE IF EXISTS {rate_key_table}")
+            cursor.execute(
+                f"""
+                CREATE TEMPORARY TABLE {rate_key_table} AS
+                SELECT pairs.`currency_id`, pairs.`order_date`,
+                       (
+                           SELECT historical_rate.`id`
+                           FROM `{DAILY_EXCHANGE_RATE_TABLE}` AS historical_rate
+                           WHERE historical_rate.`from_currency_id` = pairs.`currency_id`
+                             AND historical_rate.`to_currency_id` = 'USD'
+                             AND historical_rate.`rate_date` <= pairs.`order_date`
+                           ORDER BY historical_rate.`rate_date` DESC
+                           LIMIT 1
+                       ) AS `daily_rate_id`,
+                       (
+                           SELECT historical_cny_rate.`id`
+                           FROM `{DAILY_EXCHANGE_RATE_TABLE}` AS historical_cny_rate
+                           WHERE historical_cny_rate.`from_currency_id` = 'USD'
+                             AND historical_cny_rate.`to_currency_id` = 'CNY'
+                             AND historical_cny_rate.`rate_date` <= pairs.`order_date`
+                           ORDER BY historical_cny_rate.`rate_date` DESC
+                           LIMIT 1
+                       ) AS `cny_daily_rate_id`
+                FROM (
+                    SELECT DISTINCT `currency_id`, `order_date`
+                    FROM {order_filter_table}{where_sql}
+                ) AS pairs
+                WHERE pairs.`order_date` IS NOT NULL
+                """,
+                params,
+            )
+            cursor.execute(
+                f"ALTER TABLE {rate_key_table} "
+                f"ADD PRIMARY KEY (`currency_id`, `order_date`)"
             )
             where_sql, params = build_where()
             cursor.execute(
@@ -3672,10 +3736,61 @@ def list_orders(
             }
 
             offset = (page - 1) * page_size
+            # Limit the indexed, narrow rows before calculating page details.
+            page_table = "`tmp_mercado_order_page`"
+            cursor.execute(f"DROP TEMPORARY TABLE IF EXISTS {page_table}")
+            page_where_sql, page_params = build_where(table_alias="scoped")
+            sort_expressions = {
+                "ordered_at": "scoped.`ordered_at`",
+                "amount": f"ROUND({summary_amount_sql}, 2)",
+                "balance": f"ROUND({summary_amount_sql} - scoped.`sale_fee` - ({summary_freight_sql}), 2)",
+                "cost": "scoped.`purchase_cost`",
+                "profit": f"ROUND({summary_income_sql} - scoped.`purchase_cost`, 2)",
+                "profit_rate": (
+                    f"CASE WHEN ({summary_income_sql}) <> 0 "
+                    f"THEN (({summary_income_sql} - scoped.`purchase_cost`) / ({summary_income_sql})) "
+                    "ELSE 0 END"
+                ),
+            }
+            page_sort_joins = (
+                f"LEFT JOIN {rate_key_table} AS rate_keys "
+                "ON rate_keys.`currency_id` = scoped.`currency_id` "
+                "AND rate_keys.`order_date` = scoped.`order_date` "
+                f"LEFT JOIN `{DAILY_EXCHANGE_RATE_TABLE}` AS daily_rate "
+                "ON daily_rate.`id` = rate_keys.`daily_rate_id` "
+                f"LEFT JOIN `{EXCHANGE_RATE_TABLE}` AS current_rate "
+                "ON current_rate.`from_currency_id` = scoped.`currency_id` "
+                "AND current_rate.`to_currency_id` = 'USD' "
+                f"LEFT JOIN `{DAILY_EXCHANGE_RATE_TABLE}` AS cny_daily_rate "
+                "ON cny_daily_rate.`id` = rate_keys.`cny_daily_rate_id` "
+                f"LEFT JOIN `{EXCHANGE_RATE_TABLE}` AS cny_current_rate "
+                "ON cny_current_rate.`from_currency_id` = 'USD' "
+                "AND cny_current_rate.`to_currency_id` = 'CNY'"
+            )
             cursor.execute(
-                f"SELECT * FROM {source_sql}{where_sql} "
-                f"ORDER BY `ordered_at` DESC, `id` DESC LIMIT %s OFFSET %s",
-                [*params, page_size, offset],
+                f"CREATE TEMPORARY TABLE {page_table} AS "
+                f"SELECT scoped.`id` FROM {order_filter_table} AS scoped "
+                f"{page_sort_joins}{page_where_sql} "
+                f"ORDER BY {sort_expressions[sort_by]} {sort_sql_dir}, "
+                f"scoped.`ordered_at` DESC, scoped.`id` DESC LIMIT %s OFFSET %s",
+                [*page_params, page_size, offset],
+            )
+            cursor.execute(f"ALTER TABLE {page_table} ADD PRIMARY KEY (`id`)")
+            source_sort_expressions = {
+                "ordered_at": "order_source.`ordered_at`",
+                "amount": "order_source.`amount`",
+                "balance": "order_source.`balance`",
+                "cost": "order_source.`cost`",
+                "profit": "order_source.`profit`",
+                "profit_rate": (
+                    "CASE WHEN order_source.`income` <> 0 "
+                    "THEN order_source.`profit` / order_source.`income` ELSE 0 END"
+                ),
+            }
+            cursor.execute(
+                f"SELECT order_source.* FROM {source_sql} "
+                f"ORDER BY {source_sort_expressions[sort_by]} {sort_sql_dir}, "
+                "order_source.`ordered_at` DESC, order_source.`id` DESC"
             )
             rows = [{key: json_value(value) for key, value in row.items()} for row in cursor.fetchall()]
             order_ids = [str(row.get("id") or "") for row in rows if row.get("id")]
@@ -4274,9 +4389,6 @@ def get_mercado_purchase_tracking_orders(order_ids):
             normalized_ids.append(order_id)
     if not normalized_ids:
         raise ValueError("请至少选择一个订单")
-    if len(normalized_ids) > 100:
-        raise ValueError("单次最多同步 100 个订单")
-
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
@@ -4316,8 +4428,10 @@ def bulk_update_mercado_orders(
     logistics_company=None,
     purchase_cost=None,
     purchase_remark=None,
+    order_remark=None,
     operator_id=None,
     operator_name="",
+    allowed_token_ids=None,
 ):
     """批量更新当前授权店铺订单的处理状态和采购信息。"""
     normalized_ids = []
@@ -4333,8 +4447,8 @@ def bulk_update_mercado_orders(
     assignments, values, requested_changes = [], [], {}
     if workflow_status is not None:
         workflow_status = str(workflow_status or "").strip()
-        if len(workflow_status) > 32:
-            raise ValueError("订单状态不能超过 32 个字符")
+        if workflow_status and workflow_status not in ORDER_WORKFLOW_STATUSES:
+            raise ValueError("请选择有效的订单状态")
         assignments.append("synced.`workflow_status` = %s")
         values.append(workflow_status or None)
         requested_changes["workflow_status"] = workflow_status or None
@@ -4376,6 +4490,13 @@ def bulk_update_mercado_orders(
         assignments.append("synced.`purchase_cost` = %s")
         values.append(cost_value)
         requested_changes["purchase_cost"] = cost_value
+    if order_remark is not None:
+        order_remark = str(order_remark or "").strip()
+        if len(order_remark) > 5000:
+            raise ValueError("订单备注不能超过 5000 个字符")
+        assignments.append("synced.`order_remark` = %s")
+        values.append(order_remark or None)
+        requested_changes["order_remark"] = order_remark or None
     if purchase_remark is not None:
         purchase_remark = str(purchase_remark or "").strip()
         if len(purchase_remark) > 5000:
@@ -4401,6 +4522,7 @@ def bulk_update_mercado_orders(
         "logistics_company": "物流公司",
         "purchase_cost": "采购成本",
         "purchase_remark": "采购备注",
+        "order_remark": "订单备注",
     }
 
     def audit_value(value):
@@ -4420,14 +4542,25 @@ def bulk_update_mercado_orders(
             _ensure_mercado_synced_orders_table(cursor)
             _ensure_mercado_store_tokens_table(cursor)
             cursor.execute(
-                f"SELECT synced.`order_id`, synced.`workflow_status`, synced.`purchase_order`, "
+                f"SELECT synced.`order_id`, synced.`token_id`, synced.`status`, synced.`workflow_status`, synced.`purchase_order`, "
                 f"synced.`purchase_tracking`, synced.`logistics_company`, synced.`purchase_cost`, "
-                f"synced.`purchase_remark` FROM `mercado_synced_orders` AS synced "
+                f"synced.`order_remark`, synced.`purchase_remark` FROM `mercado_synced_orders` AS synced "
                 f"INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id` "
-                f"WHERE synced.`order_id` IN ({placeholders})",
+                f"WHERE synced.`order_id` IN ({placeholders}) FOR UPDATE",
                 normalized_ids,
             )
             before_rows = list(cursor.fetchall() or [])
+            if allowed_token_ids is not None:
+                allowed = {int(value) for value in allowed_token_ids}
+                accessible = {str(row["order_id"]) for row in before_rows if int(row["token_id"]) in allowed}
+                if any(order_id not in accessible for order_id in normalized_ids):
+                    raise ValueError("所选订单不存在或无权修改")
+            for before in before_rows:
+                current = order_effective_status(before)
+                if workflow_status == "转运-已出库" and current != "转运-待出库":
+                    raise ValueError("只有待出库订单可以确认出库")
+                if workflow_status == "转运-待出库" and current not in {"转运-待收货", "审核-已审核"}:
+                    raise ValueError("只有待收货或已审核订单可以申请出库")
             matched = len(before_rows)
             cursor.execute(
                 f"UPDATE `mercado_synced_orders` AS synced "
@@ -4444,9 +4577,25 @@ def bulk_update_mercado_orders(
                 "purchase_cost", "purchase_remark",
             }
             for before in before_rows:
+                row_changes = dict(requested_changes)
+                current_status = order_effective_status(before)
+                if workflow_status is None and (purchase_order is not None or purchase_tracking is not None):
+                    next_status = procurement_status(before, requested_changes)
+                else:
+                    next_status = order_effective_status({**before, **requested_changes})
+                # Preserve platform-confirmed progress when printing or editing metadata.
+                if current_status in {"交付", "取消-发货前", "取消-发货后"} or (
+                    workflow_status == "待发" and current_status in {"已发-在途中", "已发-异常"}
+                ):
+                    next_status = current_status
+                row_changes["workflow_status"] = next_status
+                cursor.execute(
+                    "UPDATE `mercado_synced_orders` SET `workflow_status` = %s WHERE `order_id` = %s",
+                    (next_status, str(before["order_id"])),
+                )
                 changed_fields = {}
                 after = {key: audit_value(before.get(key)) for key in field_labels}
-                for key, new_value in requested_changes.items():
+                for key, new_value in row_changes.items():
                     old_value = audit_value(before.get(key))
                     new_value = audit_value(new_value)
                     after[key] = new_value
@@ -4465,6 +4614,9 @@ def bulk_update_mercado_orders(
                     )
                     action_type = "purchase_created" if created else "purchase_updated"
                     action_label = "新增采购单" if created else "修改采购单"
+                elif "order_remark" in changed_fields:
+                    action_type = "remark_updated"
+                    action_label = "修改订单备注"
                 else:
                     action_type = "status_updated"
                     action_label = "修改订单状态"
@@ -4552,7 +4704,18 @@ def list_mercado_shipment_status_candidates(token_id, cutoff):
                 WHERE `token_id` = %s
                   AND `date_created` < %s
                   AND COALESCE(`shipping_id`, '') <> ''
-                  AND LOWER(COALESCE(`status`, '')) NOT IN ({placeholders})
+                  AND (
+                      LOWER(COALESCE(`status`, '')) NOT IN ({placeholders})
+                      OR (
+                          COALESCE(`platform_tracking_number`, '') = ''
+                          AND EXISTS (
+                              SELECT 1
+                              FROM `mercado_order_operation_logs` AS print_logs
+                              WHERE print_logs.`order_id` = `mercado_synced_orders`.`order_id`
+                                AND print_logs.`action_type` = 'label_printed'
+                          )
+                      )
+                  )
                   AND (
                       `shipment_status_checked_at` IS NULL
                       OR `shipment_status_checked_at` < CURDATE()
@@ -4568,6 +4731,38 @@ def list_mercado_shipment_status_candidates(token_id, cutoff):
                 for row in (cursor.fetchall() or [])
                 if str(row.get("shipping_id") or "").strip()
             ]
+    finally:
+        connection.close()
+
+
+def get_mercado_shipping_deadlines(token_id, shipping_ids):
+    """Return cached official ship-by times for a batch of shipments."""
+    normalized_ids = list(dict.fromkeys(
+        str(value or "").strip() for value in shipping_ids or ()
+        if str(value or "").strip()
+    ))
+    if not normalized_ids:
+        return {}
+    placeholders = ",".join(["%s"] * len(normalized_ids))
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                f"""
+                SELECT `shipping_id`, MAX(`shipping_deadline`) AS `shipping_deadline`
+                FROM `mercado_synced_orders`
+                WHERE `token_id` = %s AND `shipping_id` IN ({placeholders})
+                  AND `shipping_deadline` IS NOT NULL
+                GROUP BY `shipping_id`
+                """,
+                [int(token_id), *normalized_ids],
+            )
+            return {
+                str(row.get("shipping_id") or ""): row.get("shipping_deadline")
+                for row in cursor.fetchall() or []
+                if row.get("shipping_deadline") is not None
+            }
     finally:
         connection.close()
 
@@ -4598,11 +4793,17 @@ def save_mercado_shipment_statuses(token_id, entries):
                 (entry or {}).get("last_updated") or ""
             ).strip(),
         }
+        tracking_number = str((entry or {}).get("tracking_number") or "").strip()[:255]
+        shipping_deadline = _mercado_order_datetime(
+            (entry or {}).get("dispatch_deadline")
+        )
         normalized.append((
             effective_status,
             _MERCADO_ORDER_STATUS_LABELS.get(effective_status, ""),
             json.dumps(detail, ensure_ascii=False, separators=(",", ":")),
             error,
+            tracking_number or None,
+            shipping_deadline,
             shipping_id,
             int(token_id),
         ))
@@ -4621,32 +4822,47 @@ def save_mercado_shipment_statuses(token_id, entries):
             bit_inventory.ensure_inventory_tables(cursor)
             updated = 0
             changed_order_ids = []
-            for status, label, detail, error, shipping_id, normalized_token_id in normalized:
+            for (
+                status, label, detail, error, tracking_number,
+                shipping_deadline, shipping_id, normalized_token_id,
+            ) in normalized:
                 cursor.execute(
                     f"""
                     UPDATE `mercado_synced_orders`
-                    SET `status` = CASE WHEN %s <> '' THEN %s ELSE `status` END,
+                    SET `workflow_status` = CASE
+                            WHEN LOWER(COALESCE(`status`, '')) = 'delivered' THEN '交付'
+                            WHEN LOWER(COALESCE(`status`, '')) IN ('shipped','not_delivered')
+                                 AND COALESCE(`workflow_status`, '') NOT IN ('交付','已发-异常','问题-物流退件','取消-发货后')
+                            THEN '已发-在途中' ELSE `workflow_status` END,
+                        `status` = CASE WHEN %s <> '' THEN %s ELSE `status` END,
                         `status_label` = CASE WHEN %s <> '' THEN %s ELSE `status_label` END,
                         `status_detail` = CASE WHEN %s <> '' THEN %s ELSE `status_detail` END,
-                        `workflow_status` = CASE
-                            WHEN %s IN (
-                                'shipped', 'delivered', 'not_delivered', 'cancelled',
-                                'invalid', 'partially_refunded', 'refunded'
-                            ) AND `workflow_status` = '待发' THEN NULL
-                            ELSE `workflow_status` END,
                         `shipment_status_checked_at` = %s,
                         `shipment_status_last_error` = %s,
+                        `platform_tracking_number` = COALESCE(
+                            %s, `platform_tracking_number`
+                        ),
+                        `shipping_deadline` = COALESCE(
+                            %s, `shipping_deadline`
+                        ),
                         `synced_at` = %s
                     WHERE `shipping_id` = %s AND `token_id` = %s
                       AND LOWER(COALESCE(`status`, '')) NOT IN ({terminal_placeholders})
                     """,
                     [
-                        status, status, label, label, status, detail, status,
-                        now, error, now, shipping_id, normalized_token_id,
+                        status, status, label, label, status, detail,
+                        now, error, tracking_number, shipping_deadline, now,
+                        shipping_id, normalized_token_id,
                         *final_order_statuses,
                     ],
                 )
                 updated += max(0, int(getattr(cursor, "rowcount", 0) or 0))
+                cursor.execute(
+                    f"UPDATE `mercado_synced_orders` AS synced "
+                    f"SET synced.`workflow_status` = {order_workflow_sql('synced')} "
+                    "WHERE synced.`shipping_id` = %s AND synced.`token_id` = %s",
+                    (shipping_id, normalized_token_id),
+                )
                 cursor.execute(
                     "SELECT `order_id` FROM `mercado_synced_orders` "
                     "WHERE `shipping_id` = %s AND `token_id` = %s",
@@ -4661,6 +4877,44 @@ def save_mercado_shipment_statuses(token_id, entries):
                 )
         connection.commit()
         return {"shipments": len(normalized), "orders": updated}
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def save_mercado_shipment_tracking_numbers(token_id, entries):
+    """Persist tracking numbers revealed after Mercado generates a label."""
+
+    normalized = []
+    for entry in entries or ():
+        shipping_id = str((entry or {}).get("shipping_id") or "").strip()
+        tracking_number = str((entry or {}).get("tracking_number") or "").strip()[:255]
+        if shipping_id and tracking_number:
+            normalized.append((shipping_id, tracking_number))
+    if not normalized:
+        return {"shipments": 0, "orders": 0}
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.executemany(
+                """
+                UPDATE `mercado_synced_orders`
+                SET `platform_tracking_number` = %s, `synced_at` = %s
+                WHERE `shipping_id` = %s AND `token_id` = %s
+                """,
+                [
+                    (tracking_number, now, shipping_id, int(token_id))
+                    for shipping_id, tracking_number in normalized
+                ],
+            )
+            updated_orders = max(0, int(getattr(cursor, "rowcount", 0) or 0))
+        connection.commit()
+        return {"shipments": len(normalized), "orders": updated_orders}
     except Exception:
         connection.rollback()
         raise
@@ -6261,19 +6515,47 @@ def _ensure_weight_dimensions_record_table(cursor):
         )
 
 
-def save_weight_dimensions_records(rows, refresh=False):
+def save_weight_dimensions_records(rows, refresh=False, enrich_only=False):
     rows = [dict(row or {}) for row in rows or () if isinstance(row, dict)]
     if not rows:
         return {"inserted": 0, "duplicates": 0, "inserted_order_numbers": []}
     connection = pymysql.connect(**config)
     inserted = 0
     inserted_order_numbers = []
+    enriched = 0
     try:
         with connection.cursor() as cursor:
             _ensure_weight_dimensions_record_table(cursor)
             for row in rows:
                 order_number = str(row.get("order_number") or "").strip()
                 if not order_number:
+                    continue
+                if enrich_only:
+                    cursor.execute(
+                        "SELECT `record_json` FROM `zying_weight_dimensions_records` "
+                        "WHERE `order_number` = %s FOR UPDATE", (order_number,),
+                    )
+                    existing = cursor.fetchone()
+                    if not existing:
+                        continue
+                    previous = json.loads(existing.get("record_json") or "{}")
+                    changed = False
+                    for key in ("time", "salesperson", "source", "company_store", "product_id",
+                                "category", "title", "image_url", "tracking_number", "carrier", "region"):
+                        value = str(row.get(key) or "").strip()
+                        if value and not str(previous.get(key) or "").strip():
+                            previous[key] = value
+                            changed = True
+                    if changed:
+                        if previous.get("product_id") and previous.get("query_error") == "缺少产品id，请先通过订单导入补全":
+                            previous["query_error"] = ""
+                        cursor.execute(
+                            "UPDATE `zying_weight_dimensions_records` SET `order_time` = %s, "
+                            "`record_json` = %s WHERE `order_number` = %s",
+                            (str(previous.get("time") or "")[:64],
+                             json.dumps(previous, ensure_ascii=False, default=str), order_number),
+                        )
+                        enriched += 1
                     continue
                 logs = row.pop("execution_logs", [])
                 # These internal identifiers are needed for execution after a DB read.
@@ -6287,6 +6569,14 @@ def save_weight_dimensions_records(rows, refresh=False):
                         previous = json.loads(existing.get("record_json") or "{}")
                         for key in ("execution_status", "execution_error", "_zeshun_status", "_zying_status"):
                             row.pop(key, None)
+                        # A refresh can race an Excel import; preserve metadata
+                        # under the row lock even if its snapshot predates import.
+                        for key in ("time", "salesperson", "source", "company_store", "product_id",
+                                    "category", "title", "image_url", "tracking_number", "carrier", "region"):
+                            if not str(row.get(key) or "").strip() and previous.get(key):
+                                row[key] = previous[key]
+                        if row.get("product_id") and row.get("query_error") == "缺少产品id，请先通过订单导入补全":
+                            row["query_error"] = ""
                         previous.update(row)
                         cursor.execute(
                             "UPDATE `zying_weight_dimensions_records` SET `order_time` = %s, "
@@ -6309,7 +6599,8 @@ def save_weight_dimensions_records(rows, refresh=False):
         connection.commit()
         return {
             "inserted": inserted,
-            "duplicates": max(0, len(rows) - inserted),
+            "duplicates": max(0, len(rows) - inserted - enriched),
+            "enriched": enriched,
             "inserted_order_numbers": inserted_order_numbers,
         }
     except BaseException:
@@ -7594,18 +7885,20 @@ def insert_ai_appeal_record(record):
         connection.close()
 
 
-def get_ai_appeal_records(limit=100):
+def get_ai_appeal_records(limit=100, appeal_copy_mode=""):
     try:
         limit = max(1, min(int(limit), 500))
     except (TypeError, ValueError):
         limit = 100
 
+    mode = str(appeal_copy_mode or "").strip()
+    mode_filter = "WHERE COALESCE(NULLIF(appeal_copy_mode, ''), '未记录') = %s" if mode else ""
     initialize_appeal_storage()
     connection = _appeal_connection()
     try:
         with connection.cursor() as cursor:
             cursor.execute(
-                """
+                f"""
                 SELECT
                     `id`,
                     `appeal_time`,
@@ -7625,10 +7918,11 @@ def get_ai_appeal_records(limit=100):
                     `raw_json`,
                     `created_at`
                 FROM `ai_appeal_records`
+                {mode_filter}
                 ORDER BY `appeal_time` DESC, `id` DESC
                 LIMIT %s
                 """,
-                (limit,),
+                (mode, limit) if mode else (limit,),
             )
             rows = cursor.fetchall()
             for row in rows:
@@ -10250,6 +10544,7 @@ def list_mercado_action_center_orders(*, token_ids=None, limit=500):
                        `tracking_cache_json`, `tracking_checked_at`, `raw_json`
                 FROM `mercado_synced_orders`
                 WHERE `token_id` IN ({placeholders})
+                  AND `date_created` >= DATE_SUB(NOW(), INTERVAL 30 DAY)
                   AND (
                       `status` IN ('paid', 'ready_to_ship', 'confirmed', 'partially_paid',
                                    'payment_in_process', 'pending', 'pending_cancel',
@@ -10399,8 +10694,9 @@ def update_mercado_operator_task(task_id, *, actor, owner=None, status=None, due
     try:
         with connection.cursor() as cursor:
             _ensure_mercado_action_center_tables(cursor)
-            cursor.execute("SELECT `id` FROM `mercado_operator_tasks` WHERE `id` = %s LIMIT 1", (task_id,))
-            if not cursor.fetchone():
+            cursor.execute("SELECT `id`, `token_id`, `topic`, `resource` FROM `mercado_operator_tasks` WHERE `id` = %s LIMIT 1 FOR UPDATE", (task_id,))
+            task = cursor.fetchone()
+            if not task:
                 raise KeyError("待办不存在")
             assignments, values, changes = [], [], []
             if normalized_owner is not None:
@@ -10424,6 +10720,27 @@ def update_mercado_operator_task(task_id, *, actor, owner=None, status=None, due
                 cursor.execute(
                     f"UPDATE `mercado_operator_tasks` SET {', '.join(assignments)} WHERE `id` = %s",
                     tuple(values),
+                )
+            if note and task.get("topic") in {
+                "purchase_order_missing_24h", "purchase_tracking_missing_48h",
+                "order_not_in_transit_7d", "procurement_tracking_stalled",
+            }:
+                cursor.execute(
+                    "SELECT `order_remark` FROM `mercado_synced_orders` "
+                    "WHERE `token_id` = %s AND `order_id` = %s FOR UPDATE",
+                    (task["token_id"], task["resource"]),
+                )
+                order = cursor.fetchone()
+                if order is None:
+                    raise ValueError("关联订单不存在，无法同步订单备注")
+                remark = "\n".join(filter(None, [str(order.get("order_remark") or ""),
+                    f"[采购必办 {now:%Y-%m-%d %H:%M} {actor}] {note}"]))
+                if len(remark) > 5000:
+                    raise ValueError("同步后订单备注超过 5000 字，请先整理订单备注")
+                cursor.execute(
+                    "UPDATE `mercado_synced_orders` SET `order_remark` = %s "
+                    "WHERE `token_id` = %s AND `order_id` = %s",
+                    (remark, task["token_id"], task["resource"]),
                 )
             if note:
                 changes.append(("note", note))

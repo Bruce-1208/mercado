@@ -176,7 +176,10 @@
     }
     if (message && ["READ_PRODUCT_LIST", "EXTRACT_BATCH_PRODUCT"].includes(message.type)) {
       try {
-        if (document.querySelector("form[action*='login'], #captcha, .g-recaptcha, [data-testid='captcha']") ||
+        const pageText = `${document.title} ${(document.body?.innerText || "").slice(0, 16000)}`;
+        if (/too many requests|rate limit exceeded|demasiadas solicitudes|muitas requisições|访问过于频繁|请求过于频繁|HTTP\s*429/i.test(pageText)) {
+          sendResponse({ok: false, blocked: true, status: 429, error: "美客多访问限频"});
+        } else if (document.querySelector("form[action*='login'], #captcha, .g-recaptcha, [data-testid='captcha']") ||
             /\/(?:login|account-verification|challenge|captcha)(?:[/?]|$)/i.test(location.href)) {
           sendResponse({ok: false, blocked: true, error: "请先在前端页面完成登录或人机验证"});
         } else if (message.type === "EXTRACT_BATCH_PRODUCT") {

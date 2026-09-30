@@ -742,7 +742,7 @@ def test_approved_ai_item_failure_does_not_block_other_approved_items(monkeypatc
     assert len(calls) == 1
 
 
-def test_marketplace_variations_retry_dependent_length_with_real_size():
+def test_marketplace_variations_preserve_dependent_length_without_inventing_parent_size():
     from erp.ai_original_products import normalize_marketplace_variations
     original = {'variations': [
         {'sku_id': str(i), 'available_quantity': i + 3,
@@ -765,7 +765,8 @@ def test_marketplace_variations_retry_dependent_length_with_real_size():
             for i, n in enumerate((130, 150))
         ]})
     result = normalize_marketplace_variations(original, schema, chat=chat)
-    assert len(calls) == 2
+    assert len(calls) == 1
     assert [v['sku_id'] for v in result] == ['0', '1']
     assert [v['available_quantity'] for v in result] == [3, 4]
-    assert all(any(a['id'] == 'SIZE' for a in v['attribute_combinations']) for v in result)
+    assert [v['attribute_combinations'][-1]['value_name'] for v in result] == ['130 cm', '150 cm']
+    assert all(not any(a['id'] == 'SIZE' for a in v['attribute_combinations']) for v in result)

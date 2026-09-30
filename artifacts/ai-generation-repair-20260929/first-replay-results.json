@@ -1,0 +1,190 @@
+[
+  {
+    "id": 13088981,
+    "error": "自动映射已尝试 3 次：AI 映射后存在无法区分的变体，未保存；请保留这两组原规格的完整区别：{\"first\": [{\"option_id\": 0, \"source\": {\"name\": \"规格1\", \"value_name\": \"布艺南瓜灯笼\"}}, {\"option_id\": 2, \"source\": {\"name\": \"规格2\", \"value_name\": \"3米20灯 带闪电池款\"}}], \"second\": [{\"option_id\": 0, \"source\": {\"name\": \"规格1\", \"value_name\": \"布艺南瓜灯笼\"}}, {\"option_id\": 3, \"source\": {\"name\": \"规格2\", \"value_name\": \"3米20灯 常亮USB款\"}}], \"collapsed_attributes\": {\"MODEL\": {\"id\": \"MODEL\", \"name\": \"Model\", \"value_name\": \"Fabric pumpkin lantern\"}, \"LENGTH\": {\"id\": \"LENGTH\", \"name\": \"Length\", \"value_name\": \"3 m\"}, \"LIGHTS_NUMBER\": {\"id\": \"LIGHTS_NUMBER\", \"name\": \"Lights number\", \"value_name\": \"20\"}, \"POWER_SUPPLY_TYPE\": {\"id\": \"POWER_SUPPLY_TYPE\", \"name\": \"Power supply type\", \"value_name\": \"Domestic current\", \"value_id\": \"49713698\"}, \"WITH_REMOTE_CONTROL\": {\"id\": \"WITH_REMOTE_CONTROL\", \"name\": \"With remote control\", \"value_name\": \"No\", \"value_id\": \"242084\"}}}"
+  },
+  {
+    "id": 13088986,
+    "error": "自动映射已尝试 3 次：AI 映射后存在无法区分的变体，未保存；请保留这两组原规格的完整区别：{\"first\": [{\"option_id\": 0, \"source\": {\"name\": \"规格1\", \"value_name\": \"枫叶\"}}, {\"option_id\": 2, \"source\": {\"name\": \"规格2\", \"value_name\": \"3米20灯（2节常亮电池盒）\"}}], \"second\": [{\"option_id\": 0, \"source\": {\"name\": \"规格1\", \"value_name\": \"枫叶\"}}, {\"option_id\": 3, \"source\": {\"name\": \"规格2\", \"value_name\": \"3米20灯 （3节电池盒带闪）\"}}], \"collapsed_attributes\": {\"MODEL\": {\"id\": \"MODEL\", \"name\": \"Model\", \"value_name\": \"Maple leaf\"}, \"LENGTH\": {\"id\": \"LENGTH\", \"name\": \"Length\", \"value_name\": \"3 m\"}, \"LIGHTS_NUMBER\": {\"id\": \"LIGHTS_NUMBER\", \"name\": \"Lights number\", \"value_name\": \"20\"}, \"POWER_SUPPLY_TYPE\": {\"id\": \"POWER_SUPPLY_TYPE\", \"name\": \"Power supply type\", \"value_name\": \"Battery\", \"value_id\": \"4491927\"}}}"
+  },
+  {
+    "id": 13088987,
+    "error": "GET /marketplace/domain_discovery/search 失败 (HTTP 408): Looks like the server is taking to long to respond, please try again in sometime"
+  },
+  {
+    "id": 13088988,
+    "error": "AI 无法从平台候选中确认商品分类：halloween lantern；请核对商品类型"
+  },
+  {
+    "id": 13088989,
+    "result": {
+      "category_id": "CBT399139",
+      "category_name": "Solar Lights",
+      "variations": [
+        {
+          "id": "6300340250298",
+          "sku_id": "6300340250298",
+          "seller_sku": "",
+          "label": "一拖五黑管鬼脸 / 常规",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "One drag five black tube ghost face"
+            },
+            {
+              "id": "COLOR",
+              "name": "Structure color",
+              "value_name": "Black",
+              "value_id": "52049"
+            }
+          ],
+          "price": 21.87,
+          "price_text": "¥21.87",
+          "available_quantity": 9886,
+          "image_url": "",
+          "raw_weight": "500g",
+          "raw_text": "一拖五黑管鬼脸 / 常规",
+          "weight_g": 500
+        },
+        {
+          "id": "6300340250299",
+          "sku_id": "6300340250299",
+          "seller_sku": "",
+          "label": "一拖五红白管鬼脸 / 常规",
+          "attribute_combinations": [
+            {
+              "id": "MODEL",
+              "name": "Model",
+              "value_name": "One drag five red and white tube ghost face"
+            }
+          ],
+          "price": 22.55,
+          "price_text": "¥22.55",
+          "available_quantity": 9999,
+          "image_url": "",
+          "raw_weight": "500g",
+          "raw_text": "一拖五红白管鬼脸 / 常规",
+          "weight_g": 500
+        }
+      ],
+      "category_prediction_query": "Solar garden light with ghost face",
+      "attributes": [
+        {
+          "id": "BRAND",
+          "name": "Brand",
+          "value_name": "Generic",
+          "value_id": "35977846"
+        },
+        {
+          "id": "SALE_FORMAT",
+          "name": "Sale format",
+          "value_name": "Unit",
+          "value_id": "1359391"
+        },
+        {
+          "id": "UNITS_PER_PACK",
+          "name": "Lights number",
+          "value_name": "5"
+        },
+        {
+          "id": "COLOR",
+          "name": "Structure color",
+          "value_name": "Black",
+          "value_id": "52049"
+        },
+        {
+          "id": "EMPTY_GTIN_REASON",
+          "name": "Empty GTIN reason",
+          "value_name": "The product does not have registered code",
+          "value_id": "17055160"
+        },
+        {
+          "id": "SAT_KEY",
+          "name": "Sat key",
+          "value_name": "Does not exist in the catalog",
+          "value_id": "82021094"
+        },
+        {
+          "id": "MEASURE_UNIT_KEY",
+          "name": "Measure unit key",
+          "value_name": "Does not exist in the catalog",
+          "value_id": "82021108"
+        },
+        {
+          "id": "LIGHT_SOURCES_TYPES",
+          "name": "Light sources types",
+          "value_name": "LED",
+          "value_id": "7387210"
+        },
+        {
+          "id": "POWER_SUPPLY_TYPE",
+          "name": "Power supply type",
+          "value_name": "Solar energy",
+          "value_id": "38547771"
+        },
+        {
+          "id": "MOUNTING_PLACES",
+          "name": "Mounting places",
+          "value_name": "Floor",
+          "value_id": "963439"
+        },
+        {
+          "id": "MATERIALS",
+          "name": "Materials",
+          "value_name": "Plastic",
+          "value_id": "2748302"
+        },
+        {
+          "id": "INCLUDES_BULBS",
+          "name": "Includes bulbs",
+          "value_name": "Yes",
+          "value_id": "242085"
+        },
+        {
+          "id": "IS_WIRELESS",
+          "name": "Is wireless",
+          "value_name": "Yes",
+          "value_id": "242085"
+        },
+        {
+          "id": "MAIN_COLOR",
+          "name": "Main color",
+          "value_name": "Black",
+          "value_id": "2450295"
+        },
+        {
+          "id": "PACKAGE_WEIGHT",
+          "name": "Package weight",
+          "value_name": "500"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Item condition",
+          "value_name": "New",
+          "value_id": "2230284"
+        },
+        {
+          "id": "IS_KIT",
+          "name": "Is kit",
+          "value_name": "No",
+          "value_id": "242084"
+        }
+      ],
+      "missing_required_attributes": [
+        {
+          "id": "PACKAGE_HEIGHT",
+          "name": "Package height"
+        },
+        {
+          "id": "PACKAGE_WIDTH",
+          "name": "Package width"
+        },
+        {
+          "id": "PACKAGE_LENGTH",
+          "name": "Package length"
+        }
+      ]
+    }
+  }
+]

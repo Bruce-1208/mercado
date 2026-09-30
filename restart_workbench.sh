@@ -132,7 +132,15 @@ child_listener() {
 start_service() {
     local python_cmd="$1" pid="" elapsed=0 web_pid worker_pid
     if [[ -n "$launch_target" ]]; then
-        launchctl bootstrap "gui/$(id -u)" "$launch_plist" || die "无法加载 launchd 服务：$launch_plist"
+        # launchd persists disabled overrides independently of the plist.
+        # An explicit restart must enable the job before bootstrap (otherwise
+        # launchd reports the misleading "5: Input/output error").
+        launchctl enable "$launch_target" || die "无法启用 launchd 服务：$launch_target"
+        if ! launchctl bootstrap "${launch_target%/*}" "$launch_plist"; then
+            launchctl print-disabled "${launch_target%/*}" >&2 || true
+            /usr/bin/plutil -lint "$launch_plist" >&2 || true
+            die "无法加载 launchd 服务：$launch_plist（已尝试启用；请查看上方诊断）"
+        fi
         launchctl kickstart "$launch_target" || die "无法启动 launchd 服务"
     else
         nohup "$python_cmd" -m bit.workbench_services </dev/null >>"$LOG_FILE" 2>&1 &

@@ -90,3 +90,42 @@ stop_service
 ''')
     assert result.returncode == 0, result.stderr
     assert result.stdout.index('launchctl bootout') < result.stdout.index('kill -TERM')
+
+
+def test_disabled_launchd_job_enabled_before_bootstrap():
+    result = run_shell('''
+launch_target=gui/123/test
+launch_plist=/test.plist
+enabled=no
+launchctl() {
+    case "$1" in
+        enable) [[ "$2" == "$launch_target" ]] || exit 10; enabled=yes ;;
+        bootstrap)
+            [[ "$enabled" == yes && "$2" == gui/123 && "$3" == /test.plist ]] || exit 11
+            echo bootstrapped ;;
+        kickstart) echo started ;;
+        print) return 1 ;;
+    esac
+}
+sleep() { elapsed=999; }
+stop_service() { :; }
+tail() { :; }
+start_service python
+''')
+    assert 'bootstrapped' in result.stdout, result.stderr
+    assert 'started' in result.stdout, result.stderr
+
+
+def test_enable_failure_does_not_attempt_bootstrap():
+    result = run_shell('''
+launch_target=gui/123/test
+launch_plist=/test.plist
+launchctl() {
+    [[ "$1" != enable ]] || return 1
+    echo "unexpected $*"
+}
+start_service python
+''')
+    assert result.returncode != 0
+    assert '无法启用 launchd 服务' in result.stderr
+    assert 'unexpected' not in result.stdout

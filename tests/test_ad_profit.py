@@ -9,7 +9,7 @@ def isolated_profit(tmp_path, monkeypatch):
 
 
 def product(**metrics):
-    return dict(direct_units_available=True, token_id=7, site_id='MLM', item_id='MLM123', currency_id='MXN',
+    return dict(direct_units_available=True, token_id=7, site_id='MLM', item_id='MLM123', currency_id='MXN', profit_currency_id='MXN',
                 metrics={'cost': 100, 'clicks': 40, 'direct_units_quantity': 5, **metrics})
 
 
@@ -40,7 +40,7 @@ def test_missing_direct_metrics_are_not_treated_as_zero_sales():
 def test_persistence_clear_and_scope():
     row = product()
     ad_profit.save_profit(row, 30)
-    snapshot = {'links': [row, {**row, 'token_id': 8}, {**row, 'currency_id': 'USD'}]}
+    snapshot = {'links': [row, {**row, 'token_id': 8}, {**row, 'profit_currency_id': 'USD'}]}
     ad_profit.enrich(snapshot)
     assert [item['unit_profit'] for item in snapshot['links']] == [30, None, None]
     assert row['recommendation']['action'] == 'increase'
@@ -101,3 +101,27 @@ def test_remote_profit_save_routes_to_database_service(monkeypatch):
     bit_db_api.save_mercado_ad_profit(product(), 25)
     assert calls[0][0] == ('POST', '/api/db/ad-analysis/profit')
     assert calls[0][1]['json']['unit_profit'] == 25
+
+
+@pytest.mark.parametrize('currency', ['', 'MXN', 'CNY'])
+def test_default_profit_is_cny_and_survives_ad_currency_changes(currency):
+    row = product()
+    row.pop('profit_currency_id')
+    row['currency_id'] = currency
+    result = ad_profit.save_profit(row, 30)
+    assert result['profit_currency_id'] == 'CNY'
+    assert result['recommendation']['net_profit'] == (50 if currency == 'CNY' else None)
+    refreshed = {**row, 'currency_id': 'USD'}
+    ad_profit.enrich({'links': [refreshed]})
+    assert refreshed['unit_profit'] == 30
+    assert refreshed['profit_currency_id'] == 'CNY'
+    ad_profit.save_profit(refreshed, None)
+    assert ad_profit.enrich({'links': [row]})['links'][0]['unit_profit'] is None
+
+
+@pytest.mark.parametrize('field', ['token_id', 'site_id', 'item_id'])
+def test_missing_product_identity_still_rejected(field):
+    row = product()
+    row.pop(field)
+    with pytest.raises(ValueError, match='商品、店铺和站点不能为空'):
+        ad_profit.save_profit(row, 30)

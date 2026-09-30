@@ -47,7 +47,7 @@ main { padding: 14px 18px; }
 .account-dot { width: 8px; height: 8px; border-radius: 50%; background: #a5afbc; box-shadow: 0 0 0 3px #edf0f4; }
 .account-card:has(.logged-in) .account-dot { background: #25a36f; box-shadow: 0 0 0 3px #e0f5eb; }
 
-.mode-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 12px; padding: 4px; border-radius: 10px; background: #edf2f8; }
+.mode-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 12px; padding: 4px; border-radius: 10px; background: #edf2f8; }
 .mode-tab { border: 0; border-radius: 8px; padding: 8px 6px; background: transparent; color: #67768a; cursor: pointer; font-size: 12px; font-weight: 700; }
 .mode-tab.active { background: #fff; color: #145db7; box-shadow: 0 2px 8px rgba(43, 68, 103, .1); }
 .mode-panel[hidden] { display: none; }

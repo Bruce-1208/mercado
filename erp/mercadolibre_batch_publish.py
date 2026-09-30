@@ -117,6 +117,29 @@ def _published_item_id(publication: Mapping[str, Any]) -> str:
     return ""
 
 
+def _is_platform_rate_limit_error(exc: BaseException) -> bool:
+    """Identify Mercado API rate limits without treating model-service 429s as such."""
+    message = str(exc or "").lower()
+    known_platform_markers = (
+        "local_rate_limited",
+        "integration.rate_limited.",
+        "平台刊登服务限流",
+    )
+    if any(marker in message for marker in known_platform_markers):
+        return True
+    if not isinstance(exc, MercadoLibreError):
+        return False
+    try:
+        if int(getattr(exc, "status_code", 0) or 0) == 429:
+            return True
+    except (TypeError, ValueError):
+        pass
+    return any(
+        marker in message
+        for marker in ("rate limit", "rate_limited", "too many requests", "限流", "限频")
+    )
+
+
 def _decimal_value(value: Any) -> Decimal | None:
     if value in (None, ""):
         return None
@@ -294,6 +317,16 @@ def site_discount_rate(
     return rate.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
 
+def management_category_listing_ratio(row: Mapping[str, Any]) -> Decimal:
+    raw_ratio = row.get("management_category_listing_ratio_percent")
+    if raw_ratio in (None, ""):
+        return Decimal("100")
+    ratio = _decimal_value(raw_ratio)
+    if ratio is None or ratio <= 0 or ratio > 10000:
+        raise ValueError("分类上架比例必须大于 0 且不超过 10000")
+    return ratio
+
+
 def discounted_net_proceeds_usd(
     row: Mapping[str, Any], discount_rate: Any, net_proceeds_ratio: Any = 100
 ) -> float:
@@ -305,14 +338,15 @@ def discounted_net_proceeds_usd(
         raise ValueError("站点折扣比例必须大于 0 且不超过 100")
     base_ratio = _decimal_value(net_proceeds_ratio)
     if base_ratio is None or base_ratio <= 0 or base_ratio > 10000:
-        raise ValueError("AI 原创净收益比例必须大于 0 且不超过 10000")
-    if str(row.get("source_type") or "").strip().lower() != "ai_original":
-        base_ratio = Decimal("100")
-    amount = (net_proceeds * base_ratio / Decimal("100") * rate / Decimal("100")).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
-    )
+        raise ValueError("本次上架比例必须大于 0 且不超过 10000")
+    category_ratio = management_category_listing_ratio(row)
+    amount = (
+        net_proceeds * category_ratio / Decimal("100")
+        * rate / Decimal("100")
+        * base_ratio / Decimal("100")
+    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     if amount <= 0:
-        raise ValueError("折扣后的上架净收益必须大于 0")
+        raise ValueError("计算后的上架售价必须大于 0")
     return float(amount)
 
 
@@ -615,7 +649,7 @@ def publish_product_batch(
         or resolved_net_proceeds_ratio <= 0
         or resolved_net_proceeds_ratio > 10000
     ):
-        raise ValueError("AI 原创净收益比例必须大于 0 且不超过 10000")
+        raise ValueError("本次上架比例必须大于 0 且不超过 10000")
     resolved_net_proceeds_ratio = resolved_net_proceeds_ratio.quantize(
         Decimal("0.0001"), rounding=ROUND_HALF_UP
     )
@@ -740,6 +774,10 @@ def publish_product_batch(
             )
             pricing_metadata = {
                 "source_net_proceeds_usd": source_net_proceeds,
+                "category_ratio_percent": float(
+                    management_category_listing_ratio(row)
+                ),
+                "listing_ratio_percent": float(resolved_net_proceeds_ratio),
                 "ai_original_ratio_percent": (
                     float(resolved_net_proceeds_ratio) if is_ai_original else 100.0
                 ),
@@ -748,7 +786,7 @@ def publish_product_batch(
             }
             if account_listing_blocked.is_set():
                 raise MercadoLibreError(
-                    "账号刊登已暂停："
+                    "本批次后续商品已停止上传："
                     + (account_listing_block_reason or "平台拒绝该账号刊登")
                 )
             save_record(record_id, status="publishing", started=True)
@@ -825,12 +863,11 @@ def publish_product_batch(
                         else "上架成功；"
                     )
                     + (
-                        f"净收益 USD {source_net_proceeds:.2f} × "
-                        f"{float(resolved_net_proceeds_ratio):g}% × "
-                        f"{float(resolved_discount_rate):g}% = USD {publish_net_proceeds:.2f}"
-                        if is_ai_original
-                        else f"净收益 USD {source_net_proceeds:.2f} × "
-                        f"{float(resolved_discount_rate):g}% = USD {publish_net_proceeds:.2f}"
+                        f"净收益 USD {source_net_proceeds:.2f} × 分类比例 "
+                        f"{float(pricing_metadata['category_ratio_percent']):g}% × 店铺站点比例 "
+                        f"{float(resolved_discount_rate):g}% × 上架比例 "
+                        f"{float(resolved_net_proceeds_ratio):g}% = "
+                        f"USD {publish_net_proceeds:.2f}"
                     )
                     + f"{state_warning}"
                 ),
@@ -870,6 +907,7 @@ def publish_product_batch(
                 result={
                     "net_proceeds_calculation": pricing_metadata,
                     "result": getattr(exc, "publication_result", None),
+                    "platform_rate_limited": _is_platform_rate_limit_error(exc),
                 },
                 finished=True,
             )
@@ -884,13 +922,17 @@ def publish_product_batch(
             }
         finish(index, row, item_result)
 
+    # Probe the account with one product before opening the concurrent wave.
+    # Otherwise every worker can upload and publish before the first account
+    # restriction response sets account_listing_blocked.
+    publish_one(0, rows[0])
     with ThreadPoolExecutor(
         max_workers=worker_count,
         thread_name_prefix="mercado-publish",
     ) as executor:
         futures = [
             executor.submit(publish_one, index, row)
-            for index, row in enumerate(rows)
+            for index, row in enumerate(rows[1:], start=1)
         ]
         for future in as_completed(futures):
             future.result()

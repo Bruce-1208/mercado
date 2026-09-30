@@ -4,6 +4,18 @@ from unittest.mock import patch
 
 import pytest
 
+
+def test_publication_summary_distinguishes_account_restriction_and_rate_limit():
+    raw = [
+        {"status": 403, "message": "seller.unable_to_list", "cause": ["restrictions_coliving"]},
+        {"status": 429, "message": "local_rate_limited"},
+    ]
+    summary = follow_sell_module.publication_failure_summary(raw)
+    assert "美客多已限制该店铺上传商品" in summary
+    assert "解除限制后再重试" in summary
+    assert "429" in summary
+    assert "避免重复刊登" in summary
+
 from erp import mercadolibre_follow_sell as follow_sell_module
 from erp.mercadolibre_follow_sell import (
     MercadoLibreClient,
@@ -1501,6 +1513,26 @@ def test_family_payload_preserves_variant_attributes_stock_sku_and_images():
     assert json.dumps(source, sort_keys=True) == original
 
 
+def test_family_payload_keeps_ai_white_background_cover_ahead_of_supplier_variant_photos():
+    source = family_source()
+    white_cover = "/api/ai-original-products/images/1688-123456-ai-white.jpg"
+    source["pictures"].insert(0, {"source": white_cover})
+    source["variations"][0]["picture_ids"] = ["123-MLM"]
+    source["variations"][1]["picture_ids"] = ["blue"]
+
+    payload = follow_sell_module.build_user_product_family_payload(
+        FamilyClient(), source, {}, net_proceeds=20
+    )
+
+    assert all(row["pictures"][0] == {"source": white_cover} for row in payload)
+    assert payload[0]["pictures"][1] == {
+        "source": "https://http2.mlstatic.com/D_123.jpg"
+    }
+    assert payload[1]["pictures"][1] == {
+        "source": "https://http2.mlstatic.com/D_456.jpg"
+    }
+
+
 def test_family_publish_records_all_products_and_ignores_single_up_reuse():
     source = family_source()
     client = FamilyClient()
@@ -1590,13 +1622,14 @@ def test_family_missing_stock_uses_quantity_and_unresolved_images_fail_before_po
     assert client.posts == []
 
 
-def test_family_different_returned_family_ids_are_reported():
+def test_family_accepts_multiple_returned_family_ids_when_every_site_item_succeeded():
     rows = [{"siteless_family_id": i, "site_items": [{"site_id": "MLM", "item_id": f"MLM{i}"}]} for i in (1, 2)]
-    with pytest.raises(MercadoLibreError, match="多个 family"):
-        follow_sell_module._user_product_family_result(rows, 2, "MLM")
+    result = follow_sell_module._user_product_family_result(rows, 2, "MLM")
+    assert result["user_products"] == rows
+    assert [item["item_id"] for item in result["site_items"]] == ["MLM1", "MLM2"]
 
 
-def test_family_dependent_length_cannot_distinguish_same_color():
+def test_family_dependent_length_keeps_same_color_variants_separate():
     class IdentityClient(FamilyClient):
         def request(self, method, path, **kwargs):
             result = super().request(method, path, **kwargs)
@@ -1610,11 +1643,13 @@ def test_family_dependent_length_cannot_distinguish_same_color():
             {'id': 'COLOR', 'value_name': 'Red'},
             {'id': 'LENGTH', 'value_name': f'{130 + i * 20} cm'},
         ]
-    client = IdentityClient()
-    with pytest.raises(MercadoLibreError, match='CHILD_PK'):
-        follow_sell(client, source['id'], prepared_listing=(source, {}), net_proceeds=20, publish=True)
-    assert client.posts == []
-    assert client.uploads == []
+    payload = follow_sell_module.build_user_product_family_payload(
+        IdentityClient(), source, {}, net_proceeds=20
+    )
+    assert len(payload) == 2
+    assert payload[0]['family_name'] != payload[1]['family_name']
+    assert [next(a['value_name'] for a in row['attributes'] if a['id'] == 'LENGTH')
+            for row in payload] == ['130 cm', '150 cm']
 
 
 def test_family_preserves_each_variants_package_measurements():
@@ -1625,11 +1660,11 @@ def test_family_preserves_each_variants_package_measurements():
                 result += [{'id': 'PACKAGE_WEIGHT'}, {'id': 'PACKAGE_LENGTH'}]
             return result
     source = family_source()
-    source['variations'][0].update(weight_g=200, package_length_cm=30)
-    source['variations'][1].update(weight_g=350, package_length_cm=40)
+    source['variations'][0].update(weight_g=200, package_weight_g=290, package_length_cm=30)
+    source['variations'][1].update(weight_g=350, package_weight_g=420, package_length_cm=40)
     payload = follow_sell_module.build_user_product_family_payload(PackageClient(), source, {}, net_proceeds=20)
     attrs = [{a['id']: a.get('value_name') for a in p['attributes']} for p in payload]
-    assert [a['PACKAGE_WEIGHT'] for a in attrs] == ['200 g', '350 g']
+    assert [a['PACKAGE_WEIGHT'] for a in attrs] == ['290 g', '420 g']
     assert [a['PACKAGE_LENGTH'] for a in attrs] == ['30 cm', '40 cm']
 
 

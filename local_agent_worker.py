@@ -26,7 +26,12 @@ def _watch_cancel(path, event):
 def _write_log(text):
     text = str(text or "").replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
     if text:
-        print(text, end="" if text.endswith("\n") else "\n", flush=True)
+        try:
+            print(text, end="" if text.endswith("\n") else "\n", flush=True)
+        except UnicodeEncodeError:
+            encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+            safe = text.encode(encoding, errors="backslashreplace").decode(encoding)
+            print(safe, end="" if safe.endswith("\n") else "\n", flush=True)
 
 
 def configure_execution_context(job):
@@ -76,6 +81,31 @@ def run_appeal(payload, stop_event):
         **shensu_kwargs,
     ):
         _write_log(chunk)
+
+
+def run_open_store(payload, stop_event):
+    """Open one authorized Mercado reputation page in this Agent's BitBrowser."""
+    if stop_event.is_set():
+        raise RuntimeError("打开店铺任务已取消")
+    payload = dict(payload or {})
+    token_record = dict(payload.get("token_record") or {})
+    token_id = int(payload.get("token_id") or token_record.get("id") or 0)
+    if token_id <= 0 or int(token_record.get("id") or 0) != token_id:
+        raise ValueError("打开店铺任务缺少有效的店铺授权")
+    from bit import bit_interface
+
+    _write_log(f"本机 Agent 正在打开店铺声誉页：{token_record.get('display_name') or token_record.get('nickname') or token_id}\n")
+    result = bit_interface._open_mercado_claim_browser(
+        token_id,
+        shop_name_hint=payload.get("shop_name_hint"),
+        target_url=bit_interface.bit_reputation_info.REPUTATION_URL,
+        token_record=token_record,
+    )
+    return {
+        "status": "success",
+        "message": f"已打开 {result['shop_name']} 的声誉页面",
+        **result,
+    }
 
 
 def run_daily_task(payload, stop_event, job_file):
@@ -183,8 +213,10 @@ def run_ai_weight_price(job, stop_event, job_file):
     # can be replaced without logging the Agent computer out.
     root = job_file.parents[2] / "ai-weight-price"
     root.mkdir(parents=True, exist_ok=True)
-    service = Service(root, storage_backend="api", migrate_legacy_state=False)
+    action = str(payload.get("action") or "").strip().lower()
     actor = _agent_awp_actor(job, payload)
+    storage_backend = "agent" if action in {"start", "continue", "retry", "skip-current"} else "api"
+    service = Service(root, storage_backend=storage_backend, migrate_legacy_state=False)
     service.bind_actor(actor, view_all=False)
     identity = {
         "target": "agent",
@@ -204,7 +236,6 @@ def run_ai_weight_price(job, stop_event, job_file):
     # Browser/service code already records the same event to the central store;
     # this wrapper only mirrors it to the Agent's live stdout for the console.
     service.store.log = log
-    action = str(payload.get("action") or "").strip().lower()
     if action not in {
         "login/open", "login/confirm", "login/supplier", "categories/refresh",
         "start", "continue", "stop", "terminate", "skip-current", "retry",
@@ -345,10 +376,24 @@ def run_ai_weight_price(job, stop_event, job_file):
         stop_event.wait(0.5)
     if service.thread is not None:
         service.thread.join(timeout=1)
-    return service.status()
+    if getattr(service, "last_failure", ""):
+        service.store.flush(5) if hasattr(service.store, "flush") else None
+        pending = service.store.pending_sync_count() if hasattr(service.store, "pending_sync_count") else 0
+        suffix = (f"；本地仍保留 {pending} 条待同步记录，网络恢复后会自动续传"
+                  if pending else "")
+        raise RuntimeError(service.last_failure + suffix)
+    result = service.status()
+    if hasattr(service.store, "flush"):
+        service.store.flush(5)
+        result["pending_sync_count"] = service.store.pending_sync_count()
+    return result
 
 
 def main(argv=None):
+    # Frozen Windows workers may ignore PYTHONIOENCODING from the launcher.
+    for stream in (sys.stdout, sys.stderr):
+        if callable(getattr(stream, "reconfigure", None)):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
     parser = argparse.ArgumentParser()
     parser.add_argument("--job-file", required=True)
     parser.add_argument("--cancel-file", required=True)
@@ -374,10 +419,15 @@ def main(argv=None):
         name="agent-cancel-watcher",
         daemon=True,
     ).start()
+    job_type = str(job.get("job_type") or "")
     try:
-        job_type = str(job.get("job_type") or "")
         if job_type == "appeal":
             run_appeal(job.get("payload") or {}, stop_event)
+        elif job_type == "open_store":
+            result = run_open_store(job.get("payload") or {}, stop_event)
+            job_path.with_name("result.json").write_text(
+                json.dumps(result, ensure_ascii=False), encoding="utf-8",
+            )
         elif job_type == "daily_task":
             job_file = Path(args.job_file)
             result = run_daily_task(job.get("payload") or {}, stop_event, job_file)
@@ -402,10 +452,20 @@ def main(argv=None):
             job_file.with_name("result.json").write_text(
                 json.dumps(result, ensure_ascii=False), encoding="utf-8",
             )
+            if result.get("run_error") or (result.get("run") or {}).get("outcome") == "failed":
+                return 2 if stop_event.is_set() else 1
         else:
             raise ValueError(f"不支持的 Agent 任务类型：{job_type}")
         return 2 if stop_event.is_set() else 0
     except Exception as exc:
+        if job_type == "open_store":
+            try:
+                job_path.with_name("result.json").write_text(
+                    json.dumps({"status": "error", "message": str(exc)}, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+            except OSError:
+                pass
         _write_log(f"本机 Agent 业务执行失败：{exc}\n")
         traceback.print_exc()
         return 2 if stop_event.is_set() else 1

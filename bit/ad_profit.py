@@ -17,13 +17,13 @@ def _connect():
 
 def key(row):
     return (int(row.get('token_id') or 0), str(row.get('site_id') or '').upper(),
-            str(row.get('item_id') or '').upper(), str(row.get('currency_id') or '').upper())
+            str(row.get('item_id') or '').upper(), str(row.get('profit_currency_id') or 'CNY').strip().upper())
 
 
 def save_profit(row, value):
     identity = key(row)
     if identity[0] <= 0 or not all(identity[1:]):
-        raise ValueError('商品、店铺、站点和币种不能为空')
+        raise ValueError('商品、店铺和站点不能为空')
     if value is not None:
         if isinstance(value, bool):
             raise ValueError('单件利润必须是有效数字')
@@ -42,13 +42,17 @@ def save_profit(row, value):
                 conn.execute('INSERT OR REPLACE INTO profits VALUES (?,?,?,?,?)', (*identity, value))
     finally:
         conn.close()
-    return {'unit_profit': value, 'recommendation': recommendation(row, value)}
+    return {'unit_profit': value, 'profit_currency_id': identity[3], 'recommendation': recommendation(row, value)}
 
 
 def recommendation(row, profit):
     result = {'action': 'observe', 'label': '继续观察', 'reason': '', 'net_profit': None, 'break_even_cpc': None}
     if profit is None:
         return {**result, 'action': 'missing', 'label': '待填写利润', 'reason': '填写单件广告前利润后计算'}
+    profit_currency = key(row)[3]
+    ad_currency = str(row.get('currency_id') or '').strip().upper()
+    if ad_currency != profit_currency:
+        return {**result, 'reason': '利润已按人民币保存；广告币种缺失或与利润币种不同，暂无法计算利润建议' if profit_currency == 'CNY' else '广告币种与利润币种不同，暂无法计算利润建议'}
     m = row.get('metrics') or {}
     cost = float(m.get('cost') or 0)
     clicks = int(m.get('clicks') or 0)
@@ -78,6 +82,7 @@ def enrich(snapshot):
     finally:
         conn.close()
     for row in snapshot.get('links') or []:
+        row['profit_currency_id'] = key(row)[3]
         row['unit_profit'] = profits.get(key(row))
         row['recommendation'] = recommendation(row, row['unit_profit'])
     return snapshot

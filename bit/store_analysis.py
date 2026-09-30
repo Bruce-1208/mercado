@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import os
+import tempfile
 import threading
 import time
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
 
 from bit.bit_mysql import config, pymysql
 from erp.mercadolibre_category_tree import category_paths_for_ids
@@ -24,6 +29,7 @@ _ANALYSIS_CACHE_LOCK = threading.Lock()
 _ANALYSIS_REQUEST_LOCKS = [threading.Lock() for _ in range(16)]
 _ANALYSIS_CACHE_SECONDS = 60
 _ANALYSIS_CACHE_LIMIT = 128
+_ANALYSIS_CACHE_DIR = Path(__file__).resolve().parents[1] / ".data" / "store-analysis-cache"
 _CATEGORY_TRANSLATION_LOCK = threading.Lock()
 _CATEGORY_TRANSLATION_CACHE: dict[tuple[str, str], str] = {}
 
@@ -163,12 +169,14 @@ def summarize_store_analysis(rows, paths, *, metric="orders", category_level=2,
                 category["original_name"] = value["original_name"]
             categories.append(category)
         categories.sort(key=lambda item: (-item["gmv_usd"] if metric == "gmv" else -item["orders"], item["name"]))
-        known_top = categories[:5]
+        known_top = categories[:10]
         total_metric = float(site["gmv_usd"]) if metric == "gmv" else len(site["order_ids"])
         # One order can contain multiple categories. Pie values therefore use
         # category order appearances; the site order count remains unique.
         category_total = sum(item["gmv_usd"] if metric == "gmv" else item["orders"] for item in categories)
         unknown = site["categories"].get("__unknown__")
+        unknown_orders = len(unknown["order_ids"]) if unknown else 0
+        unknown_gmv = float(unknown["gmv_usd"]) if unknown else 0
         if unknown:
             category_total += float(unknown["gmv_usd"]) if metric == "gmv" else len(unknown["order_ids"])
         other_value = max(0, category_total - sum(item["gmv_usd"] if metric == "gmv" else item["orders"] for item in known_top))
@@ -177,31 +185,109 @@ def summarize_store_analysis(rows, paths, *, metric="orders", category_level=2,
             "orders": len(site["order_ids"]), "gmv_usd": round(float(site["gmv_usd"]), 2),
             "unconverted_orders": len(site["unconverted_orders"]),
             "top_categories": known_top, "other_value": round(other_value, 2),
+            "unrecognized_category_orders": unknown_orders,
+            "unrecognized_category_gmv_usd": round(unknown_gmv, 2),
             "category_total": round(category_total, 2), "metric_total": round(total_metric, 2),
         })
     result.sort(key=lambda item: (-item["gmv_usd"] if metric == "gmv" else -item["orders"], item["site_id"]))
     return result
 
 
+def summarize_order_trend(rows, start_date, end_date):
+    """Seven Beijing days ending at the selected end date, all order statuses."""
+    start, end = date.fromisoformat(start_date), date.fromisoformat(end_date)
+    counts = {str(row["order_date"]): int(row["orders"]) for row in rows}
+    days = []
+    for offset in range(6, -1, -1):
+        day = end - timedelta(days=offset)
+        count = counts.get(day.isoformat(), 0) if day >= start else None
+        previous_day = day - timedelta(days=1)
+        previous = counts.get(previous_day.isoformat(), 0) if previous_day >= start else None
+        change = None if count is None or previous in (None, 0) else round((count - previous) / previous * 100, 2)
+        days.append({"date": day.isoformat(), "orders": count, "previous_orders": previous,
+                     "change_rate": change})
+    return {"total_orders": sum(counts.values()), "days": days}
+
+
+def _analysis_cache_path(key):
+    serialized = json.dumps(key, ensure_ascii=False, separators=(",", ":"), default=list)
+    digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+    return _ANALYSIS_CACHE_DIR / f"{digest}.json"
+
+
+def _read_persisted_analysis(key):
+    try:
+        payload = json.loads(_analysis_cache_path(key).read_text(encoding="utf-8"))
+        result = payload.get("result")
+        if not isinstance(result, dict) or not result.get("computed_at"):
+            return None
+        return result
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def _write_persisted_analysis(key, result):
+    target = _analysis_cache_path(key)
+    temporary = None
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=target.parent, delete=False) as stream:
+            temporary = stream.name
+            json.dump({"result": result}, stream, ensure_ascii=False, separators=(",", ":"))
+        os.replace(temporary, target)
+        temporary = None
+        cache_files = sorted(target.parent.glob("*.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+        for stale in cache_files[_ANALYSIS_CACHE_LIMIT:]:
+            stale.unlink(missing_ok=True)
+    except OSError:
+        # Disk caching is an optimization; a successful analysis should still be returned.
+        pass
+    finally:
+        if temporary:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+
+
 def list_store_analysis(start_date, end_date, *, metric="orders", salesperson="", group_name="",
-                        token_id=None, allowed_token_ids=None, category_level=2):
-    """Reuse short-lived results, keeping every authorization scope isolated."""
+                        token_id=None, allowed_token_ids=None, category_level=2, refresh=False):
+    """Reuse the most recent result for an authorized query until explicitly refreshed."""
     category_level = _normalize_category_level(category_level)
+    if metric not in {"orders", "gmv"}:
+        raise ValueError("排序指标无效")
+    _dates(start_date, end_date)
     token_id = int(token_id) if token_id is not None else None
-    scope = tuple(sorted(allowed_token_ids)) if allowed_token_ids is not None else None
-    key = (start_date, end_date, metric, salesperson, group_name, token_id, scope, category_level)
+    scope = tuple(sorted(int(value) for value in allowed_token_ids)) if allowed_token_ids is not None else None
+    if token_id is not None:
+        if token_id <= 0:
+            raise ValueError("店铺参数无效")
+        if scope is not None and token_id not in scope:
+            raise PermissionError("无权查看所选店铺")
+    key = ("order-trend-v1", start_date, end_date, metric, salesperson, group_name, token_id, scope, category_level)
     # Coalesce concurrent identical requests without serializing all analysis work.
     with _ANALYSIS_REQUEST_LOCKS[hash(key) % len(_ANALYSIS_REQUEST_LOCKS)]:
-        with _ANALYSIS_CACHE_LOCK:
-            cached = _ANALYSIS_CACHE.get(key)
-            if cached and cached[0] > time.monotonic():
-                _ANALYSIS_CACHE.move_to_end(key)
-                return deepcopy(cached[1])
+        if not refresh:
+            with _ANALYSIS_CACHE_LOCK:
+                cached = _ANALYSIS_CACHE.get(key)
+                if cached and cached[0] > time.monotonic():
+                    _ANALYSIS_CACHE.move_to_end(key)
+                    return deepcopy(cached[1])
+            persisted = _read_persisted_analysis(key)
+            if persisted is not None:
+                with _ANALYSIS_CACHE_LOCK:
+                    _ANALYSIS_CACHE[key] = (time.monotonic() + _ANALYSIS_CACHE_SECONDS, deepcopy(persisted))
+                    _ANALYSIS_CACHE.move_to_end(key)
+                    while len(_ANALYSIS_CACHE) > _ANALYSIS_CACHE_LIMIT:
+                        _ANALYSIS_CACHE.popitem(last=False)
+                return persisted
         result = _compute_store_analysis(
             start_date, end_date, metric=metric, salesperson=salesperson,
             group_name=group_name, token_id=token_id,
             allowed_token_ids=scope, category_level=category_level,
         )
+        result["computed_at"] = datetime.now(timezone(timedelta(hours=8))).isoformat(timespec="seconds")
+        _write_persisted_analysis(key, result)
         with _ANALYSIS_CACHE_LOCK:
             _ANALYSIS_CACHE[key] = (time.monotonic() + _ANALYSIS_CACHE_SECONDS, deepcopy(result))
             _ANALYSIS_CACHE.move_to_end(key)
@@ -217,7 +303,7 @@ def _compute_store_analysis(start_date, end_date, *, metric="orders", salesperso
     category_level = _normalize_category_level(category_level)
     start_utc, end_utc = _dates(start_date, end_date)
     if allowed_token_ids is not None and not allowed_token_ids:
-        return {"sites": [], "start_date": start_date, "end_date": end_date,
+        return {"sites": [], "order_trend": summarize_order_trend([], start_date, end_date), "start_date": start_date, "end_date": end_date,
                 "metric": metric, "category_level": category_level}
     if token_id is not None:
         token_id = int(token_id)
@@ -242,6 +328,18 @@ def _compute_store_analysis(start_date, end_date, *, metric="orders", salesperso
     if group_name:
         clauses.append("COALESCE(settings.`group_name`, '') = %s")
         params.append(group_name)
+
+    # Count directly from orders so missing items/categories and every status are included.
+    trend_clauses = [clause for clause in clauses if "o.`status`" not in clause]
+    trend_sql = f"""
+        SELECT DATE(DATE_ADD(o.`date_created`, INTERVAL 8 HOUR)) AS order_date,
+               COUNT(DISTINCT o.`order_id`) AS orders
+        FROM `mercado_synced_orders` AS o
+        LEFT JOIN `mercado_store_site_settings` AS settings
+          ON settings.`token_id` = o.`token_id` AND settings.`site_id` = o.`site_id`
+        WHERE {' AND '.join(trend_clauses)}
+        GROUP BY DATE(DATE_ADD(o.`date_created`, INTERVAL 8 HOUR))
+    """
 
     # Category comes from the order payload when present, then the synchronized
     # listing. Historical listings remain useful even after they are delisted.
@@ -308,6 +406,8 @@ def _compute_store_analysis(start_date, end_date, *, metric="orders", salesperso
         with connection.cursor() as cursor:
             cursor.execute(sql, params)
             rows = cursor.fetchall()
+            cursor.execute(trend_sql, params)
+            trend_rows = cursor.fetchall()
     finally:
         connection.close()
     category_ids = sorted({str(row.get("category_id") or "").strip().upper() for row in rows if row.get("category_id")})
@@ -337,7 +437,7 @@ def _compute_store_analysis(start_date, end_date, *, metric="orders", salesperso
             category["name"] = name or (original if any("\u3400" <= c <= "\u9fff" for c in original) else "分类名称暂不可用")
             if name:
                 category["name_zh"] = name
-    return {"sites": sites,
+    return {"sites": sites, "order_trend": summarize_order_trend(trend_rows, start_date, end_date),
             "start_date": start_date, "end_date": end_date, "metric": metric,
             "category_level": category_level,
             "category_translation_warning": translation_warning}

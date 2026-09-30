@@ -77,14 +77,18 @@ def test_store_analysis_respects_authorized_store_scope(monkeypatch):
         list_store_analysis("2026-09-01", "2026-09-02", token_id=4, allowed_token_ids={3})
     list_store_analysis("2026-09-01", "2026-09-02", token_id=3,
                         salesperson="王", group_name="一组", allowed_token_ids={3})
+    assert "COUNT(DISTINCT o.`order_id`)" in connection.db_cursor.sql
+    assert "o.`status`" not in connection.db_cursor.sql
+    assert "JSON_TABLE" not in connection.db_cursor.sql
     assert "o.`token_id` IN (%s)" in connection.db_cursor.sql
     assert "o.`token_id` = %s" in connection.db_cursor.sql
     assert connection.db_cursor.params[-3:] == [3, "王", "一组"]
 
 
 @pytest.fixture(autouse=True)
-def clear_analysis_cache():
+def clear_analysis_cache(monkeypatch, tmp_path):
     from bit import store_analysis
+    monkeypatch.setattr(store_analysis, "_ANALYSIS_CACHE_DIR", tmp_path)
     store_analysis._ANALYSIS_CACHE.clear()
     yield
     store_analysis._ANALYSIS_CACHE.clear()
@@ -112,6 +116,8 @@ def test_analysis_cache_expires_and_isolates_filters_and_permissions(monkeypatch
     assert len(calls) == 4
     clock[0] += 61
     list_store_analysis("2026-09-01", "2026-09-07", **kwargs)
+    assert len(calls) == 4
+    list_store_analysis("2026-09-01", "2026-09-07", refresh=True, **kwargs)
     assert len(calls) == 5
 
 
@@ -126,8 +132,8 @@ def test_analysis_only_translates_displayed_categories(monkeypatch):
     class Cursor:
         def __enter__(self): return self
         def __exit__(self, *_): pass
-        def execute(self, *_): pass
-        def fetchall(self): return rows
+        def execute(self, sql, *_): self.is_trend = "AS order_date" in sql
+        def fetchall(self): return [] if self.is_trend else rows
 
     class Connection:
         def cursor(self): return Cursor()
@@ -143,10 +149,10 @@ def test_analysis_only_translates_displayed_categories(monkeypatch):
     monkeypatch.setattr(store_analysis, "_translate_category_names", translate)
     data = list_store_analysis("2026-09-01", "2026-09-07")
     site = data["sites"][0]
-    assert len(translated) == 5
+    assert len(translated) == 8
     assert site["orders"] == 8
     assert site["category_total"] == 8
-    assert site["other_value"] == 3
+    assert site["other_value"] == 0
     assert all(category["name_zh"] == "中文分类" for category in site["top_categories"])
 
 
@@ -171,5 +177,23 @@ def test_analysis_coalesces_concurrent_identical_requests(monkeypatch):
             second = executor.submit(list_store_analysis, "2026-09-01", "2026-09-07")
         finally:
             release.set()
-        assert first.result() == second.result() == {"sites": []}
+        assert first.result() == second.result()
+        assert first.result()["sites"] == []
     assert len(calls) == 1
+
+
+def test_order_trend_fills_days_and_handles_zero_and_range_boundaries():
+    from bit.store_analysis import summarize_order_trend
+    result = summarize_order_trend([
+        {"order_date": "2026-09-01", "orders": 4},
+        {"order_date": "2026-09-02", "orders": 6},
+        {"order_date": "2026-09-04", "orders": 3},
+    ], "2026-09-01", "2026-09-04")
+    assert result["total_orders"] == 13
+    assert len(result["days"]) == 7
+    assert result["days"][0]["orders"] is None
+    assert result["days"][-3]["change_rate"] == 50
+    assert result["days"][-2]["orders"] == 0
+    assert result["days"][-2]["change_rate"] == -100
+    assert result["days"][-1]["change_rate"] is None
+    assert result["days"][-1]["previous_orders"] == 0

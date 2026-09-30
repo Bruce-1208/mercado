@@ -13,7 +13,7 @@
       <h1>泽顺插件</h1>
       <p>商品采集工作台</p>
     </div>
-    <span class="version">v1.8.25 · 公网默认地址</span>
+    <span class="version">v1.8.28 · 公网默认地址</span>
   </header>
   <main>
     <div class="account-card">
@@ -25,8 +25,8 @@
       <button id="yandex-mode" class="mode-tab" type="button">Yandex采集</button>
       <button id="zying-mode" class="mode-tab" type="button">智赢产品采集</button>
       <button id="zying-infringement-mode" class="mode-tab" type="button">智赢查侵权</button>
-      <button id="weight-price-mode" class="mode-tab" type="button">核重核价</button>
-      <button id="weight-dimensions-mode" class="mode-tab" type="button">重量尺寸</button>
+      <button id="weight-price-mode" class="mode-tab" type="button" hidden>核重核价</button>
+      <button id="weight-dimensions-mode" class="mode-tab" type="button" hidden>重量尺寸</button>
       <button id="purchase-mode" class="mode-tab" type="button">订单物流</button>
     </nav>
     <div id="product-panel" class="mode-panel">
@@ -50,7 +50,12 @@
         <div id="product-zying-status" class="plugin-login-status checking" role="status">智赢插件：等待检查登录状态</div>
         <div class="zying-grid">
           <label>采集数量<input id="product-max-items" type="number" min="1" max="500" step="1" value="20"></label>
-          <label>并发数<input id="product-concurrency" type="number" min="1" max="10" step="1" value="4"></label>
+          <label>采集模式
+            <select id="product-concurrency-mode">
+              <option value="normal" selected>普通模式（默认 5 个采集进程）</option>
+              <option value="gentle">缓和模式（单进程）</option>
+            </select>
+          </label>
           <label>最低销量<input id="product-min-sales" type="number" min="0" step="1" placeholder="不限"></label>
           <label>最高销量<input id="product-max-sales" type="number" min="0" step="1" placeholder="不限"></label>
         </div>
@@ -223,7 +228,7 @@
       </section>
     </div>
     <div id="result" class="result" hidden></div>
-    <div class="support-line"><span>支持</span><b>Mercado Libre</b><i>·</i><b>Yandex</b><i>·</i><b>1688</b><i>·</i><b>智赢</b><i>·</i><b>AI核重核价</b></div>
+    <div class="support-line"><span>支持</span><b>Mercado Libre</b><i>·</i><b>Yandex</b><i>·</i><b>1688</b><i>·</i><b>智赢</b></div>
   </main>
   <footer>
     <button id="open-console" class="secondary" type="button">打开泽顺控制台</button>

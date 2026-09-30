@@ -119,3 +119,26 @@ def test_ai_video_card_shows_platform_error_beside_upload_button(console_page):
     assert inline.is_visible()
     assert reason in inline.inner_text()
     assert button.is_enabled()
+
+
+def test_video_details_page_shows_upload_history(console_browser):
+    from pathlib import Path
+    from jinja2 import Environment, FileSystemLoader
+    page = console_browser.new_page()
+    env = Environment(loader=FileSystemLoader(Path(__file__).resolve().parents[1] / 'bit' / 'templates'), autoescape=True)
+    html = env.get_template('ai_video_details.html').render(job_id='demo')
+    page.route('**/*', lambda route: route.fulfill(content_type='application/json', body=json.dumps({
+        'status': 'success', 'data': {'id': 'demo', 'published': [{
+            'item_id': 'MLM123', 'salesperson': '张三', 'store_name': '测试店铺',
+            'token_id': 7, 'site_id': 'MLM', 'status': 'UNDER_REVIEW',
+            'permalink': 'https://example.com/item', 'published_at': '2026-09-29T10:00:00Z'
+        }]}
+    })) if '/api/' in route.request.url else route.fulfill(content_type='text/html', body=html))
+    try:
+        page.goto('http://console.test/ai-videos/demo/details')
+        page.wait_for_function("document.querySelector('#records').textContent.includes('张三')")
+        assert '已上传待审核' in page.locator('#records').inner_text()
+        assert '测试店铺' in page.locator('#records').inner_text()
+        assert page.locator('#records a').get_attribute('href') == 'https://example.com/item'
+    finally:
+        page.close()

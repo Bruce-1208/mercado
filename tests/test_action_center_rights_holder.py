@@ -19,7 +19,6 @@ def test_rights_cases_read_all_pages_in_deadline_order():
 
 def test_today_rights_cases_use_authorized_organization_scope(monkeypatch):
     monkeypatch.setattr(module, '_refresh_order_watch_tasks', lambda *args: None)
-    monkeypatch.setattr(module, '_refresh_promotion_tasks', lambda *args: None)
     class Store:
         def list_mercado_store_tokens(self):
             return {'rows': [{'id': 7, 'organization_key': 'alpha'},

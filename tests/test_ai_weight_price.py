@@ -10,7 +10,7 @@ from flask import Flask, jsonify
 
 from erp.ai_weight_price.browser import CircuitOpen
 from erp.ai_weight_price.config import Config, validate as validate_config
-from erp.ai_weight_price.models import Models, parse_price, validate_weight
+from erp.ai_weight_price.models import ModelServiceError, Models, parse_price, validate_weight
 from erp.ai_weight_price.service import Service
 from erp.ai_weight_price.store import CHINA, Store
 from erp.ai_weight_price.web import create_blueprint
@@ -996,7 +996,7 @@ def test_run_scope_filters_processing_and_keeps_duplicate_task_history(service,m
     assert service.store.get("g1")["exception_reason"]=="保留其他范围异常"
 
 
-@pytest.mark.parametrize("resume,same_scope,expected",[(False,True,[3,4]),(True,True,[4]),(True,False,[3,4])])
+@pytest.mark.parametrize("resume,same_scope,expected",[(False,True,[3,4]),(True,True,[3,4]),(True,False,[3,4])])
 def test_collection_only_reads_selected_pages_and_resumes_matching_scope(service,monkeypatch,resume,same_scope,expected):
     from erp.ai_weight_price.browser import Browser
     from erp.ai_weight_price.config import selection_key
@@ -1037,6 +1037,8 @@ def test_collection_only_reads_selected_pages_and_resumes_matching_scope(service
         return {"erp_title":f"product {row.n}","erp_image":"https://image.example/1.jpg"}.get(key,"")
     monkeypatch.setattr(browser,"value",value)
     monkeypatch.setattr(browser,"erp_goods_id",lambda page,row,record:value(row,"erp_id"))
+    monkeypatch.setattr(browser, "apply_pending_review_filter", lambda *args: None)
+    monkeypatch.setattr(browser, "current_detail_review_status", lambda *args: "")
     browser.collect(service.store)
     assert read==expected and categories==["a/b"]
     assert service.store.list(scope=scope)["total"]==len(expected)
@@ -1080,6 +1082,8 @@ def test_collection_product_cursor_is_inclusive_and_stops_at_limit(service, monk
     }.get(key, ""))
     monkeypatch.setattr(browser, "erp_goods_id", lambda _page, row, _record: str(row.number))
 
+    monkeypatch.setattr(browser, "apply_pending_review_filter", lambda *args: None)
+    monkeypatch.setattr(browser, "current_detail_review_status", lambda *args: "")
     browser.collect(service.store)
 
     assert [row["erp_goods_id"] for row in service.store.list(scope=scope)["rows"]] == ["3", "4"]
@@ -1280,3 +1284,57 @@ def test_failed_thread_start_releases_lock_and_reports_failure(service, monkeypa
     assert not service.status()["running"]
     assert service.status()["run"]["outcome"] == "failed"
     assert "cannot start" in service.store.logs()[-1]["message"]
+
+
+def test_legacy_model_match_service_failure_pauses_without_product_exception(service):
+    from types import SimpleNamespace
+
+    current = task(service.store, matched=False)
+    candidate = {"url": "https://detail.1688.com/offer/1.html", "merchant_id": "m1",
+                 "skus": [{"id": "s1", "label": "蓝色500ml一只", "price": "12.50"}]}
+    browser = SimpleNamespace(candidates=lambda _task: [candidate])
+    def fail_match(*_args):
+        raise ModelServiceError("模型请求失败 HTTP 401；请检查模型权限")
+    models = SimpleNamespace(match=fail_match)
+
+    with pytest.raises(CircuitOpen, match="不修改ERP"):
+        service.process(current, browser, models, validate({}))
+
+    assert service.store.get("g1")["status"] == "pending"
+    assert any(row["level"] == "ERROR" and "HTTP 401" in row["message"]
+               for row in service.store.logs())
+
+
+def test_legacy_model_supplier_failure_pauses_without_product_exception(service):
+    from types import SimpleNamespace
+
+    current = task(service.store, matched=True, weight_g=None)
+    browser = SimpleNamespace(supplier_page=lambda _task: "页面重量待识别")
+    def fail_info(*_args, **_kwargs):
+        raise ModelServiceError("模型服务连接失败或超时")
+    models = SimpleNamespace(supplier_info=fail_info)
+
+    with pytest.raises(CircuitOpen, match="不修改ERP"):
+        service.process(current, browser, models, validate({}))
+
+    assert service.store.get("g1")["status"] == "pending"
+    assert not service.store.get("g1").get("exception_reason")
+
+
+def test_legacy_model_reply_failure_pauses_and_keeps_reply_pending(service):
+    from types import SimpleNamespace
+
+    current = task(service.store, matched=True, weight_g=None)
+    current = service.store.update("g1", status="waiting_merchant_reply")
+    browser = SimpleNamespace(replies=lambda _task: [{"text": "包装重量 450g"}])
+    def fail_weight(*_args):
+        raise ModelServiceError("模型服务返回格式无效")
+    models = SimpleNamespace(weight=fail_weight)
+
+    with pytest.raises(CircuitOpen, match="不修改ERP"):
+        service.poll(current, browser, models, validate({}), now=0)
+
+    saved = service.store.get("g1")
+    assert saved["status"] == "waiting_merchant_reply"
+    assert saved["merchant_reply"] == "包装重量 450g"
+    assert not saved.get("exception_reason")

@@ -374,6 +374,7 @@ def _refresh_order_watch_tasks(storage, token_ids: Iterable[int], organization_b
     now = now or datetime.now()
     rows = storage.list_mercado_action_center_orders(token_ids=token_ids, limit=1000)
     completed_age_watch_keys = []
+    recent_order_keys = set()
     for row in rows or ():
         token_id = int(row.get("token_id") or 0)
         order_id = str(row.get("order_id") or "")
@@ -381,9 +382,12 @@ def _refresh_order_watch_tasks(storage, token_ids: Iterable[int], organization_b
             continue
         organization_key = organization_by_token.get(token_id) or "wuhan-zeshun"
         updated = _parse_datetime(row.get("last_updated") or row.get("date_created"))
-        if updated is None:
+        created = _parse_datetime(row.get("date_created"))
+        if created is None or created < now - timedelta(days=30):
             continue
-        created = _parse_datetime(row.get("date_created")) or updated
+        recent_order_keys.add((token_id, order_id))
+        if updated is None:
+            updated = created
         order_age = now - created
         age = now - updated
         raw = row.get("raw") if isinstance(row.get("raw"), dict) else {}
@@ -397,14 +401,14 @@ def _refresh_order_watch_tasks(storage, token_ids: Iterable[int], organization_b
         in_transit = (
             shipment_status in {"shipped", "in_transit", "on_route", "transporting"}
             or order_status in {"shipped", "in_transit", "on_route", "transporting"}
-            or workflow_status in {"转运", "运输中", "已发", "已发货"}
+            or workflow_status in {"运输中", "已发", "已发货", "已发-在途中"}
         )
         stale_task_key = _task_key(
             "order_age_watch", organization_key, token_id,
             "order_not_in_transit_7d", order_id,
         )
-        terminal = order_status in {"delivered", "not_delivered", "cancelled", "canceled", "invalid", "expired", "refunded", "partially_refunded"} or workflow_status in {"已签收", "完成", "已取消", "已入库"}
-        if order_age > timedelta(days=7) and (in_transit or terminal):
+        terminal = order_status in {"delivered", "not_delivered", "cancelled", "canceled", "invalid", "expired", "refunded", "partially_refunded"} or workflow_status in {"已签收", "完成", "已取消", "已入库", "交付", "取消-发货前", "取消-发货后"}
+        if in_transit or terminal:
             completed_age_watch_keys.append(stale_task_key)
         elif order_age > timedelta(days=7) and not in_transit:
             _upsert_watch_task(
@@ -424,6 +428,21 @@ def _refresh_order_watch_tasks(storage, token_ids: Iterable[int], organization_b
                 entry_url="/?tab=orders",
                 source="order_age_watch",
             )
+        for topic, hours, field, label in (
+            ("purchase_order_missing_24h", 24, "purchase_order", "采购订单号"),
+            ("purchase_tracking_missing_48h", 48, "purchase_tracking", "采购物流号"),
+        ):
+            key = _task_key("procurement_watch", organization_key, token_id, topic, order_id)
+            if terminal or in_transit or str(row.get(field) or "").strip():
+                completed_age_watch_keys.append(key)
+            elif order_age > timedelta(hours=hours):
+                _upsert_watch_task(
+                    storage, organization_key=organization_key, token_id=token_id,
+                    topic=topic, resource=order_id, source="procurement_watch",
+                    title=f"订单超过 {hours} 小时未填写{label}",
+                    details=f"店铺 {row.get('shop_name') or ''}；订单 {order_id}；创建时间 {row.get('date_created') or ''}。",
+                    due_at=created + timedelta(hours=hours),
+                )
         if order_status == "ready_to_ship" and age >= timedelta(hours=12):
             _upsert_watch_task(
                 storage,
@@ -459,10 +478,40 @@ def _refresh_order_watch_tasks(storage, token_ids: Iterable[int], organization_b
                 priority="high",
             )
     if completed_age_watch_keys and hasattr(storage, "resolve_mercado_operator_tasks_by_keys"):
-        storage.resolve_mercado_operator_tasks_by_keys(
-            completed_age_watch_keys,
-            "订单已进入运输中或已结束，无需继续跟进。",
-        )
+        for offset in range(0, len(completed_age_watch_keys), 1000):
+            storage.resolve_mercado_operator_tasks_by_keys(
+                completed_age_watch_keys[offset:offset + 1000],
+                "订单已补齐采购信息、进入运输中或已结束，无需继续跟进。",
+            )
+    return recent_order_keys
+
+
+_ORDER_WATCH_TASK_TOPICS = frozenset({
+    "purchase_order_missing_24h", "purchase_tracking_missing_48h",
+    "order_not_in_transit_7d", "procurement_tracking_stalled",
+    "shipment_deadline_check",
+})
+_ORDER_NOTIFICATION_TOPICS = frozenset({
+    "orders", "marketplace_orders", "marketplace_orders_on_site",
+})
+
+
+def _is_recent_order_task(task, recent_order_keys):
+    topic = str(task.get("topic") or "").strip().lower().replace(" ", "_")
+    if topic in _ORDER_WATCH_TASK_TOPICS:
+        order_id = str(task.get("resource") or "").strip()
+    elif topic in _ORDER_NOTIFICATION_TOPICS:
+        match = re.search(r"/orders/([^/?#]+)", str(task.get("resource") or ""))
+        if not match:
+            return False
+        order_id = match.group(1)
+    else:
+        return True
+    try:
+        token_id = int(task.get("token_id") or 0)
+    except (TypeError, ValueError):
+        return False
+    return (token_id, order_id) in recent_order_keys
 
 
 def _rights_holder_replies(store, token_ids):
@@ -526,13 +575,23 @@ def create_action_center_blueprint(*, login_required, current_user, authorized_t
                 if (allowed is None or int(row.get("id") or 0) in allowed)
                 and (not organization or str(row.get("organization_key") or "") == organization)
             ]
+            dimensions = [setting for row in token_rows for setting in (row.get("site_settings") or [row])]
+            filter_options = {key: sorted({str(item.get(key) or "").strip() for item in dimensions if str(item.get(key) or "").strip()}) for key in ("salesperson", "group_name")}
+            selected = {key: str(request.args.get(key) or "").strip() for key in filter_options}
+            token_rows = [row for row in token_rows if any(
+                all(not value or str(setting.get(key) or "").strip() == value for key, value in selected.items())
+                for setting in (row.get("site_settings") or [row])
+            )]
             token_ids = sorted(int(row["id"]) for row in token_rows if int(row.get("id") or 0) > 0)
+            recent_order_keys = set()
             if token_ids:
                 organization_by_token = {
                     int(row["id"]): str(row.get("organization_key") or "wuhan-zeshun")
                     for row in token_rows if int(row.get("id") or 0) > 0
                 }
-                _refresh_order_watch_tasks(store, token_ids, organization_by_token)
+                recent_order_keys = _refresh_order_watch_tasks(
+                    store, token_ids, organization_by_token
+                ) or set()
             data = store.list_mercado_operator_tasks(
                 token_ids=token_ids,
                 organization_key=organization,
@@ -547,7 +606,9 @@ def create_action_center_blueprint(*, login_required, current_user, authorized_t
             data["rows"] = [
                 row for row in (data.get("rows") or [])
                 if str(row.get("topic") or "") not in {"promotion_deadline", "promotion_result_unknown"}
+                and _is_recent_order_task(row, recent_order_keys)
             ]
+            data["filter_options"] = filter_options
             data["total"] = len(data["rows"])
             data["open"] = sum(row.get("status") != "resolved" for row in data["rows"])
             data["overdue"] = sum(bool(row.get("overdue")) for row in data["rows"])

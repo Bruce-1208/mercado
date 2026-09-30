@@ -16,9 +16,9 @@ from .browser import Browser, CircuitOpen, Stopped, NoExactMatch, WritebackMisma
 from .config import Config, selection_key, selection_params
 from .credentials import api_key
 from .edge import debugger_identity, open_edge
-from .models import Models, erp_value_equal, number, parse_dimensions_evidence, validate_weight
+from .models import ModelServiceError, Models, erp_value_equal, number, parse_dimensions_evidence, validate_weight
 from .pricing import exchange_rate, protect_net_income, usd_cost
-from .store import CHINA, RemoteStore, Store, COMPLETED
+from .store import AgentStore, CHINA, RemoteStore, Store, COMPLETED
 from .supplier_adapter import SupplierAdaptationError
 
 
@@ -33,11 +33,13 @@ class RunLimitReached(Exception):
 class Service:
     def __init__(self, root, browser_factory=Browser, models_factory=Models,
                  storage_backend="sqlite", migrate_legacy_state=True):
-        self.store = RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend)
+        self.store = (AgentStore(root) if storage_backend == "agent" else
+                      RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
         self.config = Config(root, storage=self.store if storage_backend != "sqlite" else None)
         self.browser_factory, self.models_factory = browser_factory, models_factory
         self.stop_event = threading.Event()
         self.thread = None
+        self.last_failure = ""
         self.guard = threading.RLock()
         self.migrate_legacy_state = migrate_legacy_state
         self.lock_key = "ai_weight_price_" + hashlib.sha256(str(self.store.root.resolve()).encode()).hexdigest()[:16]
@@ -392,6 +394,7 @@ class Service:
                 raise ValueError("已有进程正在运行此模块")
             try:
                 self.stop_event.clear()
+                self.last_failure = ""
                 self.store.set_state("stop_requested", False)
                 self.store.set_state("agent_terminate_requested", None)
                 self.store.set_state("run_error", None)
@@ -485,7 +488,7 @@ class Service:
 
     def circuit(self, error):
         self.store.set_state("circuit", {"kind": "browser_attention", "reason": str(error), "at": time.time()})
-        self.store.log("等待人工处理1688登录或人机审核，当前商品和批次进度已保留：" + str(error), level="WARNING")
+        self.store.log("等待人工处理，当前商品和批次进度已保留：" + str(error), level="WARNING")
 
     def _requeue(self, key, force_pending=False):
         task = self.store.get(key)
@@ -518,7 +521,7 @@ class Service:
         with self.idle():
             pause = self.store.state("circuit")
             if not pause:
-                raise ValueError("当前没有等待处理的1688登录或人机审核")
+                raise ValueError("当前没有等待人工处理的暂停")
             previous = self.store.state("run", {}) or {}
             mode = previous.get("mode") if previous.get("mode") in ("pipeline", "process") else "pipeline"
             task_id = previous.get("task_id") if mode == "process" else None
@@ -537,7 +540,7 @@ class Service:
                     self.store.log("旧版登录跳转异常已恢复为待处理，继续时重试当前商品", current_id, "WARNING")
             self.store.set_state("circuit", None)
             self.store.set_state("stop_requested", False)
-            self.store.log("人工确认已完成1688登录或人机审核；从当前商品继续执行", current_id, "WARNING")
+            self.store.log("人工确认已处理暂停原因；从当前商品继续执行", current_id, "WARNING")
         try:
             # Keep the original run id so the current-run list and its
             # progress remain intact after a human login/captcha pause.
@@ -649,13 +652,12 @@ class Service:
                     return
                 while not self.stop_event.is_set() and not self.store.state("stop_requested", False):
                     if self.store.state("circuit"):
-                        self.store.log("存在1688人工处理暂停，需完成登录或人机审核后继续", level="WARNING")
+                        self.store.log("存在待人工处理的暂停，请按具体原因处理后继续", level="WARNING")
                         break
                     selected = self.store.get(task_id) if task_id else self.next_task(config)
                     if not selected:
                         break
                     self.complete_one(selected["erp_goods_id"], browser, models, config)
-                    self.store.export()
                     if task_id:
                         if self.store.get(task_id)["status"] in (*COMPLETED, "exception"):
                             break
@@ -664,7 +666,7 @@ class Service:
                     if self.stop_event.wait(1):
                         break
                 if self.store.state("circuit"):
-                    outcome, message = "blocked", "运行等待人工处理1688登录或人机审核；处理完成后点击继续执行"
+                    outcome, message = "blocked", "运行等待人工处理；请按具体暂停原因处理后点击继续执行"
                 elif self.stop_event.is_set() or self.store.state("stop_requested", False):
                     outcome, message = "stopped", "运行已停止，进度已保存"
                 else:
@@ -681,7 +683,11 @@ class Service:
         except Exception as exc:
             logging.getLogger(__name__).exception("AI核重核价运行失败（完整调用栈）")
             outcome, message = "failed", f"运行失败：{type(exc).__name__}: {exc}"
-            self.store.set_state("run_error", str(exc))
+            self.last_failure = message
+            try:
+                self.store.set_state("run_error", str(exc))
+            except Exception:
+                logging.getLogger(__name__).exception("保存失败原因失败；原始错误保留在Agent本机")
         finally:
             try:
                 self.store.set_state("run", {**self.store.state("run", {}), "mode": mode,
@@ -695,6 +701,10 @@ class Service:
                     self._clear_terminated_run(config.get("run_id"))
                 else:
                     self.store.export()
+            except Exception as exc:
+                if not self.last_failure:
+                    self.last_failure = f"批次收尾保存失败：{exc}；请核对已保存结果后继续"
+                logging.getLogger(__name__).exception("批次收尾失败：%s", self.last_failure)
             finally:
                 lock.release()
 
@@ -707,7 +717,6 @@ class Service:
         if page_url and (urlsplit(page_url).hostname or "").startswith(("login.", "passport.")):
             parsed = urlsplit(page_url)
             page_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-        task = self.store.get(key)
         event = {"id": uuid.uuid4().hex, "at": time.time(), "step": step,
                  "message": message, "page_url": page_url}
         if picture:
@@ -716,14 +725,7 @@ class Service:
             filename = event["id"] + ".jpg"
             (folder / filename).write_bytes(picture)
             event["screenshot_url"] = "/api/ai-weight-price/visuals/" + filename
-        run_id = self.store.state("run", {}).get("run_id")
-        event["run_id"] = run_id
-        history = [*(task.get("visual_history") or []), event]
-        self.store.update(key, visual_history=history)
-        self.store.set_state("visual_progress", {"task_id": key, "title": task["title"],
-                             "main_image_url": task.get("main_image_url", ""),
-                             "steps": [e for e in history if e.get("run_id") == run_id][-40:]})
-        self.progress(key, message)
+        self.store.record_visual_event(key, event)
 
     def completion_message(self, prefix):
         run = self.store.state("run", {})
@@ -737,8 +739,7 @@ class Service:
         return None
 
     def progress(self, key, message):
-        self.store.set_state("run", {**self.store.state("run", {}), "current_task_id": key, "message": message})
-        self.store.log(message, key)
+        self.store.record_progress(key, message)
 
     @staticmethod
     def _needs_human_attention(reason):
@@ -828,11 +829,14 @@ class Service:
         self.store.set_state("pipeline_current", {"scope": scope, "task_id": key})
         self.progress(key, f"当前商品 {key}：逐件主图搜货；完全匹配后核重核价，未完全匹配则记录并跳过")
         while True:
-            if self.stop_event.is_set() or self.store.state("stop_requested", False):
+            if self.stop_event.is_set():
                 raise Stopped()
-            if self.store.state("circuit"):
+            snapshot = self.store.execution_snapshot(key)
+            if snapshot["stop_requested"]:
+                raise Stopped()
+            if snapshot["circuit"]:
                 raise ItemBlocked(f"商品 {key} 等待完成1688登录或人机审核；保留当前进度")
-            task = self.store.get(key)
+            task = snapshot["task"]
             if task["status"] == "success":
                 self.progress(key, f"商品 {key} 处理成功：包装重量 {task.get('weight_g')}g，净收益 ${task.get('net_income_usd')}；继续下一件")
                 self.store.set_state("pipeline_current", None)
@@ -856,11 +860,10 @@ class Service:
                 if self.store.state("circuit") or self._needs_human_attention(reason):
                     if not self.store.state("circuit"):
                         self.circuit(f"商品 {key} 需要人工处理：{reason}")
-                    raise ItemBlocked(f"商品 {key} 等待人工处理1688登录或人机审核；保留当前进度")
+                    raise ItemBlocked(f"商品 {key} 等待人工处理暂停原因；保留当前进度")
                 self._auto_skip_exception(key, reason)
                 return
             self.tick(browser, models, config, key)
-            self.store.export()
             task = self.store.get(key)
             self.store.record_run_item(config.get("run_id"), key)
             if task["status"] in (*COMPLETED, "exception"):
@@ -886,6 +889,12 @@ class Service:
     @staticmethod
     def missing_info(task):
         return [field for field in ("weight_g", "cost_price") if not task.get(field)]
+
+    def _pause_on_model_service_error(self, key, exc):
+        self.store.log(str(exc), key, "ERROR")
+        raise CircuitOpen(
+            f"{exc}；已暂停，保留当前商品，不修改ERP价格、重量或审核状态"
+        ) from exc
 
     @staticmethod
     def page_text(match):
@@ -957,6 +966,8 @@ class Service:
             except SupplierAdaptationError as exc:
                 self.store.exception(key, str(exc))
                 return
+            except ModelServiceError as exc:
+                self._pause_on_model_service_error(key, exc)
             except (CircuitOpen, Stopped):
                 raise
             except Exception as exc:
@@ -975,6 +986,8 @@ class Service:
                                          info_sources={**task.get("info_sources", {}), **{field: "1688页面" for field in changes}})
             except (CircuitOpen, Stopped):
                 raise
+            except ModelServiceError as exc:
+                self._pause_on_model_service_error(key, exc)
             except Exception as exc:
                 self.store.exception(key, "1688页面资料读取失败", exc)
                 return
@@ -1064,6 +1077,8 @@ class Service:
             self.finish(task, browser, config)
         except (CircuitOpen, Stopped):
             raise
+        except ModelServiceError as exc:
+            self._pause_on_model_service_error(key, exc)
         except Exception as exc:
             # DOM/model errors retain the raw conversation for review, never imply a valid weight.
             self.store.exception(key, "AI无法识别包装重量", exc)

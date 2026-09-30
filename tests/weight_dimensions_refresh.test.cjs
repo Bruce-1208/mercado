@@ -6,7 +6,7 @@ const test = require('node:test');
 test('opening reads saved data and manual full sync replaces stale polls', async () => {
     const elements = new Map();
     function element() {
-        return { value: '', files: [], disabled: false, listeners: {}, classList: {contains: () => true},
+        return { style: {}, value: '', files: [], disabled: false, listeners: {}, classList: {contains: () => true},
             addEventListener(name, callback) { this.listeners[name] = callback; },
             replaceChildren() {}, appendChild() {},
             querySelector() { return element(); },
@@ -64,7 +64,7 @@ test('recent week, pagination and selection without periodic refresh', async () 
     let activate;
     const elements = new Map();
     function element() {
-        return { value: '', files: [], children: [], listeners: {}, classList: { add() {}, contains: () => active },
+        return { style: {}, value: '', files: [], children: [], listeners: {}, classList: { add() {}, contains: () => active },
             addEventListener(name, callback) { this.listeners[name] = callback; },
             replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); },
             querySelector(name) { return this[name] ||= element(); },
@@ -121,4 +121,53 @@ test('recent week, pagination and selection without periodic refresh', async () 
     assert.equal(requests.length, count);
     get('wdr-page-size').value = '20'; get('wdr-page-size').listeners.change(); await new Promise(setImmediate);
     assert.equal(get('wdr-table').tbody.children.length, 20);
+});
+
+test('history table preserves snapshots, filters results and paginates legacy logs safely', async () => {
+    const elements = new Map();
+    function element() {
+        return {style: {}, value: '', files: [], children: [], listeners: {}, classList: {add() {}, contains: () => true},
+            addEventListener(name, callback) { this.listeners[name] = callback; },
+            replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); },
+            querySelector(name) { return this[name] ||= element(); },
+            showModal() { this.open = true; }, close() { this.open = false; this.listeners.close?.(); },
+        };
+    }
+    const get = id => { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); };
+    const logs = Array.from({length: 52}, (_, i) => ({time: `time-${i}`, stage: '美客多链接', status: '成功', message: `old-${i}`}));
+    logs.push({time: 'legacy', stage: '净收益', status: '成功', message: '链接 MLB123：已重新提交当前净收益 USD 4.77'});
+    logs.push({time: 'latest', execution_id: 'batch1', marketplace_item_id: 'MLM456', stage: '美客多链接',
+        submitted_weight_g: '600', submitted_dimensions_cm: '20x10x5', status: '失败', operator: 'user:7',
+        message: '<img src=x onerror=alert(1)>'});
+    const row = {order_number: '123', actual_weight_g: '999', can_execute_zeshun: true, execution_logs: logs};
+    let initialize;
+    const context = {URL, URLSearchParams, Set, Map, console, MutationObserver: class {observe() {}},
+        document: {hidden: false, getElementById: get, createElement: element,
+            addEventListener(name, callback) { if (name === 'DOMContentLoaded') initialize = callback; }},
+        window: {location: {href: 'http://localhost/'}, setTimeout() {}},
+        fetch: async url => ({ok: true, headers: {get: () => 'application/json'}, json: async () => ({data:
+            url.includes('/saved?') ? {task_id: 'task', status: 'ready', record_total: 1, records: [row]} : {agents: []}})}),
+    };
+    vm.runInNewContext(fs.readFileSync('bit/static/weight-dimensions-records.js', 'utf8'), context);
+    initialize(); await new Promise(setImmediate);
+    const button = get('wdr-table').tbody.children[0].children[5].children[0];
+    assert.equal(button.textContent, '查看更新历史（54）');
+    button.listeners.click();
+    assert.equal(get('wdr-history-dialog').open, true);
+    assert.equal(get('wdr-history-body').children.length, 50);
+    const first = get('wdr-history-body').children[0].children;
+    assert.equal(first[4].textContent, '600');
+    assert.equal(first[9].textContent, '<img src=x onerror=alert(1)>');
+    assert.equal(first[9].children.length, 0, 'log text must never become HTML');
+    const legacy = get('wdr-history-body').children[1].children;
+    assert.equal(legacy[2].textContent, 'MLB123'); assert.equal(legacy[6].textContent, '4.77');
+    assert.equal(legacy[4].textContent, '—', 'do not copy current measurements into old logs');
+    get('wdr-history-next').listeners.click();
+    assert.equal(get('wdr-history-body').children.length, 4);
+    get('wdr-history-status').value = '失败'; get('wdr-history-status').listeners.change();
+    assert.equal(get('wdr-history-body').children.length, 1);
+    assert.match(get('wdr-history-summary').textContent, /第 1 \/ 1 页/);
+    get('wdr-history-search').value = 'missing'; get('wdr-history-search').listeners.input();
+    assert.equal(get('wdr-history-body').children[0].children[0].textContent, '没有符合条件的更新记录');
+    get('wdr-history-close').listeners.click(); assert.equal(get('wdr-history-dialog').open, false);
 });

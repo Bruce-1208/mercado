@@ -64,21 +64,35 @@ test('older responses cannot overwrite a newer filter selection; failed filters 
     assert.doesNotMatch(app.elements.get('store-analysis-message').textContent, /分析失败/);
 });
 
-test('expired results refresh and failed analysis requests can be retried', async () => {
+test('forced refresh failures can be retried', async () => {
     const app = setup();
     const first = app.context.loadStoreAnalysis();
     app.respond('/api/mercado-tokens', {rows: []});
     app.respond('/api/store-analysis', {sites: []});
     await first;
     vm.runInContext('for (const result of storeAnalysisResults.values()) result.time -= 61000;', app.context);
-    const expired = app.context.loadStoreAnalysis();
+    const expired = app.context.loadStoreAnalysis(true);
     assert.equal(app.calls.length, 3);
     app.respond('/api/store-analysis', {}, false);
     await expired;
     assert.match(app.elements.get('store-analysis-message').textContent, /分析失败/);
-    const retry = app.context.loadStoreAnalysis();
+    const retry = app.context.loadStoreAnalysis(true);
     assert.equal(app.calls.length, 4);
     app.respond('/api/store-analysis', {sites: []});
     await retry;
     assert.doesNotMatch(app.elements.get('store-analysis-message').textContent, /分析失败/);
+});
+
+
+test('order trend remains visible alongside pie and with no valid sales', () => {
+    const app = setup();
+    const data = {order_trend: {total_orders: 3, days: [
+        {date: '2026-09-29', orders: 3, previous_orders: 0, change_rate: null}
+    ]}, sites: [{site_name: '墨西哥', site_id: 'MLM', orders: 2, top_categories: []}]};
+    app.context.renderStoreAnalysis(data);
+    assert.match(app.elements.get('store-analysis-trend').innerHTML, /polyline/);
+    assert.match(app.elements.get('store-analysis-trend').innerHTML, /新增（前日0单）/);
+    assert.match(app.elements.get('store-analysis-sites').innerHTML, /store-analysis-pie/);
+    app.context.renderStoreAnalysis({...data, sites: []});
+    assert.match(app.elements.get('store-analysis-trend').innerHTML, /单量变化率/);
 });
