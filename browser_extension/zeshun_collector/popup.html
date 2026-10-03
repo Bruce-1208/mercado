@@ -13,7 +13,7 @@
       <h1>泽顺插件</h1>
       <p>商品采集工作台</p>
     </div>
-    <span class="version">v1.8.28 · 公网默认地址</span>
+    <span class="version">v1.8.40 · 采集间隔与限频停止</span>
   </header>
   <main>
     <div class="account-card">
@@ -47,7 +47,14 @@
           <select id="product-tab"><option value="">请选择已打开的 Mercado Libre 列表页</option></select>
         </label>
         <button id="product-refresh-tabs" class="link-button" type="button">刷新页面列表</button>
-        <div id="product-zying-status" class="plugin-login-status checking" role="status">智赢插件：等待检查登录状态</div>
+        <div class="zeshun-category-picker">
+          <label class="zying-field">泽顺产品分类
+            <select id="product-management-category" aria-describedby="product-management-category-status" disabled><option value="">不指定分类</option></select>
+          </label>
+          <button id="product-refresh-management-categories" class="link-button" type="button" disabled>刷新泽顺分类</button>
+          <div id="product-management-category-status" class="zeshun-category-status" role="status" aria-live="polite">正在检查泽顺产品分类…</div>
+        </div>
+        <div id="product-zying-status" class="plugin-login-status checking" role="status">泽顺数据服务：等待检查</div>
         <div class="zying-grid">
           <label>采集数量<input id="product-max-items" type="number" min="1" max="500" step="1" value="20"></label>
           <label>采集模式
@@ -56,10 +63,11 @@
               <option value="gentle">缓和模式（单进程）</option>
             </select>
           </label>
+          <label>成功后休息（秒）<input id="product-success-rest-seconds" type="number" min="0" max="3600" step="0.1" value="3"></label>
           <label>最低销量<input id="product-min-sales" type="number" min="0" step="1" placeholder="不限"></label>
           <label>最高销量<input id="product-max-sales" type="number" min="0" step="1" placeholder="不限"></label>
         </div>
-        <p class="product-batch-help">每件商品都会读取智赢销量和发货方式。只采集自发货、半托管；海外仓、本土仓、全托管和未识别商品一律不采集。Internacional 未生效时仍按智赢信息逐件筛选。</p>
+        <p class="product-batch-help">每个采集通道成功后默认休息 3 秒，可调整；普通模式并发执行，单件超时后继续下一件，遇到限频自动停止且不自动重试。每件商品由泽顺后台读取销量和发货方式，无需安装或登录智赢插件。只采集自发货、半托管；海外仓、本土仓、全托管和未识别商品一律不采集。Internacional 未生效时仍按泽顺后台信息逐件筛选。</p>
         <div class="zying-actions">
           <button id="product-batch-start" class="primary" type="button" disabled>启动批量采集</button>
           <button id="product-batch-stop" class="danger" type="button" disabled>停止</button>
@@ -73,6 +81,11 @@
         <div class="page-card-heading">
           <span>当前页面</span>
           <span id="platform-badge" class="platform-badge" hidden>商品页</span>
+        </div>
+        <div class="zeshun-category-picker">
+          <label class="zying-field">1688 产品分类（自动记忆）<select id="1688-management-category" disabled><option value="">不指定分类</option></select></label>
+          <button id="1688-refresh-management-categories" class="link-button" type="button" disabled>刷新泽顺分类</button>
+          <div id="1688-management-category-status" class="zeshun-category-status" role="status"></div>
         </div>
         <div id="page-status" class="status">正在检查当前页面…</div>
         <button id="collect" class="primary" type="button" disabled><span>＋</span>采集当前商品</button>
@@ -110,12 +123,19 @@
           <label>起始产品编号（可选）<input id="zying-start-product-id" type="text" inputmode="numeric" maxlength="64" placeholder="留空则从分类首件开始"></label>
           <label>最多产品<input id="zying-max-items" type="number" min="1" max="10000" required value="100"></label>
         </div>
-        <label class="zying-field">产品分类
+        <label class="zying-field">智赢来源分类
           <select id="zying-category"><option value="">全部分类</option></select>
         </label>
         <label class="zying-field">产品开发
           <select id="zying-developer"><option value="">全部产品开发</option></select>
         </label>
+        <div class="zeshun-category-picker">
+          <label class="zying-field">泽顺产品分类
+            <select id="zying-management-category" aria-describedby="zying-management-category-status" disabled><option value="">不指定分类</option></select>
+          </label>
+          <button id="zying-refresh-management-categories" class="link-button" type="button" disabled>刷新泽顺分类</button>
+          <div id="zying-management-category-status" class="zeshun-category-status" role="status" aria-live="polite">正在检查泽顺产品分类…</div>
+        </div>
         <p class="product-batch-help">在所选分类的当前排序中，从起始产品编号（含）继续，最多读取指定数量；留空则从分类首件开始。数据库已有编号会直接跳过。</p>
         <div class="zying-actions">
           <button id="zying-start" class="primary" type="button" disabled>启动产品采集</button>
@@ -216,7 +236,13 @@
           <span>采购订单物流同步</span>
           <span class="platform-badge purchase">插件登录态</span>
         </div>
-        <div id="purchase-page-status" class="status">正在检查控制台同步任务…</div>
+        <label for="purchase-date-start">美客多订单开始日期（北京时间）</label>
+        <input id="purchase-date-start" type="date" required>
+        <label for="purchase-date-end">美客多订单结束日期（含当天）</label>
+        <input id="purchase-date-end" type="date" required>
+        <label for="purchase-platform">采购平台</label>
+        <select id="purchase-platform"><option value="1688">1688</option><option value="taobao">淘宝 / 天猫</option><option value="pdd">拼多多</option><option value="xianyu">闲鱼</option></select>
+        <div id="purchase-page-status" class="status">选择美客多下单日期范围和采购平台，仅同步范围内有采购订单号、无采购物流号的订单。</div>
         <div id="purchase-task-meta" class="purchase-task-meta" hidden></div>
         <div class="purchase-actions">
           <button id="purchase-open-login" class="secondary inline-action" type="button" disabled>打开采购平台登录</button>

@@ -104,7 +104,7 @@ def test_execute_deduplicates_latest_measurements_and_keeps_each_net(failed_item
          patch.object(records.bit_db_api, "append_weight_dimensions_record_log"):
         records._run_execute("test", "user", action="zeshun")
     assert package.call_count == 2
-    assert {c.args[1:] for c in package.call_args_list} == {("CBT1", "600", "10x5x5"), ("CBT2", "600", "10x5x5")}
+    assert {c.args[1:] for c in package.call_args_list} == {("CBT1", "41.667", "10x5x5"), ("CBT2", "41.667", "10x5x5")}
     expected_net = {("MLM1", 11)} if failed_item == "CBT2" else {("MLM1", 11), ("MLB2", 22)}
     assert {(c.args[0], c.args[1]["net_proceeds"]) for c in client.update_global_item.call_args_list} == expected_net
     assert all(r["_zeshun_status"] == ("失败" if failed_item else "成功") for r in originals)
@@ -299,7 +299,7 @@ def test_server_zying_updates_latest_product_without_marketplace_writes():
          patch.object(records.bit_mysql, 'get_mercado_store_token') as token, \
          patch.object(records, '_package_attributes') as package:
         records.start_execute('test', 'user', action='zying', selected_order_numbers=['1', '2'], erp_browser_factory=factory)
-    browser.update_package_by_product_id.assert_called_once_with('P1', '650', '10x5x5')
+    browser.update_package_by_product_id.assert_called_once_with('P1', '41.667', '10x5x5')
     token.assert_not_called()
     package.assert_not_called()
     assert task['execute_status'] == 'completed'

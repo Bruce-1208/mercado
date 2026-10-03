@@ -18,6 +18,8 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from erp.package_update_weight import package_update_weight_g
+
 from bit import bit_mysql
 from bit import bit_db_api
 from bit.shipment_compensation import apply_dimension_costs
@@ -731,7 +733,7 @@ def load_saved_changes(owner: str, filters, allowed_token_ids=None, *, page_size
     with _lock:
         for old_id, task in list(_tasks.items()):
             if (task.get("owner") == owner and task.get("source") == "saved_changes"
-                    and task.get("execute_status", "idle") not in {"running", "queued"}):
+                    and task.get("execute_status", "idle") not in {"running", "queued", "stopping"}):
                 del _tasks[old_id]
         _tasks[task_id] = {
             "task_id": task_id, "owner": owner, "source": "saved_changes",
@@ -801,6 +803,52 @@ def _public_record(row: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _finish_stopped_execute(task):
+    action = task.get("execute_action")
+    selected = set(task.get("execute_order_numbers") or ())
+    for row in task.get("records") or ():
+        if selected and str(row.get("order_number") or "") not in selected:
+            continue
+        pending = False
+        for key in (["_zying_status"] if action == "zying" else
+                    ["_zeshun_status"] if action == "zeshun" else ["_zying_status", "_zeshun_status"]):
+            if row.get(key) not in {"成功", "失败", "跳过"}:
+                row[key] = "已终结"
+                pending = True
+        if pending:
+            row["execution_status"] = "已终结"
+            row["execution_error"] = "任务已终结，未执行的更新可重新选择后执行"
+            _log_execution(row, "任务", "已终结", row["execution_error"])
+    with _lock:
+        task["execute_status"] = "stopped"
+        task["execute_message"] = "任务已终结，已完成结果已保留，未执行记录可重新选择后执行"
+
+
+def stop_execute(task_id: str, owner: str, *, agent_cancel=None):
+    task = _get_owned_task(task_id, owner)
+    with _lock:
+        if task.get("execute_status") not in {"queued", "running", "stopping"}:
+            return {"status": task.get("execute_status", "idle"), "message": task.get("execute_message", "当前没有执行中的任务")}
+        previous_status = task["execute_status"]
+        job_id = task.get("agent_job_id")
+        if job_id and agent_cancel is None:
+            raise ValueError("未配置本机 Agent 任务终结接口")
+        task["execute_stop_requested"] = True
+        task["execute_status"] = "stopping"
+        task["execute_message"] = "正在终结任务，当前产品处理结束后停止后续更新"
+        task["agent_cancel"] = agent_cancel
+    if job_id:
+        try:
+            agent_cancel(job_id)
+        except Exception:
+            with _lock:
+                if task.get("execute_status") == "stopping":
+                    task["execute_status"] = previous_status
+                    task["execute_stop_requested"] = False
+            raise
+    return {"status": "stopping", "message": task["execute_message"]}
+
+
 def _apply_agent_job(task, job):
     """Mirror Agent queue, execution, and result states into the WDR task."""
     if not task or not job:
@@ -819,7 +867,7 @@ def _apply_agent_job(task, job):
         if str(value or "").strip()
     }
     if job_status in {"queued", "running", "stopping"}:
-        task["execute_status"] = "queued" if job_status == "queued" else "running"
+        task["execute_status"] = "stopping" if job_status == "stopping" or task.get("execute_stop_requested") else "queued" if job_status == "queued" else "running"
         task["execute_message"] = job.get("message") or "Agent 正在逐个更新智赢产品"
         row_status = "排队中" if job_status == "queued" else "执行中"
         progress_message = (
@@ -859,19 +907,20 @@ def _apply_agent_job(task, job):
                 or job.get("message")
                 or "Agent 未返回该订单的更新结果"
             )
-            row["_zying_status"] = "失败"
-            row["execution_status"] = "失败"
-            row["execution_error"] = f"智赢产品更新失败：{message[:250]}"
-            _log_execution(row, "智赢 Agent", "失败", row["execution_error"])
+            stopped = job_status == "stopped" and not item
+            row["_zying_status"] = "已终结" if stopped else "失败"
+            row["execution_status"] = row["_zying_status"]
+            row["execution_error"] = "任务已终结，未返回该产品的保存确认，可重新执行核对" if stopped else f"智赢产品更新失败：{message[:250]}"
+            _log_execution(row, "智赢 Agent", row["_zying_status"], row["execution_error"])
     task["agent_applied_status"] = job_status
     task["agent_applied_result"] = True
-    task["execute_status"] = "completed"
-    task["execute_processed"] = task.get("execute_total") or len(records)
+    task["execute_status"] = "stopped" if job_status == "stopped" else "completed"
+    task["execute_processed"] = len(result_by_order) if job_status == "stopped" else task.get("execute_total") or len(records)
     succeeded = sum(
         row.get("_zying_status") == "成功" and str(row.get("order_number") or "") in selected_orders
         for row in records
     )
-    task["execute_message"] = f"智赢 Agent 执行结束，成功 {succeeded} 条"
+    task["execute_message"] = f"智赢 Agent {'任务已终结' if job_status == 'stopped' else '执行结束'}，成功 {succeeded} 条"
 
 
 def task_status(task_id: str, owner: str, agent_job_provider=None, *, page=None, page_size=50, include_records=True) -> dict[str, Any]:
@@ -935,7 +984,7 @@ def latest_task_status(owner: str, agent_job_provider=None) -> dict[str, Any] | 
         return None
 
 
-def start_latest_execute(owner: str, erp_browser_factory=None) -> dict[str, Any]:
+def start_latest_execute(owner: str, erp_browser_factory=None, erp_browser_preflight=None) -> dict[str, Any]:
     with _lock:
         task_id = _latest_task_by_owner.get(str(owner or ""))
     if not task_id:
@@ -944,6 +993,7 @@ def start_latest_execute(owner: str, erp_browser_factory=None) -> dict[str, Any]
     # the console page uses the two explicit actions instead.
     return start_execute(
         task_id, owner, action="combined", erp_browser_factory=erp_browser_factory,
+        erp_browser_preflight=erp_browser_preflight,
     )
 
 
@@ -996,6 +1046,13 @@ def export_records_xlsx(records) -> bytes:
     for row in sheet.iter_rows(min_row=2):
         for cell in row:
             cell.number_format = "@" if cell.column in {1, 3, 7, 10, 11, 20} else "General"
+    for index, (key, _) in enumerate(EXPORT_COLUMNS, start=1):
+        color = "FFF3DF" if key.startswith("declared_") else "E5F4EF" if key.startswith("actual_") else None
+        if color:
+            for cells in sheet.iter_rows(min_col=index, max_col=index):
+                cells[0].fill = PatternFill("solid", fgColor=color)
+                if cells[0].row == 1:
+                    cells[0].font = Font(bold=True, color="263A50")
     stream = io.BytesIO()
     workbook.save(stream)
     return stream.getvalue()
@@ -1409,7 +1466,7 @@ def _run_execute(
             row for row in all_records
             if not selected or str(row.get("order_number") or "").strip() in selected
         ]
-        task["execute_status"] = "running"
+        task["execute_status"] = "stopping" if task.get("execute_stop_requested") else "running"
         task["execute_message"] = "正在服务器更新智赢产品" if action == "zying" else "正在更新泽顺数据和链接"
     execution_id = uuid.uuid4().hex
     settings_cache = {}
@@ -1518,6 +1575,8 @@ def _run_execute(
             _log_execution(current, "智赢插件", str(kwargs.get("level") or "记录"), str(message))
 
     for product_id, grouped in erp_groups.items():
+        if task.get("execute_stop_requested"):
+            break
         row = latest_order_by_product[product_id]
         chosen_order = str(row.get("order_number") or "未知")
         chosen_time = str(row.get("time") or "时间未记录")
@@ -1532,10 +1591,14 @@ def _run_execute(
         try:
             if erp_browser_factory is None:
                 raise RuntimeError("智赢插件自动化未配置")
+            submitted_weight = package_update_weight_g(row)
+            for item in grouped:
+                item.update(_submitted_weight_g=submitted_weight,
+                            _submitted_dimensions_cm=row.get("actual_dimensions_cm") or "")
             with erp_browser_factory(browser_logger) as erp_browser:
                 browser_row["current"] = row
                 erp_browser.update_package_by_product_id(
-                    product_id, row["actual_weight_g"], row["actual_dimensions_cm"]
+                    product_id, submitted_weight, row["actual_dimensions_cm"]
                 )
             for item in grouped:
                 item["_zying_status"] = "成功"
@@ -1544,7 +1607,7 @@ def _run_execute(
                 )
                 _log_execution(
                     item, "智赢插件", "成功",
-                    f"产品 {product_id} 重量 {row['actual_weight_g']}g" + (f"、尺寸 {row['actual_dimensions_cm']}cm" if row.get("actual_dimensions_cm") else "（官方未提供尺寸，沿用原值）") + f"、级别“重点”已保存并回读确认；采用最新订单 {chosen_order}",
+                    f"产品 {product_id} 提交重量 {submitted_weight}g" + (f"、尺寸 {row['actual_dimensions_cm']}cm" if row.get("actual_dimensions_cm") else "（官方未提供尺寸，沿用原值）") + f"、级别“重点”已保存并回读确认；采用最新订单 {chosen_order}",
                 )
         except Exception as exc:
             for item in grouped:
@@ -1581,22 +1644,23 @@ def _run_execute(
             row = _latest_order_row(eligible)
             chosen_order = str(row.get("order_number") or "未知")
             chosen_time = str(row.get("time") or "时间未记录")
+            submitted_weight = package_update_weight_g(row)
             for item in eligible:
-                item.update(_submitted_weight_g=row["actual_weight_g"],
+                item.update(_submitted_weight_g=submitted_weight,
                             _submitted_dimensions_cm=row.get("actual_dimensions_cm") or "",
                             _dimensions_preserved=not bool(row.get("actual_dimensions_cm")))
                 _log_execution(
                     item, "美客多链接", "进行中",
-                    f"正在更新 Global 商品 {global_id}；采用最新成功订单 {chosen_order}（{chosen_time}）的重量 {row['actual_weight_g']}g" + (f"、尺寸 {row['actual_dimensions_cm']}cm" if row.get("actual_dimensions_cm") else "；官方未提供尺寸，仅更新重量"),
+                    f"正在更新 Global 商品 {global_id}；采用最新成功订单 {chosen_order}（{chosen_time}）的提交重量 {submitted_weight}g" + (f"、尺寸 {row['actual_dimensions_cm']}cm" if row.get("actual_dimensions_cm") else "；官方未提供尺寸，仅更新重量"),
                 )
             _package_attributes(
-                api_client(token_id), global_id, row["actual_weight_g"], row["actual_dimensions_cm"]
+                api_client(token_id), global_id, submitted_weight, row["actual_dimensions_cm"]
             )
             for item in eligible:
                 item["_package_status"] = "成功"
                 item["_zeshun_status"] = "重量尺寸已更新" if row.get("actual_dimensions_cm") else "重量已更新"
                 item["execution_status"] = "重量已更新，等待更新净收益" if not row.get("actual_dimensions_cm") else "重量尺寸已更新，等待更新净收益"
-                _log_execution(item, "美客多链接", "成功", f"关联 Global 商品已更新，采用最新订单 {chosen_order} 的实际重量" + (f"和尺寸 {row['actual_dimensions_cm']}" if row.get("actual_dimensions_cm") else "；官方未提供尺寸，保留商品原尺寸"))
+                _log_execution(item, "美客多链接", "成功", f"关联 Global 商品已更新，采用最新订单 {chosen_order} 的提交重量 {submitted_weight}g" + (f"和尺寸 {row['actual_dimensions_cm']}" if row.get("actual_dimensions_cm") else "；官方未提供尺寸，保留商品原尺寸"))
         except Exception as exc:
             for item in eligible:
                 item["_package_status"] = "失败"
@@ -1606,6 +1670,9 @@ def _run_execute(
                 _log_execution(item, "美客多链接", "失败", item["execution_error"])
 
     def run_parallel_group_updates(groups, callback, stage_name, message):
+        def run_unless_stopped(key, grouped):
+            if not task.get("execute_stop_requested"):
+                callback(key, grouped)
         items = list(groups.items())
         if not items:
             return
@@ -1615,7 +1682,7 @@ def _run_execute(
         )
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="wdr-update") as executor:
             future_groups = {
-                executor.submit(callback, key, grouped): grouped
+                executor.submit(run_unless_stopped, key, grouped): grouped
                 for key, grouped in items
             }
             for future in as_completed(future_groups):
@@ -1687,6 +1754,9 @@ def _run_execute(
     if action == "zeshun":
         _finish_same_title_records(original_records, records)
         records = original_records
+    if task.get("execute_stop_requested"):
+        _finish_stopped_execute(task)
+        return
     with _lock:
         task["execute_status"] = "completed"
         if action == "zeshun":
@@ -1696,7 +1766,13 @@ def _run_execute(
                                        f"未全部完成 {len(records) - completed_count} 条；请查看逐条日志")
         else:
             completed_count = sum(row.get("_zying_status") == "成功" for row in records)
-            task["execute_message"] = f"执行结束，成功 {completed_count} 条订单记录"
+            failed_rows = [row for row in records if row.get("_zying_status") == "失败"]
+            task["execute_message"] = (
+                f"智赢产品更新结束，共 {len(records)} 条订单，成功 {completed_count} 条，"
+                f"失败 {len(failed_rows)} 条"
+            )
+            if failed_rows:
+                task["execute_message"] += "；首个失败原因：" + str(failed_rows[0].get("execution_error") or "请查看逐条日志")
 
 
 def _run_execute_guarded(task_id, owner, action, selected_order_numbers, erp_browser_factory):
@@ -1742,6 +1818,7 @@ def start_execute(
     select_all_matching=False,
     excluded_order_numbers=None,
     erp_browser_factory=None,
+    erp_browser_preflight=None,
     agent_dispatch=None,
 ) -> dict[str, Any]:
     task = _get_owned_task(task_id, owner)
@@ -1767,14 +1844,12 @@ def start_execute(
     with _lock:
         if task.get("status") != "ready":
             raise ValueError("订单查询完成后才能执行更新")
-        if task.get("execute_status") in {"queued", "running"}:
+        if task.get("execute_status") in {"queued", "running", "stopping"}:
             raise ValueError("当前任务正在执行")
         if action in {"zeshun", "zying"} and not selected and not select_all_matching:
             raise ValueError("请至少勾选一条需要更新的订单")
-        if saved_selection is not None:
-            task["records"] = saved_selection
         candidates = [
-            row for row in task["records"]
+            row for row in (saved_selection if saved_selection is not None else task["records"])
             if (select_all_matching or not selected or str(row.get("order_number") or "").strip() in selected)
             and str(row.get("order_number") or "").strip() not in excluded
         ]
@@ -1813,7 +1888,25 @@ def start_execute(
                 "泽顺更新需要美客多链接关联和实际重量；尺寸有官方核验值时一并更新"
             )
         selected = {str(row.get("order_number") or "").strip() for row in ready_rows}
+
+    # Check the execution computer's visible browser before queuing any writes.
+    # Opening Edge and waiting for login must not hold the global task lock.
+    use_agent = action == "zying" and agent_dispatch is not None
+    if action in {"zying", "combined"} and not use_agent and erp_browser_preflight is not None:
+        erp_browser_preflight()
+
+    with _lock:
+        if _tasks.get(str(task_id)) is not task:
+            raise KeyError("查询任务不存在或已过期")
+        if task.get("status") != "ready":
+            raise ValueError("订单查询完成后才能执行更新")
+        if task.get("execute_status") in {"queued", "running", "stopping"}:
+            raise ValueError("当前任务正在执行")
+        if saved_selection is not None:
+            task["records"] = saved_selection
         task["execute_status"] = "queued"
+        task["execute_stop_requested"] = False
+        task.pop("agent_cancel", None)
         task["execute_action"] = action
         task["execute_message"] = f"已排队，准备执行 {ready} 条记录"
         task["execute_total"] = ready
@@ -1823,7 +1916,7 @@ def start_execute(
         task["agent_applied_status"] = ""
         task["agent_applied_result"] = False
 
-    if action == "zying" and agent_dispatch is not None:
+    if use_agent:
         execution_id = uuid.uuid4().hex
         settings_cache = {}
         for row in ready_rows:
@@ -1835,6 +1928,7 @@ def start_execute(
                 "order_number": row.get("order_number"),
                 "product_id": row.get("product_id"),
                 "actual_weight_g": row.get("actual_weight_g"),
+                "declared_weight_g": row.get("declared_weight_g"),
                 "actual_dimensions_cm": row.get("actual_dimensions_cm"),
             }
             for row in ready_rows
@@ -1850,7 +1944,7 @@ def start_execute(
             raise
         with _lock:
             task["agent_job_id"] = job_id
-            task["execute_status"] = "queued"
+            task["execute_status"] = "stopping" if task.get("execute_stop_requested") else "queued"
             task["execute_message"] = f"已提交智赢 Agent，准备逐个更新 {ready} 个产品"
             for row in ready_rows:
                 row["_zying_status"] = "排队中"
@@ -1858,7 +1952,9 @@ def start_execute(
                 row["execution_error"] = ""
         for row in ready_rows:
             _log_execution(row, "智赢 Agent", "排队中", "任务已提交本机 Agent 队列，尚未开始更新")
-        return {"status": "queued", "ready_count": ready, "agent_job_id": job_id}
+        if task.get("execute_stop_requested") and task.get("agent_cancel"):
+            task["agent_cancel"](job_id)
+        return {"status": task["execute_status"], "ready_count": ready, "agent_job_id": job_id}
 
     thread = threading.Thread(
         target=_run_execute_guarded,

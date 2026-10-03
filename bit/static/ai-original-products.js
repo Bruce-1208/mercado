@@ -1,14 +1,147 @@
 "use strict";
 
 let aiOriginalRows = [];
+let aiOriginalTotalCost = null;
 let aiOriginalSelected = new Set();
 let aiOriginalDeleteRunning = false;
 let aiOriginalReviewRunning = false;
+let aiOriginalSubmitting = false;
+let aiOriginalLoadSequence = 0;
+let aiOriginalSelectionScope = "";
 let aiOriginalTaskTimer = null;
 let aiOriginalPublishTimer = null;
 let aiOriginalEditorState = null;
 let aiOriginalStoreRows = [];
 let aiOriginalLastTaskStatus = null;
+let aiOriginalPlatformEditorState = null;
+let aiOriginalSettingsPlatform = "mercadolibre";
+let aiOriginalOtherModelSettings = {base_url: "https://api.deepseek.com", model: "deepseek-v4-pro"};
+let aiOriginalProfiles = {
+  platforms: [
+    {id: "mercadolibre", label: "美客多", language: "西班牙语 / 葡萄牙语", title_limit: 60},
+    {id: "yandex", label: "Yandex Market", language: "俄语", title_limit: 256, description_limit: 6000},
+    {id: "amazon", label: "Amazon 美国站（非媒体商品）", language: "英语", title_limit: 75, description_limit: 2000, item_highlights_limit: 125}
+  ],
+  templates: [
+    {id: "standard", label: "标准模板", description: "均衡介绍商品用途、特点和规格"},
+    {id: "features", label: "卖点模板", description: "突出有事实依据的商品特点和使用场景"},
+    {id: "specs", label: "规格模板", description: "突出材质、尺寸、规格和包装信息"}
+  ]
+};
+let aiOriginalProfilesLoaded = false;
+
+function aiOriginalTargetPlatform() {
+  const value = document.getElementById("ai-original-platform")?.value;
+  return ["mercadolibre", "yandex", "amazon"].includes(value) ? value : "mercadolibre";
+}
+
+function aiOriginalPlatformProfile(platform = aiOriginalTargetPlatform()) {
+  return aiOriginalProfiles.platforms.find(item => item.id === platform) || aiOriginalProfiles.platforms[0];
+}
+
+function aiOriginalPlatformDraft(row, platform = aiOriginalTargetPlatform()) {
+  if (platform === "mercadolibre") return row?.ai_original || null;
+  return row?.marketplace_listings?.[platform] || null;
+}
+
+function aiOriginalPlatformStatus(row, platform = aiOriginalTargetPlatform()) {
+  return platform === "mercadolibre" ? row?.ai_status || "pending" : aiOriginalPlatformDraft(row, platform)?.status || "pending";
+}
+
+function aiOriginalValidationMessages(draft, kind) {
+  return (Array.isArray(draft?.validation?.[kind]) ? draft.validation[kind] : [])
+    .map(item => typeof item === "string" ? item : item?.message || item?.field || "")
+    .filter(Boolean);
+}
+
+function aiOriginalRuleSourceLabel(url) {
+  const labels = [
+    ["145b6d0f", "标题与 Highlights 新规"], ["G200390640", "标题规范"],
+    ["b2b15728", "标题规范说明"], ["G1881", "详情页规范"],
+    ["gtin-guide", "商品编码要求"], ["65f8e647", "主图规范"],
+    ["product-type-definition", "类目要求"], ["title-description", "标题与描述"],
+    ["main-fields/images", "主图要求"], ["updateOfferMappings", "商品字段规范"]
+  ];
+  return labels.find(([part]) => url.includes(part))?.[1] || "官方刊登规则";
+}
+
+function applyAiOriginalBudgetSettings(platform) {
+  const isMercado = platform === "mercadolibre";
+  const fields = {base_url: "ai-original-base-url", model: "ai-original-model"};
+  const fixed = {base_url: "https://api.deepseek.com", model: "deepseek-flash"};
+  Object.entries(fields).forEach(([key, id]) => {
+    const node = document.getElementById(id);
+    if (!node) return;
+    if (isMercado) {
+      if (aiOriginalSettingsPlatform !== "mercadolibre") aiOriginalOtherModelSettings[key] = node.value;
+      node.value = fixed[key];
+    } else if (aiOriginalSettingsPlatform === "mercadolibre") node.value = aiOriginalOtherModelSettings[key];
+    node.readOnly = isMercado;
+  });
+  ["api-key", "base-url", "model"].forEach(suffix => {
+    const node = document.getElementById(`ai-original-image-${suffix}`);
+    if (node) node.disabled = isMercado;
+  });
+  aiOriginalSettingsPlatform = platform;
+}
+
+function renderAiOriginalPlatformSettings() {
+  const platform = aiOriginalTargetPlatform();
+  const isMercado = platform === "mercadolibre";
+  applyAiOriginalBudgetSettings(platform);
+  const credentials = document.getElementById("ai-original-credentials-hint");
+  if (credentials) credentials.textContent = isMercado ? "使用账号已保存的 DeepSeek 凭证" : "使用账号已保存的 DeepSeek / 百炼凭证";
+  const profile = aiOriginalPlatformProfile(platform);
+  document.querySelectorAll("#tab-ai-original-products [data-ai-mercado-only]").forEach(node => { node.hidden = !isMercado; });
+  const template = aiOriginalProfiles.templates.find(item => item.id === document.getElementById("ai-original-template")?.value);
+  const hint = document.getElementById("ai-original-template-hint");
+  if (hint) hint.textContent = template?.description || "";
+  const rules = document.getElementById("ai-original-platform-rules");
+  if (rules) {
+    const notes = Array.isArray(profile.notes) ? profile.notes : profile.notes ? [profile.notes] : [];
+    const sources = (Array.isArray(profile.sources) ? profile.sources : []).map(source => {
+      const url = typeof source === "string" ? source : source?.url;
+      if (!/^https:\/\//i.test(url || "")) return "";
+      return `<a href="${aiOriginalEscape(url)}" target="_blank" rel="noopener noreferrer">${aiOriginalEscape(typeof source === "string" ? aiOriginalRuleSourceLabel(url) : source.label || source.title || aiOriginalRuleSourceLabel(url))} ↗</a>`;
+    }).join(" · ");
+    rules.innerHTML = `<strong>${aiOriginalEscape(profile.label)} · ${aiOriginalEscape(profile.language_label || profile.language || "")}</strong><p>标题 ≤ ${Number(profile.title_limit) || 60} 字符${profile.description_limit ? ` · 描述 ≤ ${Number(profile.description_limit)} 字符` : ""}。${isMercado ? "完善类目和属性，审核后可提交美客多上架。" : "生成并完善刊登资料，在下方选择授权店铺，填写真实销售资料，预检确认后自动提交平台；也可导出 JSON 草稿。"}</p>${notes.length ? `<ul>${notes.map(note => `<li>${aiOriginalEscape(note)}</li>`).join("")}</ul>` : ""}${!aiOriginalProfilesLoaded ? '<p class="ai-original-muted">平台规则目录尚未加载成功，实际校验以服务端和目标类目要求为准。</p>' : ""}${sources ? `<div class="ai-original-rule-sources">${sources}</div>` : ""}`;
+  }
+  const labels = {"ai-original-pending-label": isMercado ? "待完善 / 审核" : "待完善草稿", "ai-original-ready-label": isMercado ? "已完善并审核" : "基础检查通过", "ai-original-ready-note": isMercado ? "上架时继续校验平台规则" : "完善销售资料并预检后可提交", "ai-original-pending-note": isMercado ? "补齐资料后再提交审核" : "当前平台尚未完成基础检查", "ai-original-step-final": isMercado ? "审核并上架" : "预检并确认上架"};
+  Object.entries(labels).forEach(([id, label]) => { const node = document.getElementById(id); if (node) node.textContent = label; });
+  globalThis.AiOriginalPublisher?.syncPlatform();
+}
+
+async function loadAiOriginalProfiles() {
+  try {
+    const response = await fetch("/api/ai-original-products/profiles", {cache: "no-store"});
+    const payload = await response.json();
+    if (!response.ok || payload.status !== "success" || !Array.isArray(payload.data?.platforms) || !Array.isArray(payload.data?.templates)) throw new Error("平台规则目录读取失败");
+    const previousPlatform = aiOriginalTargetPlatform();
+    const previousTemplate = document.getElementById("ai-original-template")?.value || "standard";
+    aiOriginalProfiles = payload.data;
+    aiOriginalProfilesLoaded = true;
+    for (const [id, options, selected] of [["ai-original-platform", aiOriginalProfiles.platforms, previousPlatform], ["ai-original-template", aiOriginalProfiles.templates, previousTemplate]]) {
+      const select = document.getElementById(id);
+      if (select) {
+        select.innerHTML = options.map(item => `<option value="${aiOriginalEscape(item.id)}">${aiOriginalEscape(item.label)}</option>`).join("");
+        select.value = options.some(item => item.id === selected) ? selected : options[0]?.id || "";
+      }
+    }
+  } catch (_error) { aiOriginalProfilesLoaded = false; }
+  renderAiOriginalPlatformSettings();
+  renderAiOriginalProducts();
+}
+
+async function changeAiOriginalPlatform() {
+  aiOriginalSelected.clear();
+  renderAiOriginalPlatformSettings();
+  renderAiOriginalProducts();
+  renderAiOriginalFailureLog([]);
+  if (aiOriginalLastTaskStatus?.status && aiOriginalLastTaskStatus.status !== "idle") renderAiOriginalTaskStatus(aiOriginalLastTaskStatus);
+  else aiOriginalStatus(`已切换到 ${aiOriginalPlatformProfile().label}，选择商品后生成本平台草稿`);
+  await loadAiOriginalProducts({preserveTaskStatus: true});
+}
+
 
 function aiOriginalEscape(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;")
@@ -65,7 +198,7 @@ function aiOriginalSourceImageFallbacks(original) {
 
 function aiOriginalStatus(message, kind = "") {
   const node = document.getElementById("ai-original-task-status");
-  if (node) { node.textContent = message; node.className = `ai-original-status ${kind}`.trim(); }
+  if (node) { node.textContent = message; node.className = `ai-original-status ${kind}`.trim(); globalThis.WorkbenchUI?.feedback(node, kind || "info"); }
 }
 
 function renderAiOriginalFailureLog(lines) {
@@ -91,7 +224,45 @@ async function aiOriginalReadJsonResponse(response, action) {
 }
 
 function aiOriginalStateLabel(status) {
-  return {pending: "待处理", processing: "处理中", completed: "已完成", failed: "失败"}[status] || status || "待处理";
+  return {pending: "待处理", processing: "处理中", waiting_off_peak: "等待闲时", completed: "已完成", failed: "失败", needs_category: "待人工选类", needs_variations: "待处理规格", needs_attributes: "待补充必填属性", needs_budget_review: "待人工完成"}[status] || status || "待处理";
+}
+
+function aiOriginalRecoveryMessage(row) {
+  const prepared = row?.ai_original || {};
+  const workflow = prepared.workflow_status || row?.ai_workflow_status;
+  if (workflow === "needs_budget_review" || prepared.generation_budget?.status === "blocked") return "已保留生成结果；金额上限已取消，可重新提交继续；如有待确认费用，请先核对账单。";
+  if (!["needs_category", "needs_variations", "needs_attributes"].includes(workflow)) return "";
+  const next = {needs_category: "选择并锁定 CBT 类目后，重新生成所选产品。", needs_variations: "核对类目和 SKU 规格后，重新生成所选产品。", needs_attributes: "补齐必填属性后，重新生成所选产品。"}[workflow];
+  const checkpoint = prepared.preparation || {};
+  const saved = [checkpoint.image_ready ? "白底主图" : "", checkpoint.copy_ready ? "双语文案" : "", checkpoint.category_ready ? "类目" : "", checkpoint.variations_ready ? "SKU 规格" : ""].filter(Boolean);
+  return `${aiOriginalStateLabel(workflow)}：${next}${saved.length ? ` 已保存${saved.join("、")}，重试会继续后续步骤。` : ""}`;
+}
+
+function aiOriginalBudgetSummary(budget) {
+  if (!budget || typeof budget !== "object") return "";
+  const amount = key => budget[key] !== null && budget[key] !== undefined && budget[key] !== "" && Number.isFinite(Number(budget[key])) && Number(budget[key]) >= 0 ? Number(budget[key]) : null;
+  const money = value => `¥${value.toFixed(6).replace(/0+$/, "").replace(/\.$/, "")}`;
+  const spent = amount("spent_yuan");
+  const reserved = amount("reserved_yuan");
+  const parts = [];
+  if (spent !== null) parts.push(`模型计费估算 ${money(spent)}（含已记录尝试）`);
+  const tokens = Array.isArray(budget.calls) ? budget.calls.reduce((sum, call) => sum + (Number(call.prompt_tokens) || 0) + (Number(call.completion_tokens) || 0), 0) : Number(budget.total_tokens) || 0;
+  if (Array.isArray(budget.calls) || amount("total_tokens") !== null) parts.push(`累计 ${tokens.toLocaleString("zh-CN")} Token`);
+  if (budget.budget_limit_enabled === false) parts.push("金额不限额");
+  if (reserved > 0) parts.push(`待核对预留 ${money(reserved)}`);
+  if (Number(budget.cache_hits) > 0) parts.push(`复用结果 ${Math.floor(Number(budget.cache_hits))} 次`);
+  return parts.join(" · ");
+}
+
+function aiOriginalTaskActive(data = aiOriginalLastTaskStatus) {
+  return Boolean(data?.running) || data?.status === "waiting_off_peak";
+}
+
+function aiOriginalResumeTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return new Intl.DateTimeFormat("zh-CN", {timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false}).format(date);
 }
 
 function aiOriginalAttributes(attributes) {
@@ -422,17 +593,123 @@ function renderAiOriginalAttributes(attributes) {
   }).join("")}</div>`;
 }
 
+function renderAiOriginalMarketplaceCard(row) {
+  const platform = aiOriginalTargetPlatform();
+  const profile = aiOriginalPlatformProfile(platform);
+  const draft = aiOriginalPlatformDraft(row, platform);
+  const original = aiOriginalSource(row);
+  const sourceImage = aiOriginalDisplayImageUrl(original.main_image_url || original.images?.[0] || "");
+  const generatedImage = aiOriginalDisplayImageUrl(draft?.main_image_url || "");
+  const errors = aiOriginalValidationMessages(draft, "errors");
+  const warnings = aiOriginalValidationMessages(draft, "warnings");
+  const template = aiOriginalProfiles.templates.find(item => item.id === draft?.template_id);
+  const attributes = Array.isArray(draft?.attributes) ? draft.attributes : [];
+  const bullets = Array.isArray(draft?.bullet_points) ? draft.bullet_points : [];
+  return `<article class="ai-original-card ai-original-marketplace-card">
+    <input type="checkbox" value="${Number(row.id)}" ${aiOriginalSelected.has(Number(row.id)) ? "checked" : ""} onchange="toggleAiOriginalProduct(${Number(row.id)}, this.checked)">
+    <div class="ai-original-image-pair"><figure>${sourceImage ? `<img src="${aiOriginalEscape(sourceImage)}" data-image-candidates="${aiOriginalEscape(JSON.stringify(aiOriginalSourceImageFallbacks(original)))}" alt="1688 原始主图" loading="lazy" referrerpolicy="no-referrer" onerror="aiOriginalImageError(this)">` : '<div class="ai-original-image-empty">暂无原图</div>'}<figcaption>1688 原图</figcaption></figure><figure>${generatedImage ? `<img src="${aiOriginalEscape(generatedImage)}" alt="${aiOriginalEscape(profile.label)} 草稿主图" loading="lazy" referrerpolicy="no-referrer" onerror="aiOriginalImageError(this)">` : '<div class="ai-original-image-empty">等待生成</div>'}<figcaption>${aiOriginalEscape(profile.label)} 主图</figcaption></figure></div>
+    <div class="ai-original-source"><span class="ai-original-section-label source">1688 原始资料</span><h4>${aiOriginalEscape(original.title || row.title)}</h4><p>1688 编号：${aiOriginalEscape(original.source_1688_item_id || row.source_item_id)}</p><p>采购价：${aiOriginalEscape(row.source_purchase_price_cny ?? original.price ?? row.price ?? "-")} CNY</p><a href="${aiOriginalEscape(original.source_url || row.source_url || "#")}" target="_blank" rel="noopener noreferrer">打开 1688 详情页 ↗</a>${draft?.error ? `<p class="bad">${aiOriginalEscape(draft.error)}</p>` : ""}</div>
+    <div class="ai-original-copy"><span class="ai-original-section-label generated">${aiOriginalEscape(profile.label)} 刊登草稿</span><p>${aiOriginalEscape(profile.language_label || profile.language || "")} · ${aiOriginalEscape(template?.label || "尚未生成本平台草稿")}</p><strong>标题 ${[...String(draft?.title || "")].length}/${Number(profile.title_limit)}</strong><p>${aiOriginalEscape(draft?.title || "等待 AI 生成本平台标题")}</p>${platform === "amazon" ? `<strong>Item Highlights · 标题补充信息</strong><p>${aiOriginalEscape(draft?.item_highlights || "待补充")}</p>` : ""}<strong>卖点（${bullets.length}）</strong>${bullets.length ? `<ul class="ai-original-bullet-list">${bullets.map(bullet => `<li>${aiOriginalEscape(bullet)}</li>`).join("")}</ul>` : '<p class="ai-original-muted">暂无卖点</p>'}<strong>商品属性（${attributes.length}）</strong>${renderAiOriginalAttributes(attributes)}<details><summary>查看${aiOriginalEscape(profile.language_label || profile.language || "")}描述</summary><p>${aiOriginalEscape(draft?.description || "等待 AI 生成本平台描述")}</p></details><div class="ai-original-draft-actions"><button class="secondary" type="button" onclick="openAiOriginalPlatformEditor(${Number(row.id)})" ${draft ? "" : "disabled"}>编辑草稿</button><button class="primary" type="button" onclick="exportAiOriginalPlatformDraft(${Number(row.id)})" ${draft?.title ? "" : "disabled"}>导出草稿</button></div></div>
+    <div class="ai-original-fields"><div class="ai-original-platform-validation wide">${errors.length ? `<strong class="bad">待修正（${errors.length}）</strong><ul>${errors.map(item => `<li class="bad">${aiOriginalEscape(item)}</li>`).join("")}</ul>` : draft?.status === "completed" && draft.validation ? '<strong>文案基础校验已完成</strong>' : draft ? `<strong>${draft.status === "failed" ? "生成失败，请重试" : draft.status === "processing" ? "草稿生成中" : "草稿待完善"}</strong>` : '<strong>本平台尚无草稿</strong>'}${warnings.length ? `<strong>上架前待核实</strong><ul>${warnings.map(item => `<li>${aiOriginalEscape(item)}</li>`).join("")}</ul>` : ""}<p>导出文件为 JSON 刊登草稿。也可在下方选择 ${aiOriginalEscape(profile.label)} 授权店铺，补齐真实销售资料后预检并自动上架。</p></div></div>
+  </article>`;
+}
+
+function openAiOriginalPlatformEditor(id) {
+  const platform = aiOriginalTargetPlatform();
+  if (platform === "mercadolibre") return openAiOriginalEditor(id);
+  const row = aiOriginalEditorRow(id);
+  const draft = aiOriginalPlatformDraft(row, platform);
+  const dialog = document.getElementById("ai-original-platform-editor");
+  if (!draft || !dialog) return;
+  aiOriginalPlatformEditorState = {id: Number(id), platform, saving: false};
+  const profile = aiOriginalPlatformProfile(platform);
+  document.getElementById("ai-original-platform-editor-heading").textContent = `编辑 ${profile.label} 草稿`;
+  document.getElementById("ai-original-platform-editor-note").textContent = `${profile.language_label || profile.language} · 标题上限 ${profile.title_limit} 字符。保存后重新检查当前平台规则。`;
+  const title = document.getElementById("ai-original-platform-editor-title");
+  title.value = draft.title || "";
+  title.maxLength = Number(profile.title_limit) || 256;
+  const description = document.getElementById("ai-original-platform-editor-description");
+  description.value = draft.description || "";
+  description.maxLength = Number(profile.description_limit) || 50000;
+  document.getElementById("ai-original-platform-editor-bullets").value = (draft.bullet_points || []).join("\n");
+  document.getElementById("ai-original-platform-editor-highlights-field").hidden = platform !== "amazon";
+  document.getElementById("ai-original-platform-editor-highlights").value = draft.item_highlights || "";
+  document.getElementById("ai-original-platform-editor-highlights").maxLength = Number(profile.item_highlights_limit) || 125;
+  document.getElementById("ai-original-platform-editor-status").textContent = "保存更新当前平台草稿；在下方完善销售资料并预检后可自动上架。";
+  document.getElementById("ai-original-platform-editor-save").disabled = false;
+  dialog.showModal();
+}
+
+function closeAiOriginalPlatformEditor() {
+  document.getElementById("ai-original-platform-editor")?.close();
+  aiOriginalPlatformEditorState = null;
+}
+
+async function saveAiOriginalPlatformEditor() {
+  const state = aiOriginalPlatformEditorState;
+  if (!state || state.saving) return;
+  state.saving = true;
+  const button = document.getElementById("ai-original-platform-editor-save");
+  const status = document.getElementById("ai-original-platform-editor-status");
+  button.disabled = true;
+  const body = {
+    target_platform: state.platform,
+    title: document.getElementById("ai-original-platform-editor-title").value.trim(),
+    description: document.getElementById("ai-original-platform-editor-description").value.trim(),
+    bullet_points: document.getElementById("ai-original-platform-editor-bullets").value.split("\n").map(line => line.trim()).filter(Boolean)
+  };
+  if (state.platform === "amazon") body.item_highlights = document.getElementById("ai-original-platform-editor-highlights").value.trim();
+  try {
+    const response = await fetch(`/api/ai-original-products/${state.id}/listing`, {method: "PATCH", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    const payload = await response.json();
+    if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
+    const updated = payload.data?.row || payload.data;
+    if (updated?.id) aiOriginalRows = aiOriginalRows.map(row => Number(row.id) === state.id ? updated : row);
+    else await loadAiOriginalProducts({preserveTaskStatus: true});
+    renderAiOriginalProducts();
+    if (aiOriginalPlatformEditorState === state) closeAiOriginalPlatformEditor();
+    aiOriginalStatus(`${aiOriginalPlatformProfile(state.platform).label} 草稿已保存`, "success");
+  } catch (error) { if (aiOriginalPlatformEditorState === state) status.textContent = `保存失败：${error.message || error}`; }
+  finally { state.saving = false; if (aiOriginalPlatformEditorState === state) button.disabled = false; }
+}
+
+async function exportAiOriginalPlatformDraft(id) {
+  const platform = aiOriginalTargetPlatform();
+  if (platform === "mercadolibre") return;
+  try {
+    const response = await fetch(`/api/ai-original-products/${Number(id)}/export?target_platform=${encodeURIComponent(platform)}`, {cache: "no-store"});
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new Error(payload.message || `HTTP ${response.status}`);
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${platform}-draft-${Number(id)}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    aiOriginalStatus(`${aiOriginalPlatformProfile(platform).label} 草稿已导出，请在平台后台补齐上架资料`, "success");
+  } catch (error) { aiOriginalStatus(`导出失败：${error.message || error}`, "error"); }
+}
+
 function renderAiOriginalProducts() {
   const grid = document.getElementById("ai-original-grid");
   if (!grid) return;
   const filter = document.getElementById("ai-original-status-filter")?.value || "";
-  const rows = filter ? aiOriginalRows.filter(row => row.ai_status === filter) : aiOriginalRows;
+  const rows = filter ? aiOriginalRows.filter(row => aiOriginalPlatformStatus(row) === filter) : aiOriginalRows;
   const visibleIds = new Set(rows.map(row => Number(row.id)));
   aiOriginalSelected = new Set([...aiOriginalSelected].filter(id => visibleIds.has(id)));
-  document.getElementById("ai-original-total").textContent = `共 ${rows.length} 件`;
+  const totalCost = aiOriginalTargetPlatform() === "mercadolibre" && aiOriginalTotalCost
+    ? ` · 全部商品 ${aiOriginalBudgetSummary(aiOriginalTotalCost)} · 已记录 ${aiOriginalTotalCost.recorded_products}/${aiOriginalTotalCost.total_products} 款（历史未记录费用不含）` : "";
+  document.getElementById("ai-original-total").textContent = `共 ${rows.length} 件${totalCost}`;
   grid.innerHTML = rows.length ? rows.map(row => {
+    if (aiOriginalTargetPlatform() !== "mercadolibre") return renderAiOriginalMarketplaceCard(row);
     const original = row.original_1688 || {};
     const status = String(row.ai_status || "pending");
+    const recoveryMessage = aiOriginalRecoveryMessage(row);
+    const budgetSummary = aiOriginalBudgetSummary(row.ai_original?.generation_budget);
     const sourceImage = aiOriginalDisplayImageUrl(original.main_image_url || (original.images || [])[0] || "");
     const aiImage = aiOriginalDisplayImageUrl(row.main_image_url || "");
     const titleEs = row.title_es || "等待 AI 生成西班牙语标题";
@@ -454,8 +731,8 @@ function renderAiOriginalProducts() {
         <figure>${sourceImage ? `<img src="${aiOriginalEscape(sourceImage)}" data-image-candidates="${aiOriginalEscape(JSON.stringify(aiOriginalSourceImageFallbacks(original)))}" alt="1688 原始主图" loading="lazy" referrerpolicy="no-referrer" onerror="aiOriginalImageError(this)">` : '<span class="ai-original-image-placeholder">暂无原图</span>'}<figcaption>1688 原图</figcaption></figure>
         <figure>${aiImage ? `<img src="${aiOriginalEscape(aiImage)}" alt="AI 美客多白底主图" loading="lazy" referrerpolicy="no-referrer" onerror="aiOriginalImageError(this)">` : '<span class="ai-original-image-placeholder">待生成</span>'}<figcaption>AI 白底主图</figcaption></figure>
       </div>
-      <div class="ai-original-source"><span class="ai-original-section-label source">1688 原始资料</span><h4>${aiOriginalEscape(original.title || row.title)}</h4><p>1688 编号：${aiOriginalEscape(original.source_1688_item_id || row.source_item_id)}</p><p>采购价：${aiOriginalEscape(row.source_purchase_price_cny ?? original.price ?? row.price ?? "-")} CNY</p><a href="${aiOriginalEscape(original.source_url || row.source_url || "#")}" target="_blank" rel="noopener">打开 1688 详情页 ↗</a>${row.ai_error ? `<p class="bad">${aiOriginalEscape(row.ai_error)}</p>` : ""}</div>
-      <div class="ai-original-copy"><span class="ai-original-section-label generated">AI 美客多刊登稿</span><p>生成业务员：${aiOriginalEscape(row.generator_salesperson || "未记录")}</p><strong>西语标题 ${titleEs.length}/60</strong><p class="${titleEs.length > 60 ? "bad" : ""}">${aiOriginalEscape(titleEs)}</p><strong>葡语标题 ${titlePt.length}/60</strong><p class="${titlePt.length > 60 ? "bad" : ""}">${aiOriginalEscape(titlePt)}</p><strong>AI 商品属性（${aiAttributes.length}）</strong>${renderAiOriginalAttributes(row.ai_original?.attributes)}${missingRequired.length ? `<p class="bad">必填属性待补充：${aiOriginalEscape(missingRequired.map(item => item.name || item.id).join("、"))}</p>` : ""}<details><summary>查看 AI 双语详情</summary><p>${aiOriginalEscape(row.description_es || "待生成西语详情")}</p><p>${aiOriginalEscape(row.description_pt || "待生成葡萄牙语详情")}</p></details><div class="ai-original-readiness"><span class="${ready ? "ok" : "pending"}">${ready ? "✓" : "!"} AI 属性</span><span class="${aiImageReady ? "ok" : "pending"}">${aiImageReady ? "✓" : "!"} AI 白底主图</span><span class="${row.category_id ? "ok" : "pending"}">${row.category_id ? "✓" : "!"} CBT 类目</span></div><button class="secondary ai-original-edit-button" type="button" onclick="openAiOriginalEditor(${Number(row.id)})">编辑分类、字段、详情与变体</button></div>
+      <div class="ai-original-source"><span class="ai-original-section-label source">1688 原始资料</span><h4>${aiOriginalEscape(original.title || row.title)}</h4><p>1688 编号：${aiOriginalEscape(original.source_1688_item_id || row.source_item_id)}</p><p>采购价：${aiOriginalEscape(row.source_purchase_price_cny ?? original.price ?? row.price ?? "-")} CNY</p><a href="${aiOriginalEscape(original.source_url || row.source_url || "#")}" target="_blank" rel="noopener">打开 1688 详情页 ↗</a>${recoveryMessage ? `<p class="pending">${aiOriginalEscape(recoveryMessage)}</p>` : ""}${row.ai_error || row.ai_original?.error ? `<p class="bad">${aiOriginalEscape(row.ai_error || row.ai_original.error)}</p>` : ""}</div>
+      <div class="ai-original-copy"><span class="ai-original-section-label generated">AI 美客多刊登稿</span><p>生成业务员：${aiOriginalEscape(row.generator_salesperson || "未记录")}</p>${budgetSummary ? `<p class="ai-original-muted">${aiOriginalEscape(budgetSummary)}</p>` : ""}<strong>西语标题 ${titleEs.length}/60</strong><p class="${titleEs.length > 60 ? "bad" : ""}">${aiOriginalEscape(titleEs)}</p><strong>葡语标题 ${titlePt.length}/60</strong><p class="${titlePt.length > 60 ? "bad" : ""}">${aiOriginalEscape(titlePt)}</p><strong>AI 商品属性（${aiAttributes.length}）</strong>${renderAiOriginalAttributes(row.ai_original?.attributes)}${missingRequired.length ? `<p class="bad">必填属性待补充：${aiOriginalEscape(missingRequired.map(item => item.name || item.id).join("、"))}</p>` : ""}<details><summary>查看 AI 双语详情</summary><p>${aiOriginalEscape(row.description_es || "待生成西语详情")}</p><p>${aiOriginalEscape(row.description_pt || "待生成葡萄牙语详情")}</p></details><div class="ai-original-readiness"><span class="${ready ? "ok" : "pending"}">${ready ? "✓" : "!"} AI 属性</span><span class="${aiImageReady ? "ok" : "pending"}">${aiImageReady ? "✓" : "!"} AI 白底主图</span><span class="${row.category_id ? "ok" : "pending"}">${row.category_id ? "✓" : "!"} CBT 类目</span></div><button class="secondary ai-original-edit-button" type="button" onclick="openAiOriginalEditor(${Number(row.id)})">编辑分类、字段、详情与变体</button></div>
       <div class="ai-original-fields">
         <label>实重(g)<input id="ai-original-weight-${Number(row.id)}" type="number" min="1" step="1" value="${aiOriginalEscape(row.weight_g || "")}"></label>
         <label>净收益 USD<input id="ai-original-net-${Number(row.id)}" type="number" min="0.01" step="0.01" value="${aiOriginalEscape(netProceedsValue)}"><small class="ai-original-net-hint">${aiOriginalEscape(netProceedsHint)}</small></label>
@@ -469,11 +746,14 @@ function renderAiOriginalProducts() {
 }
 
 function openAiOriginalEditor(id) {
+  if (aiOriginalTargetPlatform() !== "mercadolibre") return openAiOriginalPlatformEditor(id);
   const row = aiOriginalEditorRow(id);
   const dialog = document.getElementById("ai-original-editor-dialog");
   if (!row || !dialog) return;
   const original = aiOriginalSource(row);
   const prepared = row.ai_original && typeof row.ai_original === "object" ? row.ai_original : {};
+  const categoryId = row.category_id || prepared.category_id || original.category_id || "";
+  const categoryName = row.category_name || prepared.category_name || original.category_name || "";
   aiOriginalEditorState = {
     id: Number(id),
     row,
@@ -486,19 +766,23 @@ function openAiOriginalEditor(id) {
   document.getElementById("ai-original-editor-title").textContent = original.title || row.title || "编辑 1688 商品";
   document.getElementById("ai-original-editor-source-title").value = original.title || "";
   document.getElementById("ai-original-editor-source-description").value = original.description_text || "";
-  document.getElementById("ai-original-editor-category-id").value = row.category_id || original.category_id || "";
-  document.getElementById("ai-original-editor-category-name").value = row.category_name || original.category_name || "";
+  document.getElementById("ai-original-editor-category-id").value = categoryId;
+  document.getElementById("ai-original-editor-category-name").value = categoryName;
+  const categoryLock = document.getElementById("ai-original-editor-category-locked");
+  if (categoryLock) categoryLock.checked = prepared.category_locked === true;
   document.getElementById("ai-original-editor-title-es").value = prepared.title_es || "";
   document.getElementById("ai-original-editor-title-pt").value = prepared.title_pt || "";
   document.getElementById("ai-original-editor-description-es").value = prepared.description_es || "";
   document.getElementById("ai-original-editor-description-pt").value = prepared.description_pt || "";
   document.getElementById("ai-original-editor-category-results").innerHTML = "";
-  document.getElementById("ai-original-editor-category-hint").textContent = row.category_id ? `当前类目：${row.category_id}${row.category_name ? ` · ${row.category_name}` : ""}` : "输入商品关键词搜索 Mercado CBT 类目";
+  document.getElementById("ai-original-editor-category-hint").textContent = categoryId ? `当前类目：${categoryId}${categoryName ? ` · ${categoryName}` : ""}` : "输入商品关键词搜索 Mercado CBT 类目";
+  const editorStatus = document.getElementById("ai-original-editor-status");
+  if (editorStatus) editorStatus.textContent = aiOriginalRecoveryMessage(row);
   renderAiOriginalCategoryFields();
   renderAiOriginalEditorDimensions();
   renderAiOriginalEditorVariations();
   dialog.showModal();
-  if (row.category_id) loadAiOriginalCategoryAttributes(row.category_id, false);
+  if (categoryId) loadAiOriginalCategoryAttributes(categoryId, false);
 }
 
 function closeAiOriginalEditor() {
@@ -528,13 +812,19 @@ async function searchAiOriginalCategories() {
 async function selectAiOriginalCategory(categoryId, categoryName) {
   document.getElementById("ai-original-editor-category-id").value = categoryId || "";
   document.getElementById("ai-original-editor-category-name").value = categoryName || "";
+  const categoryLock = document.getElementById("ai-original-editor-category-locked");
+  if (categoryLock) categoryLock.checked = /^CBT\d+$/i.test(String(categoryId || "").trim());
   document.getElementById("ai-original-editor-category-hint").textContent = `已选择：${categoryId}${categoryName ? ` · ${categoryName}` : ""}`;
   await loadAiOriginalCategoryAttributes(categoryId, true);
 }
 
 async function loadAiOriginalCategoryAttributes(categoryId, showStatus = true) {
   const normalized = String(categoryId || "").trim().toUpperCase();
-  if (!normalized) { aiOriginalEditorState.schema = []; renderAiOriginalCategoryFields(); return; }
+  if (!normalized) {
+    const categoryLock = document.getElementById("ai-original-editor-category-locked");
+    if (categoryLock) categoryLock.checked = false;
+    aiOriginalEditorState.schema = []; renderAiOriginalCategoryFields(); return;
+  }
   if (showStatus) document.getElementById("ai-original-editor-category-hint").textContent = `正在读取 ${normalized} 的必填/选填字段…`;
   try {
     const tokenId = aiOriginalEditorTokenId();
@@ -571,6 +861,7 @@ function collectAiOriginalEditorPayload() {
     source_description: document.getElementById("ai-original-editor-source-description")?.value?.trim() || "",
     category_id: document.getElementById("ai-original-editor-category-id")?.value?.trim() || "",
     category_name: document.getElementById("ai-original-editor-category-name")?.value?.trim() || "",
+    category_locked: document.getElementById("ai-original-editor-category-locked")?.checked === true,
     title_es: document.getElementById("ai-original-editor-title-es")?.value?.trim() || "",
     title_pt: document.getElementById("ai-original-editor-title-pt")?.value?.trim() || "",
     description_es: document.getElementById("ai-original-editor-description-es")?.value?.trim() || "",
@@ -601,6 +892,7 @@ async function saveAiOriginalEditor(close = true) {
 }
 
 async function translateAiOriginalEditor(language) {
+  if (aiOriginalTargetPlatform() !== "mercadolibre") return;
   if (!aiOriginalEditorState?.id) return;
   const saved = await saveAiOriginalEditor(false);
   if (!saved) return;
@@ -625,13 +917,18 @@ async function translateAiOriginalEditor(language) {
 }
 
 async function loadAiOriginalProducts({preserveTaskStatus = false} = {}) {
+  const sequence = ++aiOriginalLoadSequence;
   const search = document.getElementById("ai-original-search")?.value?.trim() || "";
+  const scope = JSON.stringify([search, document.getElementById("ai-original-generator-filter")?.value || "", aiOriginalTargetPlatform()]);
+  if (scope !== aiOriginalSelectionScope) { aiOriginalSelected.clear(); aiOriginalSelectionScope = scope; updateAiOriginalSelection(); }
   if (!preserveTaskStatus) aiOriginalStatus("正在读取 1688 产品...");
   try {
-    const response = await fetch(`/api/ai-original-products?limit=500&search=${encodeURIComponent(search)}&generator_salesperson=${encodeURIComponent(document.getElementById("ai-original-generator-filter")?.value?.trim() || "")}`, {cache: "no-store"});
+    const response = await fetch(`/api/ai-original-products?limit=500&target_platform=${encodeURIComponent(aiOriginalTargetPlatform())}&search=${encodeURIComponent(search)}&generator_salesperson=${encodeURIComponent(document.getElementById("ai-original-generator-filter")?.value?.trim() || "")}`, {cache: "no-store"});
     const payload = await response.json();
+    if (sequence !== aiOriginalLoadSequence) return;
     if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
     aiOriginalRows = payload.data?.rows || [];
+    aiOriginalTotalCost = payload.data?.generation_cost_summary || null;
     let transferredIds = [];
     try {
       const stored = JSON.parse(localStorage.getItem("mercado.aiOriginalSelected") || "[]");
@@ -645,11 +942,11 @@ async function loadAiOriginalProducts({preserveTaskStatus = false} = {}) {
     }
     renderAiOriginalProducts();
     if (!aiOriginalLastTaskStatus || aiOriginalLastTaskStatus.status === "idle") {
-      renderAiOriginalFailureLog(aiOriginalRows.filter(row => row.ai_status === "failed" && row.ai_error)
-        .slice(0, 20).map(row => `产品 ${row.id}：${row.ai_error}`));
+      renderAiOriginalFailureLog(aiOriginalRows.filter(row => aiOriginalPlatformStatus(row) === "failed")
+        .slice(0, 20).map(row => `产品 ${row.id}：${aiOriginalTargetPlatform() === "mercadolibre" ? row.ai_error || "生成失败" : aiOriginalPlatformDraft(row)?.error || "生成失败"}`));
     }
     if (!preserveTaskStatus) aiOriginalStatus(`已加载 ${aiOriginalRows.length} 件 1688 产品`, "success");
-  } catch (error) { if (!preserveTaskStatus) aiOriginalStatus(`读取失败：${error.message || error}`, "error"); }
+  } catch (error) { if (sequence !== aiOriginalLoadSequence) return; if (!preserveTaskStatus) aiOriginalStatus(`读取失败：${error.message || error}`, "error"); }
 }
 
 function toggleAiOriginalProduct(id, checked) {
@@ -659,7 +956,7 @@ function toggleAiOriginalProduct(id, checked) {
 
 function toggleAllAiOriginalProducts(checked) {
   const filter = document.getElementById("ai-original-status-filter")?.value || "";
-  aiOriginalRows.filter(row => !filter || row.ai_status === filter).forEach(row => {
+  aiOriginalRows.filter(row => !filter || aiOriginalPlatformStatus(row) === filter).forEach(row => {
     if (checked) aiOriginalSelected.add(Number(row.id)); else aiOriginalSelected.delete(Number(row.id));
   });
   renderAiOriginalProducts();
@@ -668,15 +965,15 @@ function toggleAllAiOriginalProducts(checked) {
 function updateAiOriginalSelection() {
   const count = aiOriginalSelected.size;
   const summary = document.getElementById("ai-original-selection");
-  if (summary) summary.textContent = `已选择 ${count} 件`;
+  if (summary) summary.textContent = `当前列表已选择 ${count} 件`;
   const publishSelection = document.getElementById("ai-original-publish-selection");
   if (publishSelection) publishSelection.textContent = `${count} 件`;
   const deleteButton = document.getElementById("ai-original-delete");
   if (deleteButton) deleteButton.disabled = !count || aiOriginalDeleteRunning;
   const reviewButton = document.getElementById("ai-original-review-submit");
-  if (reviewButton) reviewButton.disabled = !count || aiOriginalReviewRunning || !document.getElementById("ai-original-review-status")?.value;
+  if (reviewButton) reviewButton.disabled = aiOriginalTargetPlatform() !== "mercadolibre" || !count || aiOriginalReviewRunning || !document.getElementById("ai-original-review-status")?.value;
   const filter = document.getElementById("ai-original-status-filter")?.value || "";
-  const visible = aiOriginalRows.filter(row => !filter || row.ai_status === filter);
+  const visible = aiOriginalRows.filter(row => !filter || aiOriginalPlatformStatus(row) === filter);
   const selectedCount = visible.filter(row => aiOriginalSelected.has(Number(row.id))).length;
   const selectAll = document.getElementById("ai-original-select-all");
   if (selectAll) {
@@ -685,11 +982,13 @@ function updateAiOriginalSelection() {
   }
   const process = document.getElementById("ai-original-process");
   const publish = document.getElementById("ai-original-publish");
-  if (process) process.disabled = !count;
-  if (publish) publish.disabled = !count;
+  if (process) process.disabled = !count || aiOriginalSubmitting || aiOriginalTaskActive();
+  if (publish) publish.disabled = aiOriginalTargetPlatform() !== "mercadolibre" || !count || aiOriginalSubmitting;
+  globalThis.AiOriginalPublisher?.syncSelection();
 }
 
 async function updateSelectedAiOriginalReviewStatus() {
+  if (aiOriginalTargetPlatform() !== "mercadolibre") return;
   if (aiOriginalReviewRunning) return;
   const ids = [...aiOriginalSelected];
   const reviewStatus = document.getElementById("ai-original-review-status")?.value || "";
@@ -785,21 +1084,27 @@ async function deleteAiOriginalProductSelection(ids, setStatus) {
 }
 
 async function processSelectedAiOriginalProducts() {
+  if (aiOriginalSubmitting || aiOriginalTaskActive()) return;
   const ids = [...aiOriginalSelected];
   if (!ids.length) return;
   const button = document.getElementById("ai-original-process");
   button.disabled = true;
   aiOriginalStatus(`正在创建 ${ids.length} 件 AI 原创任务...`);
+  aiOriginalSubmitting = true;
+  updateAiOriginalSelection();
   try {
+    const isMercado = aiOriginalTargetPlatform() === "mercadolibre";
     const taskPayload = {
       product_item_ids: ids,
-      token_id: aiOriginalEditorTokenId(),
+      target_platform: aiOriginalTargetPlatform(),
+      template_id: document.getElementById("ai-original-template")?.value || "standard",
+      token_id: aiOriginalTargetPlatform() === "mercadolibre" ? aiOriginalEditorTokenId() : "",
       api_key: document.getElementById("ai-original-api-key")?.value || "",
-      base_url: document.getElementById("ai-original-base-url")?.value || "",
-      model: document.getElementById("ai-original-model")?.value || "",
-      image_api_key: document.getElementById("ai-original-image-api-key")?.value || "",
-      image_base_url: document.getElementById("ai-original-image-base-url")?.value || "",
-      image_model: document.getElementById("ai-original-image-model")?.value || "",
+      base_url: isMercado ? "https://api.deepseek.com" : document.getElementById("ai-original-base-url")?.value || "",
+      model: isMercado ? "deepseek-flash" : document.getElementById("ai-original-model")?.value || "",
+      image_api_key: isMercado ? "" : document.getElementById("ai-original-image-api-key")?.value || "",
+      image_base_url: isMercado ? "" : document.getElementById("ai-original-image-base-url")?.value || "",
+      image_model: isMercado ? "" : document.getElementById("ai-original-image-model")?.value || "",
     };
     if (window.canChangeTaskWorkers) {
       taskPayload.workers = Number(document.getElementById("ai-original-workers")?.value || 3);
@@ -809,7 +1114,7 @@ async function processSelectedAiOriginalProducts() {
     if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
     renderAiOriginalTaskStatus(payload.data || {});
     loadAiOriginalTaskStatus();
-  } catch (error) { aiOriginalStatus(`启动失败：${error.message || error}`, "error"); button.disabled = false; }
+  } catch (error) { aiOriginalStatus(`启动失败：${error.message || error}`, "error"); button.disabled = false; } finally { aiOriginalSubmitting = false; updateAiOriginalSelection(); }
 }
 
 function renderAiOriginalTaskStatus(data) {
@@ -817,14 +1122,22 @@ function renderAiOriginalTaskStatus(data) {
   const failures = (Array.isArray(data.results) ? data.results : []).filter(item => item?.status === "failed");
   const firstFailure = failures[0];
   const failureDetail = firstFailure?.message ? `；失败示例：${String(firstFailure.message).slice(0, 240)}` : "";
-  const text = `${data.message || "AI 原创任务"} · ${Number(data.processed_count || 0)}/${Number(data.requested_count || 0)} · 成功 ${Number(data.completed_count || 0)} · 失败 ${Number(data.failed_count || 0)}${failureDetail}`;
+  const taskPlatform = aiOriginalPlatformProfile(data.target_platform || (data.status === "idle" ? aiOriginalTargetPlatform() : "mercadolibre"));
+  const waiting = data.status === "waiting_off_peak";
+  const resumeTime = waiting ? aiOriginalResumeTime(data.resume_at) : "";
+  const queueMessage = waiting ? `等待闲时${resumeTime ? `，北京时间 ${resumeTime} 起自动继续` : "，进入闲时后自动继续"}` : "";
+  const budgetSummary = aiOriginalBudgetSummary(data.generation_budget);
+  const text = `${taskPlatform.label} · ${data.message || "AI 原创任务"}${queueMessage ? ` · ${queueMessage}` : ""} · ${Number(data.processed_count || 0)}/${Number(data.requested_count || 0)} · 成功 ${Number(data.completed_count || 0)} · 失败 ${Number(data.failed_count || 0)}${failureDetail}${budgetSummary ? ` · ${budgetSummary}` : ""}`;
   const hasFailures = Number(data.failed_count || 0) > 0 || data.status === "error" || data.status === "partial";
-  aiOriginalStatus(text, hasFailures ? "error" : (!data.running && data.status !== "idle" ? "success" : ""));
-  const lines = failures.map(item => `产品 ${item.product_id || item.source_item_id || "未知"}：${item.message || "处理失败，查看服务日志"}`);
+  aiOriginalStatus(text, hasFailures ? (Number(data.completed_count || 0) > 0 ? "partial" : "error") : (!aiOriginalTaskActive(data) && data.status !== "idle" ? "success" : ""));
+  const lines = failures.map(item => {
+    const cost = aiOriginalBudgetSummary(item.generation_budget);
+    return `产品 ${item.product_id || item.source_item_id || "未知"}：${item.message || "处理失败，查看服务日志"}${cost ? ` · ${cost}` : ""}`;
+  });
   if (!lines.length && data.status === "error") lines.push(data.message || "AI 原创任务失败，查看服务日志");
   if (data.status !== "idle") renderAiOriginalFailureLog(lines);
   const button = document.getElementById("ai-original-process");
-  if (button) { button.textContent = data.running ? "AI 任务执行中..." : "执行所选 AI 任务"; button.disabled = Boolean(data.running) || !aiOriginalSelected.size; }
+  if (button) { button.textContent = waiting ? "已排队，等待闲时" : data.running ? "AI 任务执行中..." : "执行所选 AI 任务"; button.disabled = aiOriginalTaskActive(data) || !aiOriginalSelected.size; }
 }
 
 async function loadAiOriginalTaskStatus() {
@@ -834,12 +1147,13 @@ async function loadAiOriginalTaskStatus() {
     const payload = await response.json();
     if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
     renderAiOriginalTaskStatus(payload.data || {});
-    if (payload.data?.running) aiOriginalTaskTimer = setTimeout(loadAiOriginalTaskStatus, 1500);
+    if (aiOriginalTaskActive(payload.data)) aiOriginalTaskTimer = setTimeout(loadAiOriginalTaskStatus, payload.data?.status === "waiting_off_peak" ? 15000 : 1500);
     else if (payload.data?.status !== "idle") await loadAiOriginalProducts({preserveTaskStatus: true});
   } catch (error) { aiOriginalStatus(`任务状态读取失败：${error.message || error}`, "error"); }
 }
 
 async function saveAiOriginalProduct(id) {
+  if (aiOriginalTargetPlatform() !== "mercadolibre") return;
   const weight = Number(document.getElementById(`ai-original-weight-${id}`)?.value || 0);
   const netProceeds = Number(document.getElementById(`ai-original-net-${id}`)?.value || 0);
   const row = aiOriginalRows.find(item => Number(item.id) === Number(id));
@@ -972,20 +1286,25 @@ function renderAiOriginalPublishFormula() {
 }
 
 function aiOriginalPublishableSelection() {
+  if (aiOriginalTargetPlatform() !== "mercadolibre") return [];
   return aiOriginalRows.filter(row => aiOriginalSelected.has(Number(row.id)) && row.review_status === "approved");
 }
 
 async function publishSelectedAiOriginalProducts() {
+  if (aiOriginalTargetPlatform() !== "mercadolibre") { aiOriginalStatus("当前平台请使用下方自动上架面板，完善销售资料后预检确认", "info"); return; }
+  if (aiOriginalSubmitting) return;
   const ids = aiOriginalPublishableSelection().map(row => Number(row.id));
   const skippedCount = aiOriginalSelected.size - ids.length;
   const tokenIds = [...(document.getElementById("ai-original-stores")?.selectedOptions || [])].map(option => Number(option.value)).filter(Boolean);
   const siteIds = aiOriginalSelectedSiteIds();
   const status = document.getElementById("ai-original-publish-status");
-  if (!ids.length) { status.textContent = "所选产品均未审核通过，已全部忽略，本次上架 0 件"; status.className = "ai-original-status success"; return; }
+  if (!ids.length) { status.textContent = "所选产品均未审核通过，已全部忽略，本次上架 0 件"; status.className = "ai-original-status info"; globalThis.WorkbenchUI?.feedback(status, "info"); return; }
   if (!tokenIds.length || !siteIds.length) { status.textContent = "请选择对应店铺和至少一个目标站点"; status.className = "ai-original-status error"; return; }
   const netProceedsRatio = Number(document.getElementById("ai-original-net-ratio")?.value || 200);
   if (!(netProceedsRatio > 0) || netProceedsRatio > 10000) { status.textContent = "AI 原创比例必须大于 0 且不超过 10000%"; status.className = "ai-original-status error"; return; }
   if (!window.confirm(`已自动忽略 ${skippedCount} 件未审核通过的产品。确定把 ${ids.length} 件产品上架到 ${tokenIds.length} 个店铺、${siteIds.length} 个站点吗？售价按产品净收益 × 分类比例 × 店铺站点比例 × AI 原创上架比例 ${netProceedsRatio}% 计算。`)) return;
+  aiOriginalSubmitting = true;
+  updateAiOriginalSelection();
   try {
     const publishPayload = {
       product_item_ids: ids, selection_mode: "accounts", token_ids: tokenIds, site_ids: siteIds,
@@ -1000,10 +1319,11 @@ async function publishSelectedAiOriginalProducts() {
     if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
     status.textContent = payload.data?.message || "已启动批量上架"; status.className = "ai-original-status success";
     loadAiOriginalPublishStatus();
-  } catch (error) { status.textContent = `上架失败：${error.message || error}`; status.className = "ai-original-status error"; }
+  } catch (error) { status.textContent = `上架失败：${error.message || error}`; status.className = "ai-original-status error"; } finally { aiOriginalSubmitting = false; updateAiOriginalSelection(); }
 }
 
 async function bulkSetAiOriginalDimensions() {
+  if (aiOriginalSubmitting) return;
   const ids = [...aiOriginalSelected];
   if (!ids.length) { aiOriginalStatus("请先选择要批量设置尺寸的 AI 原创产品", "error"); return; }
   const fields = [
@@ -1023,6 +1343,8 @@ async function bulkSetAiOriginalDimensions() {
   const button = document.getElementById("ai-original-bulk-dimensions-button");
   if (button) button.disabled = true;
   aiOriginalStatus(`正在为所选产品中尚无长宽高的商品填写尺寸…`);
+  aiOriginalSubmitting = true;
+  updateAiOriginalSelection();
   try {
     const response = await fetch("/api/ai-original-products/bulk-dimensions", {
       method: "PATCH", headers: {"Content-Type": "application/json"},
@@ -1035,6 +1357,8 @@ async function bulkSetAiOriginalDimensions() {
   } catch (error) {
     aiOriginalStatus(`批量设置尺寸失败：${error.message || error}`, "error");
   } finally {
+    aiOriginalSubmitting = false;
+    updateAiOriginalSelection();
     if (button) button.disabled = false;
   }
 }
@@ -1054,6 +1378,10 @@ async function loadAiOriginalPublishStatus() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("ai-original-platform")?.addEventListener("change", changeAiOriginalPlatform);
+  document.getElementById("ai-original-template")?.addEventListener("change", renderAiOriginalPlatformSettings);
+  document.getElementById("ai-original-platform-editor")?.addEventListener("cancel", closeAiOriginalPlatformEditor);
+  if (document.getElementById("tab-ai-original-products")) loadAiOriginalProfiles();
   document.getElementById("ai-original-generator-filter")?.addEventListener("keydown", event => { if (event.key === "Enter") loadAiOriginalProducts(); });
   document.getElementById("ai-original-search")?.addEventListener("keydown", event => { if (event.key === "Enter") loadAiOriginalProducts(); });
   document.getElementById("ai-original-status-filter")?.addEventListener("change", renderAiOriginalProducts);

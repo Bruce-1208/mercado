@@ -11,7 +11,7 @@ from bit.bit_mysql import insert_orders
 EXCEL_SUFFIXES = {".xlsx", ".xlsm"}
 ORDER_FIELDS = (
     ("id", ("id", "订单id", "订单ID")),
-    ("编号", ("编号", "订单编号", "销售单号")),
+    ("编号", ("编号", "订单编号", "销售单号", "订单号")),
     ("时间", ("时间", "订单时间")),
     ("业务员", ("业务员",)),
     ("来源", ("来源",)),
@@ -112,8 +112,8 @@ def read_order_workbook(source):
                 for index, header in enumerate(headers)
                 if _normalize_header(header)
             }
-            id_aliases = ORDER_FIELDS[0][1]
-            if not any(alias in header_index for alias in id_aliases):
+            identity_aliases = ORDER_FIELDS[0][1] + ORDER_FIELDS[1][1]
+            if not any(alias in header_index for alias in identity_aliases):
                 continue
             parsed_sheets += 1
 
@@ -135,19 +135,26 @@ def read_order_workbook(source):
                     if order_id_index is not None and order_id_index < len(values)
                     else None
                 )
-                if not order_id:
+                number_index = resolved_indexes[1]
+                order_number = _normalize_order_id(
+                    values[number_index]
+                    if number_index is not None and number_index < len(values)
+                    else None
+                )
+                if not order_id and not order_number:
                     blank_order_ids += 1
                     continue
                 row = []
                 for index in resolved_indexes:
                     row.append(values[index] if index is not None and index < len(values) else None)
-                row[0] = order_id
+                row[0] = order_id or order_number
+                row[1] = order_number or None
                 rows.append(row)
     finally:
         workbook.close()
 
     if parsed_sheets == 0:
-        raise ValueError(f"没有找到包含 id 列的订单工作表：{source_name}")
+        raise ValueError(f"没有找到包含订单编号或 id 列的订单工作表：{source_name}")
     return rows, {
         "file": source_name,
         "sheets": parsed_sheets,
@@ -177,10 +184,12 @@ def collect_latest_order_rows(sources):
         raw_rows += len(rows)
         blank_order_ids += report["blank_order_ids"]
         for row in rows:
-            order_id = row[0]
-            if order_id in latest_rows:
+            order_number = _normalize_order_id(row[1])
+            row[1] = order_number or None
+            order_key = ("number", order_number) if order_number else ("id", row[0])
+            if order_key in latest_rows:
                 duplicate_rows += 1
-            latest_rows[order_id] = row
+            latest_rows[order_key] = row
 
     return list(latest_rows.values()), {
         "files_processed": len(reports),

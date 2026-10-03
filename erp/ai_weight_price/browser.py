@@ -1,10 +1,12 @@
 """Visible CDP browser adapter. Site-specific selectors are explicit and inspectable."""
+import errno
 import hashlib
 import io
 import json
 import random
 import re
 import time
+from urllib.error import URLError
 from urllib.parse import urljoin, urlsplit
 from urllib.request import ProxyHandler, build_opener
 
@@ -12,7 +14,7 @@ from .config import safe_url, selection_key, selection_params
 import requests
 from PIL import Image
 
-from .models import number
+from .models import erp_value_equal, number
 from .pricing import sku_cost
 from .supplier_adapter import AUTO_FIELDS, DOM_SNAPSHOT, SupplierAdaptationError, verified_selectors
 
@@ -266,6 +268,10 @@ class WritebackMismatch(ValueError):
         self.actual = actual
 
 
+class ZyingLoginRequired(ValueError):
+    """The connected browser has no authenticated ZYing page."""
+
+
 PENDING_REVIEW_STATUS = "待审核"
 WRITEBACK_REVIEW_STATUSES = {"通过", "价格异常"}
 
@@ -283,19 +289,38 @@ class Browser:
         self.collection_page = None
 
     def __enter__(self):
-        from playwright.sync_api import sync_playwright
+        from playwright.sync_api import Error as PlaywrightError, sync_playwright
         self.pw = sync_playwright().start()
         try:
             # Resolve the local endpoint without system HTTP proxies. In particular,
             # proxy settings must not send the Edge debug discovery request outside this PC.
             endpoint = self.config["cdp_url"].rstrip("/")
             safe_url(endpoint, local=True)
-            with build_opener(ProxyHandler({})).open(endpoint + "/json/version", timeout=5) as response:
-                websocket = json.load(response).get("webSocketDebuggerUrl", "")
+            try:
+                with build_opener(ProxyHandler({})).open(endpoint + "/json/version", timeout=5) as response:
+                    websocket = json.load(response).get("webSocketDebuggerUrl", "")
+            except (URLError, OSError) as exc:
+                reason = exc.reason if isinstance(exc, URLError) else exc
+                if isinstance(reason, TimeoutError) or getattr(reason, "errno", None) == errno.ETIMEDOUT:
+                    detail = "连接超时"
+                elif isinstance(reason, ConnectionRefusedError) or getattr(reason, "errno", None) == errno.ECONNREFUSED:
+                    detail = "连接被拒绝"
+                else:
+                    raise
+                raise ValueError(
+                    f"无法连接本机 Edge 调试端口 {endpoint}（{detail}）。"
+                    "请在当前执行电脑打开专用 Edge 登录智赢后重试；普通 Edge 窗口无法用于自动更新"
+                ) from exc
             parsed = urlsplit(websocket)
             if parsed.scheme not in ("ws", "wss") or parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
                 raise ValueError("Edge未返回有效的本机连接地址")
-            self.browser = self.pw.chromium.connect_over_cdp(websocket, timeout=15000)
+            try:
+                self.browser = self.pw.chromium.connect_over_cdp(websocket, timeout=15000)
+            except PlaywrightError as exc:
+                raise ValueError(
+                    f"无法连接本机 Edge 浏览器会话 {endpoint}。"
+                    "请检查当前执行电脑的专用 Edge 窗口是否仍在运行，重新打开智赢登录页面后重试"
+                ) from exc
             if not self.browser.contexts:
                 raise ValueError("未找到可连接的 Edge 会话，请先点击打开登录页面")
             self.context = self.browser.contexts[0]
@@ -527,7 +552,7 @@ class Browser:
                 continue
             # No credentials leave the browser adapter or enter our task database.
             return {"page_url": page.url, "confirmed_at": time.time()}
-        raise ValueError("尚未检测到已登录的智赢后台。请在刚打开的 Edge 窗口完成登录，再点击“我已成功登录”")
+        raise ZyingLoginRequired("尚未检测到已登录的智赢后台。请在刚打开的 Edge 窗口完成登录，再点击“我已成功登录”")
 
     def categories(self):
         page = self.page(self.config["erp_list_url"])
@@ -1733,14 +1758,11 @@ class Browser:
         try:
             if "login" in page.url.lower():
                 raise ValueError("智赢登录已失效，请重新登录")
-            root_selector = ".curd-detail-wrap"
             self._open_zying_product_by_id(page, product_id)
             actual_id = self.normalize_erp_id(self.value(page, "erp_edit_id", required=True))
             if actual_id != product_id:
                 raise ValueError(f"智赢详情产品编号不匹配：目标 {product_id}，当前 {actual_id}")
-            root = page.locator(f"{root_selector}:visible")
-            if root.count() != 1:
-                raise ValueError("智赢产品详情未能唯一定位")
+            root = self._wait_zying_package_detail(page, product_id)
             weight_input = self.unique(page, "erp_weight_input")
             weight_input.fill(weight)
             dimensions_controls = self._zying_package_dimension_controls(root) if dims else []
@@ -1752,11 +1774,13 @@ class Browser:
             elif dims:
                 raise ValueError("智赢详情页未能识别唯一的包装尺寸字段")
             self._set_zying_product_level(page, root)
-            if self.unique(page, "erp_weight_input").input_value().strip() != weight:
-                raise ValueError("智赢重量输入框回读与目标值不一致")
-            expected_dims = ["x".join(dims)] if len(dimensions_controls) == 1 else dims
-            if dims and [field.input_value().strip().lower().replace("×", "x") for field in dimensions_controls] != expected_dims:
-                raise ValueError("智赢尺寸输入框回读与目标值不一致")
+            actual_weight = self.unique(page, "erp_weight_input").input_value().strip()
+            if not erp_value_equal("weight_g", actual_weight, weight):
+                raise ValueError(f"智赢重量输入框回读不一致：目标 {weight}g，实际 {actual_weight}g")
+            expected_dims = "x".join(dims)
+            actual_dims = "x".join(field.input_value().strip() for field in dimensions_controls)
+            if dims and not erp_value_equal("dimensions_cm", actual_dims, expected_dims):
+                raise ValueError(f"智赢尺寸输入框回读不一致：目标 {expected_dims}cm，实际 {actual_dims}cm")
             save = self.erp_save_button(page, root)
             self.check(page)
             save.click()
@@ -1772,16 +1796,18 @@ class Browser:
                     raise
             page.reload(wait_until="domcontentloaded")
             self._open_zying_product_by_id(page, product_id)
-            root = page.locator(f"{root_selector}:visible")
+            root = self._wait_zying_package_detail(page, product_id)
             if self.normalize_erp_id(self.value(page, "erp_edit_id", required=True)) != product_id:
                 raise ValueError("保存后智赢详情编号发生变化，无法确认写入结果")
             dimensions_controls = self._zying_package_dimension_controls(root) if dims else []
             if dims and len(dimensions_controls) not in (1, 3):
                 raise ValueError("保存后无法重新定位智赢包装尺寸字段")
-            if self.unique(page, "erp_weight_input").input_value().strip() != weight:
-                raise ValueError("保存后回读的智赢重量与目标值不一致")
-            if dims and [field.input_value().strip().lower().replace("×", "x") for field in dimensions_controls] != expected_dims:
-                raise ValueError("保存后回读的智赢尺寸与目标值不一致")
+            actual_weight = self.unique(page, "erp_weight_input").input_value().strip()
+            if not erp_value_equal("weight_g", actual_weight, weight):
+                raise ValueError(f"保存后回读的智赢重量与目标值不一致：目标 {weight}g，实际 {actual_weight}g")
+            actual_dims = "x".join(field.input_value().strip() for field in dimensions_controls)
+            if dims and not erp_value_equal("dimensions_cm", actual_dims, expected_dims):
+                raise ValueError(f"保存后回读的智赢尺寸与目标值不一致：目标 {expected_dims}cm，实际 {actual_dims}cm")
             self._verify_zying_product_level(root)
             current_dims = "x".join(field.input_value().strip() for field in dimensions_controls)
             self.log(f"智赢产品 {product_id} 已保存：重量 {weight}g" + (f"，尺寸 {'x'.join(dims)}cm" if dims else "，沿用原尺寸") + "，级别重点")
@@ -1790,42 +1816,50 @@ class Browser:
         finally:
             self.release(page)
 
-    def _open_zying_product_by_id(self, page, product_id):
+    def _open_zying_product_by_id(self, page, product_id, timeout=20):
         root_selector = ".curd-detail-wrap"
         if root_selector and page.locator(f"{root_selector}:visible").count():
             if self.normalize_erp_id(self.value(page, "erp_edit_id")) == product_id:
                 return
         self._search_zying_product(page, product_id)
         rows = page.locator(self.s["erp_rows"])
-        rows.first.wait_for(state="visible")
-        candidates, last_rows = [], []
-        search_started = time.monotonic()
-        deadline = search_started + 5
-        while time.monotonic() < deadline:
-            last_rows = rows.all()
-            exact = []
+        candidates, last_rows, unidentified = [], [], []
+        deadline = time.monotonic() + timeout
+        loading = False
+        while True:
+            self.check(page)
+            if "login" in page.url.lower():
+                raise ValueError("智赢登录已失效，请重新登录")
+            loading = bool(page.locator(".ant-spin-spinning:visible, [aria-busy='true']:visible").count())
+            last_rows = [row for row in rows.all() if row.is_visible()]
+            exact, unidentified = [], []
             for row in last_rows:
                 row_id = ""
                 if self.s.get("erp_id"):
-                    try:
-                        row_id = self.normalize_erp_id(self.value(row, "erp_id", required=True))
-                    except Exception:
-                        pass
+                    row_id = self.normalize_erp_id(self.value(row, "erp_id"))
                 if row_id == product_id or (not row_id and re.search(rf"(?<!\d){re.escape(product_id)}(?!\d)", row.inner_text())):
                     exact.append(row)
-            if exact:
+                elif not row_id:
+                    unidentified.append(row)
+            # Old cards remain mounted while the asynchronous search runs.
+            # Never select them while loading, or stop early on a sole old card.
+            if exact and not loading:
                 candidates = exact
                 break
-            if len(last_rows) == 1 and time.monotonic() - search_started >= 1.2:
+            if time.monotonic() >= deadline:
                 break
-            if self.stop.wait(.3):
+            if self.stop.wait(.1):
                 raise Stopped("智赢产品编号搜索等待被停止")
-        if not candidates and len(last_rows) == 1:
-            # The detail header is still checked before any write, so a list
-            # build that omits card IDs can use a sole search result safely.
-            candidates = last_rows
+        if not candidates and not loading and len(last_rows) == 1 and len(unidentified) == 1:
+            # Only cards without an ID may use this compatibility fallback;
+            # the detail header must still match before any write.
+            candidates = unidentified
         if len(candidates) != 1:
-            raise ValueError(f"按产品编号 {product_id} 搜索后匹配到 {len(candidates)} 个智赢商品")
+            detail = "列表仍在加载" if loading else f"当前可见卡片 {len(last_rows)} 个"
+            raise ValueError(
+                f"按产品编号 {product_id} 搜索后匹配到 {len(candidates)} 个智赢商品（{detail}；"
+                "请核对智赢筛选条件及当前账号权限）"
+            )
         card = candidates[0]
         title_selector = self.s.get("erp_title")
         title = card.locator(title_selector).first if title_selector and card.locator(title_selector).count() else card
@@ -1835,24 +1869,59 @@ class Browser:
         if actual_id != product_id:
             raise ValueError(f"打开的智赢商品编号不匹配：目标 {product_id}，当前 {actual_id}")
 
-    def _search_zying_product(self, page, product_id):
-        self.ensure_erp_modal_clear(page)
+    def _wait_zying_package_detail(self, page, product_id, timeout=20):
+        """The detail header mounts before its asynchronous form data arrives."""
+        root = page.locator(".curd-detail-wrap:visible")
+        deadline = time.monotonic() + timeout
+        while True:
+            self.check(page)
+            if "login" in page.url.lower():
+                raise ValueError("智赢登录已失效，请重新登录")
+            if root.count() == 1:
+                actual_id = self.normalize_erp_id(self.value(page, "erp_edit_id"))
+                weights = page.locator(self.s["erp_weight_input"])
+                if (actual_id == product_id and weights.count() == 1
+                        and weights.first.is_visible() and weights.first.is_enabled()
+                        and not root.locator(".ant-spin-spinning:visible, [aria-busy='true']:visible").count()):
+                    return root
+            if time.monotonic() >= deadline:
+                raise ValueError(f"智赢产品 {product_id} 详情加载超时，尚未准备好重量尺寸表单")
+            if self.stop.wait(.1):
+                raise Stopped("智赢详情加载等待被停止")
+
+    def _search_zying_product(self, page, product_id, timeout=20):
+        # DOMContentLoaded only means the HTML shell is ready. Product filters
+        # are in a lazy-loaded React chunk and mount after navigation/reload.
         selector = self.s.get("erp_product_id_search") or ""
-        if selector:
-            fields = page.locator(selector)
-            visible_fields = [field for field in fields.all() if field.is_visible()]
-        else:
-            visible_fields = []
-            for field in page.locator("input:visible").all():
-                details = field.evaluate("""e => {
-                  const box=e.closest('.ant-form-item')||e.parentElement;
-                  return [e.placeholder,e.getAttribute('aria-label'),box?.innerText].filter(Boolean).join(' ')
-                }""")
-                if re.search(r"产品编号|商品编号|产品ID|商品ID", details or ""):
-                    visible_fields.append(field)
-        if len(visible_fields) != 1:
+        deadline = time.monotonic() + timeout
+        visible_fields = []
+        while True:
+            self.check(page)
+            if "login" in page.url.lower():
+                raise ValueError("智赢登录已失效，请重新登录")
+            self.ensure_erp_modal_clear(page)
+            if selector:
+                visible_fields = [field for field in page.locator(selector).all() if field.is_visible()]
+            else:
+                visible_fields = []
+                for field in page.locator("input:visible").all():
+                    details = field.evaluate("""e => {
+                      const box=e.closest('.ant-form-item')||e.parentElement;
+                      return [e.placeholder,e.getAttribute('aria-label'),box?.innerText].filter(Boolean).join(' ')
+                    }""")
+                    if re.search(r"产品编号|商品编号|产品ID|商品ID", details or "", re.I):
+                        visible_fields.append(field)
+            if len(visible_fields) > 1:
+                break
+            if len(visible_fields) == 1 and visible_fields[0].is_enabled():
+                break
+            if time.monotonic() >= deadline:
+                break
+            if self.stop.wait(.1):
+                raise Stopped("智赢产品列表加载等待被停止")
+        if len(visible_fields) != 1 or not visible_fields[0].is_enabled():
             self.retain(page)
-            raise CircuitOpen(f"无法唯一定位智赢产品编号搜索框，请配置 erp_product_id_search（当前匹配 {len(visible_fields)} 个）；已暂停，待人工核对页面后继续")
+            raise CircuitOpen(f"智赢产品列表加载后仍无法唯一定位可用的产品编号搜索框，请配置 erp_product_id_search（当前匹配 {len(visible_fields)} 个）；已暂停，待人工核对页面后继续")
         visible_fields[0].fill(product_id)
         button_selector = self.s.get("erp_product_search_button") or ""
         if button_selector:
@@ -1885,35 +1954,61 @@ class Browser:
          .map(label => label.innerText).join(' ')""")
 
     def _zying_package_dimension_controls(self, root):
+        named = []
+        for name in ("sizeLength", "sizeWidth", "sizeHeight"):
+            matches = [field for field in root.locator(
+                f'input[id="{name}"],input[name="{name}"],input[id$="_{name}"]'
+            ).all() if field.is_visible()]
+            named.append(matches)
+        if any(named):
+            if not all(len(fields) == 1 for fields in named):
+                raise ValueError("智赢 sizeLength、sizeWidth、sizeHeight 三个尺寸框未能分别唯一定位")
+            return [fields[0] for fields in named]
         selector = self.s.get("erp_dimensions_input") or ""
-        if selector:
-            matches = [field for field in root.locator(selector).all() if field.is_visible()]
-            if len(matches) not in (1, 3):
-                raise ValueError(f"智赢尺寸字段选择器必须匹配一个整体尺寸框或长宽高三个字段，实际 {len(matches)} 个")
-            return matches
-        dimension_items = []
-        dimension_groups = []
-        side_items = {"长": [], "宽": [], "高": []}
+        configured = [field for field in root.locator(selector).all() if field.is_visible()] if selector else []
+        side_fields = {"length": [], "width": [], "height": []}
+        patterns = {
+            "length": r"(?:包装|产品|商品)?(?:长|长度)|(?:package[_-]?)?length",
+            "width": r"(?:包装|产品|商品)?(?:宽|宽度)|(?:package[_-]?)?width",
+            "height": r"(?:包装|产品|商品)?(?:高|高度)|(?:package[_-]?)?height",
+        }
+        for field in root.locator("input,textarea").all():
+            if not field.is_visible():
+                continue
+            hints = field.evaluate("""e => {
+                const item = e.closest('.ant-form-item');
+                const labels = item ? Array.from(item.querySelectorAll('.ant-form-item-label'))
+                    .filter(label => label.closest('.ant-form-item') === item).map(label => label.innerText) : [];
+                return [e.placeholder, e.getAttribute('aria-label'), e.name, e.id, ...labels].filter(Boolean);
+            }""")
+            sides = set()
+            for hint in hints:
+                hint = re.sub(r"[（(][^）)]*[）)]|厘米|cm|[：:*\s]", "", hint, flags=re.I)
+                for side, pattern in patterns.items():
+                    if re.fullmatch(pattern, hint, flags=re.I):
+                        sides.add(side)
+            if len(sides) == 1:
+                side_fields[sides.pop()].append(field)
+        # Prefer the individually named controls, even if a legacy selector
+        # matches an aggregate field. DOM order may differ from length/width/height.
+        if all(len(side_fields[side]) == 1 for side in patterns):
+            return [side_fields[side][0] for side in patterns]
+        if any(side_fields.values()):
+            raise ValueError("智赢长、宽、高输入框未能分别唯一定位，请检查尺寸字段配置")
+        if configured:
+            if len(configured) not in (1, 3):
+                raise ValueError(f"智赢尺寸字段选择器必须匹配一个整体尺寸框或长宽高三个字段，实际 {len(configured)} 个")
+            return configured
+        groups = []
         for item in root.locator(".ant-form-item").all():
             label = self._zying_form_item_label(item)
-            label = re.sub(r"[：:*\s]", "", label)
-            fields = [field for field in item.locator("input,textarea").all() if field.is_visible()]
-            if not fields:
+            if not re.search(r"包装尺寸|商品尺寸|产品尺寸|尺寸", label):
                 continue
-            if re.search(r"包装尺寸|商品尺寸|产品尺寸|尺寸", label):
-                dimension_items.extend(fields)
-                dimension_groups.append(fields)
-            for side, pattern in (("长", r"(?:包装|产品)?(?:长|长度|length)"),
-                                  ("宽", r"(?:包装|产品)?(?:宽|宽度|width)"),
-                                  ("高", r"(?:包装|产品)?(?:高|高度|height)")):
-                if re.fullmatch(pattern, label, flags=re.I):
-                    side_items[side].extend(fields)
-        if len(dimension_items) == 1:
-            return dimension_items
-        if len(dimension_groups) == 1 and len(dimension_groups[0]) == 3:
-            return dimension_groups[0]
-        if all(len(side_items[side]) == 1 for side in ("长", "宽", "高")):
-            return [side_items[side][0] for side in ("长", "宽", "高")]
+            fields = [field for field in item.locator("input,textarea").all() if field.is_visible()]
+            if fields:
+                groups.append(fields)
+        if len(groups) == 1 and len(groups[0]) in (1, 3):
+            return groups[0]
         return []
 
     def _set_zying_product_level(self, page, root):

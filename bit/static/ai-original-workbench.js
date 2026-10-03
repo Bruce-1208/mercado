@@ -4,6 +4,17 @@
 let aiOriginalWorkbenchRunning = false;
 
 function aiOriginalListingChecks(row) {
+  if (aiOriginalTargetPlatform() !== "mercadolibre") {
+    const draft = aiOriginalPlatformDraft(row);
+    const profile = aiOriginalPlatformProfile();
+    return [
+      {label: "本平台草稿", ok: Boolean(draft) && draft.status === "completed"},
+      {label: `${profile.language_label || profile.language}标题`, ok: Boolean(draft?.title?.trim()) && [...draft.title].length <= Number(profile.title_limit)},
+      {label: "商品描述", ok: Boolean(draft?.description?.trim()) && (!profile.description_limit || [...draft.description].length <= Number(profile.description_limit))},
+      {label: "商品主图", ok: Boolean(draft?.main_image_url)},
+      {label: "平台基础规则", ok: Boolean(draft?.validation) && !aiOriginalValidationMessages(draft, "errors").length}
+    ];
+  }
   const prepared = row.ai_original || {};
   return [
     {label: "美客多类目", ok: /^CBT\d+$/.test(row.category_id || "")},
@@ -16,7 +27,7 @@ function aiOriginalListingChecks(row) {
 }
 
 function aiOriginalListingReady(row) {
-  return row.ai_status === "completed" && row.review_status === "approved" && aiOriginalListingChecks(row).every(check => check.ok);
+  return aiOriginalPlatformStatus(row) === "completed" && (aiOriginalTargetPlatform() !== "mercadolibre" || row.review_status === "approved") && aiOriginalListingChecks(row).every(check => check.ok);
 }
 
 function decorateAiOriginalWorkbench() {
@@ -24,7 +35,7 @@ function decorateAiOriginalWorkbench() {
   const counts = {
     total: rows.length,
     pending: rows.filter(row => !aiOriginalListingReady(row)).length,
-    generated: rows.filter(row => row.ai_status === "completed").length,
+    generated: rows.filter(row => aiOriginalPlatformStatus(row) === "completed").length,
     ready: rows.filter(aiOriginalListingReady).length
   };
   Object.entries(counts).forEach(([key, value]) => {
@@ -39,24 +50,28 @@ function decorateAiOriginalWorkbench() {
     checkbox.setAttribute("aria-label", `选择商品 ${row.original_1688?.title || row.title || row.id}`);
     const checks = aiOriginalListingChecks(row);
     const ready = aiOriginalListingReady(row);
-    const status = ["pending", "processing", "completed", "failed"].includes(row.ai_status) ? row.ai_status : "pending";
+    const platform = aiOriginalTargetPlatform();
+    const isMercado = platform === "mercadolibre";
+    const currentStatus = aiOriginalPlatformStatus(row);
+    const status = ["pending", "processing", "completed", "failed"].includes(currentStatus) ? currentStatus : "pending";
     const header = document.createElement("header");
     header.className = "ai-original-card-head";
     const reviewStatus = String(row.review_status || "unreviewed");
     const reviewLabel = {unreviewed: "待审核", approved: "审核通过", suspected: "疑似风险", infringing: "侵权", risk: "待复核"}[reviewStatus] || reviewStatus;
-    header.innerHTML = `<label><span>1688 · ${aiOriginalEscape(row.original_1688?.source_1688_item_id || row.source_item_id)}</span></label><span class="ai-original-badge ${status}">${ready ? "已审核 · 待上架校验" : status === "completed" ? `AI 已生成 · ${aiOriginalEscape(reviewLabel)}` : aiOriginalStateLabel(status)}</span>`;
+    const badgeLabel = isMercado ? (ready ? "已审核 · 待上架校验" : status === "completed" ? `AI 已生成 · ${aiOriginalEscape(reviewLabel)}` : aiOriginalStateLabel(status)) : (ready ? "草稿已生成 · 基础检查通过" : status === "completed" ? "草稿已生成 · 待完善" : aiOriginalStateLabel(status));
+    header.innerHTML = `<label><span>1688 · ${aiOriginalEscape(row.original_1688?.source_1688_item_id || row.source_item_id)}</span></label><span class="ai-original-badge ${status}">${badgeLabel}</span>`;
     header.querySelector("label").prepend(checkbox);
     card.prepend(header);
     const fields = card.querySelector(".ai-original-fields");
     if (fields) {
       const checklist = document.createElement("div");
       checklist.className = "ai-original-check-panel";
-      checklist.innerHTML = `<strong>上架资料检查 <small>${checks.filter(check => check.ok).length}/${checks.length}</small></strong><ul>${checks.map(check => `<li class="${check.ok ? "ok" : "pending"}"><span>${check.ok ? "✓" : "○"}</span>${check.label}<small>${check.ok ? "已填写" : "待补齐"}</small></li>`).join("")}</ul><p>必填属性以美客多当前类目规则为准</p>`;
+      checklist.innerHTML = `<strong>上架资料检查 <small>${checks.filter(check => check.ok).length}/${checks.length}</small></strong><ul>${checks.map(check => `<li class="${check.ok ? "ok" : "pending"}"><span>${check.ok ? "✓" : "○"}</span>${check.label}<small>${check.ok ? "已填写" : "待补齐"}</small></li>`).join("")}</ul><p>${isMercado ? "必填属性以美客多当前类目规则为准" : "基础检查不等于平台审核通过；提交前仍需完善平台要求的字段"}</p>`;
       fields.prepend(checklist);
     }
     // A collected supplier image is not an AI result.
     const generatedFigure = card.querySelectorAll(".ai-original-image-pair figure")[1];
-    if (generatedFigure && !row.ai_original?.main_image_url) {
+    if (generatedFigure && !aiOriginalPlatformDraft(row)?.main_image_url) {
       const image = generatedFigure.querySelector("img");
       if (image) image.replaceWith(Object.assign(document.createElement("div"), {className: "ai-original-image-empty", textContent: "等待生成"}));
     }
@@ -69,7 +84,7 @@ function decorateAiOriginalWorkbench() {
     });
     // Placeholder text must not count towards the title limit.
     card.querySelectorAll(".ai-original-copy > strong").forEach((label, index) => {
-      if (index < 2) label.textContent = `${index ? "PT · 葡萄牙语" : "ES · 西班牙语"} ${[...(index ? row.title_pt : row.title_es) || ""].length}/60`;
+      if (isMercado && index < 2) label.textContent = `${index ? "PT · 葡萄牙语" : "ES · 西班牙语"} ${[...(index ? row.title_pt : row.title_es) || ""].length}/60`;
     });
   });
   syncAiOriginalWorkbenchSelection();
@@ -86,13 +101,15 @@ function syncAiOriginalWorkbenchSelection() {
   const skippedCount = count - readyCount;
   const publish = document.getElementById("ai-original-publish");
   if (publish) {
-    publish.disabled = !count;
+    publish.disabled = aiOriginalTargetPlatform() !== "mercadolibre" || !count || aiOriginalSubmitting;
     publish.title = count ? `审核通过 ${readyCount} 件，将自动忽略 ${skippedCount} 件未审核通过的产品` : "";
   }
   const process = document.getElementById("ai-original-process");
-  if (process && aiOriginalWorkbenchRunning) process.disabled = true;
+  if (process && (aiOriginalWorkbenchRunning || aiOriginalSubmitting)) process.disabled = true;
   const hint = document.getElementById("ai-original-selection-hint");
-  if (hint) hint.textContent = count ? `所选 ${count} 件 · 审核通过 ${readyCount} 件 · 将忽略 ${skippedCount} 件` : "选择商品后，批量生成刊登内容";
+  if (hint) hint.textContent = aiOriginalTargetPlatform() === "mercadolibre"
+    ? (count ? `所选 ${count} 件 · 审核通过 ${readyCount} 件 · 将忽略 ${skippedCount} 件` : "选择商品后，批量生成刊登内容")
+    : (count ? `所选 ${count} 件 · 将生成 ${aiOriginalPlatformProfile().label} 草稿` : `选择商品后，批量生成 ${aiOriginalPlatformProfile().label} 草稿`);
 }
 
 document.addEventListener("DOMContentLoaded", () => {

@@ -35,7 +35,7 @@ def test_knowledge_record_normalizes_brand_and_list_semantics():
     assert normalize_list_type("黑名单") == "blacklist"
     with pytest.raises(ValueError, match="品牌名称不能为空"):
         normalize_knowledge_record({"brand_name": "", "list_type": "whitelist"})
-    with pytest.raises(ValueError, match="白名单或黑名单"):
+    with pytest.raises(ValueError, match="待复核、风险拦截或人工放行"):
         normalize_list_type("unknown")
 
 
@@ -145,7 +145,7 @@ def test_infringement_knowledge_bulk_api(monkeypatch):
     assert [row["brand_name"] for row in captured] == ["Nike", "Adidas"]
 
 
-def test_auto_analysis_blacklist_wins_and_writes_evidence():
+def test_auto_analysis_collects_pending_and_prioritizes_infraction_evidence():
     written = []
 
     def fake_extractor(titles, *, source_label, **_kwargs):
@@ -167,11 +167,12 @@ def test_auto_analysis_blacklist_wins_and_writes_evidence():
     )
 
     assert normalize_brand_name("Generic") == ""
-    assert result["blacklist_candidates"] == 1
-    assert result["whitelist_candidates"] == 1
+    assert result["pending_candidates"] == 2
+    assert result["blacklist_candidates"] == 0
+    assert result["whitelist_candidates"] == 0
     assert [(row["brand_name"], row["list_type"]) for row in written] == [
-        ("LEGO", "blacklist"),
-        ("Nike", "whitelist"),
+        ("LEGO", "pending"),
+        ("Nike", "pending"),
     ]
     assert written[0]["evidence_count"] == 2
 
@@ -224,9 +225,21 @@ def test_workbench_contains_infringement_knowledge_management_page():
 
     assert 'data-tab="infringement-knowledge"' in source
     assert 'id="tab-infringement-knowledge"' in source
-    assert "白名单 · 不侵权" in source
-    assert "黑名单 · 侵权" in source
+    assert "人工放行 · 白名单" in source
+    assert "风险拦截 · 黑名单" in source
     assert 'id="infringement-knowledge-form"' in source
     assert "每一行会作为一条独立记录" in source
     assert 'id="start-infringement-analysis-btn"' in source
-    assert "/api/infringement-knowledge" in source
+    assert "infringement-knowledge.js" in source
+
+
+def test_unmatched_extracted_brand_does_not_invent_evidence_count():
+    written = []
+    analyze_knowledge_sources(
+        {"infraction_rows": [{"title": "Generic product"}], "active_rows": []},
+        writer=lambda rows: written.extend(rows) or {},
+        brand_extractor=lambda titles, **kwargs: ["Imagined Brand"] if titles else [],
+    )
+    assert written[0]["list_type"] == "pending"
+    assert written[0]["evidence_count"] == 0
+    assert written[0]["source_detail"] == ""

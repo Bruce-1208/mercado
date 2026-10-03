@@ -101,6 +101,11 @@ button { font: inherit; }
 .product-batch-card { margin-bottom: 12px; }
 .product-search-grid { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 10px; margin-bottom: 10px; }
 .product-batch-help { margin: 10px 0 0; color: #728096; font-size: 11px; line-height: 1.5; }
+.zeshun-category-picker { margin-top: 10px; padding: 0 10px 9px; border: 1px solid #e0e9f4; border-radius: 8px; background: #f7faff; }
+.zeshun-category-picker .link-button { margin-top: 3px; font-size: 11px; }
+.zeshun-category-status { color: #728096; font-size: 11px; line-height: 1.5; }
+.zeshun-category-status.error { color: #a52b23; }
+.zeshun-category-picker select:disabled, .link-button:disabled { cursor: not-allowed; opacity: .6; }
 .product-batch-card .inline-action { margin-bottom: 0; }
 .plugin-login-status { margin-top: 7px; padding: 8px 9px; border-radius: 8px; background: #fff4df; color: #875700; font-size: 11px; line-height: 1.4; }
 .plugin-login-status.ok { background: #e9f7ef; color: #176b43; }
@@ -185,3 +190,21 @@ footer {
   background: #fff;
   cursor: pointer;
 }
+
+/* Match the service desk controls while keeping the extension layout compact. */
+:root { color:#172033; background:#f3f5f9; font-family:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif; }
+body { min-width:0; background:#f3f5f9; }
+header, main, footer { background:#fff; }
+header { gap:12px; padding:16px; }
+main { padding:16px; }
+.page-card { border-color:#dce3ec; border-radius:12px; box-shadow:0 2px 10px rgba(15,23,42,.045); }
+.primary, .secondary { min-height:38px; box-sizing:border-box; border-radius:8px; padding:8px 12px; font-size:13px; font-weight:600; }
+.primary { background:#2563eb; box-shadow:none; }
+.primary:hover:not(:disabled) { background:#1d4ed8; }
+.secondary { color:#475569; border-color:#dce3ec; }
+input:not([type=checkbox]):not([type=radio]), select { box-sizing:border-box; min-width:0; max-width:100%; min-height:38px; border-radius:8px; border-color:#dce3ec; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
+.status, .result { overflow-wrap:anywhere; line-height:1.6; }
+@media(max-width:380px) { header { flex-wrap:wrap; } .yandex-card .zying-actions { grid-template-columns:1fr; } .mode-tab { font-size:11px; padding:8px 3px; } }
+
+.auth-line.logged-out { color: #a43120; background: #fff0eb; border: 1px solid #e9a493; border-radius: 6px; padding: 10px; font-weight: 700; }

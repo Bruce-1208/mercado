@@ -74,13 +74,28 @@ test('empty selection disables publishing', () => {
   assert.equal(nodes.get('ai-original-publish').disabled, true);
 });
 
+test('a pending publish cannot be submitted twice or unlocked by presentation updates', async () => {
+  const {run, nodes} = setup();
+  run(`
+    var writes = 0, finish;
+    fetch = () => { writes++; return new Promise(resolve => { finish = () => resolve({ok:true,json:async()=>({status:'success'})}); }); };
+    var pending = publishSelectedAiOriginalProducts();
+    publishSelectedAiOriginalProducts();
+    syncAiOriginalWorkbenchSelection();
+  `);
+  assert.equal(run('writes'), 1);
+  assert.equal(nodes.get('ai-original-publish').disabled, true);
+  await run('finish(); pending');
+  assert.equal(run('aiOriginalSubmitting'), false);
+});
+
 test('status filtering removes hidden selections, including after switching back', () => {
   const {run, nodes} = setup();
   run(`aiOriginalRows[1].ai_status = 'pending';
     document.getElementById('ai-original-status-filter').value = 'completed';
     renderAiOriginalProducts();`);
   assert.deepEqual(Array.from(run('[...aiOriginalSelected]')), [1, 3]);
-  assert.equal(nodes.get('ai-original-selection').textContent, '已选择 2 件');
+  assert.equal(nodes.get('ai-original-selection').textContent, '当前列表已选择 2 件');
   run(`document.getElementById('ai-original-status-filter').value = ''; renderAiOriginalProducts()`);
   assert.deepEqual(Array.from(run('[...aiOriginalSelected]')), [1, 3]);
 });

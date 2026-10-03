@@ -61,7 +61,8 @@
     .security { padding:12px 15px; border-left:4px solid #5b91d5; border-radius:7px; background:#f2f7fd; color:#46546a; }
     @media (max-width:760px) { .hero,.section-head { flex-direction:column; } .grid,.form-grid { grid-template-columns:1fr; } .account { align-self:flex-start; } section { padding:18px; } }
   </style>
-  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20260930-unified1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261002-ui">
+    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261002-ui"></script>
 </head>
 <body class="zs-standalone">
   <header class="bar">
@@ -69,6 +70,7 @@
     <a href="/">← 返回运营服务台</a>
   </header>
   <main>
+    {% include "model_balance_alert.html" %}
     <div class="hero">
       <div><h1>所有外部服务，在这里集中配置</h1><p>模型 Token、邮箱提醒和 Webhook 都与当前泽顺账号绑定。插件及控制台业务只读取这些配置，不再单独保存 Token。</p></div>
       <div class="account">当前账号：<b>{{ current_user.display_name or current_user.username }}</b></div>
@@ -202,7 +204,7 @@
       badge($("webhook-status"), Boolean(webhook.configured)); $("webhook-enabled").checked=Boolean(webhook.enabled); $("webhook-url").value=webhook.url || "";
     }
     async function load() { try { render((await api("/api/account-integrations")).data || {}); } catch(error) { message("token-message", error.message, true); } }
-    $("save-tokens").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const body={wan_workspace_id:$("wan_workspace_id").value.trim()}; ["deepseek","dashscope","openai","seedance","wan"].forEach(name => { const value=$(`${name}_api_key`).value.trim(); if(value) body[`${name}_api_key`]=value; }); const result=await api("/api/account-integrations/tokens",{method:"PUT",body:JSON.stringify(body)}); resetSecretInputs("#tokens"); privateSettings=null; privateSettingsPromise=null; message("token-message",result.message); await load(); } catch(error) { message("token-message",error.message,true); } finally { button.disabled=false; } });
+    $("save-tokens").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const body={wan_workspace_id:$("wan_workspace_id").value.trim()}; ["deepseek","dashscope","openai","seedance","wan"].forEach(name => { const value=$(`${name}_api_key`).value.trim(); if(value) body[`${name}_api_key`]=value; }); const result=await api("/api/account-integrations/tokens",{method:"PUT",body:JSON.stringify(body)}); resetSecretInputs("#tokens"); privateSettings=null; privateSettingsPromise=null; message("token-message",result.message); document.dispatchEvent(new Event("model-credentials-saved")); await load(); } catch(error) { message("token-message",error.message,true); } finally { button.disabled=false; } });
     $("save-email").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const result=await api("/api/account-integrations/email",{method:"PUT",body:JSON.stringify({enabled:$("email-enabled").checked,sender_email:$("sender-email").value.trim(),receiver_email:$("receiver-email").value.trim(),smtp_password:$("smtp-password").value,smtp_host:$("smtp-host").value.trim(),smtp_port:Number($("smtp-port").value),smtp_security:$("smtp-security").value})}); resetSecretInputs("#email"); privateSettings=null; privateSettingsPromise=null; badge($("email-status"),result.data.configured); message("email-message",result.message); } catch(error) { message("email-message",error.message,true); } finally { button.disabled=false; } });
     $("test-email").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const result=await api("/api/account-integrations/email/test",{method:"POST",body:"{}"}); message("email-message",result.message); } catch(error) { message("email-message",error.message,true); } finally { button.disabled=false; } });
     $("save-webhook").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const result=await api("/api/account-integrations/webhook",{method:"PUT",body:JSON.stringify({enabled:$("webhook-enabled").checked,url:$("webhook-url").value.trim(),secret:$("webhook-secret").value})}); resetSecretInputs("#webhook"); privateSettings=null; privateSettingsPromise=null; badge($("webhook-status"),result.data.configured); message("webhook-message",result.message); } catch(error) { message("webhook-message",error.message,true); } finally { button.disabled=false; } });

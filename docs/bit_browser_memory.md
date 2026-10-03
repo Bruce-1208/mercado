@@ -22,6 +22,10 @@
 - 重启使用旧代码的工作台、bit_main 和自动任务进程后生效；仅更新磁盘文件不会替换运行中的 Python 模块。
 - 状态文件为 `BIT_RUNTIME_LOCK_DIR/browser_lifecycle.sqlite3`。未设置时仍使用项目 `bit/runtime_locks`。同机多份代码或多个 Agent 业务版本必须使用相同的固定 `BIT_RUNTIME_LOCK_DIR`，才能共享窗口锁、容量和回收登记。不要在任务运行时删除此目录或数据库。
 - 默认配置见 `.env.example`。环境变量必须由实际启动器注入；复制示例文件本身不保证启动器自动加载。
+- BitBrowser 对并发窗口变更比文档中的每秒请求上限更敏感；窗口打开和关闭默认通过一个跨进程槽位串行执行。仅在目标机完成实际压测后，才使用 `BIT_BROWSER_API_MUTATION_CONCURRENCY` 显式放宽。
+- 公共 `bit_api` 的窗口打开/关闭、列表、PID 查询及配置操作共用持久化节流，默认请求间隔 0.25 秒。`BIT_BROWSER_API_MIN_INTERVAL_SECONDS` 可增大间隔，最小限制为 0.1 秒。即使显式增加窗口操作槽位，打开请求仍共用 `BIT_BROWSER_OPEN_COOLDOWN_SECONDS` 间隔。
+- 明确收到“降低接口请求频率”等拒绝时，所有打开窗口的进程共用 10、20、40、60 秒退避；成功打开后重置退避级别。打开失败的冷却不拦截 PID 查询与清理；HTTP 429 或只读接口限频则暂停整个公共 API。冷却期间不占用窗口操作槽位，避免阻止释放低内存窗口。接口不隐式重放请求，仍由原调用方决定有限重试；普通窗口冲突和未知错误不当作限频。
+- Agent 业务 worker 在导入业务模块前将默认 `BIT_RUNTIME_LOCK_DIR` 固定到 Agent 数据目录的 `runtime_locks`，跨业务版本保留窗口登记与冷却状态；已有显式设置保持优先。业务源码由 Agent 自动更新，下一项任务加载新 worker；已运行的任务仍使用原版本，需在安全停止后重新创建任务。
 - 等待窗口容量使用调用方的 `api_lock_timeout`，普通后台任务默认 `BIT_BROWSER_API_LOCK_TIMEOUT=180` 秒；到期明确报资源不足，由现有任务重试策略处理。长时间占用窗口的任务应相应降低业务 worker 数，避免大量任务同时排队超时。
 - 首次升级前已经遗留的窗口没有自动任务归属记录，会计入容量但不会擅自关闭。需要在确认旧任务停止后人工关闭遗留窗口，建立干净基线。
 - 如果 BitBrowser 本机 API 一直不可用，程序会停止新开窗口并持续重试回收，无法通过失联接口强制释放它的进程。需要恢复 BitBrowser 客户端。此修复不包含按进程名批量杀掉用户浏览器的操作。
@@ -31,3 +35,22 @@
 回归覆盖多个独立进程竞争同一容量、低内存禁止新开、启动超时后迟到窗口、关闭返回成功但 PID 存活、PID 查询失败、关闭失败后再次回收、强制终止 worker 后恢复、线程退出遗留锁、人工窗口保护，以及申诉连接失败时的完整清理。
 
 生产验收应观察至少一个完整任务周期：结束后已登记自动窗口数归零（明确手工接管除外），任务停止后残留被回收；窗口数稳定受限，系统可用内存不再随任务轮次持续下降。当前代码测试不能代替目标服务器的实际长时间负载验证。
+
+## 2026-10-01 限频补充修复
+
+仅将窗口变更并发设为 1 不能覆盖 PID/列表请求和其他进程的重试。现已补充所有公共接口共享节流、明确限频后的共享退避、冷却期间释放窗口操作槽位，以及 Agent 跨业务版本的固定状态目录。
+
+针对性回归连续三次通过，每次 24 项，覆盖跨进程请求节流与冷却、实际申诉连接重试恢复、HTTP 429 非 JSON 响应、不隐式重放请求及冷却时清理窗口。扩展回归为 131 passed：
+
+```sh
+BIT_BACKGROUND_SERVICES_DISABLED=1 python3 -m pytest -q \
+  tests/test_bit_browser_api_rate.py tests/test_bit_api_concurrency.py \
+  tests/test_bit_browser_lifecycle.py tests/test_bit_runtime_lock.py \
+  tests/test_local_agent_browser_rate_context.py tests/test_local_agent_runtime.py \
+  tests/test_local_agent_rate_limit.py tests/test_bit_appeal_ai_messages.py \
+  tests/test_bit_appeal_phrases.py tests/test_bit_collection_localization.py
+```
+
+00:47（北京时间）只读核验：3 台在线 Agent 已取得修复业务版本，当前无活动队列任务；工作台根页返回 302，数据库健康接口返回 200 且探测为 ok。无需为该业务包修复重启工作台。尚未启动真实申诉进行验收，下一批任务需观察限频次数、冷却日志和执行结果。
+
+此前自动化报告“5000/5001 未监听、服务不可达”的判断来自沙箱受限访问；在获准访问本机后确认工作台和数据库健康正常，该旧结论不能作为服务停机证据。Agent 心跳报告的最新业务版本也不代表一个已经运行的循环任务加载了该版本；运行中的任务仍使用启动时的 release。

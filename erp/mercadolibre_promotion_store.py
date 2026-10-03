@@ -68,6 +68,14 @@ class PromotionStore:
                 CREATE INDEX IF NOT EXISTS idx_promotions_scope
                     ON promotions(token_id, site_id, status_raw, deadline_date);
 
+                CREATE TABLE IF NOT EXISTS promotion_sync_scopes (
+                    token_id INTEGER NOT NULL,
+                    site_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    checked_at TEXT NOT NULL,
+                    PRIMARY KEY(token_id, site_id)
+                );
+
                 CREATE TABLE IF NOT EXISTS promotion_items (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     promotion_fk INTEGER NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
@@ -345,6 +353,9 @@ class PromotionStore:
                         i.status_raw, i.price, i.currency_id, i.last_synced_at
                     FROM promotions p JOIN promotion_items i ON i.promotion_fk=p.id
                     WHERE ({clauses}) AND LOWER(i.status_raw) IN ({status_sql})
+                        AND LOWER(p.status_raw) NOT IN ('finished','ended','cancelled','canceled','deleted')
+                        AND (p.finish_date='' OR julianday(p.finish_date) IS NULL
+                             OR julianday(p.finish_date) > julianday('now'))
                     ORDER BY p.id, i.id""",
                     params + list(applied_statuses),
                 ).fetchall()
@@ -353,6 +364,41 @@ class PromotionStore:
                     identity = (detail.pop("token_id"), detail.pop("site_id"), detail.pop("item_id"))
                     result.setdefault(identity, []).append(detail)
         return result
+
+    def record_scope_sync(self, token_id, site_id, status, promotion_ids=()):
+        """Only a complete successful snapshot can prove non-enrollment."""
+        with self._connect() as db:
+            if status == 'succeeded':
+                # Expire activities absent from the new complete platform snapshot.
+                ids = list(dict.fromkeys(str(value) for value in promotion_ids))
+                condition = f" AND promotion_id NOT IN ({','.join('?' for _ in ids)})" if ids else ''
+                db.execute("UPDATE promotions SET status_raw='finished' WHERE token_id=? AND site_id=?" + condition,
+                           [int(token_id), str(site_id).upper(), *ids])
+            db.execute('INSERT OR REPLACE INTO promotion_sync_scopes VALUES (?,?,?,?)',
+                       (int(token_id), str(site_id).upper(), status, _now()))
+
+    def clearance_item_states(self, keys, *, details=None):
+        keys = list(dict.fromkeys(keys))
+        if details is None:
+            details = self.applied_item_details(keys)
+        with self._connect() as db:
+            scopes = {(r['token_id'], r['site_id']): dict(r)
+                      for r in db.execute('SELECT * FROM promotion_sync_scopes')}
+        states = {}
+        for key in keys:
+            scope = scopes.get(key[:2], {})
+            activities = [r for r in details.get(key, [])
+                          if str(r.get('promotion_type') or '').upper() == 'CLEARANCE']
+            checked_at = scope.get('checked_at', '')
+            fresh = False
+            if checked_at:
+                try:
+                    fresh = 0 <= (datetime.now(timezone.utc) - datetime.fromisoformat(checked_at)).total_seconds() < 86400
+                except (TypeError, ValueError):
+                    pass
+            status = ('enrolled' if activities else 'not_enrolled') if scope.get('status') == 'succeeded' and fresh else 'unknown'
+            states[key] = {'status': status, 'checked_at': checked_at, 'activities': activities}
+        return states
 
     def applied_item_keys(
         self, keys: Iterable[tuple[int, str, str]]

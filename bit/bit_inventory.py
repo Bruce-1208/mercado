@@ -169,6 +169,9 @@ def ensure_inventory_tables(cursor: Any) -> None:
             `image_url` VARCHAR(1500) NULL,
             `order_remark` VARCHAR(1000) NULL,
             `salesperson` VARCHAR(128) NULL,
+            `inbound_person_id` BIGINT NOT NULL DEFAULT 0,
+            `inbound_person` VARCHAR(128) NOT NULL DEFAULT '',
+            `inventory_owner` VARCHAR(128) NOT NULL DEFAULT '',
             `sku_id` BIGINT NOT NULL DEFAULT 0,
             `quantity` INT NOT NULL DEFAULT 0,
             `unit_cost` DECIMAL(20,4) NOT NULL DEFAULT 0,
@@ -177,7 +180,7 @@ def ensure_inventory_tables(cursor: Any) -> None:
             `created_at` DATETIME NOT NULL,
             `updated_at` DATETIME NOT NULL,
             PRIMARY KEY (`id`),
-            UNIQUE KEY `uniq_inventory_stock_lot` (`shelf_id`, `order_id`, `product_id`, `sku_id`),
+            UNIQUE KEY `uniq_inventory_stock_lot` (`shelf_id`, `order_id`, `product_id`, `sku_id`, `inbound_person_id`, `inventory_owner`),
             KEY `idx_inventory_stock_product` (`product_id`, `quantity`),
             KEY `idx_inventory_stock_order` (`order_id`),
             KEY `idx_inventory_stock_inbound` (`last_inbound_at`)
@@ -197,6 +200,9 @@ def ensure_inventory_tables(cursor: Any) -> None:
             `image_url` VARCHAR(1500) NULL,
             `order_remark` VARCHAR(1000) NULL,
             `salesperson` VARCHAR(128) NULL,
+            `inbound_person_id` BIGINT NOT NULL DEFAULT 0,
+            `inbound_person` VARCHAR(128) NOT NULL DEFAULT '',
+            `inventory_owner` VARCHAR(128) NOT NULL DEFAULT '',
             `sku_id` BIGINT NULL,
             `quantity` INT NOT NULL,
             `unit_cost` DECIMAL(20,4) NOT NULL DEFAULT 0,
@@ -291,11 +297,17 @@ def ensure_inventory_tables(cursor: Any) -> None:
         (STOCK_TABLE, (
             ("order_remark", "VARCHAR(1000) NULL"),
             ("salesperson", "VARCHAR(128) NULL"),
+            ("inbound_person_id", "BIGINT NOT NULL DEFAULT 0"),
+            ("inbound_person", "VARCHAR(128) NOT NULL DEFAULT ''"),
+            ("inventory_owner", "VARCHAR(128) NOT NULL DEFAULT ''"),
             ("sku_id", "BIGINT NOT NULL DEFAULT 0"),
         )),
         (MOVEMENT_TABLE, (
             ("order_remark", "VARCHAR(1000) NULL"),
             ("salesperson", "VARCHAR(128) NULL"),
+            ("inbound_person_id", "BIGINT NOT NULL DEFAULT 0"),
+            ("inbound_person", "VARCHAR(128) NOT NULL DEFAULT ''"),
+            ("inventory_owner", "VARCHAR(128) NOT NULL DEFAULT ''"),
             ("sku_id", "BIGINT NULL"),
         )),
     ):
@@ -309,15 +321,13 @@ def ensure_inventory_tables(cursor: Any) -> None:
                 )
     cursor.execute(f"SHOW INDEX FROM `{STOCK_TABLE}` WHERE `Key_name` = %s", ("uniq_inventory_stock_lot",))
     stock_index_rows = cursor.fetchall() or []
-    if stock_index_rows:
-        indexed_columns = [str(row.get("Column_name") or "") for row in stock_index_rows]
-        if indexed_columns == ["shelf_id", "order_id", "product_id"]:
-            cursor.execute(f"ALTER TABLE `{STOCK_TABLE}` DROP INDEX `uniq_inventory_stock_lot`")
-    cursor.execute(f"SHOW INDEX FROM `{STOCK_TABLE}` WHERE `Key_name` = %s", ("uniq_inventory_stock_lot",))
-    if not cursor.fetchone():
+    indexed_columns = [str(row.get("Column_name") or "") for row in stock_index_rows]
+    expected_columns = ["shelf_id", "order_id", "product_id", "sku_id", "inbound_person_id", "inventory_owner"]
+    if indexed_columns != expected_columns:
+        drop_sql = "DROP INDEX `uniq_inventory_stock_lot`, " if stock_index_rows else ""
         cursor.execute(
-            f"ALTER TABLE `{STOCK_TABLE}` ADD UNIQUE KEY `uniq_inventory_stock_lot` "
-            "(`shelf_id`, `order_id`, `product_id`, `sku_id`)"
+            f"ALTER TABLE `{STOCK_TABLE}` {drop_sql}ADD UNIQUE KEY `uniq_inventory_stock_lot` "
+            "(`shelf_id`, `order_id`, `product_id`, `sku_id`, `inbound_person_id`, `inventory_owner`)"
         )
 
 
@@ -948,6 +958,24 @@ def _normalize_shelf_payload(data: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _inventory_people(cursor: Any) -> dict[str, list[str]]:
+    cursor.execute(
+        f"SELECT DISTINCT `inbound_person` AS `name` FROM `{STOCK_TABLE}` WHERE `inbound_person` <> ''"
+    )
+    inbound = {str(row["name"]) for row in cursor.fetchall() or []}
+    cursor.execute(
+        f"SELECT DISTINCT `inventory_owner` AS `name` FROM `{STOCK_TABLE}` WHERE `inventory_owner` <> ''"
+    )
+    owners = {str(row["name"]) for row in cursor.fetchall() or []}
+    if _table_exists(cursor, STORE_SITE_SETTINGS_TABLE):
+        cursor.execute(f"SELECT DISTINCT `salesperson` AS `name` FROM `{STORE_SITE_SETTINGS_TABLE}` WHERE `salesperson` <> ''")
+        owners.update(str(row["name"]).strip() for row in cursor.fetchall() or [] if row.get("name"))
+    if _table_exists(cursor, "workbench_users"):
+        cursor.execute("SELECT COALESCE(NULLIF(`display_name`, ''), `username`) AS `name` FROM `workbench_users` WHERE `is_active` = 1")
+        owners.update(str(row["name"]).strip() for row in cursor.fetchall() or [] if row.get("name"))
+    return {"inbound_persons": sorted(inbound), "inventory_owners": sorted(owners)}
+
+
 def list_inventory_shelves(*, include_inactive: bool = True) -> dict[str, Any]:
     connection = _connect()
     try:
@@ -968,8 +996,9 @@ def list_inventory_shelves(*, include_inactive: bool = True) -> dict[str, Any]:
                 """
             )
             rows = [_json_row(row) for row in (cursor.fetchall() or [])]
+            people = _inventory_people(cursor)
         connection.commit()
-        return {"rows": rows, "total": len(rows)}
+        return {"rows": rows, "total": len(rows), "people": people}
     finally:
         connection.close()
 
@@ -1055,6 +1084,8 @@ def update_inventory_shelf(shelf_id: Any, data: Mapping[str, Any]) -> dict[str, 
 def list_inventory_stock(
     *,
     search: str = "",
+    inbound_person: str = "",
+    inventory_owner: str = "",
     shelf_id: Any = None,
     stock_status: str = "positive",
     page: int = 1,
@@ -1084,6 +1115,10 @@ def list_inventory_stock(
         where.append("stocks.`quantity` = 0")
     elif status != "all":
         raise ValueError("库存状态筛选无效")
+    for column, value in (("inbound_person", inbound_person), ("inventory_owner", inventory_owner)):
+        if str(value or "").strip():
+            where.append(f"stocks.`{column}` = %s")
+            params.append(str(value).strip())
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     connection = _connect()
     try:
@@ -1573,6 +1608,15 @@ def create_inventory_movement(data: Mapping[str, Any]) -> dict[str, Any]:
                 context = _matched_order_product(
                     cursor, order_id, product_id, variation_id, seller_sku
                 )
+                inventory_owner = str(payload.get("inventory_owner") or "").strip()
+                if not inventory_owner:
+                    raise ValueError("请选择库存归属人")
+                if len(inventory_owner) > 128:
+                    raise ValueError("库存归属人不能超过 128 个字符")
+                if not operator_id or not operator_name:
+                    raise ValueError("入库必须记录登录操作人")
+                inbound_person_id = operator_id
+                inbound_person = operator_name
                 selected_sku_id = payload.get("sku_id")
                 sku_id = (
                     _positive_int(selected_sku_id, "内部 SKU 编号")
@@ -1615,10 +1659,10 @@ def create_inventory_movement(data: Mapping[str, Any]) -> dict[str, Any]:
                     f"""
                     SELECT * FROM `{STOCK_TABLE}`
                     WHERE `shelf_id` = %s AND `order_id` = %s AND `product_id` = %s
-                      AND `sku_id` = %s
+                      AND `sku_id` = %s AND `inbound_person_id` = %s AND `inventory_owner` = %s
                     FOR UPDATE
                     """,
-                    (shelf_id, order_id, product_id, sku_id),
+                    (shelf_id, order_id, product_id, sku_id, inbound_person_id, inventory_owner),
                 )
                 stock = cursor.fetchone()
                 inbound_cost = payload.get("unit_cost")
@@ -1640,13 +1684,14 @@ def create_inventory_movement(data: Mapping[str, Any]) -> dict[str, Any]:
                         UPDATE `{STOCK_TABLE}`
                         SET `product_name` = %s, `image_url` = %s,
                             `order_remark` = %s, `salesperson` = %s, `quantity` = %s,
-                            `sku_id` = %s, `unit_cost` = %s, `last_inbound_at` = %s, `updated_at` = %s
+                            `sku_id` = %s, `unit_cost` = %s, `inbound_person` = %s,
+                            `last_inbound_at` = %s, `updated_at` = %s
                         WHERE `id` = %s
                         """,
                         (
                             context["product_name"], context["image_url"],
                             order_remark, salesperson,
-                            effect["after_quantity"], sku_id, effect["unit_cost"],
+                            effect["after_quantity"], sku_id, effect["unit_cost"], inbound_person,
                             occurred_at, now, stock_id,
                         ),
                     )
@@ -1656,14 +1701,16 @@ def create_inventory_movement(data: Mapping[str, Any]) -> dict[str, Any]:
                         INSERT INTO `{STOCK_TABLE}`
                             (`shelf_id`, `order_id`, `product_id`, `product_name`, `image_url`,
                              `order_remark`, `salesperson`, `sku_id`,
+                             `inbound_person_id`, `inbound_person`, `inventory_owner`,
                              `quantity`, `unit_cost`, `first_inbound_at`, `last_inbound_at`,
                              `created_at`, `updated_at`)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             shelf_id, order_id, product_id, context["product_name"],
                             context["image_url"], order_remark, salesperson,
-                            sku_id, effect["after_quantity"], effect["unit_cost"],
+                            sku_id, inbound_person_id, inbound_person, inventory_owner,
+                            effect["after_quantity"], effect["unit_cost"],
                             occurred_at, occurred_at, now, now,
                         ),
                     )
@@ -1678,6 +1725,9 @@ def create_inventory_movement(data: Mapping[str, Any]) -> dict[str, Any]:
                     "image_url": context["image_url"],
                     "order_remark": order_remark,
                     "salesperson": salesperson,
+                    "inbound_person_id": inbound_person_id,
+                    "inbound_person": inbound_person,
+                    "inventory_owner": inventory_owner,
                 }
             else:
                 stock_id = _positive_int(payload.get("stock_id"), "库存记录编号")
@@ -1709,17 +1759,20 @@ def create_inventory_movement(data: Mapping[str, Any]) -> dict[str, Any]:
                 INSERT INTO `{MOVEMENT_TABLE}`
                     (`stock_id`, `shelf_id`, `movement_type`, `order_id`, `product_id`,
                      `product_name`, `image_url`, `order_remark`, `salesperson`, `sku_id`,
+                     `inbound_person_id`, `inbound_person`, `inventory_owner`,
                      `quantity`, `unit_cost`, `total_cost`,
                      `before_quantity`, `after_quantity`, `reference_no`, `remark`,
                      `operator_id`, `operator_name`, `occurred_at`, `created_at`)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s)
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     stock_id, shelf_id, movement_type, order_id, product_id,
                     stock_snapshot.get("product_name"), stock_snapshot.get("image_url"),
                     stock_snapshot.get("order_remark"), stock_snapshot.get("salesperson"),
                     int(stock_snapshot.get("sku_id") or 0),
+                    int(stock_snapshot.get("inbound_person_id") or 0),
+                    stock_snapshot.get("inbound_person") or "", stock_snapshot.get("inventory_owner") or "",
                     quantity, effect["movement_unit_cost"], total_cost,
                     effect["before_quantity"], effect["after_quantity"], reference_no,
                     remark, operator_id, operator_name, occurred_at, now,
@@ -1747,6 +1800,8 @@ def create_inventory_movement(data: Mapping[str, Any]) -> dict[str, Any]:
 def list_inventory_movements(
     *,
     search: str = "",
+    inbound_person: str = "",
+    inventory_owner: str = "",
     movement_type: str = "",
     shelf_id: Any = None,
     date_from: str = "",
@@ -1784,6 +1839,10 @@ def list_inventory_movements(
         end = datetime.strptime(_parse_datetime(date_to, "结束时间"), "%Y-%m-%d %H:%M:%S")
         where.append("movements.`occurred_at` < %s")
         params.append((end + timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S"))
+    for column, value in (("inbound_person", inbound_person), ("inventory_owner", inventory_owner)):
+        if str(value or "").strip():
+            where.append(f"movements.`{column}` = %s")
+            params.append(str(value).strip())
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     connection = _connect()
     try:

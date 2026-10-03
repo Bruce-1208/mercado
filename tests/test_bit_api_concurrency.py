@@ -3,15 +3,25 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from bit import bit_api, bit_runtime_lock
+import pytest
 
 
-def test_browser_api_mutation_default_uses_three_bounded_slots():
-    assert bit_api.DEFAULT_BROWSER_API_MUTATION_CONCURRENCY == 3
+@pytest.fixture(autouse=True)
+def isolate_rate_state(monkeypatch, tmp_path):
+    monkeypatch.setattr(bit_runtime_lock, "RUNTIME_LOCK_DIR", tmp_path / "locks")
+
+
+def test_browser_api_mutation_default_serializes_bitbrowser_requests():
+    assert bit_api.DEFAULT_BROWSER_API_MUTATION_CONCURRENCY == 1
 
 
 def test_browser_api_mutations_can_be_serialized_across_workers(monkeypatch, tmp_path):
     monkeypatch.setattr(bit_runtime_lock, "RUNTIME_LOCK_DIR", tmp_path / "locks")
-    monkeypatch.setattr(bit_api, "_BROWSER_API_MUTATION_CONCURRENCY", 1)
+    monkeypatch.setattr(
+        bit_api,
+        "_BROWSER_API_MUTATION_CONCURRENCY",
+        bit_api.DEFAULT_BROWSER_API_MUTATION_CONCURRENCY,
+    )
     monkeypatch.setattr(bit_api, "_BROWSER_OPEN_COOLDOWN_SECONDS", 0)
 
     guard = threading.Lock()

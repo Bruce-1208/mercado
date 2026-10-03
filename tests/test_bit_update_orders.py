@@ -28,7 +28,7 @@ def test_folder_import_keeps_last_order_from_latest_file(tmp_path):
     _write_orders(
         new_file,
         [
-            ["order-1", "sale-1", "2026/08/01 10:00:00", "已完成", "新标题", "新买家"],
+            ["order-1-new-id", "sale-1", "2026/08/01 10:00:00", "已完成", "新标题", "新买家"],
             ["order-2", "sale-2", "2026/08/02 11:00:00", "待处理", "订单二", "买家二"],
         ],
     )
@@ -46,7 +46,7 @@ def test_folder_import_keeps_last_order_from_latest_file(tmp_path):
     assert result["duplicate_rows"] == 1
     assert result["unique_orders"] == 2
     assert result["imported_orders"] == 2
-    assert [row[0] for row in inserted] == ["order-1", "order-2"]
+    assert [row[0] for row in inserted] == ["order-1-new-id", "order-2"]
     assert inserted[0][5] == "已完成"
     assert inserted[0][16] == "新标题"
     assert inserted[0][22] == "新买家"
@@ -73,3 +73,19 @@ def test_discovery_recurses_and_ignores_temporary_workbooks(tmp_path):
     files = bit_update_orders.discover_order_excel_files(tmp_path)
 
     assert files == [nested / "订单.xlsx"]
+
+
+def test_sales_number_only_workbook_overwrites_latest_row(tmp_path):
+    path = tmp_path / "orders.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["销售单号", "状态", "图片"])
+    sheet.append([123, "待处理", "https://example.com/old.jpg"])
+    sheet.append([123, "已完成", "https://example.com/new.jpg"])
+    workbook.save(path)
+    rows, result = bit_update_orders.collect_latest_order_rows([path])
+    assert result["duplicate_rows"] == 1
+    assert len(rows) == 1
+    assert rows[0][0:2] == ["123", "123"]
+    assert rows[0][5] == "已完成"
+    assert rows[0][17] == "https://example.com/new.jpg"

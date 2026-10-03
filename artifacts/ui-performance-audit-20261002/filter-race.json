@@ -1,0 +1,7 @@
+{
+  "selectedFilter": "second",
+  "requestedUrls": [
+    "/api/official-infractions/dashboard?search=first"
+  ],
+  "latestFilterRequested": false
+}

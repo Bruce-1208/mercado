@@ -10,11 +10,11 @@ def _order_row(order_id, order_number):
     return [order_id, order_number, *([None] * 21)]
 
 
-def test_insert_orders_deduplicates_and_upserts_order_ids():
+def test_insert_orders_deduplicates_and_upserts_sales_numbers():
     connection = MagicMock()
     cursor = connection.cursor.return_value.__enter__.return_value
-    old_row = _order_row(137492285, "old")
-    new_row = _order_row(137492285, "new")
+    old_row = _order_row(137492285, "sale-1")
+    new_row = _order_row(137492286, "sale-1")
     other_row = _order_row(200, "other")
 
     with patch("bit.bit_mysql.pymysql.connect", return_value=connection):
@@ -164,3 +164,38 @@ def test_order_details_are_limited_before_expensive_joins():
     assert result["summary"]["amount"] == 42
     assert result["pages"] == 20
     connection.close.assert_called_once_with()
+
+
+def test_order_number_migration_cleans_duplicates_and_adds_unique_key():
+    cursor = MagicMock()
+    cursor.fetchone.side_effect = [None, {"acquired": 1}, None, None]
+    bit_mysql._ensure_orders_unique_number(cursor)
+    statements = [call.args[0] for call in cursor.execute.call_args_list]
+    assert any("PARTITION BY (NULLIF(TRIM(`编号`), '') IS NULL)" in sql for sql in statements)
+    assert any("GENERATED ALWAYS AS (NULLIF(TRIM(`编号`), '')) STORED" in sql for sql in statements)
+    assert any("ADD UNIQUE KEY `uniq_orders_number` (`_order_number_key`)" in sql for sql in statements)
+    assert "RELEASE_LOCK" in statements[-1]
+
+
+def test_order_number_migration_is_skipped_when_unique_key_exists():
+    cursor = MagicMock()
+    cursor.fetchone.return_value = {"Key_name": "uniq_orders_number"}
+    bit_mysql._ensure_orders_unique_number(cursor)
+    assert cursor.execute.call_count == 1
+
+
+def test_order_number_normalization_and_missing_number_fallback():
+    assert bit_mysql._deduplicate_order_rows([
+        _order_row("old", 123.0), _order_row("new", " 123 "),
+        _order_row("fallback", None), _order_row("fallback", ""),
+    ]) == [_order_row("new", "123"), _order_row("fallback", None)]
+
+
+def test_reupload_updates_every_field_including_internal_id():
+    connection = MagicMock()
+    cursor = connection.cursor.return_value.__enter__.return_value
+    with patch("bit.bit_mysql.pymysql.connect", return_value=connection):
+        insert_orders([_order_row("new-internal-id", "same-sales-number")])
+    sql = cursor.executemany.call_args.args[0].split("ON DUPLICATE KEY UPDATE")[1]
+    for name in bit_mysql.ORDER_COLUMN_NAMES:
+        assert f"`{name}` = VALUES(`{name}`)" in sql

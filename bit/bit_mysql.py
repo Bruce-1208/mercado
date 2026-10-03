@@ -548,16 +548,31 @@ def _ensure_infringement_knowledge_table(cursor):
     )
 
 
+# Historical automatic imports stored black/white decisions. Read them as
+# unreviewed evidence without migrating or erasing the original records.
+_KNOWLEDGE_EFFECTIVE_TYPE_SQL = (
+    "CASE WHEN COALESCE(NULLIF(`source_type`, ''), 'manual') = 'manual' "
+    "THEN `list_type` ELSE 'pending' END"
+)
+_KNOWLEDGE_EFFECTIVE_SOURCE_SQL = (
+    "CASE WHEN `source_type` = 'analysis' AND LEFT(`source_detail`, 10) = 'global_ip:' "
+    "THEN 'wikidata' ELSE COALESCE(NULLIF(`source_type`, ''), 'manual') END"
+)
+
+
 def _serialize_infringement_knowledge_row(row):
-    from bit.bit_infringement_knowledge import list_type_label
+    from bit.bit_infringement_knowledge import effective_list_type, list_type_label
 
     result = dict(row or {})
     result["id"] = int(result.get("id") or 0)
-    result["list_type_label"] = list_type_label(result.get("list_type"))
     result["notes"] = str(result.get("notes") or "")
     result["source_type"] = str(result.get("source_type") or "manual")
     result["evidence_count"] = int(result.get("evidence_count") or 0)
     result["source_detail"] = str(result.get("source_detail") or "")
+    result["list_type"] = effective_list_type(result)
+    if result["source_type"] == "analysis" and result["source_detail"].startswith("global_ip:"):
+        result["source_type"] = "wikidata"
+    result["list_type_label"] = list_type_label(result.get("list_type"))
     for key in ("created_at", "updated_at"):
         if result.get(key) is not None:
             result[key] = str(result[key])
@@ -565,42 +580,88 @@ def _serialize_infringement_knowledge_row(row):
     return result
 
 
-def list_infringement_knowledge(list_type="", search="", limit=2000):
+def list_infringement_knowledge(list_type="", search="", limit=2000, after_id=None,
+                               source_type="", page=None, page_size=50):
     from bit.bit_infringement_knowledge import normalize_list_type
 
     normalized_type = normalize_list_type(list_type, allow_empty=True)
+    source_type = str(source_type or "").strip().lower()
+    if source_type not in ("", "manual", "analysis", "wipo", "wikidata"):
+        raise ValueError("知识库来源无效")
     search = str(search or "").strip()
     try:
         limit = max(1, min(int(limit or 2000), 5000))
     except (TypeError, ValueError):
         limit = 2000
+    cursor_mode = after_id is not None
+    page_mode = page is not None
+    if cursor_mode and page_mode:
+        raise ValueError("知识库页码与分页游标不能同时使用")
+    if page_mode:
+        try:
+            page, page_size = int(page), int(page_size)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("知识库分页参数无效") from exc
+        if page < 1 or page_size < 1:
+            raise ValueError("知识库分页参数无效")
+        page_size = min(page_size, 200)
+        limit = page_size
+    if cursor_mode:
+        try:
+            after_id = int(after_id)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("知识库分页游标无效") from exc
+        if after_id < 0:
+            raise ValueError("知识库分页游标无效")
 
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
             _ensure_infringement_knowledge_table(cursor)
-            cursor.execute(
-                """
-                SELECT COUNT(*) AS `total`,
-                       SUM(CASE WHEN `list_type` = 'whitelist' THEN 1 ELSE 0 END)
-                           AS `whitelist`,
-                       SUM(CASE WHEN `list_type` = 'blacklist' THEN 1 ELSE 0 END)
-                           AS `blacklist`
-                FROM `infringement_knowledge`
-                WHERE `deleted_at` IS NULL
-                """
-            )
-            summary_row = cursor.fetchone() or {}
+            # Cursor scans avoid recounting the corpus for every page.
+            if not cursor_mode:
+                cursor.execute(
+                    f"""
+                    SELECT COUNT(*) AS `total`,
+                           SUM(CASE WHEN {_KNOWLEDGE_EFFECTIVE_TYPE_SQL} = 'whitelist' THEN 1 ELSE 0 END)
+                               AS `whitelist`,
+                           SUM(CASE WHEN {_KNOWLEDGE_EFFECTIVE_TYPE_SQL} = 'blacklist' THEN 1 ELSE 0 END)
+                               AS `blacklist`,
+                           SUM(CASE WHEN {_KNOWLEDGE_EFFECTIVE_TYPE_SQL} = 'pending' THEN 1 ELSE 0 END)
+                               AS `pending`
+                    FROM `infringement_knowledge`
+                    WHERE `deleted_at` IS NULL
+                    """
+                )
+                summary_row = cursor.fetchone() or {}
 
             conditions = ["`deleted_at` IS NULL"]
             parameters = []
             if normalized_type:
-                conditions.append("`list_type` = %s")
+                conditions.append(f"({_KNOWLEDGE_EFFECTIVE_TYPE_SQL}) = %s")
                 parameters.append(normalized_type)
+            if source_type:
+                conditions.append(f"({_KNOWLEDGE_EFFECTIVE_SOURCE_SQL}) = %s")
+                parameters.append(source_type)
             if search:
                 conditions.append("(`brand_name` LIKE %s OR `notes` LIKE %s)")
                 keyword = f"%{search}%"
                 parameters.extend((keyword, keyword))
+            if page_mode:
+                cursor.execute(
+                    f"SELECT COUNT(*) AS `total` FROM `infringement_knowledge` "
+                    f"WHERE {' AND '.join(conditions)}",
+                    tuple(parameters),
+                )
+                filtered_total = int((cursor.fetchone() or {}).get("total") or 0)
+                pages = max(1, (filtered_total + page_size - 1) // page_size)
+                page = min(page, pages)
+            if cursor_mode:
+                conditions.append("`id` > %s")
+                parameters.append(after_id)
+            ordering = "`id` ASC" if cursor_mode else "`updated_at` DESC, `id` DESC"
+            paging = "LIMIT %s OFFSET %s" if page_mode else "LIMIT %s"
+            paging_params = (limit, (page - 1) * page_size) if page_mode else (limit + 1 if cursor_mode else limit,)
             cursor.execute(
                 f"""
                 SELECT `id`, `brand_name`, `list_type`, `notes`, `source_type`,
@@ -608,25 +669,31 @@ def list_infringement_knowledge(list_type="", search="", limit=2000):
                        `created_at`, `updated_at`
                 FROM `infringement_knowledge`
                 WHERE {' AND '.join(conditions)}
-                ORDER BY `updated_at` DESC, `id` DESC
-                LIMIT %s
+                ORDER BY {ordering}
+                {paging}
                 """,
-                (*parameters, limit),
+                (*parameters, *paging_params),
             )
             rows = [
                 _serialize_infringement_knowledge_row(row)
                 for row in (cursor.fetchall() or [])
             ]
         connection.commit()
-        return {
-            "summary": {
-                "total": int(summary_row.get("total") or 0),
-                "whitelist": int(summary_row.get("whitelist") or 0),
-                "blacklist": int(summary_row.get("blacklist") or 0),
-            },
-            "rows": rows,
-            "filtered_total": len(rows),
-        }
+        result = {"rows": rows[:limit], "filtered_total": min(len(rows), limit)}
+        if cursor_mode:
+            result["has_more"] = len(rows) > limit
+            result["next_after_id"] = (
+                result["rows"][-1]["id"] if result["rows"] else after_id
+            )
+        else:
+            result["summary"] = {
+                key: int(summary_row.get(key) or 0)
+                for key in ("total", "whitelist", "blacklist", "pending")
+            }
+        if page_mode:
+            result.update(filtered_total=filtered_total, page=page, page_size=page_size,
+                          pages=pages, has_more=page < pages)
+        return result
     except Exception:
         connection.rollback()
         raise
@@ -657,7 +724,7 @@ def create_infringement_knowledge(record):
                     """
                     UPDATE `infringement_knowledge`
                     SET `list_type` = %s, `notes` = %s, `source_type` = 'manual',
-                        `evidence_count` = 0, `source_detail` = NULL, `updated_at` = %s,
+                        `updated_at` = %s,
                         `deleted_at` = NULL
                     WHERE `id` = %s
                     """,
@@ -723,8 +790,7 @@ def update_infringement_knowledge(record_id, record):
                 """
                 UPDATE `infringement_knowledge`
                 SET `brand_name` = %s, `list_type` = %s, `notes` = %s,
-                    `source_type` = 'manual', `evidence_count` = 0,
-                    `source_detail` = NULL, `updated_at` = %s
+                    `source_type` = 'manual', `updated_at` = %s
                 WHERE `id` = %s
                 """,
                 (
@@ -815,8 +881,7 @@ def bulk_create_infringement_knowledge(records):
                         """
                         UPDATE `infringement_knowledge`
                         SET `list_type` = %s, `notes` = %s,
-                            `source_type` = 'manual', `evidence_count` = 0,
-                            `source_detail` = NULL, `updated_at` = %s,
+                            `source_type` = 'manual', `updated_at` = %s,
                             `deleted_at` = NULL
                         WHERE `id` = %s
                         """,
@@ -935,7 +1000,9 @@ def upsert_analyzed_infringement_knowledge(records):
     normalized_records = []
     seen = set()
     for record in records or ():
-        normalized = normalize_knowledge_record(record)
+        if not isinstance(record, dict):
+            raise ValueError("知识库记录格式无效")
+        normalized = normalize_knowledge_record({**record, "list_type": "pending"})
         key = normalized["brand_name"].casefold()
         if key in seen:
             continue
@@ -949,41 +1016,45 @@ def upsert_analyzed_infringement_knowledge(records):
         normalized_records.append(normalized)
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    inserted = updated = skipped_manual = skipped_blacklist = 0
+    if not normalized_records:
+        return {"total": 0, "inserted": 0, "updated": 0, "skipped_manual": 0,
+                "skipped_deleted": 0, "skipped_source": 0, "skipped_blacklist": 0}
+    inserted = updated = skipped_manual = skipped_deleted = skipped_source = 0
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
             _ensure_infringement_knowledge_table(cursor)
+            connection.begin()
             for normalized in normalized_records:
                 cursor.execute(
                     """
-                    SELECT `id`, `list_type`, `source_type`, `deleted_at`
+                    SELECT `id`, `list_type`, `source_type`, `source_detail`, `deleted_at`
                     FROM `infringement_knowledge`
-                    WHERE `brand_name` = %s LIMIT 1
+                    WHERE `brand_name` = %s LIMIT 1 FOR UPDATE
                     """,
                     (normalized["brand_name"],),
                 )
                 existing = cursor.fetchone()
                 if existing:
-                    if (
-                        str(existing.get("source_type") or "manual") != "analysis"
-                        or existing.get("deleted_at") is not None
-                    ):
+                    if existing.get("deleted_at") is not None:
+                        skipped_deleted += 1
+                        continue
+                    existing_source = str(existing.get("source_type") or "manual")
+                    if existing_source == "manual":
                         skipped_manual += 1
                         continue
-                    if (
-                        str(existing.get("list_type") or "") == "blacklist"
-                        and normalized["list_type"] == "whitelist"
-                    ):
-                        skipped_blacklist += 1
+                    existing_is_global = str(existing.get("source_detail") or "").startswith("global_ip:")
+                    incoming_is_global = normalized["source_detail"].startswith("global_ip:")
+                    if existing_source != "analysis" or existing_is_global != incoming_is_global:
+                        skipped_source += 1
                         continue
                     cursor.execute(
                         """
                         UPDATE `infringement_knowledge`
                         SET `list_type` = %s, `notes` = %s,
                             `evidence_count` = %s, `source_detail` = %s,
-                            `updated_at` = %s, `deleted_at` = NULL
-                        WHERE `id` = %s
+                            `updated_at` = %s
+                        WHERE `id` = %s AND `source_type` = 'analysis' AND `deleted_at` IS NULL
                         """,
                         (
                             normalized["list_type"],
@@ -994,7 +1065,7 @@ def upsert_analyzed_infringement_knowledge(records):
                             int(existing["id"]),
                         ),
                     )
-                    updated += 1
+                    updated += int(cursor.rowcount > 0)
                     continue
                 cursor.execute(
                     """
@@ -1002,6 +1073,7 @@ def upsert_analyzed_infringement_knowledge(records):
                         `brand_name`, `list_type`, `notes`, `source_type`,
                         `evidence_count`, `source_detail`, `created_at`, `updated_at`
                     ) VALUES (%s, %s, %s, 'analysis', %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE `id` = `id`
                     """,
                     (
                         normalized["brand_name"],
@@ -1013,20 +1085,232 @@ def upsert_analyzed_infringement_knowledge(records):
                         now,
                     ),
                 )
-                inserted += 1
+                inserted += int(cursor.rowcount > 0)
         connection.commit()
         return {
             "total": len(normalized_records),
             "inserted": inserted,
             "updated": updated,
             "skipped_manual": skipped_manual,
-            "skipped_blacklist": skipped_blacklist,
+            "skipped_deleted": skipped_deleted,
+            "skipped_source": skipped_source,
+            "skipped_blacklist": 0,
         }
     except Exception:
         connection.rollback()
         raise
     finally:
         connection.close()
+
+
+def _normalize_wipo_knowledge_records(records):
+    import unicodedata
+    from bit.bit_infringement_knowledge import normalize_knowledge_record
+
+    normalized_records = {}
+    for record in records or ():
+        if not isinstance(record, dict):
+            raise ValueError("WIPO 知识库记录格式无效")
+        normalized = normalize_knowledge_record({
+            **record,
+            "brand_name": unicodedata.normalize("NFKC", str(record.get("brand_name") or "")),
+            "list_type": "pending",
+        })
+        try:
+            normalized["evidence_count"] = max(0, int(record.get("evidence_count") or 0))
+        except (TypeError, ValueError):
+            normalized["evidence_count"] = 0
+        raw_detail = record.get("source_detail") or {}
+        if isinstance(raw_detail, str):
+            try:
+                detail = json.loads(raw_detail)
+            except (TypeError, ValueError):
+                detail = {"detail": raw_detail.strip()}
+        else:
+            detail = raw_detail
+        if not isinstance(detail, dict):
+            detail = {"detail": str(detail)}
+        detail = dict(detail)
+        # Only the two supported WIPO adapters may label their provenance;
+        # callers cannot bypass human review through feed fields.
+        if detail.get("source") != "WIPO Madrid Monitor":
+            detail["source"] = "WIPO Global Brand Database"
+        for field, aliases in {
+            "registration": ("registration", "registration_number", "registration_id", "wipo_id"),
+            "country": ("country", "origin_country"),
+            "status": ("status", "registration_status"),
+            "nice_classes": ("nice_classes",),
+            "source_url": ("source_url",),
+        }.items():
+            if detail.get(field):
+                continue
+            for alias in aliases:
+                if record.get(alias):
+                    detail[field] = record[alias]
+                    break
+        # Feed data must not impersonate the provenance of an existing entry.
+        detail.pop("previous_source", None)
+        normalized["wipo_detail"] = detail
+        key = normalized["brand_name"].casefold()
+        existing = normalized_records.get(key)
+        if existing is None:
+            normalized_records[key] = normalized
+            continue
+        old_detail = existing["wipo_detail"]
+        if old_detail == detail:
+            existing["evidence_count"] = max(existing["evidence_count"], normalized["evidence_count"])
+            continue
+        existing["evidence_count"] += normalized["evidence_count"]
+        for field, value in detail.items():
+            if field not in old_detail:
+                old_detail[field] = value
+            elif old_detail[field] != value:
+                values = old_detail[field] if isinstance(old_detail[field], list) else [old_detail[field]]
+                additions = value if isinstance(value, list) else [value]
+                old_detail[field] = sorted(
+                    {json.dumps(item, ensure_ascii=False, sort_keys=True): item
+                     for item in (*values, *additions)}.values(),
+                    key=lambda item: json.dumps(item, ensure_ascii=False, sort_keys=True),
+                )
+    return [normalized_records[key] for key in sorted(normalized_records)]
+
+
+def _wipo_knowledge_source_detail(detail, existing=None):
+    detail = dict(detail)
+    if existing:
+        previous_detail = str(existing.get("source_detail") or "")
+        if str(existing.get("source_type") or "manual") == "wipo":
+            try:
+                previous = json.loads(previous_detail)
+            except (TypeError, ValueError):
+                previous = {}
+            if isinstance(previous, dict) and previous.get("previous_source"):
+                detail["previous_source"] = previous["previous_source"]
+        else:
+            detail["previous_source"] = {
+                "type": str(existing.get("source_type") or "manual"),
+                "detail": previous_detail,
+            }
+
+    def encode(value):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+    encoded = encode(detail)
+    if len(encoded) <= 1000:
+        return encoded
+
+    # Keep valid JSON inside the legacy VARCHAR(1000), prioritizing identity,
+    # country/status, and provenance over long free-form detail or class lists.
+    detail["detail_truncated"] = True
+    detail.pop("nice_classes", None)
+    for field in list(detail):
+        value = detail[field]
+        if isinstance(value, str):
+            detail[field] = value[:160]
+        elif isinstance(value, list):
+            detail[field] = [str(item)[:100] for item in value[:5]]
+    if isinstance(detail.get("previous_source"), dict):
+        detail["previous_source"] = {
+            "type": str(detail["previous_source"].get("type") or "")[:16],
+            "detail": str(detail["previous_source"].get("detail") or "")[:160],
+        }
+    encoded = encode(detail)
+    if len(encoded) <= 1000:
+        return encoded
+    detail = {
+        field: str(detail[field])[:100]
+        for field in ("source", "registration", "country", "status", "source_url")
+        if field in detail
+    }
+    detail["detail_truncated"] = True
+    return encode(detail)
+
+
+def upsert_wipo_infringement_knowledge(records):
+    """Import unreviewed WIPO evidence while protecting manual and deleted records."""
+    normalized_records = _normalize_wipo_knowledge_records(records)
+    empty_result = {"total": 0, "inserted": 0, "updated": 0, "unchanged": 0, "restored": 0, "skipped_manual": 0, "skipped_deleted": 0}
+    if not normalized_records:
+        return empty_result
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for attempt in range(3):
+        result = {**empty_result, "total": len(normalized_records)}
+        connection = pymysql.connect(**config)
+        try:
+            with connection.cursor() as cursor:
+                _ensure_infringement_knowledge_table(cursor)
+                connection.begin()
+                for offset in range(0, len(normalized_records), 500):
+                    batch = normalized_records[offset:offset + 500]
+                    # One locking lookup per batch. Returning the input index
+                    # lets MySQL's own collation resolve existing brand matches.
+                    incoming = " UNION ALL ".join(
+                        f"SELECT {index} AS `input_index`, %s AS `brand_name`"
+                        for index in range(len(batch))
+                    )
+                    cursor.execute(
+                        f"""
+                        SELECT incoming.`input_index`, existing.`id`, existing.`list_type`,
+                               existing.`source_type`, existing.`source_detail`, existing.`deleted_at`
+                        FROM ({incoming}) AS incoming
+                        INNER JOIN `infringement_knowledge` AS existing
+                            ON existing.`brand_name` = incoming.`brand_name`
+                        ORDER BY existing.`id`
+                        FOR UPDATE
+                        """,
+                        tuple(row["brand_name"] for row in batch),
+                    )
+                    existing_rows = {
+                        int(row["input_index"]): row for row in (cursor.fetchall() or [])
+                    }
+                    writes = []
+                    for index, normalized in enumerate(batch):
+                        existing = existing_rows.get(index)
+                        detail = _wipo_knowledge_source_detail(normalized["wipo_detail"], existing)
+                        if not existing:
+                            result["inserted"] += 1
+                        elif existing.get("deleted_at") is not None:
+                            result["skipped_deleted"] += 1
+                            continue
+                        elif str(existing.get("source_type") or "manual") == "manual":
+                            result["skipped_manual"] += 1
+                            continue
+                        elif (existing.get("list_type") == "pending"
+                              and existing.get("source_type") == "wipo"
+                              and str(existing.get("source_detail") or "") == detail):
+                            result["unchanged"] += 1
+                            continue
+                        else:
+                            result["updated"] += 1
+                        writes.append((
+                            normalized["brand_name"], normalized["notes"],
+                            normalized["evidence_count"], detail, now, now,
+                        ))
+                    if writes:
+                        cursor.executemany(
+                            """
+                            INSERT INTO `infringement_knowledge` (
+                                `brand_name`, `list_type`, `notes`, `source_type`,
+                                `evidence_count`, `source_detail`, `created_at`, `updated_at`
+                            ) VALUES (%s, 'pending', %s, 'wipo', %s, %s, %s, %s)
+                            ON DUPLICATE KEY UPDATE
+                                `list_type` = IF(`deleted_at` IS NULL AND COALESCE(NULLIF(`source_type`, ''), 'manual') <> 'manual', 'pending', `list_type`),
+                                `source_detail` = IF(`deleted_at` IS NULL AND COALESCE(NULLIF(`source_type`, ''), 'manual') <> 'manual', VALUES(`source_detail`), `source_detail`),
+                                `updated_at` = IF(`deleted_at` IS NULL AND COALESCE(NULLIF(`source_type`, ''), 'manual') <> 'manual', VALUES(`updated_at`), `updated_at`),
+                                `source_type` = IF(`deleted_at` IS NULL AND COALESCE(NULLIF(`source_type`, ''), 'manual') <> 'manual', 'wipo', `source_type`)
+                            """,
+                            writes,
+                        )
+            connection.commit()
+            return result
+        except Exception as exc:
+            connection.rollback()
+            if (isinstance(exc, pymysql.err.OperationalError) and exc.args
+                    and exc.args[0] in (1205, 1213) and attempt < 2):
+                continue
+            raise
+        finally:
+            connection.close()
 
 
 def _parse_number(value):
@@ -1051,6 +1335,15 @@ def _parse_traffic_total(value):
             parsed = re.findall(r"-?\d+(?:\.\d+)?", text)
         values = parsed if isinstance(parsed, (list, tuple)) else [parsed]
     return sum(_parse_number(item) for item in values)
+
+
+def _parse_seven_day_orders(value):
+    """Keep an unavailable site order count distinct from a confirmed zero."""
+    try:
+        count = int(str(value).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+    return count if count >= 0 else None
 
 
 def mysql_demo():
@@ -1276,11 +1569,12 @@ def _next_collection_submit_time(cursor, collection_type, table_name):
 
 
 def _latest_reputation_snapshot_rows(cursor):
+    _ensure_column(cursor, "reputation", "七天单量", "INT NULL")
     latest_submit_time = _latest_tracked_collection_snapshot(cursor, "reputation")
     column_names = (
         "店铺名", "站点", "声誉颜色", "总单量", "投诉率", "延误率",
         "取消率", "增加或减少", "近七天变化率", "系统告警", "更新时间",
-        "一周流量趋势", "站点状态", "侵权数量", "权利人数量", "提交时间",
+        "一周流量趋势", "站点状态", "侵权数量", "权利人数量", "提交时间", "七天单量",
     )
     columns = ", ".join(f"`{name}`" for name in column_names)
     if latest_submit_time:
@@ -1381,6 +1675,7 @@ def _merge_reputation_snapshot_rows(
             row.get("侵权数量"),
             row.get("权利人数量"),
             submit_time,
+            row.get("七天单量"),
         ]
     for row in collected_rows:
         merged_rows[(str(row[0]).strip(), str(row[1]).strip())] = row
@@ -1529,7 +1824,8 @@ def inset_reputation_info(
                 if row[9] is None:
                     row[9] = previous_warnings_by_target.get((str(row[0]).strip(), str(row[1]).strip())) or "尚未浏览器同步"
                 extras = row[12:15] if len(row) >= 15 else ["", None, None]
-                row = row[:12] + extras + [submit_time]
+                seven_day_orders = _parse_seven_day_orders(row[15]) if len(row) > 15 else None
+                row = row[:12] + extras + [submit_time, seven_day_orders]
                 normalized_list.append(row)
             if preserve_account_status:
                 _preserve_reputation_account_status(
@@ -1551,8 +1847,8 @@ def inset_reputation_info(
          店铺名, 站点, 声誉颜色, 总单量, 
         投诉率, 延误率, 取消率, 增加或减少, 近七天变化率,
         系统告警, 更新时间, 一周流量趋势, 站点状态, 侵权数量,
-        权利人数量, 提交时间
-    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        权利人数量, 提交时间, 七天单量
+    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
             if normalized_list:
                 cursor.executemany(sql_insert, normalized_list)
@@ -2028,18 +2324,13 @@ def get_latest_reputation_info():
                 else:
                     row["权利人数量"] = int(row.get("权利人数量") or 0)
                 row["侵权统计天数"] = 100
-            shop_traffic_totals = {}
-            for row in rows:
-                shop_name = str(row.get("店铺名") or "")
-                shop_traffic_totals[shop_name] = (
-                    shop_traffic_totals.get(shop_name, 0)
-                    + _parse_traffic_total(row.get("一周流量趋势"))
-                )
+                row["七天单量"] = _parse_seven_day_orders(row.get("七天单量"))
+                row["orders_current_7d"] = row["七天单量"]
             rows.sort(
                 key=lambda row: (
-                    -shop_traffic_totals.get(str(row.get("店铺名") or ""), 0),
+                    row.get("七天单量") is None,
+                    -(row.get("七天单量") or 0),
                     str(row.get("店铺名") or ""),
-                    -_parse_traffic_total(row.get("一周流量趋势")),
                     str(row.get("站点") or ""),
                 )
             )
@@ -2124,6 +2415,47 @@ def _ensure_orders_unique_id(cursor):
         cursor.execute("SELECT RELEASE_LOCK('orders_unique_id_migration')")
 
 
+def _ensure_orders_unique_number(cursor):
+    """销售单号是上传覆盖键；缺少销售单号的旧订单仍通过 id 覆盖。"""
+
+    def has_index():
+        cursor.execute("SHOW INDEX FROM `orders` WHERE `Key_name` = 'uniq_orders_number'")
+        return cursor.fetchone() is not None
+
+    if has_index():
+        return
+    cursor.execute("SELECT GET_LOCK('orders_unique_number_migration', 30) AS `acquired`")
+    if int((cursor.fetchone() or {}).get("acquired") or 0) != 1:
+        raise RuntimeError("等待订单号唯一索引迁移锁超时")
+    try:
+        if has_index():
+            return
+        columns = ", ".join(f"`{name}`" for name in ORDER_COLUMN_NAMES)
+        cursor.execute("DROP TEMPORARY TABLE IF EXISTS `_orders_latest_number`")
+        cursor.execute(f"""
+            CREATE TEMPORARY TABLE `_orders_latest_number` AS
+            SELECT {columns} FROM (
+                SELECT {columns}, ROW_NUMBER() OVER (
+                    PARTITION BY (NULLIF(TRIM(`编号`), '') IS NULL),
+                                 COALESCE(NULLIF(TRIM(`编号`), ''), `id`)
+                    ORDER BY (`时间` IS NULL), `时间` DESC, `id` DESC
+                ) AS `_order_rank` FROM `orders`
+            ) AS `ranked_orders` WHERE `_order_rank` = 1
+        """)
+        cursor.execute("DELETE FROM `orders`")
+        cursor.execute(f"INSERT INTO `orders` ({columns}) SELECT {columns} FROM `_orders_latest_number`")
+        cursor.execute("DROP TEMPORARY TABLE `_orders_latest_number`")
+        cursor.execute("SHOW COLUMNS FROM `orders` LIKE '_order_number_key'")
+        if cursor.fetchone() is None:
+            cursor.execute("""
+                ALTER TABLE `orders` ADD COLUMN `_order_number_key` VARCHAR(255)
+                GENERATED ALWAYS AS (NULLIF(TRIM(`编号`), '')) STORED
+            """)
+        cursor.execute("ALTER TABLE `orders` ADD UNIQUE KEY `uniq_orders_number` (`_order_number_key`)")
+    finally:
+        cursor.execute("SELECT RELEASE_LOCK('orders_unique_number_migration')")
+
+
 def _deduplicate_order_rows(rows):
     latest = {}
     for raw_row in rows or ():
@@ -2135,7 +2467,13 @@ def _deduplicate_order_rows(rows):
         order_id = str(row[0] or "").strip()
         if not order_id:
             continue
-        latest[order_id] = row
+        order_number = row[1]
+        if isinstance(order_number, float) and order_number.is_integer():
+            order_number = int(order_number)
+        order_number = str(order_number or "").strip()
+        row[1] = order_number or None
+        order_key = ("number", order_number) if order_number else ("id", order_id)
+        latest[order_key] = row
     return list(latest.values())
 
 
@@ -2151,6 +2489,7 @@ def insert_orders(line):
     try:
         with connection.cursor() as cursor:
             _ensure_orders_unique_id(cursor)
+            _ensure_orders_unique_number(cursor)
             # 已存在的订单更新为本次导出值，使导入可以安全地重复执行。
             sql_insert = """
             INSERT INTO orders (
@@ -2160,6 +2499,7 @@ def insert_orders(line):
                 `图片`, `数量`, `订单运费`,`订单备注`, `地区`, `买家姓名`
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
+                `id` = VALUES(`id`),
                 `编号` = VALUES(`编号`),
                 `时间` = VALUES(`时间`),
                 `业务员` = VALUES(`业务员`),
@@ -4380,15 +4720,31 @@ def refresh_mercado_order_quoted_freight(limit=200):
     }
 
 
-def get_mercado_purchase_tracking_orders(order_ids):
+def get_mercado_purchase_tracking_orders(order_ids, *, all_orders=False, date_start=None, date_end=None, missing_tracking=False):
     """一次读取所选订单的采购单号，供本机浏览器同步物流号。"""
     normalized_ids = []
     for value in order_ids or ():
         order_id = str(value or "").strip()
         if order_id and order_id not in normalized_ids:
             normalized_ids.append(order_id)
-    if not normalized_ids:
+    if not normalized_ids and not all_orders:
         raise ValueError("请至少选择一个订单")
+    extra_clauses = []
+    date_params = []
+    if date_start or date_end:
+        try:
+            start = datetime.strptime(str(date_start), "%Y-%m-%d")
+            end = datetime.strptime(str(date_end), "%Y-%m-%d")
+            if start > end:
+                raise ValueError()
+            end_exclusive = end + timedelta(days=1)
+        except (ValueError, TypeError, OverflowError):
+            raise ValueError("请选择有效的美客多订单开始和结束日期")
+        extra_clauses.extend(["synced.`date_created` >= %s", "synced.`date_created` < %s"])
+        date_params.extend([start - timedelta(hours=8), end_exclusive - timedelta(hours=8)])
+    if missing_tracking:
+        extra_clauses.extend(["TRIM(COALESCE(synced.`order_id`, '')) <> ''", "TRIM(COALESCE(synced.`purchase_order`, '')) <> ''", "TRIM(COALESCE(synced.`purchase_tracking`, '')) = ''"])
+    extra_sql = "".join(" AND " + clause for clause in extra_clauses)
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
@@ -4402,14 +4758,18 @@ def get_mercado_purchase_tracking_orders(order_ids):
                 FROM `mercado_synced_orders` AS synced
                 INNER JOIN `mercado_store_tokens` AS stores
                   ON stores.`id` = synced.`token_id`
-                WHERE synced.`order_id` IN ({placeholders})
+                WHERE {"COALESCE(synced.`purchase_order`, '') <> ''" if all_orders else f"synced.`order_id` IN ({placeholders})"}
+                {extra_sql}
+                ORDER BY synced.`order_id`
                 """,
-                normalized_ids,
+                ([] if all_orders else normalized_ids) + date_params,
             )
             rows = [dict(row or {}) for row in (cursor.fetchall() or [])]
     finally:
         connection.close()
     by_id = {str(row.get("order_id") or ""): row for row in rows}
+    if all_orders:
+        normalized_ids = list(by_id)
     return [
         {
             "order_id": order_id,

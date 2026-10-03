@@ -83,40 +83,6 @@ async function zeshunReadZyingProductDevelopers() {
     }
     return [];
   };
-  // The current Vite build caches logins.select through localForage. Reading
-  // that page-owned cache avoids coupling the extension to a minified module id.
-  try {
-    const databases = typeof indexedDB.databases === "function"
-      ? await indexedDB.databases() : [{name: "localforage"}];
-    for (const name of [...new Set(databases.map(row => row?.name).filter(Boolean).concat("localforage"))]) {
-      const cached = await new Promise(resolve => {
-        const timer = setTimeout(() => resolve(null), 1200);
-        const request = indexedDB.open(name);
-        request.onerror = () => { clearTimeout(timer); resolve(null); };
-        request.onsuccess = () => {
-          const db = request.result;
-          const stores = [...db.objectStoreNames];
-          if (!stores.length) { db.close(); clearTimeout(timer); return resolve(null); }
-          let pending = stores.length;
-          let found = null;
-          for (const storeName of stores) {
-            let get;
-            try { get = db.transaction(storeName, "readonly").objectStore(storeName).get("logins"); }
-            catch (_) { if (!--pending) { db.close(); clearTimeout(timer); resolve(found); } continue; }
-            get.onsuccess = () => {
-              if (rowsFrom(get.result).length) found = get.result;
-              if (!--pending) { db.close(); clearTimeout(timer); resolve(found); }
-            };
-            get.onerror = () => {
-              if (!--pending) { db.close(); clearTimeout(timer); resolve(found); }
-            };
-          }
-        };
-      });
-      const cachedRows = rowsFrom(cached);
-      if (cachedRows.length) return cachedRows;
-    }
-  } catch (_) {}
   // Read the live selector first: current product pages need not use webpack.
   const live = new Map();
   for (const node of document.querySelectorAll(".ant-select, select")) {
@@ -144,6 +110,87 @@ async function zeshunReadZyingProductDevelopers() {
     }
   }
   if (live.size) return [...live.values()];
+  const withinDeadline = (operation, deadline) => new Promise(resolve => {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return resolve(null);
+    let settled = false;
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => finish(null), remaining);
+    Promise.resolve().then(operation).then(finish, () => finish(null));
+  });
+  // Vite caches logins.select through localForage. Give all cache lookups one
+  // short budget, including database enumeration, instead of waiting per DB.
+  try {
+    const deadline = Date.now() + 800;
+    const databases = typeof indexedDB.databases === "function"
+      ? await withinDeadline(() => indexedDB.databases(), deadline) : [{name: "localforage"}];
+    const names = [...new Set((Array.isArray(databases) ? databases : [])
+      .map(row => row?.name).filter(Boolean))];
+    // Prefer the known cache without opening a missing DB on modern browsers.
+    names.sort((a, b) => Number(b === "localforage") - Number(a === "localforage"));
+    for (const name of names) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      const cachedRows = await new Promise(resolve => {
+        let settled = false;
+        let db = null;
+        const transactions = [];
+        const finish = rows => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          for (const transaction of transactions) {
+            try { transaction.abort(); } catch (_) {}
+          }
+          if (db) db.close();
+          resolve(rows);
+        };
+        const timer = setTimeout(() => finish([]), remaining);
+        let request;
+        try { request = indexedDB.open(name); }
+        catch (_) { finish([]); return; }
+        request.onerror = request.onblocked = () => finish([]);
+        request.onupgradeneeded = () => {
+          // Browsers without databases() must probe the known name. Aborting a
+          // creation transaction prevents that probe from leaving an empty DB.
+          try { request.transaction.abort(); } catch (_) {}
+          try { request.result.close(); } catch (_) {}
+          finish([]);
+        };
+        request.onsuccess = () => {
+          const opened = request.result;
+          // An open request can finish after its deadline or blocked event.
+          if (settled) { opened.close(); return; }
+          db = opened;
+          db.onversionchange = () => finish([]);
+          const stores = [...db.objectStoreNames];
+          if (!stores.length) { finish([]); return; }
+          let pending = stores.length;
+          const complete = rows => {
+            if (settled) return;
+            if (rows.length) finish(rows);
+            else if (!--pending) finish([]);
+          };
+          for (const storeName of stores) {
+            let get;
+            try {
+              const transaction = db.transaction(storeName, "readonly");
+              transactions.push(transaction);
+              get = transaction.objectStore(storeName).get("logins");
+            } catch (_) { complete([]); continue; }
+            get.onsuccess = () => complete(rowsFrom(get.result));
+            get.onerror = () => complete([]);
+          }
+        };
+      });
+      if (cachedRows.length) return cachedRows;
+    }
+  } catch (_) {}
   try {
     const chunks = window.webpackChunkzying || Object.entries(window)
       .find(([key, value]) => key.startsWith("webpackChunk") && Array.isArray(value))?.[1];
@@ -166,9 +213,11 @@ async function zeshunReadZyingProductDevelopers() {
     };
     try { scan(window.__zeshunZyingRequire(60730)); } catch (_) {}
     for (const module of Object.values(window.__zeshunZyingRequire.c || {})) scan(module?.exports);
+    const deadline = Date.now() + 1200;
     for (const requestApi of apis) {
+      if (Date.now() >= deadline) break;
       try {
-        const rows = rowsFrom(await requestApi.getFreeStyleApi("logins.select", {}));
+        const rows = rowsFrom(await withinDeadline(() => requestApi.getFreeStyleApi("logins.select", {}), deadline));
         if (rows.length) return rows;
       } catch (_) {}
     }

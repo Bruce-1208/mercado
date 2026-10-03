@@ -1,0 +1,7 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='model-balance.css') }}?v=20261001-2">
+<section id="model-balance-alert" class="model-balance-alert" hidden aria-label="模型余额提醒">
+  <div class="model-balance-copy"><strong id="model-balance-title">DeepSeek 余额</strong><p id="model-balance-message" role="status" aria-live="polite"></p><small id="model-balance-checked"></small></div>
+  <div class="model-balance-actions"><a id="model-balance-recharge" href="https://platform.deepseek.com/" target="_blank" rel="noopener noreferrer">前往 DeepSeek 充值</a><a href="/settings/integrations#tokens">凭证设置</a><button type="button" id="model-balance-refresh">刷新余额</button></div>
+  <div id="model-balance-providers" class="model-balance-providers" role="list" aria-label="服务余额" hidden></div>
+</section>
+<script defer src="{{ url_for('static', filename='model-balance.js') }}?v=20261001-2"></script>

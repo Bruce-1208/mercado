@@ -5,7 +5,7 @@ import os
 import threading
 import time
 
-from bit import bit_browser_lifecycle as lifecycle
+from bit import bit_browser_lifecycle as lifecycle, bit_browser_api_rate as api_rate
 
 from bit.bit_runtime_lock import (
     InterProcessLock,
@@ -26,9 +26,11 @@ _AUTO_LEASES = {}
 _AUTO_LEASES_GUARD = threading.Lock()
 _BROWSER_API_MUTATION_LOCK_KEY = "bit_browser_api_mutation"
 _BROWSER_API_LOCK_TIMEOUT = int(os.environ.get("BIT_BROWSER_API_LOCK_TIMEOUT", "180"))
-# Three launch slots keep the request rate well below BitBrowser's 10/s limit
-# while preventing one slow browser start from stalling every daily-task worker.
-DEFAULT_BROWSER_API_MUTATION_CONCURRENCY = 3
+# BitBrowser can reject concurrent window mutations even when the aggregate
+# request rate is well below its documented limit.  Keep opens/closes globally
+# serialized by default; deployments that have verified a higher safe value
+# can still opt in with BIT_BROWSER_API_MUTATION_CONCURRENCY.
+DEFAULT_BROWSER_API_MUTATION_CONCURRENCY = 1
 _BROWSER_API_MUTATION_CONCURRENCY = max(
     1,
     min(
@@ -64,7 +66,7 @@ def _browser_api_slot_order(browser_id, slot_count=None):
 
 def _acquire_browser_api_mutation_slot(endpoint, browser_id, timeout):
     """限制跨进程窗口操作，避免 BitBrowser 窗口启动请求失控。"""
-    timeout = max(1, float(timeout))
+    timeout = max(0, float(timeout))
     deadline = time.monotonic() + timeout
     slot_order = _browser_api_slot_order(browser_id)
     while True:
@@ -91,24 +93,29 @@ def _post_browser_mutation(
     endpoint, browser_id, request_timeout, *, api_lock_timeout=None
 ):
     """限流调用 BitBrowser 窗口接口；窗口连接后的业务仍可多进程并行。"""
-    api_lock = _acquire_browser_api_mutation_slot(
-        endpoint,
-        browser_id,
-        (
-            _BROWSER_API_LOCK_TIMEOUT
-            if api_lock_timeout is None
-            else max(1, float(api_lock_timeout))
-        ),
-    )
+    timeout = _BROWSER_API_LOCK_TIMEOUT if api_lock_timeout is None else max(1, float(api_lock_timeout))
+    deadline = time.monotonic() + timeout
+    while True:
+        api_lock = _acquire_browser_api_mutation_slot(endpoint, browser_id,
+                                                    max(0, deadline - time.monotonic()))
+        try:
+            delay = api_rate.try_request(endpoint, _BROWSER_OPEN_COOLDOWN_SECONDS,
+                                         min(5, max(0, deadline - time.monotonic())))
+        except BaseException:
+            api_lock.release()
+            raise
+        if delay == 0:
+            break
+        # A throttled opener must not occupy the mutation lock during backoff:
+        # the reaper needs that same slot to release memory by closing windows.
+        api_lock.release()
+        if delay > max(0, deadline - time.monotonic()):
+            raise TimeoutError("等待 BitBrowser 共享限频冷却超时；本次未发送接口请求")
+        api_rate._sleep(min(delay, 0.5))
     try:
         if endpoint == "open":
             lifecycle.mark_launch_started(browser_id, request_timeout)
-        return requests.post(
-            f"{url}/browser/{endpoint}",
-            data=json.dumps({"id": f"{browser_id}"}),
-            headers=headers,
-            timeout=max(1, int(request_timeout)),
-        ).json()
+        return _send_browser_api(endpoint, {"id": str(browser_id)}, max(1, int(request_timeout)))
     finally:
         # BitBrowser's local API rejects back-to-back window starts even when the
         # HTTP calls are serialized. Keep a small cross-process gap; once opened,
@@ -116,6 +123,31 @@ def _post_browser_mutation(
         if endpoint == "open" and _BROWSER_OPEN_COOLDOWN_SECONDS:
             time.sleep(_BROWSER_OPEN_COOLDOWN_SECONDS)
         api_lock.release()
+
+
+def _post_browser_api(endpoint, payload, request_timeout, *, api_lock_timeout=None):
+    api_rate.wait_for_request(
+        endpoint,
+        _BROWSER_API_LOCK_TIMEOUT if api_lock_timeout is None else api_lock_timeout,
+        open_interval=_BROWSER_OPEN_COOLDOWN_SECONDS,
+    )
+    return _send_browser_api(endpoint, payload, request_timeout)
+
+
+def _send_browser_api(endpoint, payload, request_timeout):
+    response = requests.post(
+        f"{url}/browser/{endpoint}", data=json.dumps(payload),
+        headers=headers, timeout=request_timeout,
+    )
+    status = getattr(response, "status_code", None)
+    if status == 429:
+        # Record even a non-JSON refusal; do not replay window mutations.
+        api_rate.record_response(endpoint, http_status=status)
+    if callable(getattr(response, "raise_for_status", None)):
+        response.raise_for_status()
+    result = response.json()
+    api_rate.record_response(endpoint, result, http_status=status)
+    return result
 
 
 def createBrowser():  # 创建或者更新窗口，指纹参数 browserFingerPrint 如没有特定需求，只需要指定下内核即可，如果需要更详细的参数，请参考文档
@@ -133,9 +165,7 @@ def createBrowser():  # 创建或者更新窗口，指纹参数 browserFingerPri
         },
     }
 
-    res = requests.post(
-        f"{url}/browser/update", data=json.dumps(json_data), headers=headers
-    ).json()
+    res = _post_browser_api("update", json_data, _BROWSER_OPEN_TIMEOUT)
     browserId = res["data"]["id"]
     print(browserId)
     return browserId
@@ -147,9 +177,7 @@ def updateBrowser():  # 更新窗口，支持批量更新和按需更新，ids �
         "remark": "我是一个备注",
         "browserFingerPrint": {},
     }
-    res = requests.post(
-        f"{url}/browser/update/partial", data=json.dumps(json_data), headers=headers
-    ).json()
+    res = _post_browser_api("update/partial", json_data, _BROWSER_OPEN_TIMEOUT)
     print(res)
 
 
@@ -157,12 +185,10 @@ def listBrowsers(page_size=100, max_pages=100):
     """读取 BitBrowser 窗口列表，供授权店铺按名称实时匹配窗口。"""
     browsers = []
     for page in range(max(1, int(max_pages))):
-        response = requests.post(
-            f"{url}/browser/list",
-            data=json.dumps({"page": page, "pageSize": max(1, int(page_size))}),
-            headers=headers,
-            timeout=max(1, _BROWSER_OPEN_TIMEOUT),
-        ).json()
+        response = _post_browser_api(
+            "list", {"page": page, "pageSize": max(1, int(page_size))},
+            max(1, _BROWSER_OPEN_TIMEOUT),
+        )
         if not isinstance(response, dict) or response.get("success") is False:
             message = response.get("msg") if isinstance(response, dict) else response
             raise RuntimeError(f"读取比特浏览器窗口列表失败：{message or response}")
@@ -326,11 +352,7 @@ def closeBrowser(
 
 
 def _pid_response(endpoint, payload):
-    result = requests.post(
-        f"{url}/browser/{endpoint}", data=json.dumps(payload), headers=headers, timeout=5,
-    )
-    result.raise_for_status()
-    result = result.json()
+    result = _post_browser_api(endpoint, payload, 5)
     if not isinstance(result, dict) or result.get("success") is False:
         raise RuntimeError(f"无法确认比特浏览器进程状态：{result}")
     if "success" in result:
@@ -389,11 +411,7 @@ def release_finished_thread_leases():
 
 def deleteBrowser(id):  # 删除窗口
     json_data = {"id": f"{id}"}
-    print(
-        requests.post(
-            f"{url}/browser/delete", data=json.dumps(json_data), headers=headers
-        ).json()
-    )
+    print(_post_browser_api("delete", json_data, _BROWSER_CLOSE_TIMEOUT))
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@
   // extension is reloaded.  Expose a version marker so the background worker
   // can reload that tab before starting a new search instead of silently
   // running stale search logic alongside this copy.
-  const CONTENT_VERSION = "1.8.29";
+  const CONTENT_VERSION = "1.8.39";
   const previousListener = globalThis.__zeshun1688ContentListener;
   if (globalThis.__zeshun1688ContentVersion === CONTENT_VERSION && previousListener &&
       chrome.runtime.onMessage.hasListener?.(previousListener)) return;
@@ -95,14 +95,56 @@
     return rows.slice(0, 100);
   }
 
-  function numericPrice(skus) {
+  function supplierPrice(value) {
+    // Price objects contain quantities/discounts too. Only read amount fields.
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      for (const key of ["price", "amount", "value", "priceAmount", "priceValue"]) {
+        const amount = supplierPrice(value[key]);
+        if (amount !== null) return amount;
+      }
+      return null;
+    }
+    if (!["string", "number"].includes(typeof value)) return null;
+    const raw = String(value).replace(/,/g, "").replace(/\s*\.\s*/g, ".").trim();
+    const match = raw.match(/^(?:¥|￥|CNY)?\s*(\d+(?:\.\d+)?)(?:\s*(?:元|起|\/[^\d]+))?$/i);
+    const amount = match ? Number(match[1]) : null;
+    return Number.isFinite(amount) && amount > 0 ? amount : null;
+  }
+
+  function numericPrice(skus, pageData = {}) {
     const prices = skus.map(row => row.price).filter(value => Number.isFinite(value) && value > 0);
     if (prices.length) return Math.min(...prices);
-    const raw = text("#productPrice [class*='price']") || text("#productPrice")
-      || text("meta[property='og:price:amount']");
-    const match = raw.replace(/,/g, "").match(/(?:¥|￥)\s*(\d+(?:\.\d+)?)/)
-      || raw.trim().match(/^(\d+(?:\.\d+)?)$/);
-    return match ? Number(match[1]) : null;
+    for (const list of pageData.price_sets || []) {
+      const amounts = list.map(row => [row.price, row.priceAmount, row.priceValue]
+        .map(supplierPrice).find(value => value !== null) ?? null)
+        .filter(value => value !== null);
+      if (amounts.length) return Math.min(...amounts);
+    }
+    // Inspect all nodes: the first price-class element can be a label or a
+    // currency symbol. Never search the whole page (stock/MOQ/recommendations).
+    const excluded = "del, s, [class*='original-price'], [class*='originalPrice'], [class*='line-price'], [class*='linePrice']";
+    const selectors = [
+      "#productPrice [class*='price'], [data-module='od_product_price'] [class*='price']",
+      "#productPrice, [data-module='od_product_price']",
+      "meta[property='og:price:amount'], meta[property='product:price:amount']"
+    ];
+    for (const node of selectors.flatMap(selector => [...document.querySelectorAll(selector)])) {
+      if (node.closest(excluded)) continue;
+      const display = node.cloneNode(true);
+      display.querySelectorAll(excluded).forEach(child => child.remove());
+      const walker = document.createTreeWalker(display, NodeFilter.SHOW_TEXT);
+      const pieces = [];
+      while (walker.nextNode()) pieces.push(walker.currentNode.textContent.trim());
+      const raw = String(node.getAttribute("content") || pieces.join(" "))
+        .replace(/,/g, "").replace(/\s*\.\s*/g, ".").trim();
+      const direct = supplierPrice(raw);
+      if (direct !== null) return direct;
+      const match = raw.match(/(?:¥|￥)\s*(\d+(?:\.\d+)?)(?:\s*[-~～至]\s*(?:¥|￥)?\s*\d+(?:\.\d+)?)?/)
+        || raw.match(/^(\d+(?:\.\d+)?)\s*[-~～至]\s*\d+(?:\.\d+)?(?:\s*元)?$/);
+      const amount = match ? supplierPrice(match[1]) : null;
+      if (amount !== null) return amount;
+    }
+    return null;
   }
 
   // Keep supplier detail extraction in one place.  The AI weight/price flow
@@ -252,8 +294,8 @@
     const sets = pageData.sku_sets || [];
     const normalized = sets.map(list => list.map(item => {
       const label = aiWeightPriceDecode(item.specAttrs);
-      const price = [item.discountPrice, item.currentPrice, item.priceNum, item.price]
-        .map(value => ({raw: value, amount: aiWeightPriceNumber(value)}))
+      const price = [item.discountPrice, item.currentPrice, item.priceNum, item.price, item.salePrice, item.priceAmount, item.priceValue]
+        .map(value => ({raw: value, amount: supplierPrice(value)}))
         .find(entry => entry.amount !== null && entry.amount > 0);
       const stock = item.canBookCount ?? item.availableQuantity ?? item.stock ?? item.quantity;
       const image = item.imageUrl ?? item.imgUrl ?? item.image ?? item.pictureUrl;
@@ -321,7 +363,13 @@
 
   function aiWeightPriceDetailFacts(pageData) {
     const rows = aiWeightPriceReactSkus(pageData);
-    const sourceRows = rows.length ? rows : aiWeightPriceDomRows();
+    const domRows = aiWeightPriceDomRows();
+    const sourceRows = rows.length ? rows.map(row => {
+      if (row.price > 0) return row;
+      const matches = domRows.filter(candidate => candidate.sku_id === row.sku_id && candidate.price > 0);
+      if (!matches.length || new Set(matches.map(candidate => candidate.price)).size !== 1) return row;
+      return {...row, price: matches[0].price, price_text: matches[0].price_text};
+    }) : domRows;
     const pack = aiWeightPricePackMetrics(pageData);
     const merged = sourceRows.map(row => aiWeightPriceMergeMetrics(row, pack.byId.get(String(row.id)) || pack.common));
     const commonMetric = key => {
@@ -439,6 +487,9 @@
     const allDimensionsComplete = dimensionsComplete || (variations.length > 0 && variations.every(row =>
       [row.package_length_cm, row.package_width_cm, row.package_height_cm].every(value => value > 0)));
     const errors = [];
+    const price = numericPrice(variations, pageData);
+    if (price === null) throw new Error("1688采购价尚未加载或当前账号不可见，请确认详情页显示价格后重试");
+    if (variations.some(row => !(row.price > 0))) errors.push("未读取到完整的1688规格采购价，部分规格价格缺失");
     if (!weightComplete) errors.push("未读取到完整的1688规格重量");
     if (!allDimensionsComplete) errors.push("未读取到完整的1688规格包装尺寸");
     return {
@@ -447,7 +498,7 @@
       source_url: location.href,
       final_url: location.href,
       title,
-      price: numericPrice(variations),
+      price,
       currency_id: "CNY",
       main_image_url: images[0] || text("meta[property='og:image']"),
       images,
@@ -461,7 +512,7 @@
       volumetric_weight_kg: detailFacts.volumetric_weight_kg,
       dimensions_display: detailFacts.dimensions_display,
       weight_basis: detailFacts.weight_g ? "1688_source" : "",
-      scrape_status: weightComplete && allDimensionsComplete ? "ok" : "partial",
+      scrape_status: errors.length ? "partial" : "ok",
       error_message: errors.join("；"),
       collected_at: new Date().toISOString()
     };
@@ -470,15 +521,24 @@
   async function extractProduct() {
     const deadline = Date.now() + 10000;
     let lastError;
+    let partialProduct;
     while (Date.now() < deadline) {
-      try { return await extractProductSnapshot(); }
+      try {
+        const product = await extractProductSnapshot();
+        if (!product.variations.some(row => !(row.price > 0))) return product;
+        // Offer prices can arrive before SKU prices. Keep polling the page
+        // bridge even when a usable but incomplete snapshot already exists.
+        partialProduct = product;
+        await new Promise(resolve => setTimeout(resolve, 400));
+      }
       catch (error) {
         lastError = error;
         if (!/尚未加载|未识别到/.test(error.message || "")) throw error;
         await new Promise(resolve => setTimeout(resolve, 400));
       }
     }
-    throw lastError;
+    if (partialProduct && partialProduct.source_item_id === itemId()) return partialProduct;
+    throw lastError || new Error("1688采购价尚未加载，请重试");
   }
 
   async function aiWeightPriceDetail() {
@@ -941,6 +1001,60 @@
     toast.dataset.timer = String(window.setTimeout(() => toast.classList.remove("is-visible"), 3200));
   }
 
+  async function mountCollectionPreferences() {
+    if (document.querySelector('.zeshun-1688-preferences')) return;
+    const panel = document.createElement('div');
+    panel.className = 'zeshun-1688-preferences';
+    const status = document.createElement('div');
+    status.setAttribute('role', 'status');
+    status.textContent = '泽顺插件：正在检查登录…';
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', '1688 产品分类');
+    select.add(new Option('不指定分类', ''));
+    select.disabled = true;
+    const refresh = document.createElement('button');
+    refresh.textContent = '刷新登录 / 分类';
+    refresh.type = 'button';
+    panel.append(status, select, refresh);
+    document.documentElement.appendChild(panel);
+    async function update() {
+      select.disabled = true;
+      try {
+        const state = await chrome.runtime.sendMessage({type: 'GET_STATE'});
+        if (!state?.authenticated) {
+          status.textContent = '⚠ 泽顺插件未登录，请打开插件设置登录后采集';
+          return;
+        }
+        const response = await chrome.runtime.sendMessage({type: 'GET_ZESHUN_CATEGORIES'});
+        if (!response?.ok) throw new Error(response?.error || '分类读取失败');
+        const saved = (await chrome.storage.local.get('zeshunCollectionCategoryOptions')).zeshunCollectionCategoryOptions || {};
+        const previous = saved['1688'];
+        select.replaceChildren(new Option('不指定分类', ''));
+        for (const category of response.categories || []) select.add(new Option(category.name, String(category.id)));
+        if (previous && ![...select.options].some(option => option.value === String(previous))) {
+          const unavailable = new Option('已保存分类不可用，请重新选择', String(previous));
+          unavailable.disabled = true;
+          select.add(unavailable);
+        }
+        select.value = previous ? String(previous) : '';
+        select.disabled = false;
+        status.textContent = '泽顺 1688 采集分类（自动记忆，可不选）';
+      } catch (error) {
+        status.textContent = `泽顺插件：${error.message || error}`;
+      }
+    }
+    select.addEventListener('change', async () => {
+      try {
+        const saved = (await chrome.storage.local.get('zeshunCollectionCategoryOptions')).zeshunCollectionCategoryOptions || {};
+        await chrome.storage.local.set({zeshunCollectionCategoryOptions: {...saved, '1688': select.value ? Number(select.value) : null}});
+        status.textContent = '已记住分类，后续采集自动使用';
+      } catch (error) { status.textContent = `分类保存失败：${error.message || error}`; }
+    });
+    refresh.addEventListener('click', update);
+    window.addEventListener('focus', update);
+    await update();
+  }
+
   async function collectFromPage(button) {
     button.disabled = true;
     const original = button.textContent;
@@ -1070,5 +1184,6 @@
     });
     observer.observe(document.documentElement, {childList: true, subtree: true});
     refreshUi();
+    mountCollectionPreferences();
   }
 })();

@@ -1531,3 +1531,65 @@ def test_developer_manual_refresh_bypasses_cache(monkeypatch):
     monkeypatch.setattr(bit_zying_caiji, "_fetch_zying_product_developers", lambda token: [{"id": "18", "name": "新人员"}])
     assert bit_zying_caiji.list_zying_product_developers(credential, force_refresh=True) == [{"id": "18", "name": "新人员"}]
     assert bit_zying_caiji.list_zying_product_developers(credential) == [{"id": "18", "name": "新人员"}]
+
+
+@pytest.mark.parametrize("prefix", ["", "cookie://"])
+@pytest.mark.parametrize("seller", [False, True])
+def test_frontend_restores_token_to_both_auth_stores(monkeypatch, prefix, seller):
+    class Driver:
+        current_url = ""
+
+        def __init__(self):
+            self.storage = {}
+            self.cookies = {}
+
+        def get(self, url):
+            self.current_url = url
+            if "#/product" in url:
+                # Model the current frontend requiring local storage even when
+                # the credential was originally captured from a browser cookie.
+                if not self.storage.get("token"):
+                    self.current_url = url.split("#")[0] + "#/login"
+
+        def execute_script(self, script, *args):
+            if "localStorage.setItem" in script:
+                self.storage["token"] = args[0]
+            elif "localStorage.removeItem" in script:
+                self.storage.pop("token", None)
+            return True
+
+        def add_cookie(self, cookie):
+            self.cookies[cookie["name"]] = cookie
+
+    monkeypatch.setattr(bit_zying_caiji, "WebDriverWait", lambda driver, timeout: _OneShotWait(driver))
+    signer = bit_zying_caiji._ZyingFrontendSigner()
+    signer.driver = Driver()
+    restore = signer._prepare_seller_api_locked if seller else signer._configure_credential_locked
+    restore(prefix + "first-token")
+    assert signer.driver.storage["token"] == "first-token"
+    assert signer.driver.cookies["token"]["value"] == "first-token"
+    assert "#/login" not in signer.driver.current_url
+    restore(prefix + "replacement-token")
+    assert signer.driver.storage["token"] == "replacement-token"
+    assert signer.driver.cookies["token"]["value"] == "replacement-token"
+
+
+def test_frontend_does_not_cache_rejected_credential(monkeypatch):
+    class Driver:
+        current_url = "https://meli.zying.net/#/login"
+
+        def get(self, url):
+            pass
+
+        def execute_script(self, script, *args):
+            return True
+
+        def add_cookie(self, cookie):
+            pass
+
+    monkeypatch.setattr(bit_zying_caiji, "WebDriverWait", lambda driver, timeout: _OneShotWait(driver))
+    signer = bit_zying_caiji._ZyingFrontendSigner()
+    signer.driver = Driver()
+    with pytest.raises(bit_zying_caiji.ZyingAuthenticationError, match="重新登录"):
+        signer._configure_credential_locked("cookie://expired-token")
+    assert signer._credential == ""

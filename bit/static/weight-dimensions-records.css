@@ -64,3 +64,6 @@
 .wdr-history-table tbody tr:nth-child(even) { background: #f8fafc; }
 .wdr-history-success { color: #16804a; font-weight: 700; }
 .wdr-history-failure { color: #b53636; font-weight: 700; }
+
+#wdr-table td.wdr-old-value, #wdr-table thead tr:first-child th.wdr-old-value { background: #fff3df; }
+#wdr-table td.wdr-new-value, #wdr-table thead tr:first-child th.wdr-new-value { background: #e5f4ef; }

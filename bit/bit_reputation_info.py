@@ -2025,6 +2025,12 @@ def _parse_account_risk_datetime(value, *, now=None, future=False):
     """Parse the date formats rendered by the EN/ES/PT account-risk page."""
     reference = now or datetime.now()
     text = _ascii_account_risk_text(value)
+    iso_match = re.search(r"\b20\d{2}-\d{2}-\d{2}(?:[t ]\d{2}:\d{2}(?::\d{2})?(?:[.]\d+)?(?:z|[+-]\d{2}:?\d{2})?)?", text)
+    if iso_match:
+        try:
+            return datetime.fromisoformat(iso_match.group(0).replace("z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            pass
     relative_match = re.search(
         r"\b(?P<relative>today|hoy|hoje|yesterday|ayer|ontem)\b"
         r"(?:\s*,?\s*(?:at|a\s+las|as)?\s*(?P<hour>\d{1,2})[:h](?P<minute>\d{2}))?",
@@ -2048,7 +2054,7 @@ def _parse_account_risk_datetime(value, *, now=None, future=False):
         rf"(?:\s*,?\s*(?P<year>20\d{{2}}))?"
         rf"(?:\s*,?\s*(?:at|a\s+las|as)?\s*(?P<hour>\d{{1,2}})[:h](?P<minute>\d{{2}}))?",
         rf"(?P<day>\d{{1,2}})\s+(?:of|de)\s+(?P<month>{month_names})\.?,?"
-        rf"(?:\s+(?P<year>20\d{{2}}))?"
+        rf"(?:\s+(?:de\s+)?(?P<year>20\d{{2}}))?"
         rf"(?:\s*,?\s*(?:at|a\s+las|as)?\s*(?P<hour>\d{{1,2}})[:h](?P<minute>\d{{2}}))?",
         r"(?P<day>\d{1,2})[/-](?P<month_number>\d{1,2})"
         r"(?:[/-](?P<year>\d{2,4}))?"
@@ -2219,6 +2225,71 @@ def _normalize_account_risk_details(raw_details):
                 cleaned.append(detail)
 
     return cleaned
+
+
+def _normalize_account_risk_messages(raw_details):
+    """Keep the complete message card, including its explanation and date."""
+    navigation_line = re.compile(
+        r"^(?:\d+\s*)?(?:go\s+to\s+)?(?:restrictions?|warnings?|"
+        r"restricciones?|restri(?:ç|c)[õo]es?|advertencias?|avisos?)$|"
+        r"^(?:account\s+risk|riesgo\s+de\s+la\s+cuenta|risco\s+da\s+conta|"
+        r"account\s+status|requires?\s+attention|active\s+restrictions?|"
+        r"filter\s+and\s+sort|back|all|loading\.\.\.|cargando\.\.\.|carregando\.\.\.)$",
+        re.IGNORECASE,
+    )
+    messages = []
+    for raw in raw_details or []:
+        if isinstance(raw, dict):
+            full_text = raw.get("text") or raw.get("message")
+            values = ([full_text] if full_text else
+                      [raw.get(key) for key in ("title", "description", "content", "body")])
+            values.extend(raw.get(key) for key in ("time", "date", "created_at"))
+            raw = "\n".join(dict.fromkeys(str(value).strip() for value in values if value))
+        lines = []
+        for line in str(raw or "").splitlines():
+            line = re.sub(r"\s+", " ", line).strip(" \t\r\n·•")
+            if (not line or navigation_line.fullmatch(line) or re.fullmatch(r"\d+", line)
+                    or re.fullmatch(r"(?:\d+\s*)?\[?go\s+to\s+(?:restrictions?|warnings?)\]?(?:\([^)]*\))?", line, re.IGNORECASE)):
+                continue
+            lines.append(line)
+        # The final DOM fallback is main.innerText. Split its repeated
+        # title/date cards instead of saving several notices as one message.
+        date_words = set(ACCOUNT_RISK_MONTHS) | {
+            "today", "yesterday", "hoy", "ayer", "hoje", "ontem",
+            "at", "a", "las", "as", "de", "of", "t", "z", "h",
+        }
+        date_indices = [index for index, line in enumerate(lines)
+                        if _parse_account_risk_datetime(line)
+                        and set(re.findall(r"[a-z]+", _ascii_account_risk_text(line))) <= date_words]
+        starts = [max(0, index - 1) for index in date_indices]
+        batches = ([lines[start:end] for start, end in zip(starts, starts[1:] + [len(lines)])]
+                   if len(starts) > 1 else [lines])
+        for batch in batches:
+            message = "\n".join(batch)
+            if message and message not in messages:
+                messages.append(message)
+    # Overlapping selectors can yield a whole card and its child. Retain the
+    # whole card so the tooltip never loses the explanatory paragraphs.
+    return [message for message in messages
+            if not any(message != other and message in other for other in messages)]
+
+
+def _latest_account_risk_message(raw_details, *, now=None):
+    messages = _normalize_account_risk_messages(raw_details)
+    if not messages:
+        return ""
+    reference = now or datetime.now()
+    dated_messages = []
+    for index, message in enumerate(messages):
+        # The end of a suspension is not the date this message was issued.
+        event_text = re.sub(r"\b(?:until|hasta|ate|até)\b[^\n.。]*", "", message, flags=re.IGNORECASE)
+        date_lines = [line for line in event_text.splitlines()
+                      if _parse_account_risk_datetime(line, now=reference)]
+        issued_at = _parse_account_risk_datetime(date_lines[0], now=reference) if date_lines else None
+        if issued_at:
+            dated_messages.append((issued_at, -index, message))
+    # Equal or missing dates retain the ordering displayed by account-risk.
+    return max(dated_messages)[2] if dated_messages else messages[0]
 
 
 def _classify_account_restriction(value, *, now=None):
@@ -2451,6 +2522,12 @@ def _wait_account_risk_summary(driver, timeout=12, poll_seconds=1):
             r"限制|警告|账户状态",
             text,
             re.IGNORECASE,
+        ) and (
+            any(_account_risk_summary_count(text, kind) is not None
+                for kind in ("restriction", "warning"))
+            or _account_risk_kinds_from_summary(text)
+            or re.search(r"account\s+status\s*[:\n]?\s*(?:normal|good|active)|"
+                         r"账户状态\s*[:：\n]?\s*正常", text, re.IGNORECASE)
         ):
             return text
         _raise_if_mercado_unavailable(driver=driver, context="账户风险页面")
@@ -2462,7 +2539,7 @@ def _wait_account_risk_summary(driver, timeout=12, poll_seconds=1):
 def _wait_account_risk_details(driver, timeout=12, poll_seconds=1):
     deadline = time.monotonic() + max(0, float(timeout or 0))
     while True:
-        details = _normalize_account_risk_details(
+        details = _normalize_account_risk_messages(
             _extract_account_risk_details(driver)
         )
         if details:
@@ -2496,7 +2573,7 @@ def _collect_account_risk_detail_text(driver, kinds, window_id="", name="", site
         for detail in kind_details:
             if detail not in details:
                 details.append(detail)
-    return "\n".join(details).strip()
+    return _latest_account_risk_message(details)
 
 
 def _collect_account_risk_status(driver, window_id="", name="", site=""):
@@ -2550,7 +2627,7 @@ def _collect_account_risk_status(driver, window_id="", name="", site=""):
     if warning_text:
         messages.append(warning_text)
     assessment.update({
-        "system_warning": "\n".join(messages).strip() or "正常",
+        "system_warning": _latest_account_risk_message(messages) or "正常",
         "account_risk_summary": summary_text,
     })
     return assessment
@@ -2575,7 +2652,6 @@ def get_reputation_auxiliary_info(
         "suspension_days": None,
         "suspension_remaining_days": None,
         "suspension_total_days": None,
-        "system_warning": "正常",
     }
     direction = ""
     gradient_rate = ""
@@ -2608,8 +2684,7 @@ def get_reputation_auxiliary_info(
             data_gradient = "持平"
         print("近七天变化情况为:", data_gradient)
         direction, gradient_rate = _parse_gradient(data_gradient)
-        # The /users profile may still say active while Global Selling has
-        # stopped the account. The account-risk page is the source of truth.
+        # Read account-risk notices independently of the API listing verdict.
         risk_status = _collect_account_risk_status(
             driver,
             window_id=window_id,
@@ -2645,7 +2720,7 @@ def get_reputation_auxiliary_info(
                 f"销售汇总{_failure_status(exc).removeprefix('失败：')}"
             )
 
-    data_warn = str(risk_status.get("system_warning") or "正常").strip()
+    data_warn = str(risk_status.get("system_warning") or "").strip()
     print("系统提示为:", data_warn)
 
     account_status = risk_status.get("account_status") or "unknown"
@@ -2658,16 +2733,11 @@ def get_reputation_auxiliary_info(
             visits = "[]"
             auxiliary_errors.append(f"流量{_failure_status(exc).removeprefix('失败：')}")
 
-    if auxiliary_errors:
-        auxiliary_message = "辅助采集失败：" + "；".join(auxiliary_errors)
-        data_warn = auxiliary_message if data_warn == "正常" else f"{data_warn}\n{auxiliary_message}"
-
     result = {
         "store_name": name,
         "site": site,
         "direction": direction,
         "gradient_rate": gradient_rate,
-        "system_warning": data_warn,
         "account_status": account_status,
         "site_status_display": risk_status.get("site_status_display") or "账户状态未确认",
         "suspension_until": risk_status.get("suspension_until") or "",
@@ -2678,6 +2748,8 @@ def get_reputation_auxiliary_info(
         "updated_at": get_now_time(),
         "error": "；".join(auxiliary_errors),
     }
+    if data_warn:
+        result["system_warning"] = data_warn
     if collect_visits:
         result["visits"] = visits
     return result
@@ -3575,6 +3647,7 @@ def _api_reputation_database_row(store_name, api_row, updated_at):
         str(api_row.get("site_status_display") or "未知"),
         -1 if api_row.get("infraction_count") is None else api_row.get("infraction_count"),
         -1 if api_row.get("rights_holder_count") is None else api_row.get("rights_holder_count"),
+        api_row.get("orders_current_7d"),
     ]
 
 
@@ -3726,6 +3799,14 @@ def _merge_api_auxiliary_rows(api_rows, database_rows, auxiliary_rows):
         if database_row is not None and "visits" in auxiliary:
             database_row[11] = api_row["visits"]
         if not has_account_risk_data:
+            continue
+        if api_row.get("site_status_source") == "official_listing_api":
+            if system_warning:
+                api_row["system_warning"] = system_warning
+                if database_row is not None:
+                    database_row[9] = system_warning
+            # Listing samples own account status, including an inconclusive
+            # sample. Risk cards supply warnings rather than a second verdict.
             continue
         restriction = {
             "account_status": auxiliary.get("account_status"),
@@ -4279,6 +4360,7 @@ def get_reputation_info_all(
                 "站点状态",
                 "侵权数量",
                 "权利人数量",
+                "七天单量",
             ],
         )
         post_steps.append(("导出声誉汇总", lambda: dataframe.to_excel(output_path, index=False)))

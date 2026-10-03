@@ -194,6 +194,24 @@ class InterProcessLock:
                     _HELD_BY_THREAD.pop(registry_key, None)
             self.acquired = False
 
+    def transfer_to_current_thread(self):
+        """Adopt a held lease before its acquiring request thread can exit."""
+        if not self.acquired or self.read_owner().get("token") != self.token:
+            raise RuntimeError("Cannot transfer a lock that is no longer held")
+        previous_thread = self.thread_id
+        new_thread = threading.get_ident()
+        temporary = self.lock_path / f"owner.{self.token}.tmp"
+        try:
+            temporary.write_text(json.dumps(self._owner_payload(), ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(temporary, self.owner_path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        with _REGISTRY_GUARD:
+            if _HELD_BY_THREAD.get((previous_thread, self.key)) is self:
+                _HELD_BY_THREAD.pop((previous_thread, self.key), None)
+            self.thread_id = new_thread
+            _HELD_BY_THREAD[(new_thread, self.key)] = self
+
     def __enter__(self):
         self.acquire(timeout=0)
         return self

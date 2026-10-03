@@ -34,7 +34,7 @@ def _write_log(text):
             print(safe, end="" if safe.endswith("\n") else "\n", flush=True)
 
 
-def configure_execution_context(job):
+def configure_execution_context(job, job_path=None):
     """把 Agent 身份传给业务模块及其后续创建的子进程。"""
     job = dict(job or {})
     payload = dict(job.get("payload") or {})
@@ -46,6 +46,12 @@ def configure_execution_context(job):
     os.environ["BIT_EXECUTION_AGENT_NAME"] = agent_name
     os.environ["BIT_EXECUTION_HOSTNAME"] = hostname
     os.environ["BIT_EXECUTION_JOB_ID"] = str(job.get("job_id") or "").strip()
+    if job_path is not None and not os.environ.get("BIT_RUNTIME_LOCK_DIR"):
+        path = Path(job_path).resolve()
+        # Agent jobs live in <data_dir>/jobs/<job_id>/job.json. Keep locks and
+        # throttling outside releases so a source update cannot reset them.
+        if path.parent.parent.name == "jobs":
+            os.environ["BIT_RUNTIME_LOCK_DIR"] = str(path.parents[2] / "runtime_locks")
     return {
         "target": "agent",
         "agent_id": agent_id,
@@ -283,6 +289,7 @@ def run_ai_weight_price(job, stop_event, job_file):
         )
         return {"status": "success", "message": "Agent 已完成人工核验回写", "task": result}
     if action == "weight-dimensions-update":
+        from erp.package_update_weight import package_update_weight_g
         rows = payload.get("records") or []
         if not isinstance(rows, list) or not rows:
             raise ValueError("智赢重量尺寸更新缺少产品记录")
@@ -294,15 +301,18 @@ def run_ai_weight_price(job, stop_event, job_file):
 
         with service.weight_dimensions_browser(browser_log) as browser:
             for item in rows:
+                if stop_event.is_set():
+                    break
                 item = dict(item or {})
                 order_number = str(item.get("order_number") or "").strip()
                 product_id = str(item.get("product_id") or "").strip()
                 try:
                     if not product_id:
                         raise ValueError("缺少智赢产品 id")
+                    submitted_weight = package_update_weight_g(item)
                     result = browser.update_package_by_product_id(
                         product_id,
-                        str(item.get("actual_weight_g") or "").strip(),
+                        submitted_weight,
                         str(item.get("actual_dimensions_cm") or "").strip(),
                     ) or {}
                     results.append({
@@ -310,7 +320,7 @@ def run_ai_weight_price(job, stop_event, job_file):
                         "product_id": product_id,
                         "status": "success",
                         "message": (
-                            f"重量 {result.get('weight_g', item.get('actual_weight_g'))}g、"
+                            f"重量 {result.get('weight_g', submitted_weight)}g、"
                             +
                             (f"尺寸 {result.get('dimensions_cm', item.get('actual_dimensions_cm'))}cm、"
                              if item.get("actual_dimensions_cm") else "沿用原尺寸、")
@@ -324,10 +334,18 @@ def run_ai_weight_price(job, stop_event, job_file):
                         "status": "error",
                         "message": str(exc)[:500],
                     })
+                # Preserve completed products if the Agent must kill a stuck
+                # browser worker after cancellation.
+                progress_file = Path(job_file).with_name("result-progress.json")
+                progress_file.write_text(
+                    json.dumps({"status": "running", "rows": results}, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+                progress_file.replace(Path(job_file).with_name("result.json"))
         success_count = sum(row.get("status") == "success" for row in results)
         return {
-            "status": "success" if success_count == len(results) else "partial",
-            "message": f"Agent 已完成智赢产品更新，成功 {success_count}/{len(results)} 条",
+            "status": "stopped" if stop_event.is_set() else "success" if success_count == len(results) else "partial",
+            "message": f"Agent {'已终结' if stop_event.is_set() else '已完成'}智赢产品更新，成功 {success_count}/{len(rows)} 条",
             "rows": results,
         }
     if action == "probe":
@@ -411,7 +429,7 @@ def main(argv=None):
         job_path.write_text(
             json.dumps(sanitized_job, ensure_ascii=False), encoding="utf-8"
         )
-    configure_execution_context(job)
+    configure_execution_context(job, job_path)
     stop_event = threading.Event()
     threading.Thread(
         target=_watch_cancel,

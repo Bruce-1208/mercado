@@ -7,6 +7,8 @@ Playwright 使用按平台、账号隔离的持久化浏览器目录复用 Cooki
 
 from __future__ import annotations
 
+import json
+import sqlite3
 import hashlib
 import re
 import secrets
@@ -417,16 +419,43 @@ purchase_tracking_sync_manager = PurchaseTrackingSyncManager()
 class PluginPurchaseTrackingManager:
     """Manage tracking-sync jobs executed by the Zeshun browser extension.
 
-    The workbench only creates a user-scoped job and records results here.  The
+    The extension or workbench creates a user-scoped job and records results here. The
     extension owns the browser tab and its cookies, so this manager never
     receives or stores a procurement-platform username or password.
     """
 
     _PENDING_PHASES = frozenset({"waiting_plugin", "waiting_login"})
 
-    def __init__(self):
+    def __init__(self, log_path=None):
         self._lock = threading.RLock()
         self._states = {}
+        self._log_path = Path(log_path) if log_path else Path(__file__).resolve().parents[1] / ".data" / "purchase_tracking_logs.sqlite3"
+
+    def _connect_logs(self):
+        self._log_path.parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(str(self._log_path), timeout=30)
+        connection.execute("CREATE TABLE IF NOT EXISTS tracking_runs (request_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, started_at TEXT NOT NULL, state TEXT NOT NULL)")
+        return connection
+
+    def _save(self, state):
+        with self._connect_logs() as connection:
+            connection.execute(
+                "INSERT INTO tracking_runs VALUES (?, ?, ?, ?) ON CONFLICT(request_id) DO UPDATE SET state = excluded.state",
+                (state["request_id"], state["user_id"], state["started_at"], json.dumps(state, ensure_ascii=False)),
+            )
+        connection.close()
+        return self._public_state(state)
+
+    def history(self, user_id):
+        key = self._normalize_user_id(user_id)
+        with self._lock:
+            with self._connect_logs() as connection:
+                rows = connection.execute(
+                    "SELECT state FROM tracking_runs WHERE user_id = ? ORDER BY started_at DESC, rowid DESC LIMIT 100", (key,)
+                ).fetchall()
+            connection.close()
+            return [json.loads(row[0]) for row in rows]
+
 
     @staticmethod
     def _idle_state():
@@ -442,6 +471,7 @@ class PluginPurchaseTrackingManager:
             "synced": 0,
             "pending": 0,
             "failed": 0,
+            "skipped": 0,
             "results": [],
             "orders": [],
             "started_at": "",
@@ -467,6 +497,10 @@ class PluginPurchaseTrackingManager:
     def status(self, user_id):
         key = self._normalize_user_id(user_id)
         with self._lock:
+            if key not in self._states:
+                history = self.history(key)
+                if history:
+                    self._states[key] = history[0]
             return self._public_state(self._states.get(key) or self._idle_state())
 
     def create(self, user_id, *, platform, orders):
@@ -477,7 +511,7 @@ class PluginPurchaseTrackingManager:
         if not normalized:
             raise ValueError("所选订单还没有填写采购订单号")
         with self._lock:
-            current = self._states.get(key) or {}
+            current = self.status(key)
             if current.get("running") or current.get("phase") in self._PENDING_PHASES:
                 raise RuntimeError("已有物流号同步任务正在等待插件登录或运行")
             state = {
@@ -493,7 +527,7 @@ class PluginPurchaseTrackingManager:
                 "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
             self._states[key] = state
-            return self._public_state(state)
+            return self._save(state)
 
     def claim(self, user_id, request_id):
         key = self._normalize_user_id(user_id)
@@ -504,13 +538,13 @@ class PluginPurchaseTrackingManager:
                 raise ValueError("物流号同步任务不存在或已过期")
             if state.get("phase") not in self._PENDING_PHASES:
                 if state.get("running"):
-                    return self._public_state(state)
+                    return self._save(state)
                 raise ValueError("物流号同步任务已经结束")
             state.update({
                 "phase": "syncing",
                 "message": "插件已确认登录，正在同步物流号",
             })
-            return self._public_state(state)
+            return self._save(state)
 
     def mark_waiting_login(self, user_id, request_id):
         key = self._normalize_user_id(user_id)
@@ -523,7 +557,7 @@ class PluginPurchaseTrackingManager:
                     "phase": "waiting_login",
                     "message": "请在采购平台页面完成手动登录，然后点击确定登录",
                 })
-            return self._public_state(state)
+            return self._save(state)
 
     def record_result(
         self,
@@ -560,7 +594,8 @@ class PluginPurchaseTrackingManager:
                 "status": status,
                 "tracking_number": str(tracking_number or "").strip().upper(),
                 "logistics_company": str(logistics_company or "").strip(),
-                "message": str(message or "").strip(),
+                "message": str(message or ("平台未找到该采购订单，已跳过" if status == "not_found" else "")).strip(),
+                "recorded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
             replaced = False
             for index, existing in enumerate(results):
@@ -574,7 +609,7 @@ class PluginPurchaseTrackingManager:
                 name: sum(1 for item in results if item.get("status") == name)
                 for name in ("synced", "pending", "failed")
             }
-            counters["failed"] += sum(
+            counters["skipped"] = sum(
                 1 for item in results if item.get("status") == "not_found"
             )
             processed = len(results)
@@ -587,7 +622,7 @@ class PluginPurchaseTrackingManager:
                 state.update({
                     "running": False,
                     "phase": "completed",
-                    "message": f"同步完成：成功 {counters['synced']} 单",
+                    "message": f"同步完成：成功 {counters['synced']} 单，跳过 {counters['skipped']} 单，失败 {counters['failed']} 单",
                     "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 })
             else:
@@ -595,7 +630,7 @@ class PluginPurchaseTrackingManager:
                     "phase": "syncing",
                     "message": f"正在同步物流号：{processed} / {state.get('total', 0)}",
                 })
-            return self._public_state(state)
+            return self._save(state)
 
     def fail(self, user_id, request_id, message):
         key = self._normalize_user_id(user_id)
@@ -609,7 +644,7 @@ class PluginPurchaseTrackingManager:
                 "message": str(message or "物流号同步失败"),
                 "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             })
-            return self._public_state(state)
+            return self._save(state)
 
 
 plugin_purchase_tracking_manager = PluginPurchaseTrackingManager()

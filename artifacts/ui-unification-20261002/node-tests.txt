@@ -1,0 +1,43 @@
+✔ all collector options and shared categories remain independent of visible product rows (24.889791ms)
+✔ bulk category assignment uses product IDs and clearing sends an explicit null (2.446083ms)
+✔ single edits send only changed fields and display saved overrides including clear (6.732041ms)
+✔ invalid numeric typing cannot accidentally clear existing data and failed saves remain editable (0.653708ms)
+✔ positive finite numeric validation rejects zero, negative and infinity without writes (2.684042ms)
+✔ a saved authoritative row is retained when the following list refresh fails (2.296709ms)
+✔ a committed category change remains visible when the following list refresh fails (1.83725ms)
+✔ save busy state prevents duplicate PATCH calls and closing before completion (1.697875ms)
+✔ order inbound defaults owner to salesperson and records current user (6.812167ms)
+✔ multiple order products default owner when a product is chosen (1.112042ms)
+✔ append keeps owner while outbound displays the original inbound person (5.02475ms)
+✔ inbound requires owner and submits a changed owner (0.545417ms)
+✔ stock and log filters are sent to API and reset independently (1.760667ms)
+✔ timeout releases loading state and allows retry (2.766834ms)
+✔ superseded request cannot overwrite current loading state (0.418875ms)
+✔ timeout retries once then exits loading with a manual retry button (5.435042ms)
+✔ transient server error retries and succeeds (2.561875ms)
+✔ authorization failures do not retry (0.49775ms)
+✔ new request cancels old response body and prevents stale results (1.906125ms)
+✔ superseding a request cancels its retry delay (3.998166ms)
+✔ mixed selection enables publishing and sends all approved products regardless of completeness (3.038834ms)
+✔ all unapproved products keep button enabled and are ignored (3.806375ms)
+✔ empty selection disables publishing (0.909625ms)
+✔ a pending publish cannot be submitted twice or unlocked by presentation updates (1.2785ms)
+✔ status filtering removes hidden selections, including after switching back (2.494167ms)
+✔ bulk approval saves current inputs before sending review status (3.736958ms)
+✔ cleared input prevents approval even when saved data is valid (1.879667ms)
+✔ parameter save failure prevents bulk approval (4.577125ms)
+✔ deleteSelectedAiOriginalProducts() deletes selection and synchronizes both areas (4.858709ms)
+✔ products1688DeleteSelected() deletes selection and synchronizes both areas (3.880166ms)
+✔ cancellation and empty selection never send deletion (1.573083ms)
+✔ failed deletion preserves rows and selection and allows retry (3.234208ms)
+✔ pending request disables both delete buttons and prevents duplicates (0.801667ms)
+✔ AI select-all reflects only visible filtered rows (1.02225ms)
+✔ deleting last page returns to the last remaining page (21.410708ms)
+ℹ tests 35
+ℹ suites 0
+ℹ pass 35
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 126.8225

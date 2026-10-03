@@ -102,6 +102,12 @@ test('deleting last page returns to the last remaining page', async () => {
   const {context, run} = setup();
   const urls = [];
   context.fetch = async url => {
+    if (url === '/api/1688-products/options') {
+      return {ok: true, json: async () => ({status: 'success', data: {collector_salespeople: []}})};
+    }
+    if (url === '/api/mercado-management-categories') {
+      return {ok: true, json: async () => ({status: 'success', data: {rows: []}})};
+    }
     urls.push(url);
     return {ok: true, json: async () => ({status: 'success', data: {
       total: 50, rows: urls.length === 1 ? [] : [{id: 3}]

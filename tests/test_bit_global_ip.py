@@ -15,10 +15,10 @@ def test_import_deduplicates_names_and_retains_source():
     client.get.return_value = response
     writer = Mock(return_value={"inserted": 1})
     result = sync_global_ip(writer=writer, session=client, per_category=1)
-    assert result["blacklist_candidates"] == 1
+    assert result["pending_candidates"] == 1
     assert result["write_result"]["inserted"] == 1
     record = writer.call_args.args[0][0]
-    assert record["list_type"] == "blacklist"
+    assert record["list_type"] == "pending"
     assert record["evidence_count"] == 0
     assert "https://www.wikidata.org/wiki/Q123" in record["source_detail"]
 

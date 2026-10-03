@@ -1,4 +1,4 @@
-"""Fetch traceable global brand/IP names for the knowledge risk blacklist."""
+"""Fetch traceable global brand/IP names as evidence awaiting human review."""
 
 import re
 import requests
@@ -16,7 +16,7 @@ def sync_global_ip(*, writer, log_callback=None, session=None, per_category=1000
     log = log_callback or (lambda message: None)
     limit = max(1, min(int(per_category), 5000))
     seen = set()
-    totals = {key: 0 for key in ("inserted", "updated", "skipped_manual", "skipped_blacklist")}
+    totals = {key: 0 for key in ("inserted", "updated", "skipped_manual", "skipped_deleted", "skipped_source")}
     candidates = 0
     for category, label in CATEGORIES:
         for offset in range(0, limit, 250):
@@ -45,8 +45,8 @@ def sync_global_ip(*, writer, log_callback=None, session=None, per_category=1000
                     continue
                 seen.add(name.casefold())
                 source = "https://www.wikidata.org/wiki/" + uri.rsplit("/", 1)[-1]
-                records.append({"brand_name": name, "list_type": "blacklist",
-                                "notes": f"全球{label}风险拦截；不代表已确认侵权。来源：{source}",
+                records.append({"brand_name": name, "list_type": "pending",
+                                "notes": f"全球{label}待复核线索；名称收录不代表已确认侵权。来源：{source}",
                                 "source_detail": f"global_ip:wikidata:{category} {source}",
                                 "evidence_count": 0})
             for start in range(0, len(records), 500):
@@ -57,5 +57,5 @@ def sync_global_ip(*, writer, log_callback=None, session=None, per_category=1000
             log(f"全球{label}已处理 {len(records)} 个名称；累计新增 {totals['inserted']} 个")
             if not rows:
                 break
-    return {"blacklist_candidates": candidates, "whitelist_candidates": 0,
+    return {"pending_candidates": candidates, "blacklist_candidates": 0, "whitelist_candidates": 0,
             "write_result": totals, "source": "wikidata", "per_category_limit": limit}

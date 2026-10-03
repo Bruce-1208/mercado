@@ -88,7 +88,8 @@ def console(monkeypatch, tmp_path):
     monkeypatch.setattr(web, 'current_local_agent_bundle', lambda: {'version': 'test'})
     store = LocalAgentStore(tmp_path / 'agent.sqlite3')
     monkeypatch.setattr(web, 'get_local_agent_store', lambda: store)
-    store.heartbeat('test-agent', name='Agent', capabilities=['daily_task'], business_version='test', session_id='s')
+    store.heartbeat('test-agent', name='Agent', capabilities=['daily_task'], business_version='test', session_id='s',
+                    owner_user_id=user['id'])
     return user, store, web.app.test_client()
 
 
@@ -181,7 +182,7 @@ def test_warning_failure_preserves_traffic_and_does_not_return_account_status(mo
     from types import SimpleNamespace
     monkeypatch.setattr(browser, 'open_site', lambda *args, **kwargs: None)
     monkeypatch.setattr(bit_reputation_info, '_extract_visits_from_metrics_api', lambda *args: [{'visits': i} for i in range(8)])
-    monkeypatch.setattr(bit_reputation_info, '_extract_account_risk_page_text', lambda *args: '')
+    monkeypatch.setattr(bit_reputation_info, '_wait_account_risk_summary', lambda *args: '')
     monkeypatch.setattr(bit_reputation_info, '_get_account_risk_links', lambda *args: [])
     row = browser.collect_site(SimpleNamespace(page=object()), '店铺', '墨西哥')
     assert row['visits'] == '[0, 1, 2, 3, 4, 5, 6, 7]'

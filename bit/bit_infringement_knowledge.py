@@ -1,16 +1,18 @@
 """侵权知识库的数据规则。
 
-白名单表示该品牌不侵权，黑名单表示该品牌侵权。数据库和工作台接口共用
-这里的校验逻辑，避免不同入口对同一条记录产生不同解释。
+名单表示内部风险处置策略，不构成对品牌是否侵权的法律判断。
+自动线索必须人工复核后才能设为风险拦截或人工放行。
 """
 
 
 LIST_TYPE_WHITELIST = "whitelist"
 LIST_TYPE_BLACKLIST = "blacklist"
-LIST_TYPES = (LIST_TYPE_WHITELIST, LIST_TYPE_BLACKLIST)
+LIST_TYPE_PENDING = "pending"
+LIST_TYPES = (LIST_TYPE_WHITELIST, LIST_TYPE_BLACKLIST, LIST_TYPE_PENDING)
 LIST_TYPE_LABELS = {
-    LIST_TYPE_WHITELIST: "白名单",
-    LIST_TYPE_BLACKLIST: "黑名单",
+    LIST_TYPE_WHITELIST: "人工放行",
+    LIST_TYPE_BLACKLIST: "风险拦截",
+    LIST_TYPE_PENDING: "待复核",
 }
 
 
@@ -20,15 +22,19 @@ def normalize_list_type(value, allow_empty=False):
         "whitelist": LIST_TYPE_WHITELIST,
         "white": LIST_TYPE_WHITELIST,
         "白名单": LIST_TYPE_WHITELIST,
+        "人工放行": LIST_TYPE_WHITELIST,
         "blacklist": LIST_TYPE_BLACKLIST,
         "black": LIST_TYPE_BLACKLIST,
         "黑名单": LIST_TYPE_BLACKLIST,
+        "风险拦截": LIST_TYPE_BLACKLIST,
+        "pending": LIST_TYPE_PENDING,
+        "待复核": LIST_TYPE_PENDING,
     }
     if not text and allow_empty:
         return ""
     normalized = aliases.get(text)
     if not normalized:
-        raise ValueError("名单类型只支持白名单或黑名单")
+        raise ValueError("名单类型只支持待复核、风险拦截或人工放行")
     return normalized
 
 
@@ -87,3 +93,11 @@ def parse_bulk_brand_lines(value, list_type, notes=""):
 
 def list_type_label(value):
     return LIST_TYPE_LABELS.get(str(value or ""), "")
+
+
+def effective_list_type(record):
+    """Interpret historical automatic decisions as unreviewed evidence."""
+    source_type = str((record or {}).get("source_type") or "manual").strip().lower()
+    if source_type != "manual":
+        return LIST_TYPE_PENDING
+    return str((record or {}).get("list_type") or "").strip().lower()

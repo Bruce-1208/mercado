@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-09-30T16:46:19.671Z",
+  "mode": "standalone-node-no-browser-no-mercadolibre",
+  "request": {
+    "url": "https://meli.zying.net/api/MeliBest/QueryMeliSkuInfos",
+    "body": {
+      "Skus": [
+        "MLM6226808220"
+      ],
+      "site": 1
+    }
+  },
+  "httpStatus": 200,
+  "businessCode": 200,
+  "message": "",
+  "elapsedMs": 213,
+  "recordCount": 1,
+  "records": [
+    {
+      "sku": "MLM6226808220",
+      "weight": 1300,
+      "size": [
+        25,
+        33,
+        3
+      ],
+      "uptime": "2026-09-15T04:29:13"
+    }
+  ],
+  "responseKeys": [
+    "code",
+    "msg",
+    "data"
+  ]
+}

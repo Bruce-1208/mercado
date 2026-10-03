@@ -171,3 +171,49 @@ test('history table preserves snapshots, filters results and paginates legacy lo
     assert.equal(get('wdr-history-body').children[0].children[0].textContent, '没有符合条件的更新记录');
     get('wdr-history-close').listeners.click(); assert.equal(get('wdr-history-dialog').open, false);
 });
+
+test('task termination sends stop and unlocks actions only after stopped status', async () => {
+    const elements = new Map();
+    function element() {
+        return {style: {}, value: '', files: [], children: [], disabled: false, listeners: {}, classList: {contains: () => true, add() {}},
+            addEventListener(name, callback) { this.listeners[name] = callback; },
+            replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); },
+            querySelector(name) { return this[name] ||= element(); }};
+    }
+    const get = id => { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); };
+    const row = {order_number: '1', can_execute_zying: true};
+    let initialize, pollResolve;
+    const requests = [];
+    const response = data => ({ok: true, headers: {get: () => 'application/json'}, json: async () => ({data})});
+    const context = {URL, URLSearchParams, Set, Map, console, MutationObserver: class {observe() {}},
+        document: {hidden: false, getElementById: get, createElement: element,
+            addEventListener(name, callback) { if (name === 'DOMContentLoaded') initialize = callback; }},
+        window: {location: {href: 'http://localhost/'}, confirm: () => true, setTimeout() {}},
+        fetch: async (url, options) => {
+            requests.push([url, options]);
+            if (url.endsWith('/execute')) return response({status: 'queued'});
+            if (url.endsWith('/stop')) return response({status: 'stopping', message: '正在终结'});
+            if (url.includes('include_records=0')) return new Promise(resolve => { pollResolve = resolve; });
+            return response(url.includes('/saved?') || url.includes('/task?')
+                ? {task_id: 'task', status: 'ready', record_total: 1, page: 1, records: [row]}
+                : {agents: []});
+        }};
+    vm.runInNewContext(fs.readFileSync('bit/static/weight-dimensions-records.js', 'utf8'), context);
+    initialize(); await new Promise(setImmediate);
+    get('wdr-execution-target').value = 'server';
+    const selectAll = get('wdr-table').thead.children[0].children[0].children[0];
+    selectAll.checked = true; selectAll.listeners.change();
+    assert.equal(get('wdr-task-stop').disabled, true);
+    get('wdr-zying-execute').listeners.click(); await new Promise(setImmediate);
+    assert.equal(get('wdr-task-stop').disabled, false);
+    await get('wdr-task-stop').listeners.click();
+    assert.equal(requests.filter(([url]) => url.endsWith('/stop')).length, 1);
+    assert.equal(requests.find(([url]) => url.endsWith('/stop'))[1].method, 'POST');
+    assert.equal(get('wdr-task-stop').disabled, true);
+    assert.equal(get('wdr-zying-execute').disabled, true);
+    pollResolve(response({task_id: 'task', status: 'ready', total: 1, execute_status: 'stopped', execute_message: '任务已终结'}));
+    await new Promise(setImmediate);
+    assert.equal(get('wdr-task-stop').disabled, true);
+    assert.equal(get('wdr-zying-execute').disabled, false);
+    assert.equal(get('wdr-state').textContent, '任务已终结');
+});

@@ -8,6 +8,8 @@ ignored local JSON file.  The module supports both local Mercado Libre sellers
 from __future__ import annotations
 
 import argparse
+import copy
+import functools
 import io
 import json
 import os
@@ -32,6 +34,8 @@ from erp.mercadolibre_attribute_rules import (
     resolve_schema_attribute_id,
     semantic_value_key,
 )
+from erp import mercadolibre_publication_preflight as preflight
+
 from erp.mercadolibre_translation import (
     ListingTranslationError,
     marketplace_language,
@@ -250,11 +254,16 @@ class MercadoLibreClient:
                 time.sleep(delay)
                 continue
             if not response.ok:
-                raise MercadoLibreError(
+                error = MercadoLibreError(
                     f"{method_name} {path} 失败 (HTTP {response.status_code}): "
                     f"{_api_message(response)}",
                     status_code=int(response.status_code),
                 )
+                try:
+                    error.publication_result = response.json()
+                except ValueError:
+                    pass
+                raise error
             if response.status_code == 204 or not response.content:
                 return None
             return response.json()
@@ -372,22 +381,6 @@ READ_ONLY_ATTRIBUTE_KEYS = {
     "values",
 }
 SELLER_SPECIFIC_ATTRIBUTES = {"SELLER_SKU", "SKU"}
-DEFAULT_BRAND = "Generic"
-DEFAULT_REQUIRED_ATTRIBUTES = {
-    "MODEL": {"id": "MODEL", "value_name": "Generic"},
-    "COLOR": {"id": "COLOR", "value_name": "Multicolor"},
-    "SIZE": {"id": "SIZE", "value_name": "One size"},
-    "SEASON": {
-        "id": "SEASON",
-        "value_id": "994284",
-        "value_name": "Autumn/Winter",
-    },
-    "DRESS_TYPE": {
-        "id": "DRESS_TYPE",
-        "value_id": "1149075",
-        "value_name": "A-line/Evase",
-    },
-}
 DEFAULT_SALE_TERMS = [
     {
         "id": "WARRANTY_TYPE",
@@ -435,23 +428,26 @@ def _copy_attributes(
             or attribute_id in SELLER_SPECIFIC_ATTRIBUTES
             or (allowed_ids is not None and attribute_id not in allowed_ids)
         ):
+            if attribute_id not in SELLER_SPECIFIC_ATTRIBUTES:
+                preflight.issue("unsupported_attribute", f"目标类目不支持属性 {attribute_id}",
+                                attribute_id=attribute_id, severity="warning", source=source_attribute)
+                preflight.mapped(source_attribute, None, "unsupported_attribute")
             continue
         attribute["id"] = attribute_id
+        preflight.mapped(source_attribute, attribute, "source_schema_to_target_id")
         existing_position = positions.get(attribute_id)
         if existing_position is None:
             positions[attribute_id] = len(copied)
             copied.append(attribute)
-        elif not copied[existing_position].get("value_name") and attribute.get("value_name"):
+        elif _attribute_has_value(copied[existing_position]) and _attribute_has_value(attribute):
+            if any(copied[existing_position].get(k) != attribute.get(k)
+                   for k in ("value_id", "value_name", "value_struct", "values")):
+                preflight.issue("duplicate_attribute", f"属性 {attribute_id} 有多个冲突值",
+                                attribute_id=attribute_id, source=source_attribute)
+                if preflight.ACTIVE_REPORT.get() is None:
+                    raise MercadoLibreError(f"属性 {attribute_id} 有多个冲突值")
+        elif _attribute_has_value(attribute):
             copied[existing_position] = attribute
-    if ensure_brand:
-        brand_position = positions.get("BRAND")
-        if brand_position is None:
-            copied.append({"id": "BRAND", "value_name": DEFAULT_BRAND})
-        else:
-            # Follow-sell products intentionally publish under the generic brand;
-            # source-page brand text is often seller-entered or malformed.
-            copied[brand_position].pop("value_id", None)
-            copied[brand_position]["value_name"] = DEFAULT_BRAND
     if seller_sku:
         copied.append({"id": "SELLER_SKU", "value_name": seller_sku})
     return copied
@@ -469,6 +465,13 @@ def _restore_source_enumerated_value_id(
     ]
     if not allowed_values:
         return
+    by_id = match_enumerated_value(attribute_id, attribute.get("value_id"), None, allowed_values)
+    by_name = match_enumerated_value(attribute_id, None, attribute.get("value_name"), allowed_values)
+    if by_id and by_name and str(by_id["id"]) != str(by_name["id"]):
+        preflight.issue("id_name_conflict", f"{attribute_id} 的值 ID 与原文冲突",
+                        attribute_id=attribute_id, source=attribute)
+        if preflight.ACTIVE_REPORT.get() is None:
+            raise MercadoLibreError(f"{attribute_id} 的值 ID 与原文冲突")
     source_values = attribute.get("values")
     if isinstance(source_values, list) and source_values:
         restored: list[dict[str, Any]] = []
@@ -500,7 +503,7 @@ def _ensure_item_condition(
 ) -> None:
     if any(attribute.get("id") == "ITEM_CONDITION" for attribute in attributes):
         return
-    if (condition or "new").lower() == "new":
+    if (condition or "").lower() == "new":
         attributes.append(
             {
                 "id": "ITEM_CONDITION",
@@ -511,27 +514,8 @@ def _ensure_item_condition(
 
 
 def _ensure_gtin_or_empty_reason(attributes: list[dict[str, Any]]) -> None:
-    """Declare the documented no-GTIN reason when the source exposes no code."""
-    if any(
-        str(attribute.get("id") or "").upper() in {"GTIN", "EMPTY_GTIN_REASON"}
-        and _attribute_has_value(attribute)
-        for attribute in attributes
-    ):
-        return
-    # Do not let a collected placeholder such as valueid=-1 block the valid
-    # EMPTY_GTIN_REASON alternative or leak into the publication request.
-    attributes[:] = [
-        attribute
-        for attribute in attributes
-        if str(attribute.get("id") or "").upper() != "GTIN"
-    ]
-    attributes.append(
-        {
-            "id": "EMPTY_GTIN_REASON",
-            "value_id": "17055160",
-            "value_name": "The product does not have registered code",
-        }
-    )
+    """Absence in a scraped page is not evidence that no GTIN exists."""
+    return
 
 
 def _mercado_picture_identity(url: str) -> str:
@@ -928,12 +912,7 @@ def _infer_cbt_listing(
                     and is_required_attribute(definition)
                     and not is_read_only_attribute(definition)
                 }
-                satisfiable = set(DEFAULT_REQUIRED_ATTRIBUTES) | {"BRAND"}
-                if "EMPTY_GTIN_REASON" in {
-                    str(definition.get("id") or "").strip().upper()
-                    for definition in schema
-                }:
-                    satisfiable.add("GTIN")
+                satisfiable = {"GTIN"} if "EMPTY_GTIN_REASON" in present else set()
                 missing_count = len(required - present - satisfiable)
             ranked = (missing_count, candidate_order, suggested, inferred)
             candidate_order += 1
@@ -1000,7 +979,9 @@ def _category_attribute_schema(
     if not isinstance(instance_cache, dict):
         instance_cache = {}
         client._category_schema_cache = instance_cache
-    if category_id in instance_cache:
+    cache_times = getattr(client, "_category_schema_times", {})
+    client._category_schema_times = cache_times
+    if category_id in instance_cache and time.monotonic() - cache_times.get(category_id, 0) < _CACHE_TTL_SECONDS:
         return instance_cache[category_id]
     token_id = int(getattr(client, "token_id", 0) or 0)
     if token_id > 0:
@@ -1009,6 +990,7 @@ def _category_attribute_schema(
             cached = _CATEGORY_SCHEMA_CACHE.get(category_id)
             if cached and now - cached[0] < _CACHE_TTL_SECONDS:
                 instance_cache[category_id] = cached[1]
+                cache_times[category_id] = cached[0]
                 return cached[1]
             key_lock = _CATEGORY_KEY_LOCKS.setdefault(
                 f"schema:{category_id}", threading.Lock()
@@ -1018,6 +1000,7 @@ def _category_attribute_schema(
                 cached = _CATEGORY_SCHEMA_CACHE.get(category_id)
                 if cached and time.monotonic() - cached[0] < _CACHE_TTL_SECONDS:
                     instance_cache[category_id] = cached[1]
+                    cache_times[category_id] = cached[0]
                     return cached[1]
             schema = _try_request(client, "GET", f"/categories/{category_id}/attributes")
             if isinstance(schema, list):
@@ -1027,6 +1010,7 @@ def _category_attribute_schema(
                 with _CATEGORY_CACHE_LOCK:
                     _CATEGORY_SCHEMA_CACHE[category_id] = (time.monotonic(), normalized)
                 instance_cache[category_id] = normalized
+                cache_times[category_id] = time.monotonic()
                 return normalized
             return None
     schema = _try_request(client, "GET", f"/categories/{category_id}/attributes")
@@ -1034,6 +1018,7 @@ def _category_attribute_schema(
         return None
     normalized = [attribute for attribute in schema if isinstance(attribute, Mapping)]
     instance_cache[category_id] = normalized
+    cache_times[category_id] = time.monotonic()
     return normalized
 
 
@@ -1089,11 +1074,7 @@ def _validate_required_attributes(
         str(attribute.get("id") or "").upper()
         for attribute in attributes
         if attribute.get("id")
-        and (
-            attribute.get("value_id") not in (None, "")
-            or str(attribute.get("value_name") or "").strip()
-            or attribute.get("values")
-        )
+        and _attribute_has_value(attribute)
     }
     variation_rows = list(variations or [])
     if variation_rows:
@@ -1121,6 +1102,10 @@ def _validate_required_attributes(
     if "EMPTY_GTIN_REASON" in present:
         required.discard("GTIN")
     missing = sorted(required - present)
+    if missing and preflight.ACTIVE_REPORT.get() is not None:
+        for attribute_id in missing:
+            preflight.issue("missing_required", f"缺少目标类目必填属性 {attribute_id}", attribute_id=attribute_id)
+        return
     if missing:
         details = []
         for attribute_id in missing:
@@ -1150,45 +1135,8 @@ def _ensure_required_attribute_defaults(
     schema: Iterable[Mapping[str, Any]] | None,
     variations: Iterable[Mapping[str, Any]] | None = None,
 ) -> None:
-    """Fill safe publication fallbacks for common required catalog fields."""
-    if schema is None:
-        return
-    present = {
-        str(attribute.get("id") or "").upper()
-        for attribute in attributes
-        if attribute.get("id")
-        and (
-            attribute.get("value_id") not in (None, "")
-            or str(attribute.get("value_name") or "").strip()
-            or attribute.get("values")
-        )
-    }
-    variation_rows = list(variations or [])
-    if variation_rows:
-        per_variation = [
-            {
-                str(attribute.get("id") or "").upper()
-                for key in ("attribute_combinations", "attributes")
-                for attribute in variation.get(key) or []
-                if attribute.get("id") and _attribute_has_value(attribute)
-            }
-            for variation in variation_rows
-        ]
-        if per_variation:
-            present.update(set.intersection(*per_variation))
-    for definition in schema:
-        attribute_id = str(definition.get("id") or "").upper()
-        if (
-            not attribute_id
-            or attribute_id in present
-            or is_read_only_attribute(definition)
-            or not is_required_attribute(definition)
-        ):
-            continue
-        default = DEFAULT_REQUIRED_ATTRIBUTES.get(attribute_id)
-        if default:
-            attributes.append(dict(default))
-            present.add(attribute_id)
+    """Compatibility hook: missing product facts require evidence, not defaults."""
+    return
 
 
 def _ensure_contextual_required_attribute_defaults(
@@ -1196,82 +1144,8 @@ def _ensure_contextual_required_attribute_defaults(
     schema: Iterable[Mapping[str, Any]] | None,
     source: Mapping[str, Any],
 ) -> None:
-    """Fill required values only when source evidence supports the inference."""
-    if schema is None or any(
-        str(attribute.get("id") or "").upper() == "POWER_SUPPLY_TYPE"
-        and _attribute_has_value(attribute)
-        for attribute in attributes
-    ):
-        return
-    definition = next(
-        (
-            row for row in schema
-            if str(row.get("id") or "").upper() == "POWER_SUPPLY_TYPE"
-            and is_required_attribute(row)
-            and not is_read_only_attribute(row)
-        ),
-        None,
-    )
-    if definition is None:
-        return
-
-    usb_value = None
-    for attribute in attributes:
-        if str(attribute.get("id") or "").upper() != "WITH_USB":
-            continue
-        usb_value = semantic_value_key(
-            "WITH_USB", attribute.get("value_name") or attribute.get("value_id")
-        )
-        break
-    source_attributes = list(source.get("attributes") or [])
-    if not usb_value:
-        for source_attribute in source_attributes:
-            if resolve_schema_attribute_id(source_attribute, None) != "WITH_USB":
-                continue
-            usb_value = semantic_value_key(
-                "WITH_USB",
-                source_attribute.get("value_name") or source_attribute.get("value_id"),
-            )
-            break
-    title = str(source.get("title") or "")
-    usb_powered = usb_value == "BOOLEAN_TRUE" or (
-        not usb_value and bool(re.search(r"\bUSB\b", title, re.IGNORECASE))
-    )
-    if not usb_powered:
-        return
-
-    battery_hint = bool(re.search(r"\b(?:battery|bater[ií]a)\b", title, re.IGNORECASE))
-    if not battery_hint:
-        source_evidence = " ".join(
-            str(attribute.get(key) or "")
-            for attribute in source_attributes
-            for key in ("id", "name", "value_name")
-        )
-        normalized_evidence = unicodedata.normalize("NFKD", source_evidence)
-        normalized_evidence = "".join(
-            character for character in normalized_evidence
-            if not unicodedata.combining(character)
-        )
-        battery_hint = bool(re.search(
-            r"(?:BATTER|BATERIA|RECHARG|RECARG|RECARREG)",
-            normalized_evidence,
-            re.IGNORECASE,
-        ))
-    desired_name = (
-        "Battery/Domestic current" if battery_hint else "Domestic current"
-    )
-    allowed_values = [
-        value for value in definition.get("values") or []
-        if isinstance(value, Mapping) and value.get("id")
-    ]
-    matched = match_enumerated_value(
-        "POWER_SUPPLY_TYPE", None, desired_name, allowed_values
-    )
-    inferred = {"id": "POWER_SUPPLY_TYPE", "value_name": desired_name}
-    if matched is not None:
-        inferred["value_id"] = str(matched["id"])
-        inferred["value_name"] = str(matched.get("name") or desired_name)
-    attributes.append(inferred)
+    """USB presence does not establish the product's power supply type."""
+    return
 
 
 def _normalize_enumerated_attributes(
@@ -1290,6 +1164,7 @@ def _normalize_enumerated_attributes(
     for attribute in list(attributes):
         attribute_id = str(attribute.get("id") or "").upper()
         definition = definitions.get(attribute_id) or {}
+        preflight.normalize_numeric_unit(attribute, definition)
         allowed_values = [
             value
             for value in definition.get("values") or []
@@ -1334,20 +1209,29 @@ def _normalize_enumerated_attributes(
                 str(value.get("name") or value.get("id") or "")
                 for value in allowed_values[:8]
             )
-            raise MercadoLibreError(
+            message = (
                 f"无法用本地规则映射目标类目必填属性 {attribute_id}: "
                 f"{attribute.get('value_name') or attribute.get('value_id') or '(empty)'}"
                 + (f"；目标可选值: {choices}" if choices else "")
             )
+            preflight.issue("unmapped_value", message, attribute_id=attribute_id, source=attribute)
+            if preflight.ACTIVE_REPORT.get() is None:
+                raise MercadoLibreError(message)
         if target_value is None and controlled:
+            preflight.issue("unmapped_value", f"无法确定映射 {attribute_id} 的值",
+                            attribute_id=attribute_id, source=attribute,
+                            severity="error" if is_required_attribute(definition) or "SKU" in preflight.ACTIVE_SCOPE.get() else "warning")
+            preflight.mapped(attribute, None, "unmapped_value")
             # Optional controlled attributes are safer to omit than to send an
             # invalid localized value or guess the nearest enum value.
             discarded.append(attribute)
             continue
         if target_value is None:
             continue
+        original_attribute = copy.deepcopy(attribute)
         attribute["value_id"] = str(target_value["id"])
         attribute["value_name"] = str(target_value.get("name") or "")
+        preflight.mapped(original_attribute, attribute, "target_enum")
     for attribute in discarded:
         attributes.remove(attribute)
 
@@ -1452,6 +1336,13 @@ def _copy_variations(
 ) -> list[dict[str, Any]]:
     variations: list[dict[str, Any]] = []
     for index, variation in enumerate(source.get("variations") or [], start=1):
+        if preflight.ACTIVE_REPORT.get() is not None:
+            preflight.ACTIVE_SCOPE.set(f"SKU {index}")
+        for dimension in variation.get("attribute_combinations") or []:
+            if allowed_ids is not None and resolve_schema_attribute_id(dimension, schema) not in allowed_ids:
+                preflight.issue("lost_dimension", "变体区分属性无法映射到目标类目", source=dimension)
+                if preflight.ACTIVE_REPORT.get() is None:
+                    raise MercadoLibreError(f"变体 {index} 的区分属性无法映射到目标类目")
         raw_stock = variation.get("available_quantity", variation.get("stock"))
         try:
             variation_stock = int(raw_stock) if raw_stock not in (None, "") else int(quantity)
@@ -1507,6 +1398,7 @@ def _copy_variations(
         if urls:
             copied["picture_ids"] = urls
         variations.append(copied)
+    preflight.ACTIVE_SCOPE.set("商品")
     return variations
 
 
@@ -1541,7 +1433,7 @@ def build_global_payload(
         schema=attribute_schema,
         source_schema=source_attribute_schema,
     )
-    _ensure_item_condition(attributes, str(source.get("condition") or "new"))
+    _ensure_item_condition(attributes, str(source.get("condition") or ""))
     _ensure_gtin_or_empty_reason(attributes)
     variations = _copy_variations(
         source,
@@ -1620,7 +1512,7 @@ def build_user_product_payload(
         schema=attribute_schema,
         source_schema=source_attribute_schema,
     )
-    _ensure_item_condition(attributes, str(source.get("condition") or "new"))
+    _ensure_item_condition(attributes, str(source.get("condition") or ""))
     _ensure_gtin_or_empty_reason(attributes)
     _ensure_required_attribute_defaults(attributes, attribute_schema)
     _ensure_contextual_required_attribute_defaults(attributes, attribute_schema, source)
@@ -1730,6 +1622,8 @@ def build_user_product_family_payload(
     signatures = set()
     family_name = _user_product_family_name(source)
     for index, variation in enumerate(variations, 1):
+        if preflight.ACTIVE_REPORT.get() is not None:
+            preflight.ACTIVE_SCOPE.set(f"SKU {index}")
         child = dict(source)
         child.pop("variations", None)
         # Child attributes override common values, including color, GTIN and
@@ -1812,6 +1706,7 @@ def build_user_product_family_payload(
             )
         signatures.add(signature)
         payloads.append(payload)
+    preflight.ACTIVE_SCOPE.set("商品")
     return payloads
 
 
@@ -1883,13 +1778,17 @@ def build_local_payload(
     *,
     quantity: int = 1,
     price: float | None = None,
+    client: MercadoLibreClient | None = None,
 ) -> dict[str, Any]:
     """Build a standard local-site ``POST /items`` payload."""
     item_id = extract_item_id(str(source.get("id") or ""))
     pictures, ids_to_urls = _picture_sources(source)
+    schema = _required_category_attribute_schema(client, str(source.get("category_id") or "")) if client else None
     attributes = _copy_attributes(
-        source.get("attributes") or [], seller_sku=f"FOLLOW-{item_id}"
+        source.get("attributes") or [], seller_sku=f"FOLLOW-{item_id}",
+        schema=schema, source_schema=schema, allowed_ids=_category_attribute_ids(schema),
     )
+    _normalize_enumerated_attributes(attributes, schema)
     payload: dict[str, Any] = {
         "site_id": source.get("site_id"),
         "title": source.get("title"),
@@ -1903,8 +1802,10 @@ def build_local_payload(
         "attributes": attributes,
     }
     variations = _copy_variations(
-        source, ids_to_urls, quantity=quantity, sku_prefix=f"FOLLOW-{item_id}"
+        source, ids_to_urls, quantity=quantity, sku_prefix=f"FOLLOW-{item_id}",
+        schema=schema, source_schema=schema, allowed_ids=_category_attribute_ids(schema),
     )
+    _validate_required_attributes(attributes, schema, variations)
     if variations:
         payload["variations"] = variations
     else:
@@ -1971,6 +1872,31 @@ def _site_item_error(result: Any, site_id: str) -> Mapping[str, Any] | None:
     return None
 
 
+def _publication_contract(function):
+    @functools.wraps(function)
+    def wrapped(*args, **kwargs):
+        report = preflight.new_report()
+        token = preflight.ACTIVE_REPORT.set(report)
+        scope_token = preflight.ACTIVE_SCOPE.set("商品")
+        draft_token = preflight.ACTIVE_DRAFT.set(None)
+        try:
+            return function(*args, **kwargs)
+        except Exception as exc:
+            if not any(row["severity"] == "error" for row in report["issues"]):
+                # A transport/platform error does not mean the attribute mapping failed.
+                preflight.issue("publication_error", str(exc),
+                                severity="warning" if preflight.ACTIVE_DRAFT.get() else "error")
+            exc.preflight_report = copy.deepcopy(report)
+            exc.publication_draft = preflight.ACTIVE_DRAFT.get()
+            raise
+        finally:
+            preflight.ACTIVE_REPORT.reset(token)
+            preflight.ACTIVE_SCOPE.reset(scope_token)
+            preflight.ACTIVE_DRAFT.reset(draft_token)
+    return wrapped
+
+
+@_publication_contract
 def follow_sell(
     client: MercadoLibreClient,
     source_url: str,
@@ -1984,6 +1910,10 @@ def follow_sell(
     prepared_listing: tuple[Mapping[str, Any], Mapping[str, Any]] | None = None,
     existing_user_product_id: str | None = None,
     publish: bool = False,
+    prepared_draft: Mapping[str, Any] | None = None,
+    on_prepared: Callable[[dict[str, Any]], None] | None = None,
+    attribute_corrections: list[dict[str, Any]] | None = None,
+    prior_draft: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build, and optionally publish, a copied listing."""
     total_started = time.perf_counter()
@@ -2012,6 +1942,9 @@ def follow_sell(
                 source, description = load_listing_for_publish(source_url)
             except Exception:
                 raise api_error
+    source = copy.deepcopy(source)
+    raw_source = copy.deepcopy(source)
+    raw_description = copy.deepcopy(description)
     timings["source"] = time.perf_counter() - stage_started
     target_site = str(user.get("site_id") or "")
     is_global = target_site == "CBT"
@@ -2045,7 +1978,32 @@ def follow_sell(
     timings["translation"] = time.perf_counter() - stage_started
     stage_started = time.perf_counter()
     publication_action = "create"
-    if is_user_product and reusable_user_product_id:
+    context = {"user_id": user.get("id"), "account_site": target_site,
+               "user_products": is_user_product, "destination_site": destination_site_id,
+               "quantity": quantity, "net_proceeds": net_proceeds, "local_price": local_price,
+               "existing_user_product_id": reusable_user_product_id,
+               "attribute_corrections": (prepared_draft.get("context", {}).get("attribute_corrections", [])
+                                         if prepared_draft is not None else attribute_corrections or [])}
+    if prior_draft and prepared_draft is None:
+        attribute_corrections = preflight.retry_corrections(prior_draft, raw_source, raw_description, context)
+        context["attribute_corrections"] = attribute_corrections
+    if prepared_draft is not None:
+        fresh_schemas = {}
+        for category_id in prepared_draft.get("schemas", {}):
+            rules = client.request("GET", f"/categories/{category_id}/attributes")
+            if not isinstance(rules, list):
+                raise MercadoLibreError(f"无法刷新类目 {category_id} 的规则，已停止上架")
+            fresh_schemas[category_id] = rules
+        try:
+            payload = preflight.verify_draft(prepared_draft, raw_source, raw_description, context, fresh_schemas)
+        except ValueError as exc:
+            raise MercadoLibreError(str(exc)) from exc
+        preflight.ACTIVE_REPORT.get().update(copy.deepcopy(prepared_draft["report"]))
+        endpoint = prepared_draft["endpoint"]
+        publication_action = prepared_draft["action"]
+        timings["payload"] = time.perf_counter() - stage_started
+        timings["pictures"] = 0.0
+    elif is_user_product and reusable_user_product_id:
         payload = {
             "sites_to_sell": [{
                 "site_id": destination_site_id,
@@ -2066,27 +2024,6 @@ def follow_sell(
         )
         timings["payload"] = time.perf_counter() - stage_started
         timings["pictures"] = 0.0
-        if publish:
-            image_started = time.perf_counter()
-            uploaded: dict[str, str] = {}
-            for variant_payload in payload if is_family else [payload]:
-                picture_ids = []
-                for picture in variant_payload["pictures"]:
-                    url = picture["source"]
-                    try:
-                        if url not in uploaded:
-                            uploaded[url] = _upload_validated_picture(client, url)
-                        picture_ids.append(uploaded[url])
-                    except MercadoLibreError as exc:
-                        picture_upload_errors.append(str(exc))
-                if not picture_ids:
-                    details = "; ".join(picture_upload_errors[:3])
-                    raise MercadoLibreError(
-                        "源商品没有符合要求且上传成功的图片"
-                        + (f"：{details}" if details else "")
-                    )
-                variant_payload["pictures"] = [{"id": pid} for pid in picture_ids]
-            timings["pictures"] = time.perf_counter() - image_started
         endpoint = (
             "/global/user-products/families" if is_family else str(
                 os.environ.get("MERCADO_USER_PRODUCTS_CREATE_ENDPOINT")
@@ -2113,11 +2050,105 @@ def follow_sell(
                 f"目标店铺站点 {target_site} 与源商品站点 {source.get('site_id')} 不一致"
             )
         payload = build_local_payload(
-            source, description, quantity=quantity, price=local_price
+            source, description, quantity=quantity, price=local_price, client=client
         )
         timings["payload"] = time.perf_counter() - stage_started
         timings["pictures"] = 0.0
         endpoint = "/items"
+    payload_rows = payload if isinstance(payload, list) else [payload]
+    schemas = (fresh_schemas if prepared_draft is not None else {
+        str(row["category_id"]): _required_category_attribute_schema(client, str(row["category_id"]))
+        for row in payload_rows if row.get("category_id")
+    })
+    if prepared_draft is None:
+        for category_id, used_schema in schemas.items():
+            current_schema = client.request("GET", f"/categories/{category_id}/attributes")
+            if not isinstance(current_schema, list) or preflight.digest(current_schema) != preflight.digest(used_schema):
+                getattr(client, "_category_schema_cache", {}).pop(category_id, None)
+                with _CATEGORY_CACHE_LOCK:
+                    _CATEGORY_SCHEMA_CACHE.pop(category_id, None)
+                raise MercadoLibreError(f"类目 {category_id} 的规则已变化或无法确认，请重新预检")
+    if prepared_draft is None and attribute_corrections:
+        preflight.apply_corrections(payload, schemas, attribute_corrections)
+    preflight.validate_payload(payload, schemas, raw_source)
+    if isinstance(payload, list):
+        identities = set()
+        for index, child in enumerate(payload, 1):
+            identity = _user_product_identity_signature(child["attributes"], schemas[child["category_id"]], child.get("family_name"))
+            if identity in identities:
+                preflight.issue("duplicate_variation", "修正后的商品族 SKU 身份重复，不能合并库存", scope=f"SKU {index}")
+            identities.add(identity)
+    report = preflight.refresh_status(preflight.ACTIVE_REPORT.get())
+    draft = (copy.deepcopy(prepared_draft) if prepared_draft is not None else
+             preflight.make_draft(payload, raw_source, raw_description, context, schemas, report, endpoint, publication_action))
+    preflight.ACTIVE_DRAFT.set(draft)
+    if report["status"] != "ready":
+        if on_prepared:
+            on_prepared(copy.deepcopy(draft))
+        messages = [f"{row['scope']}：{row['message']}" for row in report["issues"] if row["severity"] == "error"]
+        raise MercadoLibreError("属性预检未通过；" + "；".join(messages))
+    if publish and on_prepared:
+        on_prepared(copy.deepcopy(draft))
+    if publish and is_user_product and publication_action in {"create", "create_family"}:
+        image_started = time.perf_counter()
+        uploaded = {}
+        for variant_payload in payload_rows:
+            resolved_pictures = []
+            for picture in variant_payload.get("pictures") or []:
+                if picture.get("id"):
+                    resolved_pictures.append(dict(picture))
+                    continue
+                url = picture.get("source")
+                # Never silently drop an SKU image after validating the draft.
+                try:
+                    if url not in uploaded:
+                        uploaded[url] = _upload_validated_picture(client, url)
+                    resolved_pictures.append({"id": uploaded[url]})
+                except MercadoLibreError as exc:
+                    if raw_source.get("variations"):
+                        raise
+                    picture_upload_errors.append(str(exc))
+                    preflight.issue("picture_rejected", str(exc), severity="warning", source={"url": url})
+            if not resolved_pictures:
+                raise MercadoLibreError("源商品没有符合要求且上传成功的图片")
+            variant_payload["pictures"] = resolved_pictures
+        timings["pictures"] = time.perf_counter() - image_started
+    # Image upload resolves references only; attribute content is frozen.
+    if publish and time.time() - draft["created_at"] > preflight.DRAFT_TTL_SECONDS:
+        raise MercadoLibreError("草稿处理时间已超过有效期，请重新预检")
+    submission_hash = preflight.digest(payload)
+    checkpoint = copy.deepcopy(draft)
+    checkpoint["submission_payload"] = copy.deepcopy(payload)
+    checkpoint["submission_hash"] = submission_hash
+    preflight.ACTIVE_DRAFT.set(checkpoint)
+    if on_prepared:
+        on_prepared(copy.deepcopy(checkpoint))
+    if preflight.digest(payload) != submission_hash:
+        raise MercadoLibreError("提交内容与校验草稿不一致，已停止上架")
+    submission_attempts = []
+
+    def submit(path, body):
+        nonlocal submission_hash
+        submitted = copy.deepcopy(body)
+        submission_hash = preflight.digest(submitted)
+        attempt = {"endpoint": path, "payload": submitted, "hash": submission_hash, "status": "submitting"}
+        submission_attempts.append(attempt)
+        checkpoint["submission_payload"] = copy.deepcopy(submitted)
+        checkpoint["submission_hash"] = submission_hash
+        checkpoint["submission_attempts"] = submission_attempts
+        preflight.ACTIVE_DRAFT.set(checkpoint)
+        if on_prepared:
+            on_prepared(copy.deepcopy(checkpoint))
+        try:
+            response = client.request("POST", path, json_body=submitted)
+        except Exception as exc:
+            attempt["status"] = "failed"
+            attempt["error"] = str(exc)
+            attempt["response"] = getattr(exc, "publication_result", None)
+            raise
+        attempt["status"] = "responded"
+        return response
+
     stage_started = time.perf_counter()
     result = None
     if publish:
@@ -2140,9 +2171,9 @@ def follow_sell(
                         "already_available": True,
                     }
                 else:
-                    result = client.request("POST", endpoint, json_body=payload)
+                    result = submit(endpoint, payload)
             else:
-                result = client.request("POST", endpoint, json_body=payload)
+                result = submit(endpoint, payload)
         except MercadoLibreError as exc:
             if (
                 is_user_product
@@ -2152,7 +2183,7 @@ def follow_sell(
                 # Explicit not-found/method-not-allowed responses are safe to
                 # fall back because Mercado confirms no product was created.
                 endpoint = "/global/items"
-                result = client.request("POST", endpoint, json_body=payload)
+                result = submit(endpoint, payload)
             elif (
                 is_user_product
                 and endpoint in {"/global/user-products", "/global/items"}
@@ -2188,10 +2219,9 @@ def follow_sell(
                 else:
                     endpoint = f"/global/user-products/{conflict_id}"
                     publication_action = "add_marketplace"
-                    result = client.request(
-                        "POST",
+                    result = submit(
                         endpoint,
-                        json_body={
+                        {
                             "sites_to_sell": [{
                                 "site_id": destination_site_id,
                                 "logistic_type": "remote",
@@ -2249,6 +2279,10 @@ def follow_sell(
         ),
         "picture_upload_required": bool(is_user_product and not publish),
         "payload": payload,
+        "preflight": copy.deepcopy(report),
+        "draft": draft,
+        "submission_hash": submission_hash,
+        "submission_attempts": submission_attempts,
         "result": result,
         "database_publish_recorded": database_publish_recorded,
         "database_publish_error": database_publish_error,

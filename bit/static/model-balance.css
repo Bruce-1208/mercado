@@ -1,0 +1,29 @@
+.model-balance-alert { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:12px 20px; padding:14px 18px; border:1px solid #e6b652; border-left:4px solid #b06b00; border-radius:10px; background:#fff8e8; color:#704700; box-sizing:border-box; }
+.model-balance-alert[hidden] { display:none!important; }
+.model-balance-alert[data-status="overdue"], .model-balance-alert[data-status="error"] { background:#fff1f1; border-color:#df8686; color:#9d2525; }
+.model-balance-alert[data-status="ok"] { background:#eef8f1; border-color:#89b89a; color:#245f39; }
+.model-balance-alert p { margin:4px 0; overflow-wrap:anywhere; }
+.model-balance-alert small { opacity:.85; }
+.model-balance-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px; flex-shrink:0; }
+.model-balance-actions a { color:inherit; text-decoration:underline; }
+.model-balance-actions button { padding:7px 12px; border:1px solid currentColor; border-radius:6px; color:inherit; background:transparent; cursor:pointer; }
+.model-balance-actions button:disabled { opacity:.5; cursor:wait; }
+.model-balance-alert [hidden] { display:none!important; }
+.model-balance-copy { min-width:0; }
+.model-balance-alert[data-mode="providers"] { display:grid; grid-template-columns:minmax(0,1fr) auto; margin:0 0 22px; padding:20px; background:#fff; border:1px solid #e5e9ef; color:#17202b; }
+.model-balance-alert[data-mode="providers"] .model-balance-copy > strong { font-size:20px; }
+.model-balance-alert[data-mode="providers"] .model-balance-copy p, .model-balance-alert[data-mode="providers"] .model-balance-copy small { color:#697586; }
+.model-balance-alert[data-mode="providers"] .model-balance-actions { color:#1769e0; }
+.model-balance-providers { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; grid-column:1/-1; min-width:0; }
+.model-balance-provider { display:flex; flex-direction:column; min-width:0; padding:16px; border:1px solid #e5e9ef; border-radius:10px; background:#fbfcfe; color:#445063; }
+.model-balance-provider-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.model-balance-provider h3 { margin:0; font-size:16px; color:#17202b; overflow-wrap:anywhere; }
+.model-balance-status { flex-shrink:0; padding:3px 9px; border-radius:999px; font-size:12px; background:#eef1f5; color:#687487; }
+.model-balance-provider[data-status="ok"] .model-balance-status { background:#e9f8ef; color:#17884b; }
+.model-balance-provider[data-status="low"] .model-balance-status { background:#fff4df; color:#a35a00; }
+.model-balance-provider[data-status="overdue"] .model-balance-status, .model-balance-provider[data-status="error"] .model-balance-status { background:#fff1f1; color:#9d2525; }
+.model-balance-provider .model-balance-amount { margin:12px 0 4px; font-size:22px; font-weight:700; color:#17202b; }
+.model-balance-provider .model-balance-provider-message { margin:10px 0; }
+.model-balance-provider-checked { display:block; margin-bottom:10px; overflow-wrap:anywhere; }
+.model-balance-console { align-self:flex-start; margin-top:auto; padding-top:4px; color:#1769e0; text-decoration:underline; overflow-wrap:anywhere; }
+@media(max-width:760px) { .model-balance-alert { margin:10px; align-items:flex-start; flex-direction:column; } .model-balance-actions { flex-shrink:1; } .model-balance-alert[data-mode="providers"] { grid-template-columns:minmax(0,1fr); padding:18px; } .model-balance-providers { grid-template-columns:minmax(0,1fr); } .model-balance-provider-head { flex-wrap:wrap; } }

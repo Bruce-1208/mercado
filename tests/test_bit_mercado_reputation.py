@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from bit import bit_db_api
 from bit import bit_interface
 from bit import bit_reputation_info
@@ -20,6 +22,8 @@ from bit.mercado_reputation import (
     fetch_reputation_payload,
     fetch_store_reputation,
 )
+
+pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user")
 
 
 def test_official_user_status_reports_restriction_without_inventing_ban_days():
@@ -252,7 +256,7 @@ def test_official_supplement_uses_orders_status_infractions_and_rights_holder_ap
     assert requested_paths[4].endswith(
         "/marketplace/moderations/infractions/seller-mlm"
     )
-    assert http.gets[2][1]["params"]["seller"] == "seller-mlm"
+    assert http.gets[2][1]["params"]["seller.id"] == "seller-mlm"
     assert http.gets[2][1]["params"]["site"] == "MLM"
     assert http.gets[3][1]["params"]["site"] == "MLM"
     assert http.gets[4][1]["params"]["date_created_since"] == "2026-05-27"
@@ -291,7 +295,7 @@ def test_official_gradient_filters_each_marketplace_site_independently():
         for url, kwargs in http.gets
         if url.endswith(ORDERS_SEARCH_PATH)
     ]
-    assert [(params["seller"], params["site"]) for params in order_params] == [
+    assert [(params["seller.id"], params["site"]) for params in order_params] == [
         ("seller-mx", "MLM"),
         ("seller-mx", "MLM"),
         ("seller-br", "MLB"),
@@ -560,12 +564,12 @@ def test_console_template_keeps_old_reputation_and_adds_api_panel():
     assert any(
         'id="infraction-body"' in table for table in plain_reputation_tables
     )
-    assert ".reputation-data-table td:nth-child(12) { width: 360px; }" in template
+    assert ".reputation-data-table td:nth-child(13) { width: 360px; }" in template
     assert "Math.round(canvas.getBoundingClientRect().width || 0)" in template
-    assert ".reputation-data-table td:nth-child(10) { width: 72px; }" in template
-    assert ".reputation-data-table td:nth-child(11) { width: 84px; }" in template
-    assert "function conciseAccountRiskWarningText(value)" in template
-    assert "const text = conciseAccountRiskWarningText(value);" in template
+    assert ".reputation-data-table td:nth-child(11) { width: 72px; }" in template
+    assert ".reputation-data-table td:nth-child(12) { width: 84px; }" in template
+    assert "function renderReputationWarningCell(value)" in template
+    assert 'data-warning-detail="${escapeHtml(text)}" data-tooltip="${escapeHtml(text)}"' in template
     assert 'id="reputation-warning-popover"' in template
     assert "function showReputationWarningDetail(cell, event)" in template
     assert "reputation-warning-preview" in template
@@ -588,12 +592,13 @@ def test_console_template_keeps_old_reputation_and_adds_api_panel():
     assert "function applyReputationFilters()" in template
     assert "function sortReputationBy(key)" in template
     assert "function compareReputationRows(left, right)" in template
-    assert len(re.findall(r'class="reputation-sort-button"', reputation_table.group(1))) == 8
+    assert len(re.findall(r'class="reputation-sort-button"', reputation_table.group(1))) == 9
     assert set(re.findall(r'data-sort-key="([^"]+)"', reputation_table.group(1))) == {
         "infraction_count",
         "rights_holder_count",
         "color",
         "order_total",
+        "orders_7d",
         "complaint_rate",
         "delay_rate",
         "cancellation_rate",
@@ -1025,6 +1030,8 @@ def test_api_reputation_last_snapshot_survives_service_restart(tmp_path):
 
 
 def test_api_reputation_uses_latest_database_rows_before_first_manual_refresh(monkeypatch):
+    monkeypatch.setattr(bit_interface.bit_db_api, "list_mercado_store_tokens", lambda: {"rows": []})
+    monkeypatch.setattr(bit_interface, "_attach_latest_reputation_infraction_counts", lambda data: data)
     monkeypatch.setattr(
         bit_interface,
         "db_get_latest_reputation_info",
@@ -1818,7 +1825,7 @@ def test_collect_account_risk_details_opens_each_filter_and_keeps_details_only(m
         bit_reputation_info.ACCOUNT_RISK_URLS["restrictions"],
         bit_reputation_info.ACCOUNT_RISK_URLS["warnings"],
     ]
-    assert result == "Restriction detail\nWarning detail"
+    assert result == "Restriction detail"
 
 
 def test_auxiliary_replaces_account_risk_count_with_details(monkeypatch):

@@ -19,8 +19,7 @@ def test_manifest_is_chrome_edge_manifest_v3_and_declares_supported_sites():
     assert manifest["manifest_version"] == 3
     assert manifest["background"]["service_worker"] == "background.js"
     assert "default_popup" not in manifest["action"]
-    assert manifest["version"] == "1.8.28"
-    assert "v1.8.28" in (EXTENSION / "popup.html").read_text(encoding="utf-8")
+    assert f"v{manifest['version']}" in (EXTENSION / "popup.html").read_text(encoding="utf-8")
     matches = manifest["content_scripts"][0]["matches"]
     assert any("mercadolibre.com.mx" in pattern for pattern in matches)
     assert any("mercadolivre.com.br" in pattern for pattern in matches)
@@ -395,7 +394,7 @@ def test_list_card_collection_only_opens_china_or_managed_products():
     content = (EXTENSION / "content.js").read_text(encoding="utf-8")
     background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
-    assert 'window.open(candidate.url, "_blank", "noopener")' in content
+    assert 'window.open(button.dataset.collectionUrl, "_blank", "noopener")' in content
     assert "extractCardProduct(candidate.card, candidate.url)" not in content
     assert "仅采集自发货和半托管" in content
     core = (EXTENSION / "collector-core.js").read_text(encoding="utf-8")
@@ -407,7 +406,8 @@ def test_list_card_collection_only_opens_china_or_managed_products():
     batch = (EXTENSION / "product-batch.js").read_text(encoding="utf-8")
     assert 'type === "READ_PRODUCT_LIST" || type === "EXTRACT_BATCH_PRODUCT"' in batch
     assert "active: false" in batch
-    assert "智赢详情浮层" in batch
+    assert "重量尺寸由后台提供" in batch
+    assert "CHECK_ZYING_PLUGIN" not in batch
 
 
 def test_detail_collection_requires_china_or_managed_origin_and_actual_weight():

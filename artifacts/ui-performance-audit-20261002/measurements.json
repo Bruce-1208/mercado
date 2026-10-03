@@ -1,0 +1,1207 @@
+{
+  "mode": "offline mock APIs; no production traffic",
+  "viewports": [
+    {
+      "width": 1440,
+      "domNodes": 5098,
+      "tabs": 37,
+      "duplicateIds": [],
+      "navigation": {
+        "name": "http://audit.test/",
+        "entryType": "navigation",
+        "startTime": 0,
+        "duration": 222.40000000596046,
+        "initiatorType": "navigation",
+        "deliveryType": "",
+        "nextHopProtocol": "",
+        "renderBlockingStatus": "non-blocking",
+        "workerStart": 0,
+        "redirectStart": 0,
+        "redirectEnd": 0,
+        "fetchStart": 0.6000000089406967,
+        "domainLookupStart": 0.6000000089406967,
+        "domainLookupEnd": 0.6000000089406967,
+        "connectStart": 0.6000000089406967,
+        "secureConnectionStart": 0,
+        "connectEnd": 0.6000000089406967,
+        "requestStart": 0.6000000089406967,
+        "responseStart": 38.400000005960464,
+        "firstInterimResponseStart": 0,
+        "finalResponseHeadersStart": 0,
+        "responseEnd": 38.400000005960464,
+        "transferSize": 1894700,
+        "encodedBodySize": 1894400,
+        "decodedBodySize": 1894400,
+        "responseStatus": 200,
+        "serverTiming": [],
+        "unloadEventStart": 0,
+        "unloadEventEnd": 0,
+        "domInteractive": 217.20000000298023,
+        "domContentLoadedEventStart": 217.70000000298023,
+        "domContentLoadedEventEnd": 221.90000000596046,
+        "domComplete": 222.29999999701977,
+        "loadEventStart": 222.40000000596046,
+        "loadEventEnd": 222.40000000596046,
+        "type": "navigate",
+        "redirectCount": 0,
+        "activationStart": 0,
+        "criticalCHRestart": 0,
+        "notRestoredReasons": null
+      },
+      "longTasks": [],
+      "stylesheets": 14,
+      "resources": [
+        {
+          "name": "http://audit.test/static/background-exports.js",
+          "decodedBodySize": 3620
+        },
+        {
+          "name": "http://audit.test/static/store-analysis.css?v=20260929-order-trend",
+          "decodedBodySize": 3003
+        },
+        {
+          "name": "http://audit.test/static/console-ui.css?v=20260930-mobile1",
+          "decodedBodySize": 14337
+        },
+        {
+          "name": "http://audit.test/static/ai-original-products.css?v=20260923-batch-delete1",
+          "decodedBodySize": 12468
+        },
+        {
+          "name": "http://audit.test/static/ai-original-workbench.css?v=20260927-bulk-review",
+          "decodedBodySize": 23730
+        },
+        {
+          "name": "http://audit.test/static/1688-products.css?v=20261002-product-management",
+          "decodedBodySize": 13678
+        },
+        {
+          "name": "http://audit.test/static/weight-dimensions-records.css?v=20260930-server-execution-1",
+          "decodedBodySize": 5950
+        },
+        {
+          "name": "http://audit.test/static/inventory-sku.css?v=20260925-1",
+          "decodedBodySize": 1840
+        },
+        {
+          "name": "http://audit.test/static/zeshun-theme.css?v=20260930-unified1",
+          "decodedBodySize": 9451
+        },
+        {
+          "name": "http://audit.test/static/console-ui.js?v=20260915",
+          "decodedBodySize": 5952
+        },
+        {
+          "name": "http://audit.test/static/copy-anywhere.js?v=20260922",
+          "decodedBodySize": 11343
+        },
+        {
+          "name": "http://audit.test/static/appeal-polling.js?v=20260922",
+          "decodedBodySize": 2690
+        },
+        {
+          "name": "http://audit.test/static/ai-original-workbench.js?v=20260927-review-only-publish",
+          "decodedBodySize": 7866
+        },
+        {
+          "name": "http://audit.test/static/ai-original-products.js?v=20260929-price-fallback",
+          "decodedBodySize": 69860
+        },
+        {
+          "name": "http://audit.test/static/1688-products.js?v=20261002-product-management",
+          "decodedBodySize": 39314
+        },
+        {
+          "name": "http://audit.test/static/weight-dimensions-records.js?v=20261001-task-stop-dimension-fields-1",
+          "decodedBodySize": 33409
+        },
+        {
+          "name": "http://audit.test/static/inventory-sku.js?v=20260925-1",
+          "decodedBodySize": 17499
+        },
+        {
+          "name": "http://audit.test/static/console-workflow.css?v=20260930",
+          "decodedBodySize": 4859
+        },
+        {
+          "name": "http://audit.test/static/images/zeshun-monogram-gold.png",
+          "decodedBodySize": 331286
+        },
+        {
+          "name": "http://audit.test/static/model-balance.css?v=20261001-2",
+          "decodedBodySize": 3538
+        },
+        {
+          "name": "http://audit.test/static/model-balance.js?v=20261001-2",
+          "decodedBodySize": 6795
+        },
+        {
+          "name": "http://audit.test/static/collection-ai.js?v=20260927-agent",
+          "decodedBodySize": 5209
+        },
+        {
+          "name": "http://audit.test/static/store-analysis.js?v=20260929-order-trend",
+          "decodedBodySize": 17751
+        },
+        {
+          "name": "http://audit.test/static/order-management-details.js?v=20260929-outbound-detail",
+          "decodedBodySize": 16555
+        },
+        {
+          "name": "http://audit.test/static/console-workflow.js?v=20260930",
+          "decodedBodySize": 10690
+        },
+        {
+          "name": "http://audit.test/static/service-health.js?v=20260930",
+          "decodedBodySize": 3368
+        },
+        {
+          "name": "http://audit.test/static/wipo-sync.js?v=20260930",
+          "decodedBodySize": 13545
+        },
+        {
+          "name": "http://audit.test/api/overview/mercado-notices",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/appeal-phrases",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/execution-agents",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/services/health",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/account-integrations/balance",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/mercado-tokens",
+          "decodedBodySize": 103
+        }
+      ],
+      "initialRequests": {
+        "/api/overview/mercado-notices": 1,
+        "/api/appeal-phrases": 1,
+        "/api/execution-agents": 1,
+        "/api/services/health": 1,
+        "/api/account-integrations/balance": 1,
+        "/api/mercado-tokens": 1
+      },
+      "pages": [
+        {
+          "tab": "overview",
+          "scrollWidth": 1440,
+          "viewportWidth": 1440,
+          "visibleButtons": 14,
+          "overflow": []
+        },
+        {
+          "tab": "orders",
+          "scrollWidth": 1440,
+          "viewportWidth": 1440,
+          "visibleButtons": 26,
+          "overflow": [
+            {
+              "tag": "TABLE",
+              "id": "",
+              "class": "order-table",
+              "right": 2170
+            },
+            {
+              "tag": "COLGROUP",
+              "id": "",
+              "class": "",
+              "right": 2170
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1545
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1735
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1880
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 2020
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 2170
+            },
+            {
+              "tag": "THEAD",
+              "id": "",
+              "class": "",
+              "right": 2170
+            }
+          ]
+        },
+        {
+          "tab": "mercado-products",
+          "scrollWidth": 1440,
+          "viewportWidth": 1440,
+          "visibleButtons": 15,
+          "overflow": [
+            {
+              "tag": "TABLE",
+              "id": "",
+              "class": "market-product-table",
+              "right": 2568
+            },
+            {
+              "tag": "THEAD",
+              "id": "mercado-list-head",
+              "class": "",
+              "right": 2568
+            },
+            {
+              "tag": "TR",
+              "id": "",
+              "class": "",
+              "right": 2568
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 1635.703125
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 1707.40625
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 1779.109375
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 1850.8125
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 1922.515625
+            }
+          ]
+        },
+        {
+          "tab": "1688-products",
+          "scrollWidth": 1440,
+          "viewportWidth": 1440,
+          "visibleButtons": 11,
+          "overflow": [
+            {
+              "tag": "TABLE",
+              "id": "",
+              "class": "p1688-table",
+              "right": 1932
+            },
+            {
+              "tag": "COLGROUP",
+              "id": "",
+              "class": "",
+              "right": 1932
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1512
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1657
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1932
+            },
+            {
+              "tag": "THEAD",
+              "id": "",
+              "class": "",
+              "right": 1932
+            },
+            {
+              "tag": "TR",
+              "id": "",
+              "class": "",
+              "right": 1932
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 1512
+            }
+          ]
+        },
+        {
+          "tab": "ai-original-products",
+          "scrollWidth": 1440,
+          "viewportWidth": 1440,
+          "visibleButtons": 7,
+          "overflow": []
+        },
+        {
+          "tab": "inventory",
+          "scrollWidth": 1440,
+          "viewportWidth": 1440,
+          "visibleButtons": 10,
+          "overflow": []
+        }
+      ],
+      "storeLinkPollWhileOtherTabActive": 3,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "domNodes": 5098,
+      "tabs": 37,
+      "duplicateIds": [],
+      "navigation": {
+        "name": "http://audit.test/",
+        "entryType": "navigation",
+        "startTime": 0,
+        "duration": 151.3999999910593,
+        "initiatorType": "navigation",
+        "deliveryType": "",
+        "nextHopProtocol": "",
+        "renderBlockingStatus": "non-blocking",
+        "workerStart": 0,
+        "redirectStart": 0,
+        "redirectEnd": 0,
+        "fetchStart": 0,
+        "domainLookupStart": 0,
+        "domainLookupEnd": 0,
+        "connectStart": 0,
+        "secureConnectionStart": 0,
+        "connectEnd": 0,
+        "requestStart": 0,
+        "responseStart": 33.599999994039536,
+        "firstInterimResponseStart": 0,
+        "finalResponseHeadersStart": 0,
+        "responseEnd": 33.599999994039536,
+        "transferSize": 1894700,
+        "encodedBodySize": 1894400,
+        "decodedBodySize": 1894400,
+        "responseStatus": 200,
+        "serverTiming": [],
+        "unloadEventStart": 0,
+        "unloadEventEnd": 0,
+        "domInteractive": 146.70000000298023,
+        "domContentLoadedEventStart": 147.09999999403954,
+        "domContentLoadedEventEnd": 151,
+        "domComplete": 151.29999999701977,
+        "loadEventStart": 151.3999999910593,
+        "loadEventEnd": 151.3999999910593,
+        "type": "navigate",
+        "redirectCount": 0,
+        "activationStart": 0,
+        "criticalCHRestart": 0,
+        "notRestoredReasons": null
+      },
+      "longTasks": [],
+      "stylesheets": 14,
+      "resources": [
+        {
+          "name": "http://audit.test/static/background-exports.js",
+          "decodedBodySize": 3620
+        },
+        {
+          "name": "http://audit.test/static/store-analysis.css?v=20260929-order-trend",
+          "decodedBodySize": 3003
+        },
+        {
+          "name": "http://audit.test/static/console-ui.css?v=20260930-mobile1",
+          "decodedBodySize": 14337
+        },
+        {
+          "name": "http://audit.test/static/ai-original-products.css?v=20260923-batch-delete1",
+          "decodedBodySize": 12468
+        },
+        {
+          "name": "http://audit.test/static/ai-original-workbench.css?v=20260927-bulk-review",
+          "decodedBodySize": 23730
+        },
+        {
+          "name": "http://audit.test/static/1688-products.css?v=20261002-product-management",
+          "decodedBodySize": 13678
+        },
+        {
+          "name": "http://audit.test/static/weight-dimensions-records.css?v=20260930-server-execution-1",
+          "decodedBodySize": 5950
+        },
+        {
+          "name": "http://audit.test/static/inventory-sku.css?v=20260925-1",
+          "decodedBodySize": 1840
+        },
+        {
+          "name": "http://audit.test/static/console-ui.js?v=20260915",
+          "decodedBodySize": 5952
+        },
+        {
+          "name": "http://audit.test/static/copy-anywhere.js?v=20260922",
+          "decodedBodySize": 11343
+        },
+        {
+          "name": "http://audit.test/static/appeal-polling.js?v=20260922",
+          "decodedBodySize": 2690
+        },
+        {
+          "name": "http://audit.test/static/zeshun-theme.css?v=20260930-unified1",
+          "decodedBodySize": 9451
+        },
+        {
+          "name": "http://audit.test/static/ai-original-workbench.js?v=20260927-review-only-publish",
+          "decodedBodySize": 7866
+        },
+        {
+          "name": "http://audit.test/static/ai-original-products.js?v=20260929-price-fallback",
+          "decodedBodySize": 69860
+        },
+        {
+          "name": "http://audit.test/static/1688-products.js?v=20261002-product-management",
+          "decodedBodySize": 39314
+        },
+        {
+          "name": "http://audit.test/static/weight-dimensions-records.js?v=20261001-task-stop-dimension-fields-1",
+          "decodedBodySize": 33409
+        },
+        {
+          "name": "http://audit.test/static/inventory-sku.js?v=20260925-1",
+          "decodedBodySize": 17499
+        },
+        {
+          "name": "http://audit.test/static/console-workflow.css?v=20260930",
+          "decodedBodySize": 4859
+        },
+        {
+          "name": "http://audit.test/static/images/zeshun-monogram-gold.png",
+          "decodedBodySize": 331286
+        },
+        {
+          "name": "http://audit.test/static/model-balance.css?v=20261001-2",
+          "decodedBodySize": 3538
+        },
+        {
+          "name": "http://audit.test/static/model-balance.js?v=20261001-2",
+          "decodedBodySize": 6795
+        },
+        {
+          "name": "http://audit.test/static/collection-ai.js?v=20260927-agent",
+          "decodedBodySize": 5209
+        },
+        {
+          "name": "http://audit.test/static/store-analysis.js?v=20260929-order-trend",
+          "decodedBodySize": 17751
+        },
+        {
+          "name": "http://audit.test/static/order-management-details.js?v=20260929-outbound-detail",
+          "decodedBodySize": 16555
+        },
+        {
+          "name": "http://audit.test/static/console-workflow.js?v=20260930",
+          "decodedBodySize": 10690
+        },
+        {
+          "name": "http://audit.test/static/service-health.js?v=20260930",
+          "decodedBodySize": 3368
+        },
+        {
+          "name": "http://audit.test/static/wipo-sync.js?v=20260930",
+          "decodedBodySize": 13545
+        },
+        {
+          "name": "http://audit.test/api/overview/mercado-notices",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/appeal-phrases",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/execution-agents",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/services/health",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/account-integrations/balance",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/mercado-tokens",
+          "decodedBodySize": 103
+        }
+      ],
+      "initialRequests": {
+        "/api/overview/mercado-notices": 1,
+        "/api/appeal-phrases": 1,
+        "/api/execution-agents": 1,
+        "/api/services/health": 1,
+        "/api/account-integrations/balance": 1,
+        "/api/mercado-tokens": 1
+      },
+      "pages": [
+        {
+          "tab": "overview",
+          "scrollWidth": 1280,
+          "viewportWidth": 1280,
+          "visibleButtons": 14,
+          "overflow": []
+        },
+        {
+          "tab": "orders",
+          "scrollWidth": 1280,
+          "viewportWidth": 1280,
+          "visibleButtons": 26,
+          "overflow": [
+            {
+              "tag": "TABLE",
+              "id": "",
+              "class": "order-table",
+              "right": 2170
+            },
+            {
+              "tag": "COLGROUP",
+              "id": "",
+              "class": "",
+              "right": 2170
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1343
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1415
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1545
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1735
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1880
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 2020
+            }
+          ]
+        },
+        {
+          "tab": "mercado-products",
+          "scrollWidth": 1280,
+          "viewportWidth": 1280,
+          "visibleButtons": 15,
+          "overflow": [
+            {
+              "tag": "TABLE",
+              "id": "",
+              "class": "market-product-table",
+              "right": 2568
+            },
+            {
+              "tag": "THEAD",
+              "id": "mercado-list-head",
+              "class": "",
+              "right": 2568
+            },
+            {
+              "tag": "TR",
+              "id": "",
+              "class": "",
+              "right": 2568
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 1635.703125
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 1707.40625
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 1779.109375
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 1850.8125
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 1922.515625
+            }
+          ]
+        },
+        {
+          "tab": "1688-products",
+          "scrollWidth": 1280,
+          "viewportWidth": 1280,
+          "visibleButtons": 11,
+          "overflow": [
+            {
+              "tag": "TABLE",
+              "id": "",
+              "class": "p1688-table",
+              "right": 1932
+            },
+            {
+              "tag": "COLGROUP",
+              "id": "",
+              "class": "",
+              "right": 1932
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1377
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1512
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1657
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 1932
+            },
+            {
+              "tag": "THEAD",
+              "id": "",
+              "class": "",
+              "right": 1932
+            },
+            {
+              "tag": "TR",
+              "id": "",
+              "class": "",
+              "right": 1932
+            }
+          ]
+        },
+        {
+          "tab": "ai-original-products",
+          "scrollWidth": 1280,
+          "viewportWidth": 1280,
+          "visibleButtons": 7,
+          "overflow": []
+        },
+        {
+          "tab": "inventory",
+          "scrollWidth": 1280,
+          "viewportWidth": 1280,
+          "visibleButtons": 10,
+          "overflow": []
+        }
+      ],
+      "errors": []
+    },
+    {
+      "width": 390,
+      "domNodes": 5098,
+      "tabs": 37,
+      "duplicateIds": [],
+      "navigation": {
+        "name": "http://audit.test/",
+        "entryType": "navigation",
+        "startTime": 0,
+        "duration": 147.59999999403954,
+        "initiatorType": "navigation",
+        "deliveryType": "",
+        "nextHopProtocol": "",
+        "renderBlockingStatus": "non-blocking",
+        "workerStart": 0,
+        "redirectStart": 0,
+        "redirectEnd": 0,
+        "fetchStart": 0,
+        "domainLookupStart": 0,
+        "domainLookupEnd": 0,
+        "connectStart": 0,
+        "secureConnectionStart": 0,
+        "connectEnd": 0,
+        "requestStart": 0,
+        "responseStart": 32.69999998807907,
+        "firstInterimResponseStart": 0,
+        "finalResponseHeadersStart": 0,
+        "responseEnd": 32.69999998807907,
+        "transferSize": 1894700,
+        "encodedBodySize": 1894400,
+        "decodedBodySize": 1894400,
+        "responseStatus": 200,
+        "serverTiming": [],
+        "unloadEventStart": 0,
+        "unloadEventEnd": 0,
+        "domInteractive": 143.3999999910593,
+        "domContentLoadedEventStart": 143.79999999701977,
+        "domContentLoadedEventEnd": 147.29999999701977,
+        "domComplete": 147.59999999403954,
+        "loadEventStart": 147.59999999403954,
+        "loadEventEnd": 147.59999999403954,
+        "type": "navigate",
+        "redirectCount": 0,
+        "activationStart": 0,
+        "criticalCHRestart": 0,
+        "notRestoredReasons": null
+      },
+      "longTasks": [],
+      "stylesheets": 14,
+      "resources": [
+        {
+          "name": "http://audit.test/static/store-analysis.css?v=20260929-order-trend",
+          "decodedBodySize": 3003
+        },
+        {
+          "name": "http://audit.test/static/console-ui.css?v=20260930-mobile1",
+          "decodedBodySize": 14337
+        },
+        {
+          "name": "http://audit.test/static/background-exports.js",
+          "decodedBodySize": 3620
+        },
+        {
+          "name": "http://audit.test/static/ai-original-products.css?v=20260923-batch-delete1",
+          "decodedBodySize": 12468
+        },
+        {
+          "name": "http://audit.test/static/ai-original-workbench.css?v=20260927-bulk-review",
+          "decodedBodySize": 23730
+        },
+        {
+          "name": "http://audit.test/static/1688-products.css?v=20261002-product-management",
+          "decodedBodySize": 13678
+        },
+        {
+          "name": "http://audit.test/static/weight-dimensions-records.css?v=20260930-server-execution-1",
+          "decodedBodySize": 5950
+        },
+        {
+          "name": "http://audit.test/static/inventory-sku.css?v=20260925-1",
+          "decodedBodySize": 1840
+        },
+        {
+          "name": "http://audit.test/static/console-ui.js?v=20260915",
+          "decodedBodySize": 5952
+        },
+        {
+          "name": "http://audit.test/static/copy-anywhere.js?v=20260922",
+          "decodedBodySize": 11343
+        },
+        {
+          "name": "http://audit.test/static/appeal-polling.js?v=20260922",
+          "decodedBodySize": 2690
+        },
+        {
+          "name": "http://audit.test/static/ai-original-products.js?v=20260929-price-fallback",
+          "decodedBodySize": 69860
+        },
+        {
+          "name": "http://audit.test/static/zeshun-theme.css?v=20260930-unified1",
+          "decodedBodySize": 9451
+        },
+        {
+          "name": "http://audit.test/static/console-workflow.css?v=20260930",
+          "decodedBodySize": 4859
+        },
+        {
+          "name": "http://audit.test/static/images/zeshun-monogram-gold.png",
+          "decodedBodySize": 331286
+        },
+        {
+          "name": "http://audit.test/static/model-balance.css?v=20261001-2",
+          "decodedBodySize": 3538
+        },
+        {
+          "name": "http://audit.test/static/ai-original-workbench.js?v=20260927-review-only-publish",
+          "decodedBodySize": 7866
+        },
+        {
+          "name": "http://audit.test/static/1688-products.js?v=20261002-product-management",
+          "decodedBodySize": 39314
+        },
+        {
+          "name": "http://audit.test/static/weight-dimensions-records.js?v=20261001-task-stop-dimension-fields-1",
+          "decodedBodySize": 33409
+        },
+        {
+          "name": "http://audit.test/static/inventory-sku.js?v=20260925-1",
+          "decodedBodySize": 17499
+        },
+        {
+          "name": "http://audit.test/static/model-balance.js?v=20261001-2",
+          "decodedBodySize": 6795
+        },
+        {
+          "name": "http://audit.test/static/collection-ai.js?v=20260927-agent",
+          "decodedBodySize": 5209
+        },
+        {
+          "name": "http://audit.test/static/store-analysis.js?v=20260929-order-trend",
+          "decodedBodySize": 17751
+        },
+        {
+          "name": "http://audit.test/static/order-management-details.js?v=20260929-outbound-detail",
+          "decodedBodySize": 16555
+        },
+        {
+          "name": "http://audit.test/static/console-workflow.js?v=20260930",
+          "decodedBodySize": 10690
+        },
+        {
+          "name": "http://audit.test/static/service-health.js?v=20260930",
+          "decodedBodySize": 3368
+        },
+        {
+          "name": "http://audit.test/static/wipo-sync.js?v=20260930",
+          "decodedBodySize": 13545
+        },
+        {
+          "name": "http://audit.test/api/overview/mercado-notices",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/appeal-phrases",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/execution-agents",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/services/health",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/account-integrations/balance",
+          "decodedBodySize": 103
+        },
+        {
+          "name": "http://audit.test/api/mercado-tokens",
+          "decodedBodySize": 103
+        }
+      ],
+      "initialRequests": {
+        "/api/overview/mercado-notices": 1,
+        "/api/appeal-phrases": 1,
+        "/api/execution-agents": 1,
+        "/api/services/health": 1,
+        "/api/account-integrations/balance": 1,
+        "/api/mercado-tokens": 1
+      },
+      "pages": [
+        {
+          "tab": "overview",
+          "scrollWidth": 390,
+          "viewportWidth": 390,
+          "visibleButtons": 14,
+          "overflow": []
+        },
+        {
+          "tab": "orders",
+          "scrollWidth": 390,
+          "viewportWidth": 390,
+          "visibleButtons": 26,
+          "overflow": [
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "class": "order-market-button",
+              "right": 490
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "class": "order-market-button",
+              "right": 579
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "class": "order-market-button",
+              "right": 668
+            },
+            {
+              "tag": "DIV",
+              "id": "",
+              "class": "order-market-source",
+              "right": 846.609375
+            },
+            {
+              "tag": "SPAN",
+              "id": "",
+              "class": "order-origin-label",
+              "right": 721
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "class": "order-origin-button active",
+              "right": 846.609375
+            },
+            {
+              "tag": "STRONG",
+              "id": "order-origin-token-count",
+              "class": "",
+              "right": 836.609375
+            },
+            {
+              "tag": "TABLE",
+              "id": "",
+              "class": "order-table",
+              "right": 1930
+            }
+          ]
+        },
+        {
+          "tab": "mercado-products",
+          "scrollWidth": 390,
+          "viewportWidth": 390,
+          "visibleButtons": 15,
+          "overflow": [
+            {
+              "tag": "TABLE",
+              "id": "",
+              "class": "market-product-table",
+              "right": 2328
+            },
+            {
+              "tag": "THEAD",
+              "id": "mercado-list-head",
+              "class": "",
+              "right": 2328
+            },
+            {
+              "tag": "TR",
+              "id": "",
+              "class": "",
+              "right": 2328
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 542
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 684
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 755.703125
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 875.703125
+            },
+            {
+              "tag": "TH",
+              "id": "",
+              "class": "copy-anywhere-target",
+              "right": 1395.703125
+            }
+          ]
+        },
+        {
+          "tab": "1688-products",
+          "scrollWidth": 390,
+          "viewportWidth": 390,
+          "visibleButtons": 11,
+          "overflow": [
+            {
+              "tag": "TABLE",
+              "id": "",
+              "class": "p1688-table",
+              "right": 1692
+            },
+            {
+              "tag": "COLGROUP",
+              "id": "",
+              "class": "",
+              "right": 1692
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 412
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 527
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 627
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 727
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 815
+            },
+            {
+              "tag": "COL",
+              "id": "",
+              "class": "",
+              "right": 935
+            }
+          ]
+        },
+        {
+          "tab": "ai-original-products",
+          "scrollWidth": 390,
+          "viewportWidth": 390,
+          "visibleButtons": 7,
+          "overflow": []
+        },
+        {
+          "tab": "inventory",
+          "scrollWidth": 390,
+          "viewportWidth": 390,
+          "visibleButtons": 10,
+          "overflow": [
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "class": "",
+              "right": 430.625
+            },
+            {
+              "tag": "B",
+              "id": "inventory-sku-tab-count",
+              "class": "",
+              "right": 414.625
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "class": "",
+              "right": 548.625
+            },
+            {
+              "tag": "SPAN",
+              "id": "",
+              "class": "",
+              "right": 502.625
+            },
+            {
+              "tag": "B",
+              "id": "inventory-shelf-tab-count",
+              "class": "",
+              "right": 532.625
+            },
+            {
+              "tag": "TABLE",
+              "id": "",
+              "class": "inventory-table inventory-stock-table",
+              "right": 960
+            },
+            {
+              "tag": "THEAD",
+              "id": "",
+              "class": "",
+              "right": 960
+            },
+            {
+              "tag": "TR",
+              "id": "",
+              "class": "",
+              "right": 960
+            }
+          ]
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

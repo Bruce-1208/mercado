@@ -1,0 +1,394 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>泽顺插件 1.8.35 商品栏预览</title><style>
+body{margin:0;padding:32px;background:#f2f3f4;font:14px/1.5 system-ui,sans-serif;color:#333}h1{font-size:20px;margin:0 0 4px}p{margin:0 0 20px;color:#777}.cards{display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap}.example{width:284px}.caption{font-size:12px;color:#777;margin-bottom:8px}.poly-card{width:100%;border-radius:6px;background:white;box-shadow:0 1px 3px #0002;overflow:hidden}.photo{height:284px;overflow:hidden;position:relative;background:#f6f6f6}.photo img{display:block;width:303px;max-width:none;position:absolute;left:-14px;top:-7px}.native{padding:16px 16px 8px}.native h2{font-size:13px;font-weight:400;line-height:1.5;margin:0 0 6px}.rating{font-size:12px}.star{color:#3483fa}.old{font-size:11px;color:#888;text-decoration:line-through;margin-top:10px}.price{font-size:25px;line-height:1.35}.price sup{font-size:11px}.discount,.delivery{background:#00a650;color:#fff;font-size:13px;font-weight:600}.delivery{display:inline-block;margin-top:5px}.full{color:#00a650;font-size:12px;font-weight:700;font-style:italic}.narrow{width:220px}.plain{padding:16px;background:#fff}.plain h2{font-size:14px;margin:0 0 10px}.mock{padding:18px;color:#777;font-size:12px;background:#fafafa}
+.zeshun-collector-floating {
+  position: fixed;
+  right: 22px;
+  top: 42%;
+  z-index: 2147483646;
+  font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+}
+
+.zeshun-collector-primary,
+.zeshun-card-collect {
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  cursor: pointer;
+  font: 600 14px/1.2 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  box-shadow: 0 8px 24px rgba(20, 65, 142, 0.24);
+  background: linear-gradient(135deg, #1368e8, #0b4db8);
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+
+.zeshun-collector-primary {
+  min-width: 116px;
+  padding: 13px 18px;
+}
+
+.zeshun-collector-primary:hover,
+.zeshun-card-collect:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(20, 65, 142, 0.32);
+}
+
+.zeshun-collector-primary:disabled,
+.zeshun-card-collect:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.zeshun-collector-card-host {
+  position: relative !important;
+}
+
+.zeshun-card-collect {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 20;
+  min-width: 58px;
+  padding: 8px 11px;
+  font-size: 13px;
+}
+
+.zeshun-collector-toast {
+  position: fixed;
+  left: 50%;
+  top: 24px;
+  z-index: 2147483647;
+  max-width: min(520px, calc(100vw - 40px));
+  padding: 12px 18px;
+  border-radius: 10px;
+  color: #fff;
+  background: #263238;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.25);
+  font: 500 14px/1.5 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -12px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.zeshun-collector-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.zeshun-collector-toast.is-success { background: #137a49; }
+.zeshun-collector-toast.is-warning { background: #9a6300; }
+.zeshun-collector-toast.is-error { background: #b3261e; }
+
+@media (max-width: 760px) {
+  .zeshun-collector-floating {
+    right: 12px;
+    top: auto;
+    bottom: 18px;
+  }
+}
+
+/* Keep listing data inside the same visual card as the native product. */
+.zeshun-collector-product-card {
+  min-width: 0;
+}
+
+.zeshun-product-info {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 12px 10px;
+  border: 0;
+  border-top: 0;
+  border-radius: 0 0 6px 6px;
+  background: #fcfeed;
+  color: #262626;
+  font: 12px/21px Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
+  text-align: left;
+  white-space: normal;
+  position: relative;
+  z-index: 2;
+  font-variant-numeric: tabular-nums;
+}
+
+.zeshun-product-info--detail {
+  margin-top: 12px;
+  border: 1px solid #edf0db;
+  border-radius: 6px;
+}
+
+.zeshun-product-info * { box-sizing: border-box; }
+.zeshun-product-info .zs-info-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 4px;
+  line-height: 22px;
+}
+.zeshun-product-info .zs-info-identity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 3px 6px;
+}
+.zeshun-product-info .zs-info-id { font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.zeshun-product-info .zs-info-country { font-size: 13px; line-height: 18px; }
+.zeshun-product-info .zs-info-brand {
+  flex: 0 0 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fa8c16;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 700;
+  text-align: center;
+}
+.zeshun-product-info .zs-info-tag {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 4px;
+  border: 1px solid #91d5ff;
+  border-radius: 2px;
+  color: #1890ff;
+  background: #e6f7ff;
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+.zeshun-product-info .zs-info-reputation { border-color: #b7eb8f; color: #52c41a; background: #f6ffed; }
+.zeshun-product-info .zs-info-seller {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 5px;
+  min-width: 0;
+  margin-bottom: 2px;
+  min-height: 22px;
+}
+.zeshun-product-info .zs-info-label { color: #666; font-weight: 400; white-space: nowrap; }
+.zeshun-product-info .zs-info-shop {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: calc(100% - 41px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #1890ff;
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 600;
+}
+.zeshun-product-info a.zs-info-shop:hover { text-decoration: underline; color: #096dd9; }
+.zeshun-product-info a.zs-info-shop:focus-visible,
+.zeshun-product-info .zs-info-refresh:focus-visible { outline: 2px solid #1890ff; outline-offset: 2px; }
+.zeshun-product-info .zs-info-tags { display: flex; flex-wrap: wrap; max-width: 100%; gap: 3px; }
+.zeshun-product-info .zs-info-row {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  gap: 5px;
+}
+.zeshun-product-info .zs-info-row > .zs-info-label { flex: 0 0 36px; }
+.zeshun-product-info .zs-info-value { min-width: 0; overflow-wrap: anywhere; }
+.zeshun-product-info .zs-info-stats { display: flex; justify-content: space-between; gap: 12px; }
+.zeshun-product-info .zs-info-measure > .zs-info-value { flex: 1; }
+.zeshun-product-info .zs-info-hint { color: #888; font-size: 11px; }
+.zeshun-product-info .zs-info-freight {
+  display: inline-flex;
+  align-items: baseline;
+  flex-shrink: 0;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 1px solid #e5e8cf;
+  color: #888;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.zeshun-product-info .zs-info-freight.is-selected { color: #52c41a; font-weight: 600; }
+.zeshun-product-info .zs-info-low { color: #fa8c16; font-size: 10px; font-weight: 400; }
+.zeshun-product-info .zs-info-profit { margin-top: 1px; }
+.zeshun-product-info .zs-info-profit .zs-info-value { font-weight: 400; }
+.zeshun-product-info .zs-info-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px 6px;
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid #edf0db;
+  color: #999;
+  font-size: 9px;
+  line-height: 17px;
+}
+.zeshun-product-info .zs-info-profit-rule { margin-left: auto; }
+.zeshun-product-info .zs-info-updated { white-space: nowrap; }
+.zeshun-product-info .zs-info-refresh {
+  appearance: none;
+  padding: 0 5px;
+  border: 1px solid #91d5ff;
+  border-radius: 2px;
+  color: #1890ff;
+  background: #ecf5ff;
+  font: 12px/17px Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.zeshun-product-info .zs-info-refresh:hover { color: #fff; border-color: #1890ff; background: #1890ff; }
+.zeshun-product-info .zs-info-warning { margin-top: 4px; color: #a66822; font-size: 10px; overflow-wrap: anywhere; }
+.zeshun-product-info .zs-info-state { display: flex; align-items: center; gap: 6px; min-height: 26px; }
+.zeshun-product-info .zs-info-state-message { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+</style><h1>泽顺 ERP · 商品栏排版</h1><p>参考智赢风格：浅黄色数据区直接接在商品内容下方。以下为示例数据。</p><div class="cards"><div class="example"><div class="caption">标准商品卡 · 284 px</div><article class="poly-card" id="product-card"><div class="photo"><img src="reference.png" alt="用户提供的商品卡片参考图"></div><div class="native"><h2>Anime Kpop Demon Hunter Cosplay<br>Rumi Zoey Mira Cosplay</h2><div class="rating"><span class="star">★</span> 4.5</div><div class="old">$ 496.70</div><div class="price">$ 255<sup>16</sup> <span class="discount">48% OFF</span></div><span class="delivery">Llega gratis hoy</span> <span class="full">ϟ FULL</span></div><section class="zeshun-product-info" id="standard"></section></article></div><div class="example narrow"><div class="caption">窄卡片与长卖家名称 · 220 px</div><article class="poly-card"><div class="plain"><h2>商品内容</h2><div class="price">$ 900</div></div><section class="zeshun-product-info" id="narrow"></section></article><div class="caption" style="margin-top:24px">读取失败与重试</div><article class="poly-card"><div class="mock">商品内容</div><section class="zeshun-product-info"><div class="zs-info-state"><span class="zs-info-state-message">泽顺 · 数据源暂时不可用，请稍后重试</span><button class="zs-info-refresh" type="button">重试</button></div></section></article></div></div><script>(function(root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  root.ZeshunMercadoData = api;
+})(globalThis, function() {
+  'use strict';
+  function listingId(url) {
+    let value = String(url || '');
+    try { value = decodeURIComponent(value); } catch (_) {}
+    const explicit = value.match(/(?:item_id|itemId|wid)=((?:MLM|MLB|MLC|MLA|MLU|MCO)-?\d{5,})/i);
+    if (explicit) return explicit[1].replace('-', '').toUpperCase();
+    if (/\/p\/|\/up\//i.test(value)) return ''; // A catalog ID is not a seller listing.
+    return (value.match(/\b(?:MLM|MLB|MLC|MLA|MLU|MCO)-?\d{5,}\b/i)?.[0] || '').replace('-', '').toUpperCase();
+  }
+  function apply(product, record) {
+    if (!record?.product) throw Error('数据源尚无该商品记录，请稍后重试');
+    const info = record.product;
+    if (info.sku !== product.source_item_id) throw Error('商品编号与数据响应不一致');
+    const size = info.size_cm || [];
+    const complete = info.weight_g > 0 && size.length === 3 && size.every(v => v > 0);
+    Object.assign(product, {
+      weight_g: info.weight_g, package_length_cm:size[0] ?? null,
+      package_width_cm:size[1] ?? null, package_height_cm:size[2] ?? null,
+      volumetric_weight_kg: info.volumetric_weight_g == null ? null : info.volumetric_weight_g / 1000,
+      weight_basis:'server_actual', net_proceeds_usd:info.net_proceeds_usd,
+      commission_amount_usd:info.commission_amount_usd,
+      scrape_status:complete && product.main_image_url ? 'ok' : 'partial',
+      error_message:!complete ? '商品数据暂缺实际重量或完整包装尺寸' : !product.main_image_url ? '未识别到商品主图' : '',
+      plugin_snapshot:{...info, source:'泽顺商品数据服务', read_method:'zeshun_server_api',
+        fetched_at:record.fetched_at, weight_basis:'server_actual',
+        fulfillment_type:info.fulfillment_type, fulfillment_label:info.fulfillment_label,
+        fulfillment_eligible:info.fulfillment_eligible, self_ship_origin:info.seller_country || 'unknown',
+        sales:info.sales, volumetric_formula:'length_cm * width_cm * height_cm / 6000'}
+    });
+    product.source.sold_quantity = info.sales;
+    return product;
+  }
+  function sellerUrl(info) {
+    const hosts = {MLM:'listado.mercadolibre.com.mx', MLB:'lista.mercadolivre.com.br',
+      MLC:'listado.mercadolibre.cl', MCO:'listado.mercadolibre.com.co',
+      MLA:'listado.mercadolibre.com.ar', MLU:'listado.mercadolibre.com.uy'};
+    const host = hosts[String(info.sku || '').slice(0,3)];
+    const id = String(info.seller_id ?? '');
+    return host && /^[1-9]\d*$/.test(id) ? `https://${host}/_CustId_${id}` : '';
+  }
+  function render(doc, panel, record, options = {}) {
+    const info = record.product;
+    const display = value => value == null || value === '' ? '—' : String(value);
+    const money = value => value == null ? '—' : `$${Number(value).toFixed(2)}`;
+    const el = (tag, cls, text) => {
+      const node = doc.createElement(tag); node.className = cls;
+      if (text != null) node.textContent = text;
+      return node;
+    };
+    panel.replaceChildren();
+    panel.setAttribute('aria-label', `泽顺 ERP · ${info.sku} 商品数据`);
+    const header = el('div','zs-info-header');
+    const identity = el('div','zs-info-identity');
+    identity.append(el('strong','zs-info-id',info.sku));
+    const country = String(info.seller_country || '').toUpperCase();
+    const flags = {CN:'🇨🇳',MX:'🇲🇽',BR:'🇧🇷',AR:'🇦🇷',CL:'🇨🇱',CO:'🇨🇴',UY:'🇺🇾',US:'🇺🇸'};
+    if (country) {
+      const flag = el('span','zs-info-country',flags[country] || country);
+      flag.title = `卖家所在国家：${country}`;
+      flag.setAttribute('aria-label', flag.title);
+      identity.append(flag);
+    }
+    identity.append(el('span','zs-info-tag zs-info-fulfillment',info.fulfillment_label || '未识别'));
+    const brand = el('span','zs-info-brand','泽');
+    brand.title = '泽顺 ERP';
+    brand.setAttribute('aria-label','泽顺 ERP');
+    header.append(identity,brand);
+    const seller = el('div','zs-info-seller');
+    seller.append(el('span','zs-info-label','卖家：'));
+    const href = sellerUrl(info);
+    const name = el(href ? 'a' : 'span','zs-info-shop',display(info.seller));
+    name.title = href ? `查看 ${display(info.seller)} 的店铺商品（新标签页）` : '暂无卖家店铺链接';
+    if (href) {name.href=href; name.target='_blank'; name.rel='noopener noreferrer';}
+    seller.append(name);
+    const tags = el('span','zs-info-tags');
+    if (info.seller_status) tags.append(el('span','zs-info-tag zs-info-status',info.seller_status));
+    if (info.seller_level != null) tags.append(el('span','zs-info-tag zs-info-reputation',`${info.seller_level}_GREEN`));
+    if (tags.childNodes.length) seller.append(tags);
+    const line=(label,value,cls='')=>{
+      const node=el('div',`zs-info-row ${cls}`.trim());
+      node.append(el('span','zs-info-label',label),el('span','zs-info-value',value));
+      return node;
+    };
+    const stats = el('div','zs-info-stats');
+    stats.append(line('销量：',display(info.sales)),line('佣金：',info.commission_percent == null ? '—' : `${info.commission_percent}%`));
+    const measure = (label, value, hint, shipping, source) => {
+      const cell=line(label,value,'zs-info-measure');
+      if (hint) cell.querySelector('.zs-info-value').append(el('span','zs-info-hint',hint));
+      const selected = info.effective_freight_source === source;
+      const freight=el('span',`zs-info-freight${selected ? ' is-selected' : ''}`);
+      freight.title=`${source === 'weight' ? '实际重量' : '体积重量'}运费${selected ? '（净收益采用此项）' : ''}`;
+      freight.setAttribute('aria-label', `${freight.title}：${money(shipping)}${info.low_freight ? '，低价档' : ''}`);
+      freight.append(el('span','zs-info-freight-amount',money(shipping)));
+      if (info.low_freight && shipping != null) freight.append(el('span','zs-info-low','低'));
+      cell.append(freight);
+      return cell;
+    };
+    const weight=measure('重量：',info.weight_g == null ? '—' : `${info.weight_g}g`,
+      '',info.weight_freight_usd,'weight');
+    const size=measure('尺寸：',info.size_cm ? `${info.size_cm.join(' × ')} cm` : '—',
+      info.volumetric_weight_g == null ? '' : `（计抛${info.volumetric_weight_g}g）`,info.size_freight_usd,'size');
+    const profit=line('净收益：',`${money(info.net_proceeds_usd)} / ${info.net_proceeds_cny == null ? '—' : `¥${Number(info.net_proceeds_cny).toFixed(2)}`}`,'zs-info-profit');
+    profit.title=info.estimate_note || '净收益按美元售价减15%佣金及运费计算；不代表实际结算利润';
+    const foot=el('div','zs-info-foot');
+    const updated=Number(record.fetched_at);
+    const estimate=info.estimate_commission_percent ?? 15;
+    const freshness=el('span','zs-info-updated',`${record.cached ? '缓存' : '更新'}${updated > 0 ? ' '+new Date(updated*1000).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit',hour12:false}) : ''}`);
+    freshness.title=`净收益按${estimate}%佣金估算；${record.cached ? '服务端缓存数据' : '商品数据已更新'}`;
+    foot.append(el('span','zs-info-profit-rule',`按${estimate}%佣金估算`),freshness);
+    if (typeof options.onRefresh === 'function') {
+      const refresh=el('button','zs-info-refresh','刷新');
+      refresh.type='button';
+      refresh.title='重新读取泽顺商品数据';
+      refresh.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();options.onRefresh();});
+      foot.append(refresh);
+    }
+    // Match the compact action strip: action first, quiet context at the right.
+    const refresh = foot.querySelector('.zs-info-refresh');
+    if (refresh) foot.prepend(refresh);
+    panel.append(header,seller,stats,line('品牌：',display(info.brand)),weight,size,
+      line('上架：',rows(info).find(row=>row[0]==='上架')[1]),profit,foot);
+    for (const warning of record.warnings || []) panel.append(el('div','zs-info-warning',warning));
+  }
+  function rows(info, now = Date.now()) {
+    const display = v => v === null || v === undefined || v === '' ? '—' : String(v);
+    const money = v => v === null || v === undefined ? '—' : `$${Number(v).toFixed(2)}`;
+    const listed = info.listed_at ? String(info.listed_at).slice(0, 10) : '';
+    const days = listed ? Math.floor((now - Date.parse(listed+'T00:00:00Z'))/86400000) : NaN;
+    const age = Number.isFinite(days) && days >= 0 ? `（${days}天前）` : '';
+    return [
+      ['商品', `${info.sku} · ${display(info.seller_country)} · ${info.fulfillment_label}`],
+      ['卖家', `${display(info.seller)}${info.seller_level != null ? ` · ${info.seller_level}_GREEN` : ''}${info.seller_status ? ` · ${info.seller_status}` : ''}`],
+      ['销量 / 佣金', `${display(info.sales)} / ${info.commission_percent == null ? '—' : info.commission_percent+'%'}`],
+      ['品牌', display(info.brand)],
+      ['重量', `${info.weight_g == null ? '—' : info.weight_g+'g'} · 运费 ${money(info.weight_freight_usd)}${info.effective_freight_source === 'weight' ? ' ✓' : ''}`],
+      ['尺寸', `${info.size_cm ? info.size_cm.join(' × ')+' cm' : '—'}（计抛${display(info.volumetric_weight_g)}g）`],
+      ['体积运费', `${money(info.size_freight_usd)}${info.effective_freight_source === 'size' ? ' ✓' : ''}${info.low_freight ? ' · 低价档' : ''}`],
+      ['上架', listed ? listed+age : '—'],
+      ['预计净收益', `${money(info.net_proceeds_usd)} / ${info.net_proceeds_cny == null ? '—' : '¥'+Number(info.net_proceeds_cny).toFixed(2)}`]
+    ];
+  }
+  return {listingId, apply, rows, sellerUrl, render};
+});
+
+const sample={sku:'MLM5385775246',seller_country:'MX',fulfillment_label:'本土仓',seller:'TREASURE PROD',seller_id:123456,seller_status:'领导铂金',seller_level:5,sales:1000,commission_percent:20,brand:'KCHOOH',weight_g:210,size_cm:[30,24,4],volumetric_weight_g:480,weight_freight_usd:3.15,size_freight_usd:5.13,effective_freight_source:'weight',low_freight:true,listed_at:'2026-05-22',net_proceeds_usd:8.89,net_proceeds_cny:59.70,estimate_commission_percent:15};
+function draw(id,product){ZeshunMercadoData.render(document,document.getElementById(id),{product,cached:true,fetched_at:1790877600},{onRefresh:()=>draw(id,product)})}
+draw('standard',sample);draw('narrow',{...sample,seller:'TREASURE PRODUCT INTERNATIONAL LONG SHOP NAME',fulfillment_label:'半托管',seller_country:'CN',weight_g:1300,size_cm:[25,33,3],volumetric_weight_g:413,sales:0,commission_percent:0});
+</script></html>

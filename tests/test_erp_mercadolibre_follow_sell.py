@@ -435,7 +435,7 @@ def test_browser_picture_sources_are_accepted_and_non_product_logos_are_filtered
     ]
 
 
-def test_payload_defaults_brand_and_canonicalizes_spanish_attribute_ids():
+def test_payload_keeps_missing_brand_and_canonicalizes_spanish_attribute_ids():
     source = sample_source()
     source["attributes"] = [
         {"id": "MARCA", "name": "Marca", "value_name": ""},
@@ -448,7 +448,7 @@ def test_payload_defaults_brand_and_canonicalizes_spanish_attribute_ids():
     )
     by_id = {attribute["id"]: attribute for attribute in payload["attributes"]}
 
-    assert by_id["BRAND"]["value_name"] == "Generic"
+    assert by_id["BRAND"]["value_name"] == ""
     assert by_id["GENDER"]["value_name"] == "Sin género"
     assert "MARCA" not in by_id
     assert "G_NERO" not in by_id
@@ -513,30 +513,20 @@ def test_unknown_required_closed_enum_reports_actionable_mapping_error():
         )
 
 
-def test_payload_overrides_source_brand_with_generic_without_adding_a_duplicate():
+def test_payload_preserves_source_brand_without_adding_a_duplicate():
     payload = build_global_payload(
         CategoryClient(), sample_source(), {}, quantity=1, net_proceeds=20
     )
 
     brands = [attribute for attribute in payload["attributes"] if attribute["id"] == "BRAND"]
-    assert brands == [{"id": "BRAND", "name": "Marca", "value_name": "Generic"}]
+    assert brands == [{"id": "BRAND", "name": "Marca", "value_name": "Genérica"}]
 
 
-def test_payload_fills_known_required_category_attribute_defaults():
+def test_payload_requires_missing_brand_and_model_instead_of_inventing_defaults():
     source = sample_source()
     source["attributes"] = []
-
-    payload = build_user_product_payload(
-        RequiredModelCategoryClient(),
-        source,
-        {},
-        quantity=1,
-        net_proceeds=20,
-    )
-
-    by_id = {attribute["id"]: attribute for attribute in payload["attributes"]}
-    assert by_id["BRAND"]["value_name"] == "Generic"
-    assert by_id["MODEL"]["value_name"] == "Generic"
+    with pytest.raises(MercadoLibreError, match="BRAND, MODEL"):
+        build_user_product_payload(RequiredModelCategoryClient(), source, {}, net_proceeds=20)
 
 
 def test_payload_still_reports_unknown_required_category_attributes():
@@ -669,30 +659,16 @@ def test_payload_maps_collected_spanish_attribute_ids_to_cbt_schema():
     assert by_id["IS_WIRELESS"]["value_name"] == "Sí"
 
 
-def test_payload_maps_spanish_usb_and_infers_required_power_supply_from_evidence():
+def test_usb_and_battery_title_do_not_establish_power_supply_type():
     source = sample_source()
     source["title"] = "Proyector USB con batería"
-    source["attributes"] = [
-        {"id": "CON_USB", "name": "Con USB", "value_name": "Sí"},
-        {
-            "id": "VOLTAJE_DE_LA_BATERIA",
-            "name": "Voltaje de la batería",
-            "value_name": "5 V",
-        },
-    ]
-
-    payload = build_user_product_payload(
-        PowerSupplyCategoryClient(), source, {}, quantity=1, net_proceeds=20
-    )
-
-    by_id = {attribute["id"]: attribute for attribute in payload["attributes"]}
-    assert by_id["WITH_USB"]["value_id"] == "242085"
-    assert by_id["WITH_USB"]["value_name"] == "Yes"
-    assert by_id["POWER_SUPPLY_TYPE"]["value_id"] == "hybrid"
-    assert by_id["POWER_SUPPLY_TYPE"]["value_name"] == "Battery/Domestic current"
+    source["attributes"] = [{"id": "CON_USB", "name": "Con USB", "value_name": "Sí"}]
+    with pytest.raises(MercadoLibreError, match="POWER_SUPPLY_TYPE"):
+        build_user_product_payload(PowerSupplyCategoryClient(), source, {}, net_proceeds=20)
 
 
-def test_category_discovery_retries_with_deterministic_english_keywords():
+def test_category_discovery_retries_with_deterministic_english_keywords(monkeypatch):
+    monkeypatch.setattr(follow_sell_module, "translate_texts", lambda *a, **k: [])
     class Client:
         def __init__(self):
             self.queries = []
@@ -723,7 +699,8 @@ def test_category_discovery_retries_with_deterministic_english_keywords():
     assert len(client.queries) == 2
 
 
-def test_category_name_is_safer_fallback_than_a_non_english_title():
+def test_category_name_is_safer_fallback_than_a_non_english_title(monkeypatch):
+    monkeypatch.setattr(follow_sell_module, "translate_texts", lambda *a, **k: [])
     class Client:
         def __init__(self):
             self.queries = []
@@ -750,7 +727,8 @@ def test_category_name_is_safer_fallback_than_a_non_english_title():
     assert client.queries == ["Pulseras"]
 
 
-def test_category_fallback_does_not_escape_to_an_unrelated_title_prediction():
+def test_category_fallback_does_not_escape_to_an_unrelated_title_prediction(monkeypatch):
+    monkeypatch.setattr(follow_sell_module, "translate_texts", lambda *a, **k: [])
     class Client:
         def __init__(self):
             self.queries = []
@@ -846,18 +824,12 @@ def test_user_product_payload_uses_uploaded_picture_ids():
     assert payload["global_net_proceeds"] == 22
     assert payload["pictures"] == [{"id": "uploaded-CBT-picture"}]
     no_gtin = [a for a in payload["attributes"] if a["id"] == "EMPTY_GTIN_REASON"]
-    assert no_gtin == [
-        {
-            "id": "EMPTY_GTIN_REASON",
-            "value_id": "17055160",
-            "value_name": "The product does not have registered code",
-        }
-    ]
+    assert no_gtin == []
 
 
 def test_required_gtin_accepts_documented_empty_reason():
     source = sample_source()
-    source["attributes"] = []
+    source["attributes"] = [{"id": "EMPTY_GTIN_REASON", "value_id": "17055160", "value_name": "The product does not have registered code"}]
 
     payload = build_user_product_payload(
         RequiredGtinCategoryClient(),
@@ -874,22 +846,11 @@ def test_required_gtin_accepts_documented_empty_reason():
     )
 
 
-def test_empty_gtin_placeholder_is_replaced_by_documented_reason():
+def test_empty_gtin_placeholder_requires_evidence_instead_of_inventing_reason():
     source = sample_source()
     source["attributes"] = [{"id": "GTIN"}]
-
-    payload = build_user_product_payload(
-        RequiredGtinCategoryClient(),
-        source,
-        {},
-        quantity=1,
-        net_proceeds=22,
-        picture_ids=["uploaded-CBT-picture"],
-    )
-
-    by_id = {attribute["id"]: attribute for attribute in payload["attributes"]}
-    assert "GTIN" not in by_id
-    assert by_id["EMPTY_GTIN_REASON"]["value_id"] == "17055160"
+    with pytest.raises(MercadoLibreError, match="GTIN"):
+        build_user_product_payload(RequiredGtinCategoryClient(), source, {}, net_proceeds=22)
 
 
 def test_user_product_payload_limits_family_name_to_platform_maximum():
@@ -1413,7 +1374,8 @@ def test_existing_user_product_skips_add_when_marketplace_mapping_already_exists
     assert result["result"]["site_items"][0]["item_id"] == "MLB2"
 
 
-def test_follow_sell_uses_rules_without_calling_translator_for_brazil_destination():
+def test_follow_sell_uses_rules_without_calling_translator_for_brazil_destination(monkeypatch):
+    monkeypatch.setattr(follow_sell_module, "translate_texts", lambda *a, **k: [])
     class GlobalUserProductClient(DiscoveryClient):
         def request(self, method, path, **kwargs):
             if path == "/users/me":

@@ -576,7 +576,8 @@ def test_source_and_generator_owners_are_independent():
     ("api_1688_products", "collector_salesperson"),
     ("api_ai_original_products", "generator_salesperson"),
 ])
-def test_product_routes_forward_owner_filter_and_source_net(endpoint, owner_field):
+def test_product_routes_forward_owner_filter_and_source_net(endpoint, owner_field, monkeypatch):
+    monkeypatch.setattr("erp.ai_original_cost_control.generation_cost_summary", lambda: {"total_tokens": 123})
     import ast
     import logging
     from flask import Flask, request, jsonify
@@ -770,3 +771,13 @@ def test_marketplace_variations_preserve_dependent_length_without_inventing_pare
     assert [v['available_quantity'] for v in result] == [3, 4]
     assert [v['attribute_combinations'][-1]['value_name'] for v in result] == ['130 cm', '150 cm']
     assert all(not any(a['id'] == 'SIZE' for a in v['attribute_combinations']) for v in result)
+
+
+def test_copy_accepts_single_product_envelope():
+    import json
+    payload = {'product': {'title_es': 'Caja de almacenamiento', 'title_pt': 'Caixa organizadora',
+                          'description_es': 'Caja para organizar objetos.',
+                          'description_pt': 'Caixa para organizar objetos.', 'attributes': []}}
+    result = generate_marketplace_copy({'title': '收纳盒'}, chat=lambda *a, **kw: json.dumps(payload))
+    assert result['title_es'] == payload['product']['title_es']
+    assert result['title_pt'] == payload['product']['title_pt']

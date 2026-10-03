@@ -1,5 +1,24 @@
 /* AI listing workspace. Scope every rule so the collector and other tabs keep their layout. */
 #tab-ai-original-products { --ai-ink:#253653; --ai-muted:#738198; --ai-line:#e2e9f2; --ai-blue:#2867d7; color:var(--ai-ink); }
+#tab-ai-original-products [hidden] { display:none !important; }
+#tab-ai-original-products .ai-original-platform-controls { display:grid; grid-template-columns:minmax(200px,1fr) minmax(180px,1fr) minmax(240px,1.5fr); gap:14px; align-items:end; margin-bottom:14px; }
+#tab-ai-original-products .ai-original-platform-controls p { margin:0 0 10px; font-size:12px; color:var(--ai-muted); line-height:1.6; }
+#tab-ai-original-products .ai-original-platform-rules { padding:14px 16px; margin-bottom:18px; border:1px solid #dce8f7; border-radius:10px; background:#f5f9ff; color:#586f8d; font-size:12px; line-height:1.7; }
+#tab-ai-original-products .ai-original-platform-rules strong { color:#2d568c; }
+#tab-ai-original-products .ai-original-platform-rules p { margin:6px 0; }
+#tab-ai-original-products .ai-original-platform-rules ul { padding-left:19px; margin:6px 0; }
+#tab-ai-original-products .ai-original-rule-sources a { color:#2867d7; }
+#tab-ai-original-products .ai-original-draft-actions { display:flex; gap:8px; margin-top:16px; }
+#tab-ai-original-products .ai-original-draft-actions button { flex:1; }
+#tab-ai-original-products .ai-original-bullet-list { margin:8px 0 16px; padding-left:20px; color:#425a79; font-size:12px; line-height:1.8; overflow-wrap:anywhere; }
+#tab-ai-original-products .ai-original-platform-validation { font-size:11px; color:#7a6a48; line-height:1.7; overflow-wrap:anywhere; }
+#tab-ai-original-products .ai-original-platform-validation > strong { display:block; margin-bottom:7px; }
+#tab-ai-original-products .ai-original-platform-validation > strong + strong { margin-top:12px; }
+#tab-ai-original-products .ai-original-platform-validation ul { padding-left:17px; margin:8px 0 16px; }
+#tab-ai-original-products .ai-original-platform-validation p { color:#8593a5; }
+#tab-ai-original-products .ai-original-platform-editor { max-width:800px; }
+@media(max-width:800px) { #tab-ai-original-products .ai-original-platform-controls { grid-template-columns:1fr 1fr; } #tab-ai-original-products .ai-original-platform-controls p { grid-column:1/-1; margin:0; } }
+@media(max-width:500px) { #tab-ai-original-products .ai-original-platform-controls { grid-template-columns:1fr; } }
 #tab-ai-original-products *, #tab-ai-original-products *::before, #tab-ai-original-products *::after { box-sizing:border-box; }
 #tab-ai-original-products .ai-original-heading { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:28px 30px; margin-bottom:18px; border:1px solid #dbe6f5; border-radius:18px; background:linear-gradient(115deg,#f1f6ff,#fff 72%); }
 #tab-ai-original-products .ai-original-eyebrow { display:block; color:#4974b3; font-size:10px; font-weight:800; letter-spacing:.15em; }

@@ -1,0 +1,28 @@
+.sidebar .nav-tools { padding: 6px 4px 10px; border-bottom: 1px solid #edf0f5; }
+.sidebar .nav-tools input { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px 9px; border: 1px solid #e0e6ef; border-radius: 7px; font-size: 12px; }
+.nav-tools > div { display: flex; justify-content: space-between; margin-top: 6px; }
+.nav-tools button { border: 0; background: transparent; padding: 3px; color: #63738a; font-size: 11px; cursor: pointer; }
+.sidebar .nav-section { margin: 4px 0; }
+.sidebar .nav-section > summary { display: flex; align-items: center; gap: 7px; padding: 11px 9px; border-radius: 7px; color: #526176; font-size: 12px; font-weight: 700; cursor: pointer; list-style: none; }
+.nav-section > summary::-webkit-details-marker { display: none; }
+.nav-section > summary::before { content: '›'; font-size: 17px; transition: transform .15s; }
+.nav-section[open] > summary::before { transform: rotate(90deg); }
+.nav-section > summary small { margin-left: auto; font-size: 10px; color: #8a97a9; }
+.sidebar .nav-section > summary:hover, .sidebar .nav-section > summary.has-active { background: #f0f5ff; color: #3066ce; }
+.nav-section-items { padding-bottom: 5px; }
+.sidebar .nav-search-hidden, .sidebar [hidden] { display: none !important; }
+.nav-empty { padding: 12px; color: #8a97a9; font-size: 12px; }
+body.sidebar-collapsed .nav-tools { display: none; }
+body.sidebar-collapsed .nav-section > summary { padding: 8px 2px; justify-content: center; font-size: 10px; }
+body.sidebar-collapsed .nav-section > summary::before, body.sidebar-collapsed .nav-section > summary small { display: none; }
+@media (max-width: 1100px) {
+    body:not(.sidebar-collapsed) { --sidebar-width: 200px; }
+    body:not(.sidebar-collapsed) .sidebar .nav-label { display: inline; }
+    body:not(.sidebar-collapsed) .sidebar .tab-button { justify-content: flex-start; }
+}
+@media (max-width: 760px) {
+    .sidebar .sidebar-scroll { display: block; max-height: 300px; overflow: auto; }
+    .sidebar .tab-button { width: 100%; height: auto; }
+    body.sidebar-collapsed .sidebar .sidebar-scroll { display: none; }
+    body.sidebar-collapsed .sidebar { display: none; }
+}

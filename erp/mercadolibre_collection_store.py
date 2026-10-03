@@ -9,7 +9,7 @@ import re
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Callable, Iterable, Mapping
 
 
@@ -55,6 +55,10 @@ PRODUCT_PUBLISH_COLUMN_DEFINITIONS = (
     ("last_published_at", "DATETIME NULL"),
 )
 PRODUCT_SOURCE_TYPES = {"collected", "pulled", "zying", "ai_original"}
+SOURCE_1688_NUMERIC_FIELDS = {
+    "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
+    "net_proceeds_usd", "price",
+}
 PRODUCT_REVIEW_STATUSES = {
     "unreviewed", "approved", "suspected", "infringing", "risk",
 }
@@ -229,10 +233,29 @@ def _mirror_zying_snapshot_fields(row: Mapping[str, Any]) -> dict[str, Any]:
     source_type = str(result.get("source_type") or "").strip().lower()
     if source_type == "ai_original":
         snapshot = _loads(result.get("source_snapshot_json"), {})
+        if not isinstance(snapshot, dict):
+            snapshot = {}
         original = snapshot.get("original_1688") if isinstance(snapshot, dict) else {}
         prepared = snapshot.get("ai_original") if isinstance(snapshot, dict) else {}
         result["original_1688"] = original if isinstance(original, dict) else {}
         result["ai_original"] = prepared if isinstance(prepared, dict) else {}
+        drafts = snapshot.get("marketplace_listings")
+        result["marketplace_listings"] = dict(drafts) if isinstance(drafts, Mapping) else {}
+        # The legacy Mercado listing remains authoritative after manual edits.
+        result["marketplace_listings"]["mercadolibre"] = result["ai_original"]
+        overrides = snapshot.get("source_1688_overrides")
+        result["source_1688_overrides"] = (
+            dict(overrides) if isinstance(overrides, dict) else {}
+        )
+        overrides = result["source_1688_overrides"]
+        for field in (
+            "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
+        ):
+            effective = overrides[field] if field in overrides else result["original_1688"].get(field)
+            if field not in overrides and effective in (None, ""):
+                effective = result.get(field)
+            number = _decimal_from_text(effective)
+            result[f"source_{field}"] = float(number) if number is not None else None
         result["ai_status"] = str(result["ai_original"].get("status") or "pending")
         result["ai_error"] = str(result["ai_original"].get("error") or "")
         result["title_es"] = str(result["ai_original"].get("title_es") or "")
@@ -254,15 +277,24 @@ def _mirror_zying_snapshot_fields(row: Mapping[str, Any]) -> dict[str, Any]:
         result["source_purchase_price_cny"] = (
             product_min if product_min is not None else variation_min
         )
+        if "price" in overrides:
+            raw_product_price = overrides["price"]
+            result["source_purchase_price_cny"] = raw_product_price
         max_price, suggested_net = suggested_ai_original_net_proceeds(
-            variations, fallback_price=raw_product_price
+            [] if "price" in overrides else variations, fallback_price=raw_product_price
         )
         result["source_variation_max_price_cny"] = variation_max
         result["source_net_calculation_price_cny"] = max_price
         result["suggested_net_price_basis"] = (
-            "sku" if variation_max is not None else "product_price" if max_price is not None else ""
+            "manual_purchase_price" if "price" in overrides and max_price is not None
+            else "" if "price" in overrides
+            else "sku" if variation_max is not None
+            else "product_price" if max_price is not None else ""
         )
         result["suggested_net_proceeds_usd"] = suggested_net
+        result["source_net_proceeds_usd"] = (
+            overrides["net_proceeds_usd"] if "net_proceeds_usd" in overrides else suggested_net
+        )
         plugin = snapshot.get("plugin_snapshot") or {}
         result["collector_salesperson"] = str(plugin.get("created_by") or "").removeprefix("浏览器插件：").strip()
         result["generator_salesperson"] = str(result["ai_original"].get("generated_by") or "").strip()
@@ -1149,6 +1181,31 @@ def recover_interrupted_collection_tasks(
         connection.close()
 
 
+def normalize_collection_management_category_id(value: Any) -> int | None:
+    """Parse an optional destination category without accepting lossy numbers."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    text = str(value).strip()
+    if isinstance(value, bool) or not re.fullmatch(r"[1-9]\d{0,18}", text):
+        raise ValueError("泽顺产品分类编号必须是正整数")
+    category_id = int(text)
+    if category_id > 9223372036854775807:
+        raise ValueError("泽顺产品分类编号无效")
+    return category_id
+
+
+def _validate_collection_management_categories(cursor, category_ids) -> None:
+    # Hold the category row until the product write commits so a concurrent
+    # category deletion cannot leave a successful collection pointing nowhere.
+    for category_id in sorted(set(category_ids)):
+        cursor.execute(
+            f"SELECT `id` FROM `{MANAGEMENT_CATEGORY_TABLE}` WHERE `id` = %s FOR UPDATE",
+            (category_id,),
+        )
+        if not cursor.fetchone():
+            raise ValueError("所选泽顺产品分类不存在，请刷新分类后重试")
+
+
 def upsert_collection_items(
     task_id: int,
     rows: Iterable[Mapping[str, Any]],
@@ -1158,10 +1215,18 @@ def upsert_collection_items(
     records = [dict(row) for row in rows or []]
     if not records:
         return 0
+    category_ids = set()
+    for row in records:
+        row["management_category_id"] = normalize_collection_management_category_id(
+            row.get("management_category_id")
+        )
+        if row["management_category_id"] is not None:
+            category_ids.add(row["management_category_id"])
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
+            _validate_collection_management_categories(cursor, category_ids)
             # Resolve the USD display price for rows without a complete
             # rate-card snapshot from the one stored rate per currency.
             fixed_exchange_rates: dict[str, Mapping[str, Any]] = {}
@@ -1290,6 +1355,14 @@ def upsert_collection_items(
                     _dumps(row.get("plugin_snapshot") or {}),
                     str(row.get("collected_at") or _now()),
                 )
+                category_column_sql = ""
+                category_update_sql = ""
+                if row["management_category_id"] is not None:
+                    values += (row["management_category_id"],)
+                    category_column_sql = ", `management_category_id`"
+                    category_update_sql = (
+                        "`management_category_id` = VALUES(`management_category_id`),"
+                    )
                 cursor.execute(
                     f"""
                     INSERT INTO `{COLLECTION_TABLE}` (
@@ -1300,9 +1373,10 @@ def upsert_collection_items(
                         `weight_basis`, {profitability_columns_sql},
                         `scrape_status`, `error_message`, `source_json`,
                         `description_json`, `page_snapshot_json`, `plugin_snapshot_json`,
-                        `collected_at`
+                        `collected_at`{category_column_sql}
                     ) VALUES ({", ".join(["%s"] * len(values))})
                     ON DUPLICATE KEY UPDATE
+                        {category_update_sql}
                         `task_id` = IF(
                             {protect_existing_complete_sql},
                             `task_id`, VALUES(`task_id`)
@@ -1379,6 +1453,12 @@ def upsert_collection_items(
                     """,
                     values,
                 )
+                if row["management_category_id"] is not None:
+                    cursor.execute(
+                        f"UPDATE `{PRODUCT_TABLE}` SET `management_category_id` = %s "
+                        "WHERE `source_item_id` = %s",
+                        (row["management_category_id"], values[1]),
+                    )
         connection.commit()
         return len(records)
     except BaseException:
@@ -1397,7 +1477,9 @@ def _list_rows(
     task_id: int | None = None,
     source_type: str = "",
     ai_status: str = "",
+    target_platform: str = "mercadolibre",
     collector_salesperson: str = "",
+    collector_salesperson_exact: bool = False,
     generator_salesperson: str = "",
     review_status: str = "",
     publish_status: str = "",
@@ -1418,6 +1500,16 @@ def _list_rows(
     token_ids: Iterable[int] | None = None,
     connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
+    # Only fixed JSON paths may participate in SQL; never interpolate a request path.
+    platform_paths = {
+        "mercadolibre": "$.ai_original",
+        "yandex": "$.marketplace_listings.yandex",
+        "amazon": "$.marketplace_listings.amazon",
+    }
+    target_platform = str(target_platform or "mercadolibre").strip().lower()
+    if target_platform not in platform_paths:
+        raise ValueError("不支持的目标平台，请选择美客多、Yandex 或亚马逊美国站")
+    listing_path = platform_paths[target_platform]
     limit = max(1, min(int(limit), 1000))
     offset = max(0, int(offset))
     where: list[str] = []
@@ -1481,7 +1573,7 @@ def _list_rows(
                 raise ValueError(f"不支持的 AI 状态: {ai_status}")
             ai_status_expr = (
                 "JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`), "
-                "`source_snapshot_json`, '{}'), '$.ai_original.status'))"
+                f"`source_snapshot_json`, '{{}}'), '{listing_path}.status'))"
             )
             where.append(f"COALESCE(NULLIF({ai_status_expr}, ''), 'pending') = %s")
             params.append(ai_status)
@@ -1563,11 +1655,24 @@ def _list_rows(
         maximum = optional_decimal(raw_max, f"最高{label}", nonnegative=nonnegative)
         if minimum is not None and maximum is not None and minimum > maximum:
             raise ValueError(f"最低{label}不能大于最高{label}")
+        expression = f"`{column}`"
+        if table == PRODUCT_TABLE and source_type == "ai_original" and column == "price":
+            snapshot_sql = "IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{}')"
+            override_sql = f"JSON_UNQUOTE(JSON_EXTRACT({snapshot_sql}, '$.source_1688_overrides.price'))"
+            original_sql = f"JSON_UNQUOTE(JSON_EXTRACT({snapshot_sql}, '$.original_1688.price'))"
+            original_number_sql = f"CAST(NULLIF({original_sql}, 'null') AS DECIMAL(20,4))"
+            expression = (
+                f"(CASE WHEN JSON_CONTAINS_PATH({snapshot_sql}, 'one', "
+                "'$.source_1688_overrides.price') THEN "
+                f"CAST(NULLIF({override_sql}, 'null') AS DECIMAL(20,4)) "
+                f"ELSE CASE WHEN {original_number_sql} > 0 THEN {original_number_sql} "
+                "WHEN `price` > 0 THEN `price` ELSE NULL END END)"
+            )
         if minimum is not None:
-            where.append(f"`{column}` >= %s")
+            where.append(f"{expression} >= %s")
             params.append(minimum)
         if maximum is not None:
-            where.append(f"`{column}` <= %s")
+            where.append(f"{expression} <= %s")
             params.append(maximum)
 
     def parsed_datetime(value: Any, name: str) -> tuple[datetime | None, str]:
@@ -1602,7 +1707,7 @@ def _list_rows(
         params.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
     for owner, path, prefix in (
         (collector_salesperson, "$.plugin_snapshot.created_by", "浏览器插件："),
-        (generator_salesperson, "$.ai_original.generated_by", ""),
+        (generator_salesperson, f"{listing_path}.generated_by", ""),
     ):
         if str(owner or "").strip():
             expression = (
@@ -1610,8 +1715,12 @@ def _list_rows(
                 "IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{}'), "
                 f"'{path}')), 'null'), ''), '{prefix}', ''))"
             )
-            where.append(f"{expression} LIKE %s")
-            params.append("%" + str(owner).strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
+            if path == "$.plugin_snapshot.created_by" and collector_salesperson_exact:
+                where.append(f"{expression} = %s")
+                params.append(str(owner).strip())
+            else:
+                where.append(f"{expression} LIKE %s")
+                params.append("%" + str(owner).strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     started = time.monotonic()
     timings = {}
@@ -1876,6 +1985,31 @@ def list_product_items(**kwargs: Any) -> dict[str, Any]:
     return _list_rows(PRODUCT_TABLE, **kwargs)
 
 
+def get_1688_product_options(
+    *, connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Load collector choices across all source records, without pagination."""
+    connection = (connection_factory or _connect_list)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                "SELECT DISTINCT TRIM(REPLACE(COALESCE(NULLIF(JSON_UNQUOTE("
+                "JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`), "
+                "`source_snapshot_json`, '{}'), '$.plugin_snapshot.created_by')), "
+                "'null'), ''), '浏览器插件：', '')) AS collector_salesperson "
+                f"FROM `{PRODUCT_TABLE}` WHERE `source_type` = 'ai_original' "
+                "HAVING collector_salesperson <> '' ORDER BY collector_salesperson"
+            )
+            rows = cursor.fetchall()
+        return {"collector_salespeople": sorted({
+            str(row.get("collector_salesperson") or "").strip()
+            for row in rows if str(row.get("collector_salesperson") or "").strip()
+        })}
+    finally:
+        connection.close()
+
+
 def _normalize_management_category_name(value: Any) -> str:
     name = re.sub(r"\s+", " ", str(value or "").strip())
     if not name:
@@ -2045,7 +2179,7 @@ def delete_management_category(
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             cursor.execute(
-                f"SELECT `id` FROM `{MANAGEMENT_CATEGORY_TABLE}` WHERE `id` = %s",
+                f"SELECT `id` FROM `{MANAGEMENT_CATEGORY_TABLE}` WHERE `id` = %s FOR UPDATE",
                 (normalized_id,),
             )
             if not cursor.fetchone():
@@ -2545,10 +2679,10 @@ def claim_due_rate_limited_product_publish_records(
         "LOWER(COALESCE(records.`result_json`, '')) LIKE %s",
         "LOWER(COALESCE(records.`result_json`, '')) LIKE %s",
         "(LOWER(COALESCE(records.`failure_reason`, '')) LIKE %s AND "
-        "(LOWER(COALESCE(records.`failure_reason`, '')) LIKE '%get /%' OR "
-        "LOWER(COALESCE(records.`failure_reason`, '')) LIKE '%post /%' OR "
-        "LOWER(COALESCE(records.`failure_reason`, '')) LIKE '%put /%' OR "
-        "LOWER(COALESCE(records.`failure_reason`, '')) LIKE '%delete /%'))",
+        "(LOWER(COALESCE(records.`failure_reason`, '')) LIKE '%%get /%%' OR "
+        "LOWER(COALESCE(records.`failure_reason`, '')) LIKE '%%post /%%' OR "
+        "LOWER(COALESCE(records.`failure_reason`, '')) LIKE '%%put /%%' OR "
+        "LOWER(COALESCE(records.`failure_reason`, '')) LIKE '%%delete /%%'))",
     )
     rate_limit_patterns = (
         "%local_rate_limited%",
@@ -3114,6 +3248,109 @@ def update_collection_items(
         connection.close()
 
 
+def normalize_1688_product_changes(changes: Mapping[str, Any]) -> dict[str, Decimal | None]:
+    """Validate source edits strictly before opening a write connection."""
+    if not isinstance(changes, Mapping) or not changes:
+        raise ValueError("请填写需要修改的 1688 产品字段")
+    unsupported = set(changes) - SOURCE_1688_NUMERIC_FIELDS
+    if unsupported:
+        raise ValueError("不支持的 1688 产品字段：" + ", ".join(sorted(map(str, unsupported))))
+    normalized = {}
+    for field, value in changes.items():
+        if value is None or isinstance(value, str) and not value.strip():
+            normalized[field] = None
+            continue
+        try:
+            if isinstance(value, bool):
+                raise ValueError()
+            number = Decimal(str(value).strip())
+        except Exception as exc:
+            raise ValueError(f"{field} 必须是有效数字") from exc
+        if not number.is_finite() or number <= 0:
+            raise ValueError(f"{field} 必须是大于 0 的有效数字")
+        if number > Decimal("9999999999999999.9999"):
+            raise ValueError(f"{field} 超出可保存的数字范围")
+        number = number.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        if number <= 0 or Decimal(str(float(number))) > Decimal("9999999999999999.9999"):
+            raise ValueError(f"{field} 超出可保存的数字范围（最小 0.0001）")
+        normalized[field] = number
+    return normalized
+
+
+def _1688_override_table_assignments(
+    current: Mapping[str, Any], overrides: Mapping[str, Any],
+) -> tuple[list[str], list[Any]]:
+    """Keep source measurements/economics in the listing's publish inputs."""
+    assignments, values = [], []
+    for field, value in overrides.items():
+        if field not in SOURCE_1688_NUMERIC_FIELDS:
+            continue
+        # Once generated, the listing uses USD; its price has separate meaning.
+        if field == "price" and str(current.get("currency_id") or "CNY").upper() != "CNY":
+            continue
+        assignments.append(f"`{field}` = %s")
+        values.append(value)
+    if "weight_g" in overrides:
+        assignments.append("`weight_basis` = '1688_manual'")
+    if set(overrides).intersection({
+        "package_length_cm", "package_width_cm", "package_height_cm",
+    }):
+        assignments.append(
+            "`volumetric_weight_kg` = CASE WHEN `package_length_cm` > 0 "
+            "AND `package_width_cm` > 0 AND `package_height_cm` > 0 THEN ROUND("
+            "`package_length_cm` * `package_width_cm` * `package_height_cm` / 6000, 4) "
+            "ELSE NULL END"
+        )
+    return assignments, values
+
+
+def update_1688_product(
+    product_item_id: int, changes: Mapping[str, Any],
+    *, connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Atomically save source overrides while preserving collected and AI facts."""
+    row_id = int(product_item_id)
+    if row_id <= 0:
+        raise ValueError("产品记录编号无效")
+    normalized = normalize_1688_product_changes(changes)
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
+                "AND `source_type` = 'ai_original' FOR UPDATE", (row_id,),
+            )
+            current = cursor.fetchone()
+            if not current:
+                raise KeyError("1688 产品不存在")
+            snapshot = _loads(current.get("source_snapshot_json"), {})
+            snapshot = dict(snapshot) if isinstance(snapshot, Mapping) else {}
+            overrides = snapshot.get("source_1688_overrides")
+            overrides = dict(overrides) if isinstance(overrides, Mapping) else {}
+            overrides.update({
+                field: float(value) if value is not None else None
+                for field, value in normalized.items()
+            })
+            snapshot["source_1688_overrides"] = overrides
+            assignments, values = _1688_override_table_assignments(current, normalized)
+            assignments.append("`source_snapshot_json` = %s")
+            values.append(_dumps(snapshot))
+            cursor.execute(
+                f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} "
+                "WHERE `id` = %s AND `source_type` = 'ai_original'", tuple(values + [row_id]),
+            )
+            cursor.execute(f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s", (row_id,))
+            row = cursor.fetchone()
+        connection.commit()
+        return _mirror_zying_snapshot_fields(_json_safe_row(row))
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def upsert_ai_original_product(
     raw_product: Mapping[str, Any],
     *,
@@ -3123,6 +3360,7 @@ def upsert_ai_original_product(
     """Insert or refresh one 1688 source snapshot in the unified product list."""
     from erp.ai_original_products import normalize_1688_product
 
+    category_id = normalize_collection_management_category_id(raw_product.get("management_category_id"))
     product = normalize_1688_product(raw_product)
     dimensions = (
         _decimal_from_text(product.get("package_length_cm")),
@@ -3158,6 +3396,32 @@ def upsert_ai_original_product(
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             cursor.execute(
+                f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `source_item_id` = %s FOR UPDATE",
+                (product["source_item_id"],),
+            )
+            existing = cursor.fetchone()
+            existing = existing if existing and existing.get("source_type") == "ai_original" else {}
+            existing_snapshot = _loads(existing.get("source_snapshot_json"), {})
+            overrides = (
+                existing_snapshot.get("source_1688_overrides")
+                if isinstance(existing_snapshot, Mapping) else None
+            )
+            overrides = dict(overrides) if isinstance(overrides, Mapping) else {}
+            if overrides:
+                source_snapshot["source_1688_overrides"] = overrides
+            if isinstance(existing_snapshot, Mapping) and isinstance(existing_snapshot.get("marketplace_listings"), Mapping):
+                source_snapshot["marketplace_listings"] = dict(existing_snapshot["marketplace_listings"])
+            existing_prepared = existing_snapshot.get("ai_original") if isinstance(existing_snapshot, Mapping) else None
+            if isinstance(existing_prepared, Mapping) and isinstance(existing_prepared.get("generation_budget"), Mapping):
+                # Recollection changes source facts, never the already spent
+                # allowance. Keep checkpoints; fingerprints invalidate only
+                # steps affected by the new source on the next generation.
+                source_snapshot["ai_original"] = dict(existing_prepared)
+                source_snapshot["ai_original"]["edit_revision"] = _ai_original_edit_revision(existing_prepared) + 1
+                if existing_prepared.get("status") != "completed":
+                    source_snapshot["ai_original"].update(status="pending", error="")
+                source_snapshot.setdefault("marketplace_listings", {})["mercadolibre"] = dict(source_snapshot["ai_original"])
+            cursor.execute(
                 f"""
                 INSERT INTO `{PRODUCT_TABLE}` (
                     `collection_item_id`, `source_type`, `review_status`,
@@ -3177,7 +3441,7 @@ def upsert_ai_original_product(
                         JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`),
                         `source_snapshot_json`, '{{}}'), '$.ai_original.status')) <> 'completed',
                         VALUES(`title`), `title`),
-                    `price` = IF(`source_type` = 'ai_original', VALUES(`price`), `price`),
+                    `price` = IF(`source_type` = 'ai_original' AND `currency_id` = 'CNY', VALUES(`price`), `price`),
                     `weight_basis` = IF(`source_type` = 'ai_original', VALUES(`weight_basis`), `weight_basis`),
                     `weight_g` = IF(`source_type` = 'ai_original', VALUES(`weight_g`), `weight_g`),
                     `package_length_cm` = IF(`source_type` = 'ai_original', VALUES(`package_length_cm`), `package_length_cm`),
@@ -3197,6 +3461,20 @@ def upsert_ai_original_product(
                     "1688_source" if weight_g else "", _dumps(source_snapshot), now,
                 ),
             )
+            if category_id is not None:
+                cursor.execute(
+                    f"UPDATE `{PRODUCT_TABLE}` SET `management_category_id` = %s "
+                    "WHERE `source_item_id` = %s AND `source_type` = 'ai_original'",
+                    (category_id, product["source_item_id"]),
+                )
+            if overrides:
+                assignments, values = _1688_override_table_assignments(existing, overrides)
+                if assignments:
+                    cursor.execute(
+                        f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} "
+                        "WHERE `source_item_id` = %s AND `source_type` = 'ai_original'",
+                        tuple(values + [product["source_item_id"]]),
+                    )
             cursor.execute(
                 f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `source_item_id` = %s",
                 (product["source_item_id"],),
@@ -3225,6 +3503,25 @@ def update_ai_original_product(
         "category_id", "category_name", "net_proceeds_usd", "review_status", "currency_id",
     }
     normalized = {key: value for key, value in dict(changes or {}).items() if key in allowed}
+    platform_listing = (changes or {}).get("marketplace_listing")
+    expected_revision = (changes or {}).get("expected_ai_original_revision")
+    expected_budget_revision = (changes or {}).get("expected_generation_budget_revision")
+    if expected_budget_revision is not None and (isinstance(expected_budget_revision, bool)
+            or not isinstance(expected_budget_revision, int) or expected_budget_revision < 0):
+        raise ValueError("费用记录版本必须是非负整数")
+    if expected_revision is not None and (isinstance(expected_revision, bool) or not isinstance(expected_revision, int) or expected_revision < 0):
+        raise ValueError("刊登资料版本必须是非负整数")
+    if platform_listing is not None:
+        from erp.ai_original_platforms import normalize_listing_options
+
+        if not isinstance(platform_listing, Mapping):
+            raise ValueError("平台草稿必须是对象")
+        platform, _ = normalize_listing_options(platform_listing.get("target_platform"), platform_listing.get("template_id", "standard"))
+        if platform == "mercadolibre":
+            raise ValueError("美客多草稿请通过原刊登编辑接口保存")
+        # A platform-only update must never change the Mercado row columns.
+        normalized = {"source_snapshot_json": {}}
+        expected_revision = None
     if not normalized:
         raise ValueError("没有可保存的 AI 原创产品字段")
     if "review_status" in normalized and normalized["review_status"] not in {
@@ -3260,6 +3557,62 @@ def update_ai_original_product(
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
+            if "source_snapshot_json" in normalized or expected_revision is not None:
+                # An AI worker can save a snapshot loaded before a source edit.
+                # Lock and merge the current overrides so that save cannot erase it.
+                cursor.execute(
+                    f"SELECT `source_snapshot_json` FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
+                    "AND `source_type` = 'ai_original' FOR UPDATE", (row_id,),
+                )
+                current = cursor.fetchone()
+                if not current:
+                    raise KeyError("AI 原创产品不存在")
+                existing_snapshot = _loads(current.get("source_snapshot_json"), {})
+                existing_prepared = existing_snapshot.get("ai_original") if isinstance(existing_snapshot, Mapping) else {}
+                old_budget = (existing_prepared or {}).get("generation_budget")
+                budget_revision = int(old_budget.get("revision") or 0) if isinstance(old_budget, Mapping) else 0
+                if expected_budget_revision is not None and expected_budget_revision != budget_revision:
+                    raise ValueError("商品费用记录已变化，已停止付费调用；请刷新后继续")
+                current_revision = _ai_original_edit_revision(existing_prepared)
+                if expected_revision is not None and expected_revision != current_revision:
+                    raise ValueError("刊登资料已被人工修改，请重新执行未完成步骤")
+                incoming_snapshot = _loads(normalized.get("source_snapshot_json"), {})
+                if isinstance(existing_snapshot, Mapping) and isinstance(incoming_snapshot, Mapping):
+                    if platform_listing is not None:
+                        incoming_snapshot = dict(existing_snapshot)
+                        drafts = dict(existing_snapshot.get("marketplace_listings") or {})
+                        drafts[platform] = dict(platform_listing)
+                        incoming_snapshot["marketplace_listings"] = drafts
+                    else:
+                        incoming_snapshot = dict(incoming_snapshot)
+                        # Manual/source edits can carry an older snapshot. A
+                        # saved reservation must never disappear or roll back
+                        # when an unrelated field is updated concurrently.
+                        old_budget = (existing_prepared or {}).get("generation_budget")
+                        prepared = incoming_snapshot.get("ai_original")
+                        if isinstance(old_budget, Mapping):
+                            prepared = dict(prepared) if isinstance(prepared, Mapping) else dict(existing_prepared)
+                            new_budget = prepared.get("generation_budget")
+                            old_revision = int(old_budget.get("revision") or 0)
+                            new_revision = int(new_budget.get("revision") or 0) if isinstance(new_budget, Mapping) else -1
+                            if new_revision <= old_revision or expected_budget_revision is None:
+                                prepared["generation_budget"] = dict(old_budget)
+                            incoming_snapshot["ai_original"] = prepared
+                        if expected_revision is not None and isinstance(incoming_snapshot.get("ai_original"), Mapping):
+                            incoming_snapshot["ai_original"] = dict(incoming_snapshot["ai_original"])
+                            incoming_snapshot["ai_original"]["edit_revision"] = current_revision
+                        # Workers hold old snapshots. Preserve other platforms'
+                        # newest drafts, including manual edits made meanwhile.
+                        drafts = dict(incoming_snapshot.get("marketplace_listings") or {})
+                        drafts.update(existing_snapshot.get("marketplace_listings") or {})
+                        if isinstance(incoming_snapshot.get("ai_original"), Mapping):
+                            drafts["mercadolibre"] = dict(incoming_snapshot["ai_original"])
+                        incoming_snapshot["marketplace_listings"] = drafts
+                    overrides = existing_snapshot.get("source_1688_overrides")
+                    if isinstance(overrides, Mapping):
+                        incoming_snapshot["source_1688_overrides"] = dict(overrides)
+                    if "source_snapshot_json" in normalized:
+                        values[list(normalized).index("source_snapshot_json")] = _dumps(incoming_snapshot)
             if normalized.get("review_status") == "approved":
                 cursor.execute(
                     f"SELECT `weight_g`, `net_proceeds_usd`, `source_snapshot_json` "
@@ -3384,6 +3737,25 @@ def update_ai_original_product_items(
         connection.close()
 
 
+def _ai_original_edit_revision(prepared: Any) -> int:
+    value = prepared.get("edit_revision") if isinstance(prepared, Mapping) else None
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
+
+
+def _sync_ai_original_cached_copy(prepared: dict[str, Any], fields: Iterable[str]) -> None:
+    cached = prepared.get("generated_copy")
+    if not isinstance(cached, Mapping):
+        return
+    cached = dict(cached)
+    for field in fields:
+        cached[field] = prepared[field]
+        if field == "title_es":
+            cached["title"] = prepared[field]
+        elif field == "description_es":
+            cached["description"] = prepared[field]
+    prepared["generated_copy"] = cached
+
+
 def _editor_text(value: Any, maximum: int) -> str:
     return str(value or "").strip()[:maximum]
 
@@ -3455,6 +3827,63 @@ def _editor_variation_dimensions(value: Any) -> list[dict[str, Any]]:
     return result
 
 
+def _update_ai_platform_listing(product_item_id, data, platform, *, connection_factory=None):
+    """Edit one platform under a row lock without altering any other draft."""
+    from erp.ai_original_platforms import validate_platform_listing
+
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
+                "AND `source_type` = 'ai_original' FOR UPDATE", (product_item_id,),
+            )
+            current = cursor.fetchone()
+            if not current:
+                raise KeyError("AI 原创产品不存在")
+            snapshot = _loads(current.get("source_snapshot_json"), {})
+            drafts = dict(snapshot.get("marketplace_listings") or {})
+            draft = dict(drafts.get(platform) or {})
+            if not draft:
+                raise ValueError("请先生成该平台的商品草稿")
+            for field in ("title", "description", "item_highlights"):
+                if field in data:
+                    if not isinstance(data[field], str):
+                        raise ValueError(f"{field} 必须是文本")
+                    draft[field] = data[field].strip()
+            if "bullet_points" in data:
+                points = data["bullet_points"]
+                if not isinstance(points, list) or any(not isinstance(value, str) for value in points):
+                    raise ValueError("卖点必须是文本数组")
+                draft["bullet_points"] = [value.strip() for value in points if value.strip()]
+            if "attributes" in data:
+                if not isinstance(data["attributes"], list):
+                    raise ValueError("商品属性必须是数组")
+                draft["attributes"] = _editor_attributes(data["attributes"])
+            draft["validation"] = validate_platform_listing(draft, platform)
+            if draft["validation"]["errors"]:
+                raise ValueError("；".join(draft["validation"]["errors"]))
+            # Saving text cannot turn a failed generation or missing image into a completed job.
+            draft["manually_edited"] = True
+            drafts[platform] = draft
+            snapshot["marketplace_listings"] = drafts
+            cursor.execute(
+                f"UPDATE `{PRODUCT_TABLE}` SET `source_snapshot_json` = %s "
+                "WHERE `id` = %s AND `source_type` = 'ai_original'",
+                (_dumps(snapshot), product_item_id),
+            )
+            cursor.execute(f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s", (product_item_id,))
+            row = cursor.fetchone()
+        connection.commit()
+        return _mirror_zying_snapshot_fields(_json_safe_row(row))
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def update_ai_original_listing(
     product_item_id: int,
     listing: Mapping[str, Any],
@@ -3466,13 +3895,18 @@ def update_ai_original_listing(
     if row_id <= 0:
         raise ValueError("产品记录编号无效")
     data = dict(listing or {})
+    from erp.ai_original_platforms import normalize_listing_options
+
+    platform, _ = normalize_listing_options(data.get("target_platform", "mercadolibre"))
+    if platform != "mercadolibre":
+        return _update_ai_platform_listing(row_id, data, platform, connection_factory=connection_factory)
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             cursor.execute(
                 f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
-                "AND `source_type` = 'ai_original'",
+                "AND `source_type` = 'ai_original' FOR UPDATE",
                 (row_id,),
             )
             current = cursor.fetchone()
@@ -3487,8 +3921,16 @@ def update_ai_original_listing(
 
             source_title = _editor_text(data.get("source_title"), 255)
             source_description = _editor_text(data.get("source_description"), 50000)
-            category_id = _editor_text(data.get("category_id"), 64)
-            category_name = _editor_text(data.get("category_name"), 255)
+            category_id = _editor_text(data.get("category_id", prepared.get("category_id") or source.get("category_id") or current.get("category_id")), 64).upper()
+            category_name = _editor_text(data.get("category_name", prepared.get("category_name") or source.get("category_name") or current.get("category_name")), 255)
+            if "category_locked" in data and not isinstance(data["category_locked"], bool):
+                raise ValueError("锁定分类必须是布尔值")
+            category_locked = data.get("category_locked", prepared.get("category_locked") is True)
+            if not category_id:
+                category_locked = False
+                category_name = ""
+            elif category_locked and not re.fullmatch(r"CBT\d+", category_id):
+                raise ValueError("锁定分类时必须填写有效的 CBT 分类编号")
             title_es = _editor_text(data.get("title_es"), 255)
             title_pt = _editor_text(data.get("title_pt"), 255)
             description_es = _editor_text(data.get("description_es"), 50000)
@@ -3496,6 +3938,23 @@ def update_ai_original_listing(
             attributes = _editor_attributes(data.get("attributes"))
             variations = _editor_variations(data.get("variations"))
             variation_dimensions = _editor_variation_dimensions(data.get("variation_dimensions", []))
+            category_changed = (
+                category_id != str(prepared.get("category_id") or source.get("category_id") or current.get("category_id") or "").strip().upper()
+                or category_locked != (prepared.get("category_locked") is True)
+            )
+            variations_changed = "variations" in data and variations != _editor_variations(prepared.get("variations", original.get("variations")))
+            dimensions_changed = "variation_dimensions" in data and variation_dimensions != _editor_variation_dimensions(prepared.get("variation_dimensions", original.get("variation_dimensions", [])))
+            attributes_changed = "attributes" in data and attributes != _editor_attributes(prepared.get("attributes"))
+            old_attribute_ids = {item.get("id") for item in _editor_attributes(prepared.get("attributes")) if item.get("id")}
+            new_attribute_ids = {item.get("id") for item in attributes if item.get("id")}
+            removed_attribute_ids = (
+                set(prepared.get("manual_attribute_removed_ids") or [])
+                | (old_attribute_ids - new_attribute_ids)
+            ) - new_attribute_ids
+            copy_changes = [field for field, value, limit in (
+                ("title_es", title_es, 255), ("title_pt", title_pt, 255),
+                ("description_es", description_es, 50000), ("description_pt", description_pt, 50000),
+            ) if field in data and value != _editor_text(prepared.get(field), limit)]
 
             if "source_title" in data and source_title:
                 original["title"] = source_title
@@ -3504,29 +3963,63 @@ def update_ai_original_listing(
             if "category_id" in data:
                 original["category_id"] = category_id
                 source["category_id"] = category_id
+                prepared["category_id"] = category_id
             if "category_name" in data:
                 original["category_name"] = category_name
                 source["category_name"] = category_name
+                prepared["category_name"] = category_name
+            if "category_id" in data and not category_id:
+                original["category_name"] = ""
+                source["category_name"] = ""
+                prepared["category_name"] = ""
+            prepared["category_locked"] = category_locked
+            if category_locked:
+                prepared["category_id"] = category_id
+                prepared["category_name"] = category_name
+                source["category_id"] = category_id
+                source["category_name"] = category_name
             if "title_es" in data:
                 prepared["title_es"] = title_es
+                prepared["title"] = title_es
             if "title_pt" in data:
                 prepared["title_pt"] = title_pt
             if "description_es" in data:
                 prepared["description_es"] = description_es
+                prepared["description"] = description_es
             if "description_pt" in data:
                 prepared["description_pt"] = description_pt
+            _sync_ai_original_cached_copy(prepared, copy_changes)
             if "attributes" in data:
                 prepared["attributes"] = attributes
                 source["attributes"] = attributes
+                if attributes_changed:
+                    prepared["manual_attributes"] = attributes
+                    prepared["manual_attribute_removed_ids"] = sorted(removed_attribute_ids)
             if "variations" in data:
                 prepared["variations"] = variations
                 source["variations"] = variations
+                if variations_changed:
+                    prepared["source_variations"] = variations
             if "variation_dimensions" in data:
                 prepared["variation_dimensions"] = variation_dimensions
                 source["variation_dimensions"] = variation_dimensions
-            if "source_title" in data or "source_description" in data:
+                if dimensions_changed:
+                    prepared["source_variation_dimensions"] = variation_dimensions
+            checkpoint = prepared.get("preparation")
+            if isinstance(checkpoint, dict):
+                checkpoint = dict(checkpoint)
+                if category_changed:
+                    checkpoint.update(category_ready=False, variations_ready=False, required_ready=False)
+                if variations_changed or dimensions_changed:
+                    checkpoint.update(variations_ready=False, required_ready=False)
+                if attributes_changed:
+                    checkpoint["required_ready"] = False
+                prepared["preparation"] = checkpoint
+            if any(field in data for field in ("source_title", "source_description", "category_id", "category_name")):
                 snapshot["original_1688"] = original
+            prepared["edit_revision"] = _ai_original_edit_revision(prepared) + 1
             snapshot["ai_original"] = prepared
+            snapshot.setdefault("marketplace_listings", {})["mercadolibre"] = dict(prepared)
             snapshot["source"] = source
             description_for_row = description_es or source_description
             if description_for_row:
@@ -3633,7 +4126,28 @@ def translate_ai_original_listing(
                 setter(value)
             prepared["attributes"] = attributes
             prepared["variations"] = variations
+            # Translation performs a network call. Re-read after it completes so
+            # a newly generated/edited platform draft is not lost to this old snapshot.
+            cursor.execute(
+                f"SELECT `source_snapshot_json` FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
+                "AND `source_type` = 'ai_original' FOR UPDATE", (row_id,),
+            )
+            latest = cursor.fetchone()
+            if not latest:
+                raise KeyError("AI 原创产品不存在")
+            latest_snapshot = _loads(latest.get("source_snapshot_json"), {})
+            if (latest_snapshot.get("ai_original") != snapshot.get("ai_original")
+                    or latest_snapshot.get("original_1688") != snapshot.get("original_1688")):
+                raise ValueError("翻译期间商品资料已更新，请刷新后重新翻译")
+            snapshot = dict(latest_snapshot)
+            prepared["title"] = prepared.get("title_es") or ""
+            prepared["description"] = prepared.get("description_es") or ""
+            _sync_ai_original_cached_copy(prepared, [field for field in (
+                "title_es", "title_pt", "description_es", "description_pt",
+            ) if field in prepared])
+            prepared["edit_revision"] = _ai_original_edit_revision(prepared) + 1
             snapshot["ai_original"] = prepared
+            snapshot.setdefault("marketplace_listings", {})["mercadolibre"] = dict(prepared)
             source = dict(snapshot.get("source") or {})
             source["attributes"] = attributes
             source["variations"] = variations
@@ -3661,6 +4175,8 @@ def upsert_zying_products_to_products(
     """将智赢二级详情快照写入统一产品列表，供审核和上架流程复用。"""
 
     values = []
+    category_ids = set()
+    destination_categories = []
     skipped = 0
     now = _now()
     for raw_record in records or []:
@@ -3675,6 +4191,12 @@ def upsert_zying_products_to_products(
         if not product_id or not title:
             skipped += 1
             continue
+        destination_category_id = normalize_collection_management_category_id(
+            record.get("management_category_id")
+        )
+        destination_categories.append(destination_category_id)
+        if destination_category_id is not None:
+            category_ids.add(destination_category_id)
         plugin_snapshot = dict(snapshot.get("plugin_snapshot") or {})
         plugin_snapshot.update(
             {
@@ -3759,6 +4281,20 @@ def upsert_zying_products_to_products(
     if not values:
         return {"count": 0, "skipped": skipped}
 
+    category_column_sql = ""
+    category_update_sql = ""
+    if category_ids:
+        values = [
+            row + (category_id,)
+            for row, category_id in zip(values, destination_categories)
+        ]
+        category_column_sql = ", `management_category_id`"
+        category_update_sql = (
+            "`management_category_id` = IF(`source_type` = 'zying', "
+            "COALESCE(VALUES(`management_category_id`), `management_category_id`), "
+            "`management_category_id`),"
+        )
+
     mirrored_fields = (
         "source_url", "main_image_url", "title", "description_text", "price",
         "currency_id", "weight_g", "volumetric_weight_kg", "package_length_cm",
@@ -3775,6 +4311,7 @@ def upsert_zying_products_to_products(
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
+            _validate_collection_management_categories(cursor, category_ids)
             cursor.executemany(
                 f"""
                 INSERT INTO `{PRODUCT_TABLE}` (
@@ -3785,9 +4322,10 @@ def upsert_zying_products_to_products(
                     `weight_basis`, `sale_price_usd`, `category_id`, `category_name`,
                     `net_proceeds_usd`, `profitability_updated_at`, `profitability_source`,
                     `source_snapshot_json`, `added_at`, `product_developer_id`,
-                    `product_developer_name`
-                ) VALUES ({", ".join(["%s"] * 26)})
+                    `product_developer_name`{category_column_sql}
+                ) VALUES ({", ".join(["%s"] * len(values[0]))})
                 ON DUPLICATE KEY UPDATE
+                    {category_update_sql}
                     {updates},
                     `updated_at` = CURRENT_TIMESTAMP
                 """,

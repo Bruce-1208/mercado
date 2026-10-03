@@ -622,12 +622,15 @@ def _decorate_store_link_markers(rows: list[dict[str, Any]]) -> None:
     try:
         from erp.mercadolibre_promotion_store import PromotionStore
 
-        promotion_details = PromotionStore().applied_item_details(identities)
+        promotion_store = PromotionStore()
+        promotion_details = promotion_store.applied_item_details(identities)
+        clearance_states = promotion_store.clearance_item_states(identities, details=promotion_details)
         promotion_markers = set(promotion_details)
     except Exception:
         # Activity synchronization is an optional companion store.
         promotion_markers = set()
         promotion_details = None
+        clearance_states = {}
     # The ad-analysis module already keeps the last successful remote snapshot.
     # Use it as a read-only fallback so ads created before the marker store was
     # introduced are still visible when that snapshot is available.
@@ -667,6 +670,10 @@ def _decorate_store_link_markers(rows: list[dict[str, Any]]) -> None:
         # Keep descriptive names and short aliases so API consumers can use the
         # response without knowing the UI's terminology.
         row["enrolled_promotions"] = promotion_details.get(identity, []) if promotion_details is not None else None
+        clearance = clearance_states.get(identity, {})
+        row["clearance_status"] = clearance.get("status", "unknown")
+        row["clearance_checked_at"] = clearance.get("checked_at", "")
+        row["clearance_promotions"] = clearance.get("activities", [])
         row["promotion_applied"] = promotion_applied
         row["activity_applied"] = promotion_applied
         row["advertising_enabled"] = advertising_enabled

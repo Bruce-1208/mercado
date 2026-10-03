@@ -4,8 +4,8 @@
 0 = 未发现可疑性，1 = 有侵权风险/需人工复核，2 = 有明确侵权特征。
 对于 1/2 级结果，同时把品牌或 IP 关键词写入“侵权关键词”字段。
 
-主图链接和 Logo OCR 暂不参与判断。侵权知识库中的黑名单优先判侵权，
-白名单会作为“该品牌本身不构成侵权”的明确约束传给所选 AI 模型。
+主图链接和 Logo OCR 暂不参与判断。侵权知识库中人工确认的风险拦截优先，
+人工放行仅约束对应品牌，不代表整个商品安全；自动线索与待复核记录不参与裁决。
 """
 
 import argparse
@@ -36,6 +36,7 @@ except (AttributeError, ValueError):
     pass
 
 from AI_Agent.deepseek import chat_deepseek
+from bit.bit_infringement_knowledge import effective_list_type
 from bit.bit_mysql import get_zying_risk_candidates, update_zying_product_risks
 from bit.bit_risk import (
     DEFAULT_BATCH_SIZE,
@@ -203,7 +204,7 @@ def _knowledge_lists(records):
     for row in records or ():
         if not isinstance(row, dict):
             continue
-        list_type = str(row.get("list_type") or "").strip().lower()
+        list_type = effective_list_type(row)
         brand = " ".join(str(row.get("brand_name") or "").split())
         if list_type in lists and brand:
             lists[list_type].append(brand)
@@ -272,7 +273,7 @@ def classify_risk_records(
 1. “适用于/兼容/for/compatible with”后的品牌通常先判 1，除非标题同时包含仿冒或受保护图案的直接证据。
 2. 主图链接、图片内容和 Logo 不在本次检测范围内，禁止根据图片或常识补充判断。
 3. risk_level 为 1 或 2 时，keywords 必须列出标题中命中的品牌、人物或 IP；为 0 时 keywords 必须是空数组。
-4. knowledge.blacklist 中命中的品牌必须判 2；knowledge.whitelist 中命中的品牌本身不构成侵权，但标题中其他品牌/IP 仍需独立判断。若同一名称同时出现于黑白名单，以黑名单为准。
+4. knowledge 仅包含人工确认的处置规则。knowledge.blacklist 中命中的品牌按风险拦截判 2；knowledge.whitelist 仅表示人工放行该品牌名称，不代表整个商品安全，标题中其他品牌/IP 仍需独立判断。若同一名称同时出现于黑白名单，以黑名单为准。自动采集与待复核线索不能作为侵权或安全结论。
 5. 每个 row_id 必须返回且只返回一次。只返回 JSON 数组，不要 Markdown 或其他文字。
 
 返回格式：

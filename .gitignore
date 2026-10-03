@@ -37,6 +37,9 @@ output/
 outputs/
 bit/runtime_locks/
 .data/local-agent-hub.sqlite3*
+.data/size-charts.sqlite3*
+.data/ai-original-publish.sqlite3*
+.data/wipo-sync.sqlite3*
 .data/local-agent/
 .data/mercadolibre_required_attributes_*.jsonl.gz
 .data/pdd_orders_profile/
@@ -49,3 +52,7 @@ bit/logs/*_history.json
 
 # Persistent store-link audit journal (contains operational data).
 runtime_logs/store_link_operations.sqlite3*
+
+# Private upstream session/runtime and shared product cache
+.data/mercado-product-data/
+.private/

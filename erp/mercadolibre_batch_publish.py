@@ -626,6 +626,8 @@ def publish_product_batch(
     update_record: Callable[..., Any] | None = None,
     existing_user_product_ids: Mapping[int, str] | None = None,
     ai_completion_options: Mapping[str, Any] | None = None,
+    prepared_drafts: Mapping[str, Any] | None = None,
+    retry_drafts: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     rows = [dict(row) for row in product_rows or []]
     if not rows:
@@ -801,10 +803,23 @@ def publish_product_batch(
                 # Legacy rows without an embedded snapshot keep the compatible
                 # database path; normal collected rows avoid the write/read pair.
                 _sync_product_source_snapshot(row)
-            if is_ai_original and prepared_listing is not None and not reusable_user_product_ids.get(product_id):
+            prepared_draft = (prepared_drafts or {}).get(str(product_id))
+            prior_draft = (retry_drafts or {}).get(str(product_id))
+            if is_ai_original and prepared_listing is not None and not reusable_user_product_ids.get(product_id) and prepared_draft is None and prior_draft is None:
                 prepared_listing = _complete_ai_publication_attributes(
                     row, prepared_listing, worker_client(), **dict(ai_completion_options or {})
                 )
+            def checkpoint_draft(draft):
+                # Checkpoint failure must stop before the remote create call.
+                # Do not use save_record(), which deliberately swallows errors
+                # only for post-publication bookkeeping.
+                details = {"draft": draft, "preflight": draft["report"],
+                           "net_proceeds_calculation": pricing_metadata}
+                if record_id and update_record is not None:
+                    update_record(record_id, status="publishing", result=details)
+                update_state(product_id, status="publishing", store_name=store_name,
+                             token_id=int(token_id), result=details)
+
             publication = follow_sell(
                 worker_client(),
                 source_url,
@@ -815,6 +830,9 @@ def publish_product_batch(
                 prepared_listing=prepared_listing,
                 existing_user_product_id=reusable_user_product_ids.get(product_id),
                 publish=True,
+                on_prepared=checkpoint_draft,
+                prepared_draft=prepared_draft,
+                prior_draft=prior_draft,
             )
             publication = {**dict(publication or {}), "net_proceeds_calculation": pricing_metadata}
             published_item_id = _published_item_id(publication)
@@ -896,6 +914,9 @@ def publish_product_batch(
                     store_name=store_name,
                     token_id=int(token_id),
                     error_message=message,
+                    result={"preflight": getattr(exc, "preflight_report", None),
+                            "draft": getattr(exc, "publication_draft", None),
+                            "platform_error": str(exc)},
                     finished=True,
                 )
             except Exception as state_exc:
@@ -906,6 +927,9 @@ def publish_product_batch(
                 failure_reason=message,
                 result={
                     "net_proceeds_calculation": pricing_metadata,
+                    "preflight": getattr(exc, "preflight_report", None),
+                    "draft": getattr(exc, "publication_draft", None),
+                    "platform_error": str(exc),
                     "result": getattr(exc, "publication_result", None),
                     "platform_rate_limited": _is_platform_rate_limit_error(exc),
                 },
@@ -916,6 +940,7 @@ def publish_product_batch(
                 "product_id": product_id,
                 "source_item_id": source_item_id,
                 "status": "failed",
+                "preflight": getattr(exc, "preflight_report", None),
                 "published_item_id": "",
                 "timings": {"total": round(time.perf_counter() - item_started, 4)},
                 "message": message,

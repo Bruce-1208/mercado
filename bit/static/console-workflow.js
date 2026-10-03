@@ -48,6 +48,19 @@
         'mercado-product-developer-filter', 'mercado-weight-status-filter',
         'mercado-weight-min', 'mercado-price-min', 'mercado-net-min', 'mercado-date-from',
     ], '.market-filter-field');
+    foldFilters(document.querySelector('.store-link-filters'), [
+        'store-link-product-category-filter', 'store-link-mercado-category-filter',
+        'store-link-promotion-filter', 'store-link-advertising-filter', 'store-link-video-filter',
+    ], '.order-filter-field');
+    const supplierFilters = document.querySelector('.p1688-toolbar');
+    foldFilters(supplierFilters, [
+        'products-1688-status-filter', 'products-1688-review-filter',
+        'products-1688-price-min', 'products-1688-price-max',
+        'products-1688-date-from', 'products-1688-date-to',
+    ], '.p1688-field');
+    // Keep the feedback after all filters and before the batch toolbar.
+    const supplierStatus = byId('products-1688-status');
+    if (supplierFilters && supplierStatus) supplierFilters.append(supplierStatus);
 
     const card = byId('mercado-product-actions');
     const module = byId('mercado-list-module');

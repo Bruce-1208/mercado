@@ -1865,6 +1865,55 @@
             font-weight: 800;
         }
 
+        #tab-order-analysis .panel { overflow: hidden; }
+        #tab-order-analysis .infractions-header { gap: 16px; flex-wrap: wrap; }
+        #tab-order-analysis .collection-scope-hint { max-width: 760px; line-height: 1.6; }
+        #tab-order-analysis .summary-row {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            padding: 16px;
+        }
+        #tab-order-analysis .metric { min-width: 0; padding: 14px 16px; }
+        #tab-order-analysis .order-analysis-actions > button { width: auto; flex-shrink: 0; }
+        #tab-order-analysis .metric-value { font-variant-numeric: tabular-nums; }
+        #tab-order-analysis .after-sale-filter-bar {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(0, 1.2fr);
+            gap: 12px;
+            padding: 16px;
+        }
+        #tab-order-analysis .after-sale-filter-bar > .primary { justify-self: end; grid-column: 3; }
+        #tab-order-analysis .after-sale-table-wrap { margin: 0 16px 16px; border: 1px solid var(--border); border-radius: 10px; }
+        #tab-order-analysis .after-sale-table-wrap table { min-width: 1100px; }
+        #tab-order-analysis .after-sale-table-wrap th { position: sticky; top: 0; z-index: 1; background: var(--surface, #f8fafc); white-space: nowrap; }
+        #tab-order-analysis .after-sale-table-wrap td { vertical-align: middle; padding: 12px; font-variant-numeric: tabular-nums; }
+        #tab-order-analysis .after-sale-table-wrap td:nth-child(n+5) { text-align: right; white-space: nowrap; max-width: none; }
+        #tab-order-analysis .after-sale-table-wrap th:nth-child(n+5) { text-align: right; }
+        #tab-order-analysis .analysis-product-id { font-weight: 600; overflow-wrap: anywhere; }
+        #tab-order-analysis .analysis-product-title { min-width: 220px; max-width: 360px; line-height: 1.55; overflow-wrap: anywhere; }
+        .analysis-product-image, .analysis-image-placeholder {
+            display: flex; width: 60px; height: 60px; align-items: center; justify-content: center;
+            border: 1px solid var(--border); border-radius: 8px; background: #f8fafc;
+            color: var(--muted); font-size: 11px; text-decoration: none; overflow: hidden;
+        }
+        .analysis-product-image img { width: 100%; height: 100%; object-fit: contain; }
+        .analysis-product-image span { display: none; }
+        .analysis-product-image.missing span { display: block; }
+        .analysis-product-image:hover { border-color: #93c5fd; }
+        #tab-order-analysis #order-analysis-log { min-height: 48px; margin: 0 16px 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+        @media (max-width: 900px) {
+            #tab-order-analysis .summary-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            #tab-order-analysis .after-sale-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            #tab-order-analysis .after-sale-filter-bar > .field:nth-child(3) { grid-column: 1 / -1; }
+            #tab-order-analysis .after-sale-filter-bar > .primary { grid-column: 2; }
+            #tab-order-analysis .after-sale-sort-buttons { flex-wrap: wrap; }
+        }
+        @media (max-width: 540px) {
+            #tab-order-analysis .after-sale-filter-bar { grid-template-columns: minmax(0, 1fr); }
+            #tab-order-analysis .after-sale-filter-bar > .primary { grid-column: 1; justify-self: stretch; }
+            #tab-order-analysis .metric { padding: 12px; }
+        }
+
         .form-panel {
             padding: 10px;
         }
@@ -4662,6 +4711,11 @@
             overflow-wrap: anywhere;
         }
 
+        .traffic-tooltip.reputation-warning-tooltip {
+            max-height: calc(100vh - 24px);
+            overflow-y: auto;
+        }
+
         .traffic-tooltip strong {
             display: block;
             margin-bottom: 4px;
@@ -4824,7 +4878,7 @@
         }
 
         .reputation-data-table {
-            min-width: 1666px;
+            min-width: 1728px;
         }
 
         .reputation-data-table th:nth-child(1),
@@ -4840,25 +4894,27 @@
         .reputation-data-table th:nth-child(6),
         .reputation-data-table td:nth-child(6) { width: 62px; }
         .reputation-data-table th:nth-child(7),
-        .reputation-data-table td:nth-child(7),
+        .reputation-data-table td:nth-child(7) { width: 62px; }
         .reputation-data-table th:nth-child(8),
         .reputation-data-table td:nth-child(8),
         .reputation-data-table th:nth-child(9),
-        .reputation-data-table td:nth-child(9) { width: 58px; }
+        .reputation-data-table td:nth-child(9),
         .reputation-data-table th:nth-child(10),
-        .reputation-data-table td:nth-child(10) { width: 72px; }
+        .reputation-data-table td:nth-child(10) { width: 58px; }
         .reputation-data-table th:nth-child(11),
-        .reputation-data-table td:nth-child(11) { width: 84px; }
+        .reputation-data-table td:nth-child(11) { width: 72px; }
         .reputation-data-table th:nth-child(12),
-        .reputation-data-table td:nth-child(12) { width: 360px; }
+        .reputation-data-table td:nth-child(12) { width: 84px; }
         .reputation-data-table th:nth-child(13),
-        .reputation-data-table td:nth-child(13) { width: 190px; }
+        .reputation-data-table td:nth-child(13) { width: 360px; }
         .reputation-data-table th:nth-child(14),
-        .reputation-data-table td:nth-child(14) { width: 140px; }
+        .reputation-data-table td:nth-child(14) { width: 190px; }
         .reputation-data-table th:nth-child(15),
-        .reputation-data-table td:nth-child(15) { width: 210px; }
+        .reputation-data-table td:nth-child(15) { width: 140px; }
         .reputation-data-table th:nth-child(16),
-        .reputation-data-table td:nth-child(16) { width: 100px; }
+        .reputation-data-table td:nth-child(16) { width: 210px; }
+        .reputation-data-table th:nth-child(17),
+        .reputation-data-table td:nth-child(17) { width: 100px; }
 
         .reputation-site-status {
             display: inline-flex;
@@ -9741,7 +9797,7 @@
         .inventory-metrics strong { display: block; position: relative; z-index: 1; margin: 7px 0 2px; color: #172033; font-size: 24px; }
         .inventory-metrics small { color: #98a0ae; font-size: 10px; }
         .inventory-toolbar {
-            display: grid; grid-template-columns: minmax(260px, 1fr) 180px 150px auto; gap: 10px;
+            display: grid; grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(130px, 160px)) auto; gap: 10px;
             align-items: end; margin-bottom: 13px; padding: 12px; border: 1px solid #e7e9ee;
             border-radius: 9px; background: #fafbfc;
         }
@@ -9987,16 +10043,18 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='console-ui.css') }}?v=20260930-mobile1">
     <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-products.css') }}?v=20260923-batch-delete1">
     <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-workbench.css') }}?v=20260927-bulk-review">
-    <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20260925-layout-ratio1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20261002-product-management">
     <link rel="stylesheet" href="{{ url_for('static', filename='weight-dimensions-records.css') }}?v=20260930-server-execution-1">
     <link rel="stylesheet" href="{{ url_for('static', filename='inventory-sku.css') }}?v=20260925-1">
     <script src="{{ url_for('static', filename='console-ui.js') }}?v=20260915"></script>
     <script src="{{ url_for('static', filename='copy-anywhere.js') }}?v=20260922"></script>
     <script src="{{ url_for('static', filename='appeal-polling.js') }}?v=20260922"></script>
-    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260929-price-fallback"></script>
-    <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20260927-review-only-publish"></script>
-    <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260929-price-fallback"></script>
-    <script defer src="{{ url_for('static', filename='weight-dimensions-records.js') }}?v=20260930-server-execution-1"></script>
+    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20261003-publish"></script>
+    <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20261003-publish"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-publish.css') }}?v=20261003-publish">
+    <script defer src="{{ url_for('static', filename='ai-original-publish.js') }}?v=20261003-publish"></script>
+    <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20261002-ui"></script>
+    <script defer src="{{ url_for('static', filename='weight-dimensions-records.js') }}?v=20261001-task-stop-dimension-fields-1"></script>
     <script defer src="{{ url_for('static', filename='inventory-sku.js') }}?v=20260925-1"></script>
     <style>
         .ai-video-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(360px, .9fr); gap: 14px; align-items: start; }
@@ -10139,8 +10197,11 @@
             .store-link-audit-more-wrap button { width: 100%; justify-content: center; }
         }
     </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20260930-unified1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='console-workflow.css') }}?v=20260930">
+    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261002-ui">
+    <link rel="stylesheet" href="{{ url_for('static', filename='console-navigation.css') }}?v=20261003">
+    <link rel="stylesheet" href="{{ url_for('static', filename='console-workflow.css') }}?v=20261002-ui">
+    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261002-ui"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='infringement-knowledge.css') }}?v=20261003">
 </head>
 <body class="zs-console">
     <header class="topbar">
@@ -10194,6 +10255,7 @@
         <button class="workspace-tab" type="button" data-tab="risk-check" onclick="switchTab('risk-check')">侵权检测</button>
     </nav>
 
+    {% include "model_balance_alert.html" %}
     <main class="page">
         <aside class="panel sidebar">
             <div class="sidebar-scroll">
@@ -10225,9 +10287,12 @@
                 <button class="tab-button" type="button" data-tab="window-anomalies" data-icon="◉" data-permission="shop_status.view" onclick="switchTab('window-anomalies')"><span class="nav-label">店铺状态</span></button>
                 <button class="tab-button" type="button" data-tab="store-tokens" data-icon="⌘" onclick="switchTab('store-tokens')"><span class="nav-label">店铺授权</span></button>
                 <button class="tab-button" type="button" data-tab="store-links" data-icon="↗" onclick="switchTab('store-links')"><span class="nav-label">店铺链接</span></button>
+                <button class="tab-button" type="button" data-tab="size-charts" data-icon="▦" data-permission="size_charts.view" onclick="switchTab('size-charts')"><span class="nav-label">尺码表管理</span></button>
+                <button class="tab-button" type="button" data-tab="clearance-alerts" data-icon="!" data-permission="order_analysis.view" onclick="switchTab('clearance-alerts')"><span class="nav-label">半托管清退告警</span></button>
                 {% if current_user.is_platform_admin %}
                 <button class="tab-button" type="button" data-tab="store-operations" data-icon="≡" onclick="switchTab('store-operations')"><span class="nav-label">店铺操作记录</span></button>
                 {% endif %}
+                <button class="tab-button" type="button" data-tab="salesperson-stats" data-icon="▥" data-permission="salesperson_stats.view" onclick="switchTab('salesperson-stats')"><span class="nav-label">业务员量统计</span></button>
                 <button class="tab-button" type="button" data-tab="store-analysis" data-icon="◔" data-permission="order_analysis.view" onclick="switchTab('store-analysis')"><span class="nav-label">店铺分析</span></button>
                 <button class="tab-button" type="button" data-tab="yandex" data-icon="Y" onclick="switchTab('yandex')"><span class="nav-label">Yandex 店铺</span></button>
 
@@ -10388,7 +10453,7 @@
                     <div class="order-bulk-bar" id="order-bulk-bar">
                         <label class="order-bulk-selection">
                             <input id="order-select-all" type="checkbox" onchange="toggleAllVisibleOrders(this.checked)">
-                            <span id="order-selection-count">已选 0 单</span>
+                            <span>选中本页</span><span id="order-selection-count">本页已选 0 单</span>
                         </label>
                         <div class="order-bulk-group">
                             <select id="order-bulk-status" aria-label="批量修改订单状态"><option value="">选择处理状态</option><option value="__platform__">自动流转</option><optgroup label="找货"><option value="找货-没汇总">找货-没汇总</option><option value="找货-已采购">找货-已采购</option><option value="找货-待确定">找货-待确定</option></optgroup><optgroup label="审核"><option value="审核-待审核">审核-待审核</option><option value="审核-已审核">审核-已审核</option></optgroup><optgroup label="转运"><option value="转运-待收货">转运-待收货</option><option value="转运-待出库">转运-待出库</option><option value="转运-已出库">转运-已出库</option><option value="转运-待退回">转运-待退回</option></optgroup><optgroup label="待发"><option value="待发">待发</option></optgroup><optgroup label="已发"><option value="已发-在途中">已发-在途中</option><option value="已发-异常">已发-异常</option></optgroup><optgroup label="问题"><option value="问题-验货异常">问题-验货异常</option><option value="问题-物流退件">问题-物流退件</option><option value="问题-亏损超重">问题-亏损超重</option></optgroup><optgroup label="交付"><option value="交付">交付</option></optgroup><optgroup label="取消"><option value="取消-发货前">取消-发货前</option><option value="取消-发货后">取消-发货后</option></optgroup></select>
@@ -10398,6 +10463,7 @@
                             <button class="secondary" type="button" onclick="openOrderRemarkEditor()">批量备注</button>
                             <button class="primary" id="order-bulk-purchase-button" type="button" onclick="openPurchaseOrderDialog()" disabled>添加 / 修改采购单</button>
                             <button class="secondary" id="order-purchase-tracking-sync-button" type="button" onclick="openPurchaseTrackingSyncDialog()" disabled>自动同步物流号</button>
+                            <button class="secondary" type="button" onclick="openPurchaseTrackingLogs()">物流同步日志</button>
                             <button class="secondary" id="order-bulk-print-button" type="button" onclick="printOrders()" disabled>打印美客多面单</button>
                         </div>
                         <span class="order-bulk-message" id="order-bulk-message">勾选订单后可批量操作</span>
@@ -10741,6 +10807,11 @@
                     </div>
                 </dialog>
 
+                <dialog class="purchase-tracking-sync-dialog" id="purchase-tracking-logs-dialog" onclick="if(event.target === this) this.close()">
+                    <div class="order-detail-header"><h3>物流同步日志</h3><button class="order-detail-close" type="button" onclick="document.getElementById('purchase-tracking-logs-dialog').close()">×</button></div>
+                    <div class="purchase-tracking-sync-body"><p>插件选择平台即可直接启动。这里显示当前账号最近 100 次同步及逐单回填结果。</p><button class="secondary" type="button" onclick="loadPurchaseTrackingLogs()">刷新日志</button><div id="purchase-tracking-logs-content" aria-live="polite"></div></div>
+                </dialog>
+
                 <dialog class="order-tracking-dialog" id="order-tracking-dialog" onclick="if(event.target === this) this.close()">
                     <div class="order-detail-header">
                         <div>
@@ -10795,11 +10866,13 @@
                             <label class="inventory-search-field"><span>搜索库存</span><input id="inventory-stock-search" type="search" placeholder="订单号、产品编号、产品名或货架"></label>
                             <label><span>货架</span><select id="inventory-stock-shelf" onchange="loadInventoryStock(1)"><option value="">全部货架</option></select></label>
                             <label><span>库存状态</span><select id="inventory-stock-status" onchange="loadInventoryStock(1)"><option value="positive">仅在库</option><option value="empty">已清空</option><option value="all">全部记录</option></select></label>
+                            <label><span>入库人</span><select id="inventory-stock-inbound-person" onchange="loadInventoryStock(1)"><option value="">全部入库人</option></select></label>
+                            <label><span>库存归属人</span><select id="inventory-stock-owner" onchange="loadInventoryStock(1)"><option value="">全部归属人</option></select></label>
                             <div class="inventory-toolbar-actions"><button class="primary" type="submit">搜索</button><button class="secondary" type="button" onclick="resetInventoryStockFilters()">重置</button></div>
                         </form>
                         <div class="inventory-table-wrap">
                             <table class="inventory-table inventory-stock-table">
-                                <thead><tr><th>产品</th><th>对应订单</th><th>入库货架</th><th>库存量</th><th>单位 / 总成本</th><th>入库时间</th><th>操作</th></tr></thead>
+                                <thead><tr><th>产品</th><th>对应订单</th><th>入库货架</th><th>库存量</th><th>单位 / 总成本</th><th>入库时间 / 入库人 / 归属人</th><th>操作</th></tr></thead>
                                 <tbody id="inventory-stock-body"><tr><td colspan="7" class="empty-state">打开库存管理后加载数据</td></tr></tbody>
                             </table>
                         </div>
@@ -10811,6 +10884,8 @@
                             <label class="inventory-search-field"><span>搜索日志</span><input id="inventory-log-search" type="search" placeholder="订单、产品、单据号、操作人或货架"></label>
                             <label><span>类型</span><select id="inventory-log-type" onchange="loadInventoryLogs(1)"><option value="">全部类型</option><option value="inbound">入库</option><option value="outbound">出库</option></select></label>
                             <label><span>货架</span><select id="inventory-log-shelf" onchange="loadInventoryLogs(1)"><option value="">全部货架</option></select></label>
+                            <label><span>入库人</span><select id="inventory-log-inbound-person" onchange="loadInventoryLogs(1)"><option value="">全部入库人</option></select></label>
+                            <label><span>库存归属人</span><select id="inventory-log-owner" onchange="loadInventoryLogs(1)"><option value="">全部归属人</option></select></label>
                             <div class="inventory-toolbar-actions"><button class="primary" type="submit">搜索</button><button class="secondary" type="button" onclick="resetInventoryLogFilters()">重置</button></div>
                         </form>
                         <div class="inventory-table-wrap">
@@ -10908,6 +10983,8 @@
                                 <label><span>内部 SKU（自动匹配，可调整）</span><select id="inventory-movement-sku"><option value="">不关联内部 SKU</option></select></label>
                                 <label><span>数量 *</span><input id="inventory-movement-quantity" type="number" min="1" max="1000000" step="1" value="1"></label>
                                 <label><span>单位成本（人民币）*</span><input id="inventory-movement-cost" type="number" min="0" step="0.0001" placeholder="0.00"></label>
+                                <label><span>入库人（自动记录）</span><input id="inventory-movement-inbound-person" type="text" readonly></label>
+                                <label><span>库存归属人 *</span><select id="inventory-movement-owner"><option value="">请选择库存归属人</option></select></label>
                                 <label><span>业务时间 *</span><input id="inventory-movement-time" type="datetime-local" step="60"></label>
                                 <label><span>单据 / 参考号</span><input id="inventory-movement-reference" type="text" maxlength="128" placeholder="采购单、领用单或出库单号"></label>
                                 <label class="wide"><span>备注</span><textarea id="inventory-movement-remark" rows="3" maxlength="1000" placeholder="入库批次、领用人、异常说明等"></textarea></label>
@@ -10961,7 +11038,7 @@
                     <div class="products-1688-heading-copy">
                         <span class="ai-original-eyebrow">1688 PRODUCT CENTER</span>
                         <h2>1688产品区</h2>
-                        <p>按智赢产品库的结构整理泽顺插件采集的 1688 商品：主图、标题、采购价、规格属性、重量、包装尺寸与采集时间集中查看，点击标题或主图可打开原商品链接。</p>
+                        <p>集中管理泽顺插件采集的 1688 商品：按采集业务员筛选、批量关联产品列表的自建分类，并逐件修改重量、包装尺寸、净收益价与采购价。点击标题或主图可打开原商品链接。</p>
                     </div>
                     <div class="products-1688-heading-actions">
                         <a class="primary" href="/api/browser-extension/download" download>下载泽顺插件</a>
@@ -10980,18 +11057,20 @@
                 <section class="panel p1688-toolbar">
                     <div class="p1688-toolbar-row">
                         <label class="p1688-field search"><span>产品搜索</span><input id="products-1688-search" type="search" placeholder="输入 1688 商品标题"></label>
-                        <label class="p1688-field"><span>采集业务员</span><input id="products-1688-salesperson" type="search" placeholder="输入姓名或账号筛选"></label>
+                        <label class="p1688-field"><span>采集业务员</span><select id="products-1688-salesperson"><option value="">全部采集业务员</option></select></label>
+                        <label class="p1688-field"><span>自建产品分类</span><select id="products-1688-category-filter"><option value="">全部分类</option><option value="uncategorized">未分类</option></select></label>
                         <label class="p1688-field"><span>AI 状态</span><select id="products-1688-status-filter"><option value="">全部状态</option><option value="pending">待处理</option><option value="processing">AI处理中</option><option value="completed">AI已完成</option><option value="failed">处理失败</option></select></label>
                         <label class="p1688-field"><span>审核状态</span><select id="products-1688-review-filter"><option value="">全部审核状态</option><option value="unreviewed">未审核</option><option value="approved">已审核</option><option value="suspected">疑似风险</option><option value="infringing">侵权</option><option value="risk">待复核</option></select></label>
                         <label class="p1688-field"><span>采购价最低（CNY）</span><input id="products-1688-price-min" type="number" min="0" step="0.01" placeholder="不限"></label>
                         <label class="p1688-field"><span>采购价最高（CNY）</span><input id="products-1688-price-max" type="number" min="0" step="0.01" placeholder="不限"></label>
                         <button class="primary" type="button" onclick="load1688Products()">查询</button>
-                        <button class="secondary" type="button" onclick="document.getElementById('products-1688-search').value='';document.getElementById('products-1688-salesperson').value='';document.getElementById('products-1688-status-filter').value='';document.getElementById('products-1688-review-filter').value='';document.getElementById('products-1688-price-min').value='';document.getElementById('products-1688-price-max').value='';document.getElementById('products-1688-date-from').value='';document.getElementById('products-1688-date-to').value='';load1688Products()">重置</button>
+                        <button class="secondary" type="button" onclick="products1688ResetFilters()">重置</button>
                     </div>
                     <div class="p1688-toolbar-row">
                         <label class="p1688-field"><span>采集开始日期</span><input id="products-1688-date-from" type="date"></label>
                         <label class="p1688-field"><span>采集结束日期</span><input id="products-1688-date-to" type="date"></label>
                         <label class="p1688-field"><span>每页条数</span><select id="products-1688-page-size"><option value="50">50 条</option><option value="100">100 条</option><option value="200">200 条</option></select></label>
+                        <button class="secondary" type="button" onclick="products1688OpenCategoryManager()">管理自建分类</button>
                         <span class="p1688-toolbar-note" id="products-1688-status">等待加载 1688 商品</span>
                     </div>
                 </section>
@@ -11003,18 +11082,20 @@
                         <button class="danger" id="products-1688-delete" type="button" onclick="products1688DeleteSelected()" disabled>删除所选</button>
                         <label class="p1688-batch-review"><span>批量审核状态</span><select id="products-1688-review-status"><option value="">选择状态</option><option value="unreviewed">未审核</option><option value="approved">已审核</option><option value="suspected">疑似风险</option><option value="infringing">侵权</option><option value="risk">待复核</option></select></label>
                         <button class="secondary" id="products-1688-review-submit" type="button" onclick="products1688ApplyReviewStatus()" disabled>更新审核状态</button>
+                        <label class="p1688-batch-review"><span>批量产品分类</span><select id="products-1688-batch-category" disabled><option value="">选择分类</option><option value="uncategorized">移出分类</option></select></label>
+                        <button class="secondary" id="products-1688-category-submit" type="button" onclick="products1688ApplyCategory()" disabled>更新产品分类</button>
                         <button class="primary" type="button" onclick="products1688SendSelectedToWorkflow()">送入 AI 原创任务</button>
                         <span id="products-1688-list-summary">当前 0 件 · 共 0 件</span>
                     </div>
                     <div class="p1688-table-wrap">
                         <table class="p1688-table">
                             <colgroup><col style="width:40px"><col style="min-width:360px"><col style="width:130px"><col style="width:120px"><col style="width:110px"><col style="width:105px"><col style="width:130px"><col style="width:105px"><col style="width:105px"><col style="width:120px"><col style="width:145px"><col style="width:170px"></colgroup>
-                            <thead><tr><th class="p1688-check-cell">选</th><th>商品</th><th>产品分类</th><th>采购价</th><th>净收益</th><th>包装毛重</th><th>包装尺寸</th><th>审核状态</th><th>AI 状态</th><th>采集业务员</th><th>采集时间</th><th>操作</th></tr></thead>
+                            <thead><tr><th class="p1688-check-cell">选</th><th>商品</th><th>自建产品分类</th><th>采购价</th><th>净收益价</th><th>包装毛重</th><th>包装尺寸</th><th>审核状态</th><th>AI 状态</th><th>采集业务员</th><th>采集时间</th><th>操作</th></tr></thead>
                             <tbody id="products-1688-body"><tr><td class="p1688-empty" colspan="12">打开模块后加载泽顺插件采集的 1688 商品</td></tr></tbody>
                         </table>
                     </div>
                     <div class="p1688-pagination">
-                        <span>数据以泽顺插件上报的 1688 原始资料为准</span>
+                        <span>自建分类与产品列表共用 · 商品资料可逐件修改</span>
                         <div class="p1688-pagination-actions"><button class="secondary" id="products-1688-prev" type="button" onclick="products1688PageMove(-1)">‹</button><span id="products-1688-page-indicator">1 / 1</span><button class="secondary" id="products-1688-next" type="button" onclick="products1688PageMove(1)">›</button></div>
                     </div>
                 </section>
@@ -11023,14 +11104,32 @@
                     <div class="p1688-dialog-head"><div><span class="ai-original-eyebrow">1688 SOURCE SNAPSHOT</span><h3 id="products-1688-detail-title">商品详情</h3><p id="products-1688-detail-subtitle">—</p></div><button class="p1688-dialog-close" type="button" aria-label="关闭" onclick="products1688CloseDetail()">×</button></div>
                     <div class="p1688-dialog-body" id="products-1688-detail-content"></div>
                 </dialog>
+                <dialog class="p1688-dialog p1688-edit-dialog" id="products-1688-edit-dialog" aria-labelledby="products-1688-edit-heading" onclick="if(event.target === this) products1688CloseEdit()">
+                    <form id="products-1688-edit-form" onsubmit="products1688SaveEdit(event)" novalidate>
+                        <div class="p1688-dialog-head"><div><h3 id="products-1688-edit-heading">修改商品资料</h3><p id="products-1688-edit-title">—</p></div><button class="p1688-dialog-close" id="products-1688-edit-close" type="button" aria-label="关闭修改资料" onclick="products1688CloseEdit()">×</button></div>
+                        <div class="p1688-dialog-body">
+                            <p class="p1688-edit-help">可单独修改任一项。填写大于 0 的数值；清空已填写的项目后保存，即可移除该值。</p>
+                            <div class="p1688-edit-grid">
+                                <label class="p1688-field"><span>重量（g）</span><input id="products-1688-edit-weight_g" type="number" min="0" step="any" placeholder="未填写"></label>
+                                <label class="p1688-field"><span>采购价（CNY）</span><input id="products-1688-edit-price" type="number" min="0" step="any" placeholder="未填写"></label>
+                                <label class="p1688-field"><span>包装长度（cm）</span><input id="products-1688-edit-package_length_cm" type="number" min="0" step="any" placeholder="未填写"></label>
+                                <label class="p1688-field"><span>包装宽度（cm）</span><input id="products-1688-edit-package_width_cm" type="number" min="0" step="any" placeholder="未填写"></label>
+                                <label class="p1688-field"><span>包装高度（cm）</span><input id="products-1688-edit-package_height_cm" type="number" min="0" step="any" placeholder="未填写"></label>
+                                <label class="p1688-field"><span>净收益价（USD）</span><input id="products-1688-edit-net_proceeds_usd" type="number" min="0" step="any" placeholder="未填写"></label>
+                            </div>
+                            <p class="p1688-edit-message" id="products-1688-edit-message" role="status" aria-live="polite"></p>
+                        </div>
+                        <div class="p1688-edit-footer"><button class="secondary" id="products-1688-edit-cancel" type="button" onclick="products1688CloseEdit()">取消</button><button class="primary" id="products-1688-edit-save" type="submit">保存修改</button></div>
+                    </form>
+                </dialog>
             </div>
 
             <div class="tab-page ai-original-page" id="tab-ai-original-products">
                 <div class="tab-heading ai-original-heading">
                     <div>
-                        <span class="ai-original-eyebrow">1688 → MERCADO LIBRE</span>
+                        <span class="ai-original-eyebrow">1688 → MULTI-MARKETPLACE</span>
                         <h2>AI原创产品</h2>
-                        <p>把 1688 产品区的货源完善为美客多刊登稿：补齐分类属性、上架字段、双语标题与描述，生成白底主图，审核后按站点上架。</p>
+                        <p>选择平台与文案模板，把 1688 货源生成对应语言的刊登草稿与白底主图。美客多支持审核后上架；Yandex 和亚马逊可完善真实销售资料，预检确认后自动提交平台。</p>
                     </div>
                     <div class="ai-original-heading-actions">
                         <a class="primary ai-original-plugin-download" href="/api/browser-extension/download" download>下载泽顺插件</a>
@@ -11040,14 +11139,20 @@
 
                 <div class="ai-original-metrics" aria-label="当前已加载商品概况">
                     <div class="ai-original-metric"><span>来源商品</span><strong id="ai-original-count-total">0</strong><small>当前加载的 1688 货源</small></div>
-                    <div class="ai-original-metric"><span>待完善 / 审核</span><strong id="ai-original-count-pending">0</strong><small>补齐资料后再提交审核</small></div>
+                    <div class="ai-original-metric"><span id="ai-original-pending-label">待完善 / 审核</span><strong id="ai-original-count-pending">0</strong><small id="ai-original-pending-note">补齐资料后再提交审核</small></div>
                     <div class="ai-original-metric"><span>AI 已生成</span><strong id="ai-original-count-generated">0</strong><small>文案与图片任务已完成</small></div>
-                    <div class="ai-original-metric"><span>已完善并审核</span><strong id="ai-original-count-ready">0</strong><small>上架时继续校验平台规则</small></div>
+                    <div class="ai-original-metric"><span id="ai-original-ready-label">已完善并审核</span><strong id="ai-original-count-ready">0</strong><small id="ai-original-ready-note">上架时继续校验平台规则</small></div>
                 </div>
                 <section class="panel ai-original-toolbar">
                     <div class="ai-original-steps">
-                        <span><b>1</b>选择 1688 货源</span><i>→</i><span><b>2</b>AI 生成文案与主图</span><i>→</i><span><b>3</b>完善分类、属性与字段</span><i>→</i><span><b>4</b>审核并上架</span>
+                        <span><b>1</b>选择 1688 货源</span><i>→</i><span><b>2</b>AI 生成文案与主图</span><i>→</i><span><b>3</b>完善分类、属性与字段</span><i>→</i><span><b>4</b><span id="ai-original-step-final">审核并上架</span></span>
                     </div>
+                    <div class="ai-original-platform-controls">
+                        <label><span>目标平台</span><select id="ai-original-platform"><option value="mercadolibre">美客多</option><option value="yandex">Yandex Market</option><option value="amazon">Amazon 美国站（非媒体商品）</option></select></label>
+                        <label><span>文案模板</span><select id="ai-original-template" aria-describedby="ai-original-template-hint"><option value="standard">标准模板</option><option value="features">卖点模板</option><option value="specs">规格模板</option></select></label>
+                        <p id="ai-original-template-hint">均衡介绍商品用途、特点和规格</p>
+                    </div>
+                    <div class="ai-original-platform-rules" id="ai-original-platform-rules" aria-live="polite"></div>
                     <div class="ai-original-controls">
                         <label><span>搜索</span><input id="ai-original-search" type="search" placeholder="1688 编号或标题"></label>
                         <label><span>生成业务员</span><input id="ai-original-generator-filter" type="search" placeholder="输入业务员姓名"></label>
@@ -11055,14 +11160,15 @@
                         <button class="secondary" type="button" onclick="loadAiOriginalProducts()">刷新</button>
                     </div>
                     <div class="ai-original-ai-settings">
-                        <label><span>模型地址</span><input id="ai-original-base-url" type="url" value="https://api.deepseek.com" placeholder="OpenAI 兼容 API 地址"></label>
-                        <label><span>模型</span><input id="ai-original-model" type="text" value="deepseek-v4-pro" maxlength="128"></label>
+                        <label><span>模型地址</span><input id="ai-original-base-url" type="url" value="https://api.deepseek.com" placeholder="OpenAI 兼容 API 地址" readonly></label>
+                        <label><span>模型</span><input id="ai-original-model" type="text" value="deepseek-flash" maxlength="128" readonly></label>
                         <input id="ai-original-api-key" type="hidden" value="">
-                        <div class="wide"><span>文案 Token</span><small class="shop-search-hint">使用账号已保存的 DeepSeek / 百炼凭证 · <a href="/settings/integrations">前往集成设置</a></small></div>
+                        <div class="wide"><span>文案 Token</span><small class="shop-search-hint"><span id="ai-original-credentials-hint">使用账号已保存的 DeepSeek 凭证</span> · <a href="/settings/integrations">前往集成设置</a></small></div>
                         <div class="wide"><span>白底图</span><small class="shop-search-hint">本机免费使用 rembg / isnet-general-use 抠图，不调用付费图片 API，也不需要 Token。</small></div>
                         {% if can_change_task_workers %}<label><span>并发</span><input id="ai-original-workers" type="number" min="1" max="6" value="3"></label>{% endif %}
                         <button class="primary" id="ai-original-process" type="button" onclick="processSelectedAiOriginalProducts()" disabled>执行所选 AI 任务</button>
                     </div>
+                    <div class="ai-original-platform-rules" data-ai-mercado-only><strong>商品生成说明</strong><p>Flash 关闭思考，闲时自动生成；高峰提交会排队。相同输入复用已生成结果。常用品类参考辅助匹配，刊登前仍校验美客多规则；复杂商品可能需要人工补齐。白底图使用本机抠图。</p></div>
                     <div class="ai-original-status" id="ai-original-task-status">等待选择 1688 产品</div>
                     <div class="ai-original-task-log" id="ai-original-task-log" hidden></div>
                 </section>
@@ -11072,11 +11178,11 @@
                         <label><input id="ai-original-select-all" type="checkbox" onchange="toggleAllAiOriginalProducts(this.checked)"> 全选当前结果</label>
                         <strong id="ai-original-selection">已选择 0 件</strong>
                         <button class="danger" id="ai-original-delete" type="button" onclick="deleteSelectedAiOriginalProducts()" disabled>删除所选</button>
-                        <label class="ai-original-bulk-review"><span>批量审核状态</span><select id="ai-original-review-status"><option value="">选择状态</option><option value="unreviewed">未审核</option><option value="approved">通过</option><option value="suspected">疑似风险</option><option value="infringing">侵权</option><option value="risk">待复核</option></select></label>
-                        <button class="secondary" id="ai-original-review-submit" type="button" onclick="updateSelectedAiOriginalReviewStatus()" disabled>更新审核状态</button>
+                        <label class="ai-original-bulk-review" data-ai-mercado-only><span>批量审核状态</span><select id="ai-original-review-status"><option value="">选择状态</option><option value="unreviewed">未审核</option><option value="approved">通过</option><option value="suspected">疑似风险</option><option value="infringing">侵权</option><option value="risk">待复核</option></select></label>
+                        <button class="secondary" id="ai-original-review-submit" data-ai-mercado-only type="button" onclick="updateSelectedAiOriginalReviewStatus()" disabled>更新审核状态</button>
                         <span id="ai-original-total">共 0 件</span>
                     </div>
-                    <div class="ai-original-bulk-dimensions">
+                    <div class="ai-original-bulk-dimensions" data-ai-mercado-only>
                         <div><strong>批量填写包装尺寸</strong><small>单位：厘米。仅对长、宽、高都未填写的所选产品生效；已有尺寸的产品保持原值。</small></div>
                         <label><span>长</span><input id="ai-original-bulk-length" type="number" min="0.01" step="any" placeholder="长度 cm"></label>
                         <label><span>宽</span><input id="ai-original-bulk-width" type="number" min="0.01" step="any" placeholder="宽度 cm"></label>
@@ -11085,6 +11191,17 @@
                     </div>
                     <div class="ai-original-grid" id="ai-original-grid"><div class="empty-state">打开模块后加载 1688 商品</div></div>
                 </section>
+
+                <dialog class="ai-original-editor-dialog ai-original-platform-editor" id="ai-original-platform-editor" aria-labelledby="ai-original-platform-editor-heading" onclick="if(event.target === this) closeAiOriginalPlatformEditor()">
+                    <div class="ai-original-editor-head"><div><span class="ai-original-eyebrow">MARKETPLACE DRAFT</span><h3 id="ai-original-platform-editor-heading">编辑平台草稿</h3><p id="ai-original-platform-editor-note"></p></div><button class="secondary" type="button" onclick="closeAiOriginalPlatformEditor()" aria-label="关闭草稿编辑器">关闭</button></div>
+                    <div class="ai-original-editor-body"><div class="ai-original-editor-form-grid">
+                        <label class="wide"><span>商品标题</span><input id="ai-original-platform-editor-title" type="text"></label>
+                        <label class="wide" id="ai-original-platform-editor-highlights-field" hidden><span>Item Highlights · 标题补充信息（≤125 字符）</span><input id="ai-original-platform-editor-highlights" type="text" maxlength="125"></label>
+                        <label class="wide"><span>商品描述</span><textarea id="ai-original-platform-editor-description" rows="9"></textarea></label>
+                        <label class="wide"><span>商品卖点（每行一条，Amazon 最多 5 条）</span><textarea id="ai-original-platform-editor-bullets" rows="6"></textarea></label>
+                    </div></div>
+                    <div class="ai-original-editor-footer"><span class="ai-original-status" id="ai-original-platform-editor-status" aria-live="polite"></span><div><button class="secondary" type="button" onclick="closeAiOriginalPlatformEditor()">取消</button><button class="primary" id="ai-original-platform-editor-save" type="button" onclick="saveAiOriginalPlatformEditor()">保存草稿</button></div></div>
+                </dialog>
 
                 <dialog class="ai-original-editor-dialog" id="ai-original-editor-dialog" onclick="if(event.target === this) closeAiOriginalEditor()">
                     <div class="ai-original-editor-head">
@@ -11097,6 +11214,7 @@
                             <div class="ai-original-editor-category-search"><input id="ai-original-editor-category-search" type="search" placeholder="输入商品关键词，例如 organizer / zapatos" onkeydown="if(event.key === 'Enter'){event.preventDefault();searchAiOriginalCategories()}"><button class="secondary" type="button" onclick="searchAiOriginalCategories()">搜索类目</button></div>
                             <div class="ai-original-editor-category-results" id="ai-original-editor-category-results"></div>
                             <div class="ai-original-editor-category-selected"><label><span>分类编号</span><input id="ai-original-editor-category-id" type="text" placeholder="例如 CBT1234" onchange="loadAiOriginalCategoryAttributes(this.value, true)"></label><label><span>分类名称</span><input id="ai-original-editor-category-name" type="text" placeholder="可手动补充名称"></label><span id="ai-original-editor-category-hint">输入商品关键词搜索 Mercado CBT 类目</span></div>
+                            <label style="display:flex;align-items:center;gap:7px;margin-top:10px"><input id="ai-original-editor-category-locked" type="checkbox" style="width:auto;padding:0"> 锁定所选分类；重新生成时使用此 CBT 类目</label>
                         </section>
 
                         <section class="ai-original-editor-section">
@@ -11127,7 +11245,39 @@
                     <div class="ai-original-editor-footer"><span class="ai-original-status" id="ai-original-editor-status">修改后点击保存；翻译前会先保存当前中文资料。</span><div><button class="secondary" type="button" onclick="closeAiOriginalEditor()">取消</button><button class="primary" type="button" onclick="saveAiOriginalEditor(true)">保存并同步</button></div></div>
                 </dialog>
 
-                <section class="panel ai-original-publish-panel">
+                <section class="panel ai-original-publisher" id="aip-panel" hidden>
+                    <header class="aip-heading"><div><span class="ai-original-eyebrow">04 · PUBLISH</span><h3 id="aip-platform-name">自动上架</h3><p>选择授权店铺，逐件填写真实品牌、条码、报价和库存。先预检并核对完整资料，再确认提交真实平台。</p></div><strong class="aip-selection" id="aip-selected-count">已选择 0 件</strong></header>
+                    <div class="aip-body">
+                        <div class="aip-targets">
+                            <label><span>目标店铺</span><select id="aip-store"><option value="">请选择授权店铺</option></select></label>
+                            <label><span id="aip-category-label">类目 / 商品类型</span><input id="aip-category" type="text" autocomplete="off"></label>
+                            <button class="secondary" id="aip-schema-load" type="button" onclick="AiOriginalPublisher.loadSchema()">读取类目要求</button>
+                        </div>
+                        <div class="aip-store-actions"><button class="secondary" type="button" onclick="AiOriginalPublisher.loadStores()">刷新店铺</button><button class="secondary" id="aip-yandex-authorize" type="button" onclick="switchTab('yandex')">管理 Yandex 店铺授权</button>
+                            {% if current_user.is_platform_admin or current_user.is_admin or current_user.role_key in ['super_admin', 'enterprise_admin', 'admin'] %}<span id="aip-amazon-config-actions" hidden><button class="secondary" type="button" onclick="AiOriginalPublisher.openAmazonConfig()">配置亚马逊店铺授权</button></span>{% endif %}
+                        </div>
+                        <p class="aip-hint" id="aip-store-hint"></p>
+                        <details class="aip-schema"><summary>查看所选类目的字段要求</summary><div id="aip-schema">选择店铺并填写类目后，读取平台当前字段要求。</div></details>
+                        <div class="aip-products" id="aip-products"></div>
+                        <div class="aip-step-actions"><p>每批最多 20 件，建议先选择 10 件以内预检。每个商品需使用独立 SKU 和真实条码；多规格货源请先拆成独立商品。当前支持全新商品。</p><button class="primary" id="aip-prepare" type="button" onclick="AiOriginalPublisher.prepare()" disabled>检查并生成上架预览</button></div>
+                        <div class="aip-status" id="aip-status" role="status" aria-live="polite">完善资料后生成预览</div>
+                        <section class="aip-preview" id="aip-preview" hidden>
+                            <h4 id="aip-preview-title">上架预览</h4><p id="aip-preview-expiry"></p><div id="aip-preview-items"></div>
+                            <div class="aip-confirmation"><p>点击确认后，将把上方显示的商品资料、图片、报价与真实库存提交到所选店铺。请确认它们与实际销售商品一致。</p><button class="primary" id="aip-confirm" type="button" onclick="AiOriginalPublisher.confirmPublish()" disabled>确认自动上架</button></div>
+                        </section>
+                    </div>
+                    <section class="aip-history"><div class="aip-history-heading"><h4>自动上架记录</h4><button class="secondary" type="button" onclick="AiOriginalPublisher.loadJobs()">刷新记录</button></div><div id="aip-jobs"></div></section>
+                    {% if current_user.is_platform_admin or current_user.is_admin or current_user.role_key in ['super_admin', 'enterprise_admin', 'admin'] %}
+                    <dialog class="aip-credential-dialog" id="aip-amazon-config" aria-labelledby="aip-amazon-config-title" onclick="if(event.target === this) AiOriginalPublisher.closeAmazonConfig()">
+                        <form id="aip-amazon-form" autocomplete="off"><h4 id="aip-amazon-config-title">配置亚马逊美国站店铺</h4><p>使用卖家已授权的 SP-API 应用凭证。凭证仅提交到服务端保存，不回显、不写入浏览器本地存储。</p>
+                            <div class="aip-credential-fields"><label><span>店铺名称</span><input name="label" type="text" required maxlength="100"></label><label><span>Seller ID</span><input name="seller_id" type="text" required autocomplete="off"></label><label><span>LWA Client ID</span><input name="client_id" type="text" required autocomplete="off"></label><label><span>LWA Client Secret</span><input name="client_secret" type="password" required autocomplete="new-password"></label><label><span>Refresh Token</span><input name="refresh_token" type="password" required autocomplete="new-password"></label></div>
+                            <p id="aip-amazon-status" role="status" aria-live="polite"></p><footer><button class="secondary" type="button" onclick="AiOriginalPublisher.closeAmazonConfig()">取消</button><button class="primary" id="aip-amazon-save" type="submit">保存授权</button></footer>
+                        </form>
+                    </dialog>
+                    {% endif %}
+                </section>
+
+                <section class="panel ai-original-publish-panel" data-ai-mercado-only>
                     <header class="ai-original-publish-heading">
                         <div>
                             <span class="ai-original-eyebrow">04 · PUBLISH</span>
@@ -11670,10 +11820,11 @@
                     <button id="wdr-select-all-matching" type="button" disabled>全选筛选结果</button>
                     <button class="primary" id="wdr-zeshun-execute" type="button" data-permission="order_analysis.execute" disabled>更新泽顺数据和链接</button>
                     <button class="danger" id="wdr-zying-execute" type="button" data-permission="order_analysis.execute" disabled>更新智赢产品</button>
+                    <button class="danger" id="wdr-task-stop" type="button" data-permission="order_analysis.execute" disabled>任务终结</button>
                     <span id="wdr-selection-summary" class="wdr-selection-summary">已选择 0 条</span>
                     <span id="wdr-state" role="status">正在读取最近七天已保存记录…</span>
                 </section>
-                <p class="wdr-note">泽顺 ERP 执行状态和智赢产品执行状态分别记录两个动作；某一项显示“成功”后，下次全选执行会自动跳过该项。“排队中”表示本机 Agent 尚未领取任务；“执行中”表示后台已开始处理。异常退出时，未完成记录会标记失败并保留原因，可核对后重试。</p>
+                <p class="wdr-note">旧数据（标记重量、尺寸、运费）为浅橙色，新数据（实际重量、尺寸、运费）为浅绿色。实际重量或标记重量超过 500g 时，两个更新动作均填写体积重：长×宽×高（厘米）÷6000 千克；缺少有效实际尺寸时不执行重量更新。泽顺 ERP 执行状态和智赢产品执行状态分别记录两个动作；某一项显示“成功”后，下次全选执行会自动跳过该项。“排队中”表示本机 Agent 尚未领取任务；“执行中”表示后台已开始处理。异常退出时，未完成记录会标记失败并保留原因，可核对后重试。</p>
                 <section class="panel wdr-filters" aria-label="重量尺寸变更记录筛选器">
                     <label>下单开始时间<input id="wdr-filter-date-from" type="datetime-local" step="60"></label>
                     <label>下单结束时间<input id="wdr-filter-date-to" type="datetime-local" step="60"></label>
@@ -11850,7 +12001,7 @@
                                     <th>批次</th>
                                     <th>库存</th>
                                     <th>结果</th>
-                                    <th>上架商品编号</th>
+                                    <th>美客多产品编号</th>
                                     <th>失败原因 / 接口明细</th>
                                     <th>开始 / 完成时间</th>
                                     <th>操作人</th>
@@ -12422,6 +12573,21 @@
                 </div>
             </div>
 
+            <div class="tab-page" id="tab-salesperson-stats">
+                <div class="tab-heading"><div><h2>业务员量统计</h2><p>统计实际操作账号的打印面单量与新增采购订单量。</p></div></div>
+                <section class="panel store-analysis-board">
+                    <form class="store-analysis-filters zs-filter-panel" id="salesperson-stats-form">
+                        <div class="order-filter-field"><label for="salesperson-stats-start">开始日期</label><input id="salesperson-stats-start" type="date"></div>
+                        <div class="order-filter-field"><label for="salesperson-stats-end">结束日期</label><input id="salesperson-stats-end" type="date"></div>
+                        <button class="primary" type="submit">查询统计</button>
+                        <button class="secondary" type="button" id="salesperson-stats-all">全部时间</button>
+                    </form>
+                    <p class="store-link-bulk-note">按实际操作人分别统计。同一账号对同一订单的打印、新增采购各计一次，重复操作归入首次操作日期；修改采购信息不计新增。打印量以成功生成面单并写入日志为准。仅统计当前可见店铺内已有操作日志，不含系统自动操作及缺失日志的历史操作。日期使用操作日志时间。</p>
+                    <p id="salesperson-stats-message" role="status" aria-live="polite"></p>
+                    <div class="table-wrapper"><table><thead><tr><th>业务员（操作账号）</th><th>打印面单量</th><th>新增采购订单量</th></tr></thead><tbody id="salesperson-stats-rows"></tbody></table></div>
+                </section>
+            </div>
+
             <div class="tab-page" id="tab-store-analysis">
                 <div class="tab-heading">
                     <div>
@@ -12483,7 +12649,7 @@
                             <div class="metric-value" id="order-analysis-raw-count">0</div>
                         </div>
                         <div class="metric">
-                            <div class="metric-label">重复覆盖</div>
+                            <div class="metric-label">本批重复合并</div>
                             <div class="metric-value" id="order-analysis-duplicate-count">0</div>
                         </div>
                         <div class="metric">
@@ -12491,7 +12657,7 @@
                             <div class="metric-value" id="order-analysis-imported-count">0</div>
                         </div>
                     </div>
-                    <pre id="order-analysis-log">选择文件夹后点击“更新订单数据库”。同一订单按文件修改时间和文件内行顺序处理，最后读取到的数据覆盖之前的数据。</pre>
+                    <pre id="order-analysis-log">选择文件夹后点击“更新订单数据库”。按销售单号（编号）覆盖已有订单，新单号入库。同一单号按文件修改时间和行顺序处理，最后读取到的数据生效；缺少编号时使用 id。</pre>
                 </section>
 
                 <section class="panel infractions-panel order-analysis-alert-panel">
@@ -12556,7 +12722,8 @@
                         <table>
                             <thead>
                                 <tr>
-                                    <th style="width: 110px;">产品编号</th>
+                                    <th style="width: 130px;">产品编号</th>
+                                    <th style="width: 84px;">产品图片</th>
                                     <th>产品标题</th>
                                     <th style="width: 90px;">站点</th>
                                     <th style="width: 90px;">总销量</th>
@@ -12567,7 +12734,7 @@
                                 </tr>
                             </thead>
                             <tbody id="after-sale-alert-body">
-                                <tr><td class="empty-state" colspan="8">正在加载高售后告警...</td></tr>
+                                <tr><td class="empty-state" colspan="9">正在加载高售后告警...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -12635,7 +12802,8 @@
                         <table>
                             <thead>
                                 <tr>
-                                    <th style="width: 110px;">产品编号</th>
+                                    <th style="width: 130px;">产品编号</th>
+                                    <th style="width: 84px;">产品图片</th>
                                     <th>产品标题</th>
                                     <th style="width: 90px;">站点</th>
                                     <th style="width: 80px;">销量</th>
@@ -12646,7 +12814,7 @@
                                 </tr>
                             </thead>
                             <tbody id="high-profit-body">
-                                <tr><td class="empty-state" colspan="8">正在加载高利润产品...</td></tr>
+                                <tr><td class="empty-state" colspan="9">正在加载高利润产品...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -13115,7 +13283,7 @@
                     <div class="store-link-bulk">
                         <div class="store-link-selection">
                             <input class="market-row-select" id="store-link-select-all" type="checkbox" onchange="toggleAllStoreLinks(this.checked)">
-                            <span id="store-link-selection-count">已选 0 条</span>
+                            <span class="zs-selection-scope">选中本页 · 跨页保留，修改筛选后清空</span><span id="store-link-selection-count">已选 0 条</span>
                             <button class="secondary" id="store-link-clear-selection" type="button" onclick="clearStoreLinkSelection()" disabled>清空选择</button>
                         </div>
                         <div class="field"><label for="store-link-bulk-price">价格</label><input id="store-link-bulk-price" type="number" min="0" step="0.01" placeholder="不修改"></div>
@@ -13134,6 +13302,9 @@
                     <div class="store-link-marker-legend" aria-label="店铺链接操作标志">
                         <span>链接标志：</span>
                         <span class="store-link-marker promotion">已报活动</span>
+                        <span class="store-link-marker promotion">已参加清仓</span>
+                        <span class="store-link-marker">未参加清仓 / 清仓待同步</span>
+                        <button class="secondary" type="button" onclick="switchTab('promotions')" data-permission="promotions.view">前往活动同步</button>
                         <span class="store-link-marker advertising">已开广告</span>
                         <span class="store-link-marker video">已上传视频</span>
                         <span>标志显示在商品信息下方。</span>
@@ -13178,6 +13349,18 @@
                             <button class="secondary" id="store-link-next" type="button" onclick="loadStoreLinks(storeLinkPage + 1)">下一页</button>
                         </div>
                     </div>
+                </section>
+            </div>
+
+            <div class="tab-page" id="tab-size-charts">
+                <section class="panel" style="height:calc(100vh - 150px);min-height:760px;overflow:hidden;padding:0">
+                    <iframe id="size-charts-frame" title="尺码表管理" data-src="/size-charts?embedded=1" style="display:block;width:100%;height:100%;border:0;background:#f5f7fb"></iframe>
+                </section>
+            </div>
+
+            <div class="tab-page" id="tab-clearance-alerts">
+                <section class="panel" style="height:calc(100vh - 150px);min-height:760px;overflow:hidden;padding:0">
+                    <iframe id="clearance-alerts-frame" title="半托管清退告警" data-src="/clearance-alerts?embedded=1" style="display:block;width:100%;height:100%;border:0;background:#f5f7fb"></iframe>
                 </section>
             </div>
 
@@ -14246,120 +14429,122 @@
             </div>
 
             <div class="tab-page" id="tab-infringement-knowledge">
-                <div class="tab-heading">
-                    <h2>侵权知识库</h2>
-                    <p>维护品牌侵权判定：白名单品牌不侵权，黑名单品牌侵权</p>
+                <div class="tab-heading knowledge-heading">
+                    <div><span class="knowledge-eyebrow">品牌风险管理</span><h2>侵权知识库</h2><p>收集线索、核实依据，维护供商品检测使用的品牌规则。</p></div>
+                    <button class="primary infringement-knowledge-manage-action" id="add-infringement-knowledge-btn" type="button" onclick="openInfringementKnowledgeEditor()">＋ 新增品牌</button>
                 </div>
-
-                <section class="panel infractions-panel">
-                    <div class="infractions-header">
-                        <div>
-                            <h2 class="panel-title" style="margin: 0;">品牌名单</h2>
-                            <p class="shop-search-hint" id="infringement-knowledge-result-count">共 0 条记录</p>
-                        </div>
-                        <div class="header-actions">
-                            <button class="secondary" type="button" onclick="loadInfringementKnowledge(true)">刷新</button>
-                            <button class="primary infringement-knowledge-manage-action" id="add-infringement-knowledge-btn" type="button" onclick="openInfringementKnowledgeEditor()">新增品牌</button>
-                        </div>
-                    </div>
-                    <div class="knowledge-explainer">
-                        <div class="knowledge-explainer-card">
-                            <span class="knowledge-list-badge">白名单</span>
-                            <div><strong>不侵权</strong><span>该品牌已确认可以使用，不判定为侵权</span></div>
-                        </div>
-                        <div class="knowledge-explainer-card">
-                            <span class="knowledge-list-badge blacklist">黑名单</span>
-                            <div><strong>侵权</strong><span>该品牌存在侵权风险，按侵权品牌处理</span></div>
-                        </div>
-                    </div>
-                    <div class="knowledge-analysis-panel">
-                        <div class="knowledge-analysis-copy">
-                            <h3>全球品牌/IP 黑名单与 AI 自动分析</h3>
-                            <p>从 Wikidata 自动获取品牌、媒体系列和虚构角色的中英西葡名称，每类最多 1000 个实体。用于风险拦截，不代表确认侵权或全球完整覆盖。保护人工记录，失败可重新获取。</p>
-                            <button class="primary" id="fetch-global-ip-btn" type="button" onclick="startInfringementKnowledgeAnalysis(true)">获取全球品牌/IP 并加入黑名单</button>
-                            <p>侵权记录中提取的品牌/IP进入黑名单；白名单仅取当前 active 且已有销量的链接，并排除所有黑名单命中。黑名单优先，人工新增或修改的记录不会被自动覆盖。</p>
-                            <div class="knowledge-analysis-controls">
-                                <div class="field">
-                                    <label for="infringement-analysis-infraction-limit">侵权商品上限</label>
-                                    <input id="infringement-analysis-infraction-limit" type="number" min="1" max="20000" value="10000">
-                                </div>
-                                <div class="field">
-                                    <label for="infringement-analysis-active-limit">活跃成交链接上限</label>
-                                    <input id="infringement-analysis-active-limit" type="number" min="1" max="10000" value="5000">
-                                </div>
-                                <button class="primary" id="start-infringement-analysis-btn" type="button" onclick="startInfringementKnowledgeAnalysis()">开始自动分析</button>
-                            </div>
-                            <span class="knowledge-analysis-status" id="infringement-analysis-status">等待启动</span>
-                        </div>
-                        <pre class="knowledge-analysis-log" id="infringement-analysis-log">自动分析尚未启动</pre>
-                    </div>
-                    <div class="summary-row">
-                        <div class="metric"><div class="metric-label">全部品牌</div><div class="metric-value" id="infringement-knowledge-total">0</div></div>
-                        <div class="metric"><div class="metric-label">白名单 · 不侵权</div><div class="metric-value" id="infringement-knowledge-whitelist">0</div></div>
-                        <div class="metric"><div class="metric-label">黑名单 · 侵权</div><div class="metric-value" id="infringement-knowledge-blacklist">0</div></div>
-                    </div>
-                    <div class="risk-check-filter-bar knowledge-filter-bar zs-filter-panel">
-                        <div class="field">
-                            <label for="infringement-knowledge-type-filter">名单类型</label>
-                            <select id="infringement-knowledge-type-filter" onchange="loadInfringementKnowledge(true)">
-                                <option value="">全部名单</option>
-                                <option value="whitelist">白名单 · 不侵权</option>
-                                <option value="blacklist">黑名单 · 侵权</option>
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label for="infringement-knowledge-search">搜索品牌或备注</label>
-                            <input id="infringement-knowledge-search" type="search" placeholder="输入品牌名称或备注关键词" onkeydown="if (event.key === 'Enter') loadInfringementKnowledge(true)">
-                        </div>
-                        <button class="primary" type="button" onclick="loadInfringementKnowledge(true)">查询</button>
-                        <button class="secondary" type="button" onclick="resetInfringementKnowledgeFilters()">重置</button>
-                    </div>
-                    <form class="appeal-phrase-editor" id="infringement-knowledge-form" hidden>
-                        <input id="infringement-knowledge-id" type="hidden">
-                        <div class="appeal-phrase-editor-grid">
-                            <div>
-                                <div class="field">
-                                    <label for="infringement-knowledge-brand">品牌名称（新增时可输入多行）</label>
-                                    <textarea id="infringement-knowledge-brand" maxlength="10000" required placeholder="每行一个品牌，例如：&#10;Nike&#10;Adidas&#10;LEGO"></textarea>
-                                    <p class="shop-search-hint" id="infringement-knowledge-brand-hint">每一行会作为一条独立记录，重复行自动忽略</p>
-                                </div>
-                                <div class="field" style="margin-top: 8px;">
-                                    <label for="infringement-knowledge-list-type">名单类型</label>
-                                    <select id="infringement-knowledge-list-type" required>
-                                        <option value="whitelist">白名单 · 不侵权</option>
-                                        <option value="blacklist">黑名单 · 侵权</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="field">
-                                <label for="infringement-knowledge-notes">备注</label>
-                                <textarea id="infringement-knowledge-notes" maxlength="2000" placeholder="可填写判定依据、适用范围或其他说明"></textarea>
-                            </div>
-                        </div>
-                        <div class="access-form-actions">
-                            <button class="secondary" type="button" onclick="closeInfringementKnowledgeEditor()">取消</button>
-                            <button class="primary" id="save-infringement-knowledge-btn" type="submit">保存记录</button>
-                        </div>
+                <div class="knowledge-metrics" aria-label="知识库概览">
+                    <button type="button" class="knowledge-metric selected" data-knowledge-filter="" onclick="InfringementKnowledge.filter('')"><span>全部品牌</span><strong id="infringement-knowledge-total">—</strong><small>收录的品牌与 IP</small></button>
+                    <button type="button" class="knowledge-metric pending" data-knowledge-filter="pending" onclick="InfringementKnowledge.filter('pending')"><span>待复核 <i>待办</i></span><strong id="infringement-knowledge-pending">—</strong><small>补充依据后确认处理方式</small></button>
+                    <button type="button" class="knowledge-metric" data-knowledge-filter="blacklist" onclick="InfringementKnowledge.filter('blacklist')"><span>风险拦截</span><strong id="infringement-knowledge-blacklist">—</strong><small>人工确认的黑名单</small></button>
+                    <button type="button" class="knowledge-metric" data-knowledge-filter="whitelist" onclick="InfringementKnowledge.filter('whitelist')"><span>人工放行</span><strong id="infringement-knowledge-whitelist">—</strong><small>人工确认的白名单</small></button>
+                </div>
+                <nav class="knowledge-tabs" aria-label="知识库功能">
+                    <button type="button" id="knowledge-records-tab" aria-controls="knowledge-records-panel" aria-pressed="true" onclick="InfringementKnowledge.showPanel('records')">品牌管理</button>
+                    <button type="button" id="knowledge-sources-tab" aria-controls="knowledge-sources-panel" aria-pressed="false" onclick="InfringementKnowledge.showPanel('sources')">数据来源与同步</button>
+                </nav>
+                <p id="knowledge-feedback" class="knowledge-feedback" role="status" aria-live="polite" hidden></p>
+                <section class="panel" id="knowledge-records-panel" aria-labelledby="knowledge-records-tab">
+                    <div class="knowledge-panel-head"><div><h3>品牌记录</h3><p id="infringement-knowledge-result-count">正在读取品牌记录</p></div><button class="secondary" type="button" onclick="loadInfringementKnowledge(true)">刷新列表</button></div>
+                    <div class="knowledge-rule-note"><strong>先复核，再生效</strong><span>AI、WIPO 和公开资料只提供线索；在售或有销量不会自动放行。待复核记录不作为黑白名单规则，商品仍走常规检测。</span></div>
+                    <form class="knowledge-filters" id="knowledge-filter-form">
+                        <div class="field"><label for="infringement-knowledge-search">搜索品牌 / 依据</label><input id="infringement-knowledge-search" type="search" placeholder="输入品牌、IP 或备注关键词"></div>
+                        <div class="field"><label for="infringement-knowledge-type-filter">处理状态</label><select id="infringement-knowledge-type-filter" onchange="InfringementKnowledge.filter(this.value)"><option value="">全部状态</option><option value="pending">待复核</option><option value="blacklist">风险拦截 · 黑名单</option><option value="whitelist">人工放行 · 白名单</option></select></div>
+                        <div class="field"><label for="infringement-knowledge-source-filter">记录来源</label><select id="infringement-knowledge-source-filter" onchange="InfringementKnowledge.search()"><option value="">全部来源</option><option value="manual">人工维护</option><option value="analysis">AI 提取</option><option value="wipo">WIPO</option><option value="wikidata">Wikidata</option></select></div>
+                        <button class="primary" type="submit">查询</button><button class="secondary" type="button" onclick="resetInfringementKnowledgeFilters()">重置</button>
                     </form>
-                    <div class="table-wrap appeal-phrase-table-wrap">
-                        <table class="knowledge-table">
-                            <thead>
-                                <tr>
-                                    <th>品牌名称</th>
-                                    <th>名单</th>
-                                    <th>侵权判定</th>
-                                    <th>来源</th>
-                                    <th>备注</th>
-                                    <th>更新时间</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody id="infringement-knowledge-body">
-                                <tr><td class="empty-state" colspan="7">打开模块后加载品牌记录</td></tr>
-                            </tbody>
-                        </table>
+                    <div class="table-wrap knowledge-table-wrap"><table class="knowledge-table"><thead><tr><th>品牌 / IP</th><th>处理状态</th><th>来源与证据</th><th>依据与备注</th><th>更新时间</th><th>操作</th></tr></thead><tbody id="infringement-knowledge-body"><tr><td class="empty-state" colspan="6">打开模块后加载品牌记录</td></tr></tbody></table></div>
+                    <div class="knowledge-pagination"><span id="knowledge-page-summary">每页 50 条</span><div><button class="secondary" type="button" id="knowledge-prev-page" disabled onclick="InfringementKnowledge.turnPage(-1)">上一页</button><span id="knowledge-page-number">第 1 页</span><button class="secondary" type="button" id="knowledge-next-page" disabled onclick="InfringementKnowledge.turnPage(1)">下一页</button></div></div>
+                </section>
+                <section id="knowledge-sources-panel" aria-labelledby="knowledge-sources-tab" hidden>
+                    <div class="knowledge-source-intro"><h3>把资料收集与处理决定分开</h3><p>新增线索统一进入待复核。复核保存后由人工维护，后续自动同步不会覆盖决定，也不会恢复已删除的品牌。</p></div>
+                    <div class="knowledge-source-grid">
+                        <section class="panel knowledge-source-card"><span class="knowledge-source-tag">店铺数据</span><h3>AI 提取品牌线索</h3><p>从侵权商品和活跃成交链接中提取品牌及 IP，保留样本依据。两类结果都需要人工复核。</p><div class="knowledge-analysis-controls"><div class="field"><label for="infringement-analysis-infraction-limit">侵权商品上限</label><input id="infringement-analysis-infraction-limit" type="number" min="1" max="20000" value="10000"></div><div class="field"><label for="infringement-analysis-active-limit">活跃成交链接上限</label><input id="infringement-analysis-active-limit" type="number" min="1" max="10000" value="5000"></div></div><button class="primary" id="start-infringement-analysis-btn" type="button" onclick="startInfringementKnowledgeAnalysis()">提取待复核线索</button></section>
+                        <section class="panel knowledge-source-card"><span class="knowledge-source-tag">公开资料</span><h3>Wikidata 品牌与 IP</h3><p>收集品牌、媒体系列和虚构角色的中英西葡名称，每类最多 1000 个实体。名称收录不等于侵权，也不代表完整覆盖。</p><p class="shop-search-hint">来源链接随记录保存，可在复核时查看。</p><button class="secondary" id="fetch-global-ip-btn" type="button" onclick="startInfringementKnowledgeAnalysis(true)">收集公开资料</button></section>
+                    </div>
+                    <section class="panel knowledge-task-panel"><div class="knowledge-panel-head"><h3>资料收集进度</h3><button class="secondary" type="button" onclick="loadInfringementKnowledgeAnalysisStatus()">刷新状态</button></div><p class="knowledge-analysis-status" id="infringement-analysis-status" role="status" aria-live="polite">等待启动</p><details><summary>运行日志</summary><pre class="knowledge-analysis-log" id="infringement-analysis-log">尚未启动资料收集</pre></details></section>
+                    <div class="knowledge-analysis-panel" id="wipo-sync-panel" aria-label="WIPO 商标资料">
+                        <div class="knowledge-analysis-copy">
+                            <h3>WIPO 商标资料</h3>
+                            <p>自动拉取 WIPO 官方马德里商标每日增量，仅覆盖马德里体系。完整历史或全球品牌数据需接入授权数据源（CSV / JSON）；公共搜索页面不作为全库抓取接口。</p>
+                            <p>新品牌进入待复核；人工决定和已删除记录不会被同步覆盖。商标登记资料用于辅助核实，不直接触发拦截或放行。</p>
+                            <form id="wipo-sync-form" hidden>
+                                <div class="knowledge-analysis-controls">
+                                    <div class="field">
+                                        <label for="wipo-sync-source-mode">同步来源</label>
+                                        <select id="wipo-sync-source-mode">
+                                            <option value="madrid">官方马德里商标每日增量</option>
+                                            <option value="feed">授权数据源（CSV / JSON）</option>
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label for="wipo-sync-interval">更新间隔（小时）</label>
+                                        <input id="wipo-sync-interval" type="number" min="1" max="720" step="1" value="24" required>
+                                    </div>
+                                    <label class="shop-search-hint"><input id="wipo-sync-enabled" type="checkbox"> 自动更新</label>
+                                </div>
+                                <div class="field" id="wipo-sync-madrid-fields">
+                                    <label for="wipo-sync-madrid-from-date">首次拉取起始日期</label>
+                                    <input id="wipo-sync-madrid-from-date" type="date">
+                                    <p class="shop-search-hint">首次从该日期开始；之后自动从已成功拉取的日期继续。</p>
+                                </div>
+                                <div id="wipo-sync-feed-fields" hidden>
+                                    <div class="field">
+                                        <label for="wipo-sync-feed-url">授权数据源地址</label>
+                                        <input id="wipo-sync-feed-url" type="url" autocomplete="off" placeholder="https://数据服务地址/brands.json">
+                                    </div>
+                                    <div class="field">
+                                        <label for="wipo-sync-format">数据格式</label>
+                                        <select id="wipo-sync-format">
+                                            <option value="auto">自动识别</option>
+                                            <option value="json">JSON</option>
+                                            <option value="csv">CSV</option>
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label for="wipo-sync-token">Bearer 令牌（可选，留空保留已保存令牌）</label>
+                                        <input id="wipo-sync-token" type="password" autocomplete="new-password" placeholder="仅写入，不回显">
+                                        <p id="wipo-sync-token-hint" class="shop-search-hint">尚未配置令牌</p>
+                                    </div>
+                                </div>
+                                <div class="header-actions">
+                                    <button class="secondary" id="wipo-sync-save" type="submit">保存配置</button>
+                                    <button class="primary" id="wipo-sync-start" type="button">保存并立即同步</button>
+                                </div>
+                            </form>
+                            <p id="wipo-sync-settings-summary">打开模块后加载同步配置</p>
+                            <p id="wipo-sync-error" role="alert" hidden></p>
+                            <span class="knowledge-analysis-status" id="wipo-sync-status" role="status" aria-live="polite">等待同步</span>
+                            <p id="wipo-sync-summary">尚无同步结果</p>
+                            <p id="wipo-sync-times">最近成功：暂无 · 下次自动更新：暂无</p>
+                            <button class="secondary" id="wipo-sync-refresh" type="button">刷新同步状态</button>
+                        </div>
+                        <div class="knowledge-analysis-copy">
+                            <details><summary>同步日志</summary><pre class="knowledge-analysis-log" id="wipo-sync-log">同步尚未启动</pre></details>
+                            <details>
+                                <summary>最近同步记录</summary>
+                                <div id="wipo-sync-history" class="shop-search-hint">暂无同步记录</div>
+                            </details>
+                            <details>
+                                <summary>WIPO 数据来源与声明</summary>
+                                <p id="wipo-sync-source">数据来源：WIPO</p>
+                                <p id="wipo-sync-disclaimer"></p>
+                            </details>
+                        </div>
                     </div>
                 </section>
+                <dialog id="infringement-knowledge-dialog" class="knowledge-dialog" aria-labelledby="knowledge-editor-title">
+                    <form id="infringement-knowledge-form" hidden>
+                        <div class="knowledge-dialog-head"><div><span class="knowledge-eyebrow">品牌规则</span><h3 id="knowledge-editor-title">新增品牌</h3></div><button class="secondary" type="button" aria-label="关闭编辑" onclick="closeInfringementKnowledgeEditor()">关闭</button></div>
+                        <input id="infringement-knowledge-id" type="hidden">
+                        <div id="knowledge-editor-evidence" class="knowledge-rule-note" hidden></div>
+                        <div class="field"><label for="infringement-knowledge-brand">品牌 / IP 名称</label><textarea id="infringement-knowledge-brand" maxlength="10000" required rows="3" placeholder="每行一个品牌，例如：&#10;Nike&#10;Adidas"></textarea><p class="shop-search-hint" id="infringement-knowledge-brand-hint">每一行会作为一条独立记录，重复行自动忽略</p></div>
+                        <div class="field"><label for="infringement-knowledge-list-type">处理方式</label><select id="infringement-knowledge-list-type" required onchange="InfringementKnowledge.editorTypeChanged()"><option value="pending">待复核 · 暂不形成规则</option><option value="blacklist">风险拦截 · 加入黑名单</option><option value="whitelist">人工放行 · 加入白名单</option></select><p class="shop-search-hint" id="knowledge-decision-hint">待复核记录仍由常规商品检测继续判断。</p></div>
+                        <div class="field"><label for="infringement-knowledge-notes">处理依据</label><textarea id="infringement-knowledge-notes" maxlength="2000" rows="4" placeholder="填写核实依据、授权情况和证据来源，便于后续复查。"></textarea><p class="shop-search-hint">选择拦截或放行时请填写依据。当前规则按全库品牌名称生效，备注中的店铺或站点范围不会自动限制规则。</p></div>
+                        <p id="knowledge-editor-error" role="alert" hidden></p>
+                        <div class="knowledge-dialog-actions"><button class="secondary" type="button" onclick="closeInfringementKnowledgeEditor()">取消</button><button class="primary" id="save-infringement-knowledge-btn" type="submit">保存记录</button></div>
+                    </form>
+                </dialog>
             </div>
 
             <div class="tab-page" id="tab-infractions">
@@ -14470,7 +14655,7 @@
             <div class="tab-page" id="tab-reputation">
                 <div class="tab-heading">
                     <h2>声誉数据</h2>
-                    <p>每天北京时间 14:00 自动更新 API 数据。“更新所选店铺”仅更新 API 数据；流量趋势和系统告警请勾选店铺后点击“浏览器同步”。账号状态按该站点最新 100 条链接判断：任一活跃则正常，全部不活跃则封禁；无链接或读取不完整时显示未确认，封禁天数未确认。七天变化率由官方订单 API 自算；数值可能因取消单、退款、时区和平台内部统计口径而与后台略有差异。</p>
+                    <p>每天北京时间 14:00 自动更新 API 数据。“更新所选店铺”仅更新 API 数据；流量趋势和系统告警请勾选店铺后点击“浏览器同步”。系统告警显示该店铺 account-risk 页的最新一条，鼠标悬停查看全文。默认按各站点七天单量从高到低排序。账号状态按该站点最新 100 条链接判断：任一活跃则正常，全部不活跃则封禁；无链接或读取不完整时显示未确认，封禁天数未确认。七天单量和七天变化率由官方订单 API 自算；数值可能因取消单、退款、时区和平台内部统计口径而与后台略有差异。</p>
                 </div>
 
                 <section class="panel overview-notices">
@@ -14580,6 +14765,7 @@
                                     <th><button class="reputation-sort-button" type="button" data-sort-key="rights_holder_count" onclick="sortReputationBy('rights_holder_count')">近100天权利人<span class="reputation-sort-indicator">↕</span></button></th>
                                     <th><button class="reputation-sort-button" type="button" data-sort-key="color" onclick="sortReputationBy('color')">声誉颜色<span class="reputation-sort-indicator">↕</span></button></th>
                                     <th><button class="reputation-sort-button" type="button" data-sort-key="order_total" onclick="sortReputationBy('order_total')">总单量<span class="reputation-sort-indicator">↕</span></button></th>
+                                    <th><button class="reputation-sort-button" type="button" data-sort-key="orders_7d" onclick="sortReputationBy('orders_7d')">七天单量<span class="reputation-sort-indicator">↓</span></button></th>
                                     <th><button class="reputation-sort-button" type="button" data-sort-key="complaint_rate" onclick="sortReputationBy('complaint_rate')">投诉率<span class="reputation-sort-indicator">↕</span></button></th>
                                     <th><button class="reputation-sort-button" type="button" data-sort-key="delay_rate" onclick="sortReputationBy('delay_rate')">延误率<span class="reputation-sort-indicator">↕</span></button></th>
                                     <th><button class="reputation-sort-button" type="button" data-sort-key="cancellation_rate" onclick="sortReputationBy('cancellation_rate')">取消率<span class="reputation-sort-indicator">↕</span></button></th>
@@ -14593,7 +14779,7 @@
                                 </tr>
                             </thead>
                             <tbody id="reputation-body">
-                                <tr><td class="empty-state" colspan="16">正在加载最新声誉数据...</td></tr>
+                                <tr><td class="empty-state" colspan="17">正在加载最新声誉数据...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -15097,15 +15283,6 @@
         const appealPhraseType = document.getElementById("appeal-phrase-type");
         const appealPhraseContent = document.getElementById("appeal-phrase-content");
         const appealPhraseActive = document.getElementById("appeal-phrase-active");
-        const infringementKnowledgeBody = document.getElementById("infringement-knowledge-body");
-        const infringementKnowledgeForm = document.getElementById("infringement-knowledge-form");
-        const infringementKnowledgeId = document.getElementById("infringement-knowledge-id");
-        const infringementKnowledgeBrand = document.getElementById("infringement-knowledge-brand");
-        const infringementKnowledgeListType = document.getElementById("infringement-knowledge-list-type");
-        const infringementKnowledgeNotes = document.getElementById("infringement-knowledge-notes");
-        const infringementAnalysisStatus = document.getElementById("infringement-analysis-status");
-        const infringementAnalysisLog = document.getElementById("infringement-analysis-log");
-        const startInfringementAnalysisBtn = document.getElementById("start-infringement-analysis-btn");
         const infractionBody = document.getElementById("infraction-body");
         const infractionTime = document.getElementById("infraction-time");
         const infractionTotal = document.getElementById("infraction-total");
@@ -15190,6 +15367,7 @@
         const reputationWarningPopover = document.getElementById("reputation-warning-popover");
         const reputationWarningPopoverBody = document.getElementById("reputation-warning-popover-body");
         let activeReputationWarningCell = null;
+        let reputationWarningTooltipCloseTimer = null;
         const aiAppealRecordBody = document.getElementById("ai-appeal-record-body");
         const aiAppealLatestTime = document.getElementById("ai-appeal-latest-time");
         const aiAppealTotal = document.getElementById("ai-appeal-total");
@@ -15688,8 +15866,8 @@
         let riskResultSortDir = "desc";
         let reputationLoaded = false;
         let reputationRows = [];
-        let reputationSortKey = "";
-        let reputationSortDirection = "asc";
+        let reputationSortKey = "orders_7d";
+        let reputationSortDirection = "desc";
         let apiReputationLoaded = false;
         let apiReputationRows = [];
         let apiReputationSortKey = "store";
@@ -15832,10 +16010,6 @@
         const localExecutorCredentials = new Map();
         let appealPhrasesLoaded = false;
         let appealPhraseRows = [];
-        let infringementKnowledgeLoaded = false;
-        let infringementKnowledgeRows = [];
-        let infringementAnalysisPollTimer = null;
-        let infringementAnalysisWasRunning = false;
         let accessLoaded = false;
         let accessPermissionGroups = [];
         let accessRoles = [];
@@ -15874,6 +16048,8 @@
         let mercadoManagementCategoriesLoaded = false;
         let selectedMercadoCollectionIds = new Set();
         let mercadoPublishRunning = false;
+        let mercadoPublishSubmitting = false;
+        let mercadoSelectionMutationBusy = false;
         let mercadoPublishPollTimer = null;
         let mercadoPublishStoresLoaded = false;
         let mercadoStoreTokenRows = [];
@@ -16406,6 +16582,7 @@
             document.querySelectorAll(".tab-page").forEach(page => {
                 page.classList.toggle("active", page.id === `tab-${tabName}`);
             });
+            window.InfringementKnowledge?.activate(tabName === "infringement-knowledge");
             syncWorkspaceTabs(tabName);
             window.scrollTo({top: 0, behavior: "smooth"});
             if (tabName === "ai-weight-price") {
@@ -16445,12 +16622,6 @@
                 loadRiskScopeOptions();
                 loadRiskCheckStatus();
             }
-            if (tabName === "infringement-knowledge" && !infringementKnowledgeLoaded) {
-                loadInfringementKnowledge();
-            }
-            if (tabName === "infringement-knowledge") {
-                loadInfringementKnowledgeAnalysisStatus();
-            }
             if (tabName === "zying-collection") {
                 loadZyingCollectionCategories();
                 loadZyingProductDevelopers();
@@ -16480,6 +16651,7 @@
                 if (!highAfterSaleLoaded) setHighAfterSalePeriod(30);
                 if (!highProfitLoaded) setHighProfitPeriod(30);
             }
+            if (tabName === "salesperson-stats") loadSalespersonStats();
             if (tabName === "store-analysis") loadStoreAnalysis();
             if (tabName === "orders" && !ordersLoaded) {
                 loadOrders(1);
@@ -16510,6 +16682,20 @@
                 if (!storeLinksLoaded) loadStoreLinks(1);
                 loadStoreLinkSyncStatus();
                 loadStoreLinkRemoteUpdateStatus();
+            }
+            if (tabName === "size-charts") {
+                const frame = document.getElementById("size-charts-frame");
+                if (frame && !frame.dataset.loaded) {
+                    frame.src = enterpriseScopedUrl(frame.dataset.src);
+                    frame.dataset.loaded = "1";
+                }
+            }
+            if (tabName === "clearance-alerts") {
+                const frame = document.getElementById("clearance-alerts-frame");
+                if (frame && !frame.dataset.loaded) {
+                    frame.src = enterpriseScopedUrl(frame.dataset.src);
+                    frame.dataset.loaded = "1";
+                }
             }
             if (tabName === "promotions") {
                 const frame = document.getElementById("promotions-frame");
@@ -16617,6 +16803,7 @@
             if (!element) return;
             element.textContent = message;
             element.className = `inventory-message ${state || ""}`.trim();
+            globalThis.WorkbenchUI?.feedback(element, state || "info");
         }
 
         function inventoryMoney(value) {
@@ -16669,6 +16856,34 @@
             });
         }
 
+        function setInventoryOwner(value = "") {
+            const select = inventoryEl("inventory-movement-owner");
+            if (value && !Array.from(select.options).some(option => option.value === value)) {
+                select.add(new Option(value, value));
+            }
+            select.value = value;
+        }
+
+        function syncInventoryPeopleOptions(people = {}) {
+            const staffName = currentWorkbenchUser.display_name || currentWorkbenchUser.username || "";
+            const inbound = [...new Set([...(people.inbound_persons || []), staffName].filter(Boolean))];
+            const owners = [...new Set([...(people.inventory_owners || []), staffName].filter(Boolean))];
+            [
+                ["inventory-stock-inbound-person", "全部入库人", inbound],
+                ["inventory-log-inbound-person", "全部入库人", inbound],
+                ["inventory-stock-owner", "全部归属人", owners],
+                ["inventory-log-owner", "全部归属人", owners],
+                ["inventory-movement-owner", "请选择库存归属人", owners],
+            ].forEach(([id, placeholder, names]) => {
+                const select = inventoryEl(id);
+                const current = select.value;
+                const values = [...new Set([...names, current].filter(Boolean))];
+                select.innerHTML = `<option value="">${placeholder}</option>` + values.map(name =>
+                    `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+                select.value = current;
+            });
+        }
+
         async function loadInventoryShelves(force = false) {
             if (inventoryShelves.length && !force) {
                 syncInventoryShelfOptions();
@@ -16682,6 +16897,7 @@
             }
             inventoryShelves = Array.isArray(payload.data?.rows) ? payload.data.rows : [];
             syncInventoryShelfOptions();
+            syncInventoryPeopleOptions(payload.data?.people || {});
             renderInventoryShelves();
             inventoryEl("inventory-shelf-tab-count").textContent = String(inventoryShelves.length);
             return inventoryShelves;
@@ -16714,14 +16930,20 @@
             }).join("");
         }
 
+        let inventoryStockLoadSequence = 0;
         async function loadInventoryStock(page = 1) {
+            const sequence = ++inventoryStockLoadSequence;
             inventoryStockPage = Math.max(1, Math.min(Number(page) || 1, inventoryStockPages || 1));
             const body = inventoryEl("inventory-stock-body");
             if (body) body.innerHTML = '<tr><td colspan="7" class="empty-state">正在加载库存…</td></tr>';
-            setInventoryMessage("正在读取库存数据…");
+            setInventoryMessage("正在读取库存数据…", "loading");
+            globalThis.WorkbenchUI?.tableState(body, "loading", "正在读取库存数据…");
             try {
                 await loadInventoryShelves();
+                if (sequence !== inventoryStockLoadSequence) return;
                 const params = new URLSearchParams({
+                    inbound_person: inventoryEl("inventory-stock-inbound-person")?.value || "",
+                    inventory_owner: inventoryEl("inventory-stock-owner")?.value || "",
                     search: inventoryEl("inventory-stock-search")?.value || "",
                     shelf_id: inventoryEl("inventory-stock-shelf")?.value || "",
                     stock_status: inventoryEl("inventory-stock-status")?.value || "positive",
@@ -16730,17 +16952,23 @@
                 });
                 const response = await fetch(`/api/inventory/stocks?${params}`, {cache: "no-store"});
                 const payload = await response.json();
-                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "库存加载失败");
+                if (sequence !== inventoryStockLoadSequence) return;
+                if (!response.ok || payload.status !== "success") throw Object.assign(new Error(payload.message || "库存加载失败"), {status: response.status});
                 const data = payload.data || {};
                 inventoryRows = Array.isArray(data.rows) ? data.rows : [];
                 inventoryStockPage = Number(data.page || 1);
                 inventoryStockPages = Number(data.pages || 1);
+                if (body) body.dataset.uiState = "";
                 renderInventoryStock(data);
+                if (!inventoryRows.length) globalThis.WorkbenchUI?.tableState(body, "empty", "没有符合当前条件的库存");
                 inventoryLoaded = true;
                 setInventoryMessage(`库存数据更新于 ${new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"})}`, "success");
             } catch (error) {
+                if (sequence !== inventoryStockLoadSequence) return;
                 if (body) body.innerHTML = `<tr><td colspan="7" class="empty-state">${escapeHtml(error.message || String(error))}</td></tr>`;
-                setInventoryMessage(error.message || String(error), "error");
+                const kind = globalThis.WorkbenchUI?.errorKind(error) || "error";
+                setInventoryMessage(kind === "denied" ? "权限不足，请联系管理员开通库存查看权限。" : error.message || String(error), kind);
+                globalThis.WorkbenchUI?.tableState(body, kind, kind === "denied" ? "当前账号没有查看权限" : error.message, () => loadInventoryStock(page));
             }
         }
 
@@ -16773,7 +17001,7 @@
                     <td><span class="inventory-shelf-code">${escapeHtml(row.shelf_code)}</span><div class="inventory-cell-meta">${escapeHtml(row.warehouse || row.shelf_name || "")}</div></td>
                     <td><span class="inventory-quantity ${quantity ? "" : "inventory-zero"}">${quantity.toLocaleString("zh-CN")}</span><div class="inventory-cell-meta">件</div></td>
                     <td><strong>${inventoryMoney(row.unit_cost)}</strong><div class="inventory-cell-meta">合计 ${inventoryMoney(row.total_cost)}</div></td>
-                    <td><strong>${escapeHtml(row.last_inbound_at || "—")}</strong><div class="inventory-cell-meta">首次 ${escapeHtml(row.first_inbound_at || "—")}</div></td>
+                    <td><strong>${escapeHtml(row.last_inbound_at || "—")}</strong><div class="inventory-cell-meta">首次 ${escapeHtml(row.first_inbound_at || "—")}</div><div class="inventory-cell-meta">入库人：${escapeHtml(row.inbound_person || "未记录")}</div><div class="inventory-cell-meta">归属人：${escapeHtml(row.inventory_owner || "未记录")}</div></td>
                     <td>${actions}</td>
                 </tr>`;
             }).join("");
@@ -16781,6 +17009,8 @@
 
         function resetInventoryStockFilters() {
             inventoryEl("inventory-stock-search").value = "";
+            inventoryEl("inventory-stock-inbound-person").value = "";
+            inventoryEl("inventory-stock-owner").value = "";
             inventoryEl("inventory-stock-shelf").value = "";
             inventoryEl("inventory-stock-status").value = "positive";
             loadInventoryStock(1);
@@ -16793,6 +17023,8 @@
             try {
                 await loadInventoryShelves();
                 const params = new URLSearchParams({
+                    inbound_person: inventoryEl("inventory-log-inbound-person")?.value || "",
+                    inventory_owner: inventoryEl("inventory-log-owner")?.value || "",
                     search: inventoryEl("inventory-log-search")?.value || "",
                     movement_type: inventoryEl("inventory-log-type")?.value || "",
                     shelf_id: inventoryEl("inventory-log-shelf")?.value || "",
@@ -16834,13 +17066,15 @@
                     <td><span class="inventory-shelf-code">${escapeHtml(row.shelf_code)}</span><div class="inventory-cell-meta">${escapeHtml(row.shelf_name || "")}</div></td>
                     <td><div class="inventory-change ${inbound ? "inbound" : "outbound"}"><strong>${sign}${Number(row.quantity || 0).toLocaleString("zh-CN")}</strong><small>${Number(row.before_quantity || 0)} → ${Number(row.after_quantity || 0)}</small></div></td>
                     <td><strong>${inventoryMoney(row.total_cost)}</strong><div class="inventory-cell-meta">${inventoryMoney(row.unit_cost)} / 件</div></td>
-                    <td><strong>${escapeHtml(row.operator_name || "系统")}</strong><div class="inventory-cell-meta">${escapeHtml(row.salesperson ? `业务员 ${row.salesperson}` : "业务员未分配")}</div><div class="inventory-cell-meta" title="${escapeHtml(row.remark || row.order_remark || "")}">${escapeHtml(row.remark || row.order_remark || "—")}</div></td>
+                    <td><strong>${escapeHtml(row.operator_name || "系统")}</strong><div class="inventory-cell-meta">入库人：${escapeHtml(row.inbound_person || (inbound ? row.operator_name : "") || "未记录")} · 归属人：${escapeHtml(row.inventory_owner || "未记录")}</div><div class="inventory-cell-meta">${escapeHtml(row.salesperson ? `业务员 ${row.salesperson}` : "业务员未分配")}</div><div class="inventory-cell-meta" title="${escapeHtml(row.remark || row.order_remark || "")}">${escapeHtml(row.remark || row.order_remark || "—")}</div></td>
                 </tr>`;
             }).join("");
         }
 
         function resetInventoryLogFilters() {
             inventoryEl("inventory-log-search").value = "";
+            inventoryEl("inventory-log-inbound-person").value = "";
+            inventoryEl("inventory-log-owner").value = "";
             inventoryEl("inventory-log-type").value = "";
             inventoryEl("inventory-log-shelf").value = "";
             loadInventoryLogs(1);
@@ -16878,6 +17112,10 @@
             inventoryEl("inventory-movement-reference").value = "";
             inventoryEl("inventory-movement-remark").value = "";
             inventoryEl("inventory-movement-time").value = localDateTimeText(new Date());
+            inventoryEl("inventory-movement-inbound-person").value = inventoryMovementType === "inbound"
+                ? (currentWorkbenchUser.display_name || currentWorkbenchUser.username || "") : (row?.inbound_person || "未记录");
+            setInventoryOwner("");
+            inventoryEl("inventory-movement-owner").disabled = inventoryMovementType === "outbound";
             inventoryEl("inventory-movement-cost").disabled = inventoryMovementType === "outbound";
             inventoryEl("inventory-movement-shelf").disabled = inventoryMovementType === "outbound";
             inventoryEl("inventory-movement-sku").disabled = inventoryMovementType === "outbound";
@@ -16897,6 +17135,7 @@
                     suggested_unit_cost: row.unit_cost,
                     stock_quantity: row.quantity,
                     salesperson: row.salesperson,
+                    inventory_owner: row.inventory_owner,
                     order_remark: row.order_remark,
                 };
                 setInventorySelectedProduct(inventorySelectedMatch);
@@ -16938,6 +17177,7 @@
         function clearInventoryMatch() {
             if (inventoryMovementType === "outbound") return;
             inventorySelectedMatch = null;
+            setInventoryOwner("");
             if (inventoryEl("inventory-movement-sku")) inventoryEl("inventory-movement-sku").value = "";
             inventoryEl("inventory-selected-product").hidden = true;
             inventoryEl("inventory-match-section").hidden = false;
@@ -16946,6 +17186,7 @@
 
         function setInventorySelectedProduct(row) {
             inventorySelectedMatch = {...row};
+            setInventoryOwner(row.inventory_owner || row.salesperson || "");
             const image = inventoryEl("inventory-selected-image");
             const source = String(row.image_url || "");
             image.src = /^https?:\/\//i.test(source) ? source : "";
@@ -17033,6 +17274,11 @@
                 payload.seller_sku = inventorySelectedMatch.seller_sku || "";
                 payload.sku_id = inventoryEl("inventory-movement-sku").value || "";
                 payload.unit_cost = inventoryEl("inventory-movement-cost").value;
+                payload.inventory_owner = inventoryEl("inventory-movement-owner").value;
+                if (!payload.inventory_owner) {
+                    inventoryEl("inventory-movement-message").textContent = "请选择库存归属人";
+                    return;
+                }
             } else {
                 payload.stock_id = inventoryMovementStockId;
             }
@@ -17360,7 +17606,7 @@
                 checkbox.checked = allChecked;
                 checkbox.indeterminate = selectedVisible.length > 0 && !allChecked;
             });
-            orderSelectionCount.textContent = `已选 ${selectedOrderIds.size} 单`;
+            orderSelectionCount.textContent = `本页已选 ${selectedOrderIds.size} 单`;
             orderBulkBar?.classList.toggle("active", selectedOrderIds.size > 0);
             orderBulkStatusButton.disabled = orderBulkRunning || selectedOrderIds.size === 0;
             orderBulkPurchaseButton.disabled = orderBulkRunning || selectedOrderIds.size === 0;
@@ -18054,15 +18300,18 @@
             orderTableBody.innerHTML = '<tr class="order-loading-row"><td colspan="15"><span class="order-loading-dot"></span>正在读取订单数据</td></tr>';
             const page = Math.max(1, Math.min(Number(targetPage || 1), orderPages || 1));
             const params = orderQueryParams(page);
+            globalThis.WorkbenchUI?.tableState(orderTableBody, "loading", "正在读取数据…");
             try {
                 const response = await fetch(`/api/orders?${params.toString()}`, {cache: "no-store", signal: controller.signal});
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
-                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                    throw Object.assign(new Error(payload.message || `接口请求失败：${response.status}`), {status: response.status});
                 }
                 if (requestId !== orderLoadSequence) return;
                 const data = payload.data || {};
+                if (orderTableBody.dataset) orderTableBody.dataset.uiState = "";
                 renderOrderRows(data.rows || []);
+                if (!data.rows?.length) globalThis.WorkbenchUI?.tableState(orderTableBody, "empty", "没有符合当前筛选条件的数据");
                 renderOrderStatusStrip(data.status_counts || {});
                 renderOrderMetrics(data);
                 renderOrderOriginCounts(data.origin_counts || {});
@@ -18085,6 +18334,8 @@
                     ? "订单查询超时，请缩小日期范围后重试"
                     : (error.message || error);
                 orderTableBody.innerHTML = `<tr class="order-loading-row"><td colspan="15">加载失败：${escapeHtml(message)}<br><button class="secondary" type="button" style="margin-top:12px" onclick="loadOrders(1)">重新加载</button></td></tr>`;
+                const kind = globalThis.WorkbenchUI?.errorKind(error) || "error";
+                globalThis.WorkbenchUI?.tableState(orderTableBody, kind, kind === "denied" ? "当前账号没有查看权限" : String(message), () => loadOrders(targetPage));
                 orderPaginationSummary.textContent = "订单数据暂不可用";
             } finally {
                 clearTimeout(timeoutId);
@@ -18160,6 +18411,7 @@
             if (!orderIds.length || orderBulkRunning) return;
             orderBulkRunning = true;
             orderBulkMessage.textContent = `正在更新 ${orderIds.length} 个订单…`;
+            globalThis.WorkbenchUI?.feedback(orderBulkMessage, "loading");
             updateOrderSelectionState();
             try {
                 const response = await fetch("/api/orders/bulk-update", {
@@ -18172,9 +18424,11 @@
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
                 orderBulkMessage.textContent = `${successMessage}，共 ${Number(payload.data?.matched || 0)} 单`;
+                globalThis.WorkbenchUI?.feedback(orderBulkMessage, "success");
                 await loadOrders(orderPage);
             } catch (error) {
-                orderBulkMessage.textContent = `操作失败：${error.message || error}`;
+                orderBulkMessage.textContent = `操作失败：${error.message || error}；请确认当前结果后再提交`;
+                globalThis.WorkbenchUI?.feedback(orderBulkMessage, "error");
             } finally {
                 orderBulkRunning = false;
                 updateOrderSelectionState();
@@ -18279,6 +18533,27 @@
 
         function purchaseTrackingPlatform() {
             return String(document.querySelector('input[name="purchase-tracking-platform"]:checked')?.value || "1688");
+        }
+
+        let purchaseTrackingLogsTimer = null;
+        async function openPurchaseTrackingLogs() {
+            document.getElementById("purchase-tracking-logs-dialog").showModal();
+            await loadPurchaseTrackingLogs();
+        }
+        async function loadPurchaseTrackingLogs() {
+            clearTimeout(purchaseTrackingLogsTimer);
+            const container = document.getElementById("purchase-tracking-logs-content");
+            try {
+                const response = await fetch("/api/orders/purchase-tracking/logs", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "日志读取失败");
+                const labels = {synced: "已回填", pending: "待发货", not_found: "未找到，已跳过", failed: "失败"};
+                const platforms = {"1688": "1688", taobao: "淘宝 / 天猫", pdd: "拼多多", xianyu: "闲鱼"};
+                container.innerHTML = (payload.data.rows || []).map(run => `<details open><summary>${escapeHtml(run.started_at)} · ${escapeHtml(platforms[run.platform] || run.platform)} · ${escapeHtml(run.message)}</summary><p>共 ${Number(run.total || 0)} 单，已处理 ${Number(run.processed || 0)} 单 · 成功 ${Number(run.synced || 0)} · 跳过 ${Number(run.skipped || 0)} · 待发货 ${Number(run.pending || 0)} · 失败 ${Number(run.failed || 0)}</p>${(run.results || []).map(row => `<div class="purchase-tracking-result"><strong>泽顺订单 ${escapeHtml(row.order_id)} · 采购单 ${escapeHtml(row.purchase_order)}</strong><span>${escapeHtml(row.recorded_at || "")} · ${escapeHtml(labels[row.status] || row.status)} · ${escapeHtml(row.tracking_number || "")} ${escapeHtml(row.logistics_company || "")} ${escapeHtml(row.message || "")}</span></div>`).join("")}</details>`).join("") || "暂无物流同步日志";
+            } catch (error) {
+                container.textContent = error.message || String(error);
+            }
+            if (document.getElementById("purchase-tracking-logs-dialog").open) purchaseTrackingLogsTimer = setTimeout(loadPurchaseTrackingLogs, 3000);
         }
 
         function openPurchaseTrackingSyncDialog() {
@@ -19162,6 +19437,58 @@
             }
         }
 
+        function mercadoPublishRecordItems(row) {
+            const hosts = {
+                MLM: "articulo.mercadolibre.com.mx", MLB: "produto.mercadolivre.com.br",
+                MLA: "articulo.mercadolibre.com.ar", MLC: "articulo.mercadolibre.cl",
+                MCO: "articulo.mercadolibre.com.co", MLU: "articulo.mercadolibre.com.uy",
+            };
+            const site = String(row.site_id || "").trim().toUpperCase();
+            const items = new Map();
+            const add = value => {
+                if (!value || typeof value !== "object" || value.error) return;
+                const id = String(value.item_id || value.id || "").trim().toUpperCase().replace(/-/g, "");
+                const match = /^(ML[A-Z]|MCO)(\d+)$/.exec(id);
+                if (!match || !hosts[match[1]] || (site && match[1] !== site)) return;
+                if (!items.has(id)) items.set(id, {
+                    id, url: `https://${hosts[match[1]]}/${match[1]}-${match[2]}`,
+                });
+            };
+            let publication = row.result_json;
+            try {
+                if (typeof publication === "string") publication = JSON.parse(publication);
+            } catch (_) { publication = null; }
+            const result = publication?.result || publication;
+            const visit = value => {
+                if (Array.isArray(value)) { value.forEach(visit); return; }
+                if (!value || typeof value !== "object") return;
+                add(value);
+                for (const key of ["site_items", "marketplace_items", "user_products"]) {
+                    if (Array.isArray(value[key])) value[key].forEach(visit);
+                }
+            };
+            visit(result);
+            if (!items.size) add({id: row.published_item_id});
+            return Array.from(items.values());
+        }
+
+        function renderMercadoPublishRecordItems(row) {
+            const items = mercadoPublishRecordItems(row);
+            if (items.length) {
+                return items.map(item => `<a class="market-item-link" style="display:block" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" data-copy-ignore data-published-item-id="${escapeHtml(item.id)}" title="点击打开前台商品页，右键复制产品编号" oncontextmenu="copyMercadoPublishRecordItem(event, this); return false">${escapeHtml(item.id)}</a>`).join("");
+            }
+            const globalId = String(row.published_item_id || "").trim();
+            return globalId
+                ? `<strong data-copy-ignore data-published-item-id="${escapeHtml(globalId)}" title="右键复制全局编号" oncontextmenu="copyMercadoPublishRecordItem(event, this); return false">${escapeHtml(globalId)}</strong><span class="market-metric-note">全局编号，暂未返回站点产品编号</span>`
+                : '<span class="market-list-summary">-</span>';
+        }
+
+        function copyMercadoPublishRecordItem(event, element) {
+            event.preventDefault();
+            event.stopPropagation();
+            window.copyTextReliably(element.dataset.publishedItemId, {message: "产品编号已复制"});
+        }
+
         function renderMercadoPublishRecords(data) {
             const rows = Array.isArray(data?.rows) ? data.rows : [];
             mercadoPublishRecordRows = rows;
@@ -19198,7 +19525,8 @@
                 const productLink = sourceUrl
                     ? `<a class="market-item-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">打开源商品</a>`
                     : "";
-            const [statusLabel, statusClass] = statusDefinitions[recordStatus] || [recordStatus || "未知", "partial"];
+            const attributeStatus = recordStatus === "failed" ? window.mercadoAttributeStatusLabel?.(row.result_json) : "";
+            const [statusLabel, statusClass] = attributeStatus ? [attributeStatus, "failed"] : (statusDefinitions[recordStatus] || [recordStatus || "未知", "partial"]);
             const resultText = publishRecordResultText(row.result_json);
             const failureReason = String(row.failure_reason || "");
                 const details = resultText
@@ -19206,9 +19534,7 @@
                     : "";
                 const groupName = String(row.group_name || "").trim() || "未分组";
                 const target = `${escapeHtml(row.store_name || "-")}<span class="market-metric-note">${escapeHtml(row.site_name || row.site_id || "-")} · ${escapeHtml(row.site_id || "-")} · ${escapeHtml(groupName)}</span>`;
-                const resultItem = row.published_item_id
-                    ? `<strong>${escapeHtml(row.published_item_id)}</strong>`
-                    : '<span class="market-list-summary">-</span>';
+                const resultItem = renderMercadoPublishRecordItems(row);
                 return `<tr>
                     <td>${checkbox}</td>
                     <td><div class="publish-record-product">${image}<div><span class="market-product-title" title="${escapeHtml(row.title || '')}">${escapeHtml(row.title || "未识别标题")}</span>${productLink}</div></div></td>
@@ -19218,7 +19544,7 @@
                     <td>${Number(row.quantity || 0).toLocaleString("zh-CN")}</td>
                     <td><span class="market-status-tag ${statusClass}">${escapeHtml(statusLabel)}</span></td>
                     <td>${resultItem}</td>
-                    <td title="${escapeHtml(failureReason)}">${failureReason ? `<span class="publish-record-reason">${escapeHtml(failureReason)}</span>` : '<span class="market-list-summary">-</span>'}${details}</td>
+                    <td title="${escapeHtml(failureReason)}">${failureReason ? `<span class="publish-record-reason">${escapeHtml(failureReason)}</span>` : '<span class="market-list-summary">-</span>'}${window.renderMercadoAttributeReport?.(row.result_json) || ''}${details}</td>
                     <td><span class="market-metric-main">${escapeHtml(row.started_at || row.created_at || "-")}</span><span class="market-metric-note">完成：${escapeHtml(row.finished_at || "-")}</span></td>
                     <td>${escapeHtml(row.created_by || "-")}</td>
                 </tr>`;
@@ -20467,9 +20793,13 @@
         async function assignSelectedMercadoCategory() {
             const value = mercadoManagementCategoryBulk.value;
             if (!value) return;
-            await assignMercadoCategory(Array.from(selectedMercadoCollectionIds), value);
-            mercadoManagementCategoryBulk.value = "";
+            if (mercadoSelectionMutationBusy) return;
+            mercadoSelectionMutationBusy = true;
             updateMercadoSelection();
+            try {
+                await assignMercadoCategory(Array.from(selectedMercadoCollectionIds), value);
+                mercadoManagementCategoryBulk.value = "";
+            } finally { mercadoSelectionMutationBusy = false; updateMercadoSelection(); }
         }
 
         function renderMercadoListRows(rows) {
@@ -20778,6 +21108,7 @@
             if (mercadoNetMax.value !== "") query.set("net_proceeds_max", mercadoNetMax.value);
             if (mercadoDateFrom.value) query.set("date_from", mercadoDateFrom.value);
             if (mercadoDateTo.value) query.set("date_to", mercadoDateTo.value);
+            globalThis.WorkbenchUI?.tableState(mercadoListBody, "loading", "正在读取数据…");
             try {
                 let payload;
                 for (let attempt = 0; attempt < 2; attempt++) {
@@ -20796,12 +21127,14 @@
                         });
                         if (!response.ok) {
                             const error = new Error(`接口请求失败：${response.status}`);
+                            error.status = response.status;
                             error.retryable = [408, 429, 500, 502, 503, 504].includes(response.status);
                             throw error;
                         }
                         payload = await response.json();
                         if (payload.status !== "success") {
                             const error = new Error(payload.message || "读取列表失败");
+                            error.status = response.status;
                             error.retryable = false;
                             throw error;
                         }
@@ -20838,13 +21171,17 @@
                 }
                 mercadoListPages = availablePages;
                 mercadoListSummary.textContent = `共 ${mercadoListTotal} 件 · 第 ${mercadoListPage}/${mercadoListPages} 页`;
+                if (mercadoListBody.dataset) mercadoListBody.dataset.uiState = "";
                 renderMercadoListRows(rows);
+                if (!rows.length) globalThis.WorkbenchUI?.tableState(mercadoListBody, "empty", "没有符合当前筛选条件的数据");
                 updateMercadoListPagination();
                 mercadoCollectionLoaded = true;
             } catch (error) {
                 if (sequence !== mercadoListLoadSequence || controller.signal.aborted) return;
                 mercadoListSummary.textContent = "加载失败";
                 mercadoListBody.innerHTML = `<tr><td class="empty-state" colspan="${mercadoListColumnCount()}">加载失败：${escapeHtml(error.message || error)} <button type="button" class="secondary" onclick="loadMercadoList()">重新加载</button></td></tr>`;
+                const kind = globalThis.WorkbenchUI?.errorKind(error) || "error";
+                globalThis.WorkbenchUI?.tableState(mercadoListBody, kind, kind === "denied" ? "当前账号没有查看权限" : String(error.message || error), () => loadMercadoList());
             } finally {
                 if (sequence === mercadoListLoadSequence) mercadoListLoadController = null;
             }
@@ -20855,6 +21192,7 @@
             mercadoListMessage.textContent = String(message || "");
             mercadoListMessage.className = `market-list-message ${state}`.trim();
             mercadoListMessage.hidden = !message;
+            globalThis.WorkbenchUI?.feedback(mercadoListMessage, state || "info");
         }
 
         function mountMercadoListModule(mode) {
@@ -20977,10 +21315,12 @@
         }
 
         async function updateSelectedMercadoReviewStatus() {
-            await updateMercadoProductReviewStatus(
-                Array.from(selectedMercadoCollectionIds),
-                mercadoReviewBulk.value,
-            );
+            if (mercadoSelectionMutationBusy) return;
+            mercadoSelectionMutationBusy = true;
+            updateMercadoSelection();
+            try {
+                await updateMercadoProductReviewStatus(Array.from(selectedMercadoCollectionIds), mercadoReviewBulk.value);
+            } finally { mercadoSelectionMutationBusy = false; updateMercadoSelection(); }
         }
 
         function toggleMercadoItem(rowId, checked) {
@@ -21193,22 +21533,22 @@
             mercadoSelectAll.indeterminate = (
                 selectedCurrentPageIds.length > 0 && selectedCurrentPageIds.length < currentPageIds.length
             );
-            mercadoSelectionSummary.textContent = `已选择 ${selectedMercadoCollectionIds.size} 件`;
-            const hasSelection = selectedMercadoCollectionIds.size > 0;
+            mercadoSelectionSummary.textContent = `本页已选择 ${selectedMercadoCollectionIds.size} 件`;
+            const hasSelection = selectedMercadoCollectionIds.size > 0 && !mercadoSelectionMutationBusy;
             const selectedRows = mercadoListRows.filter(row => selectedMercadoCollectionIds.has(Number(row.id)));
             const blockedCount = selectedRows.filter(row => mercadoProductPublishIssues(row).length).length;
             const readinessNotes = [];
             if (blockedCount) readinessNotes.push(`${blockedCount} 件不可上架，将自动移回采集列表`);
-            mercadoSelectionSummary.textContent = `已选择 ${selectedMercadoCollectionIds.size} 件${readinessNotes.length ? ` · ${readinessNotes.join(" · ")}` : ""}`;
+            mercadoSelectionSummary.textContent = `本页已选择 ${selectedMercadoCollectionIds.size} 件${readinessNotes.length ? ` · ${readinessNotes.join(" · ")}` : ""}`;
             const exceedsBulkEditLimit = selectedMercadoCollectionIds.size > 500;
             mercadoAddSelected.disabled = !hasSelection || mercadoListMode !== "collection" || mercadoAiCopyRunning;
-            mercadoAiCopySelected.disabled = !hasSelection || mercadoListMode !== "collection" || mercadoPublishRunning || mercadoAiCopyRunning || exceedsBulkEditLimit;
+            mercadoAiCopySelected.disabled = !hasSelection || mercadoListMode !== "collection" || (mercadoPublishRunning || mercadoPublishSubmitting) || mercadoAiCopyRunning || exceedsBulkEditLimit;
             mercadoAiCopySelected.textContent = mercadoAiCopyRunning ? "标题生成中..." : "批量修改标题";
             mercadoAiCopySelected.title = exceedsBulkEditLimit ? "每次最多选择 500 件商品" : "根据采集商品资料生成西班牙语和葡萄牙语标题、描述";
-            mercadoDeleteSelected.disabled = !hasSelection || mercadoPublishRunning;
-            mercadoReviewSelected.disabled = !hasSelection || mercadoListMode !== "products" || mercadoPublishRunning;
+            mercadoDeleteSelected.disabled = !hasSelection || (mercadoPublishRunning || mercadoPublishSubmitting);
+            mercadoReviewSelected.disabled = !hasSelection || mercadoListMode !== "products" || (mercadoPublishRunning || mercadoPublishSubmitting);
             mercadoManagementCategoryAssign.disabled = !hasSelection || !mercadoManagementCategoryBulk.value;
-            mercadoBulkEditSelected.disabled = !hasSelection || mercadoPublishRunning || mercadoBulkEditSaving || exceedsBulkEditLimit;
+            mercadoBulkEditSelected.disabled = !hasSelection || (mercadoPublishRunning || mercadoPublishSubmitting) || mercadoBulkEditSaving || exceedsBulkEditLimit;
             mercadoBulkEditSelected.textContent = mercadoListMode === "collection"
                 ? "批量修改尺寸/重量" : "批量修改所选";
             mercadoBulkEditSelected.title = exceedsBulkEditLimit ? "每次最多批量修改 500 件商品" : "";
@@ -21217,7 +21557,7 @@
                 ? mercadoSelectedValues(mercadoPublishGroup).length > 0
                 : mercadoSelectedValues(mercadoPublishStore).length > 0;
             mercadoPublishSelected.disabled = (
-                !hasSelection || mercadoListMode !== "products" || mercadoPublishRunning ||
+                !hasSelection || mercadoListMode !== "products" || (mercadoPublishRunning || mercadoPublishSubmitting) ||
                 !hasPublishTarget || !mercadoSelectedValues(mercadoPublishSite).length
             );
             mercadoPublishSelected.title = readinessNotes.join("；");
@@ -21225,10 +21565,13 @@
         }
 
         async function addSelectedMercadoProducts() {
+            if (mercadoSelectionMutationBusy || mercadoPublishSubmitting) return;
             const itemIds = Array.from(selectedMercadoCollectionIds);
             if (!itemIds.length) return;
             mercadoAddSelected.disabled = true;
             mercadoAddSelected.textContent = "正在加入...";
+            mercadoSelectionMutationBusy = true;
+            updateMercadoSelection();
             try {
                 const response = await fetch("/api/mercado-products/add", {
                     method: "POST",
@@ -21247,17 +21590,19 @@
                 const incompleteNote = skippedIncomplete
                     ? `；${skippedIncomplete} 件缺少有效重量，已留在采集列表`
                     : "";
-                setMercadoListFeedback(`已加入产品列表 ${Number(payload.data?.count || 0)} 件${incompleteNote}${mirrorNote}`, "success");
+                setMercadoListFeedback(`已加入产品列表 ${Number(payload.data?.count || 0)} 件${incompleteNote}${mirrorNote}`, (skippedIncomplete || mirrorNote) ? "partial" : "success");
                 await loadMercadoList();
             } catch (error) {
                 setMercadoListFeedback(`加入产品列表失败：${error.message || error}`, "error");
             } finally {
+                mercadoSelectionMutationBusy = false;
                 mercadoAddSelected.textContent = "加入产品列表";
                 updateMercadoSelection();
             }
         }
 
         async function deleteSelectedMercadoItems() {
+            if (mercadoSelectionMutationBusy || mercadoPublishSubmitting) return;
             const itemIds = Array.from(selectedMercadoCollectionIds);
             if (!itemIds.length) return;
             const label = mercadoListMode === "collection" ? "采集列表" : "产品列表";
@@ -21266,6 +21611,8 @@
             mercadoDeleteSelected.textContent = "正在删除...";
             const endpoint = mercadoListMode === "collection" ? "/api/mercado-collection/items" : "/api/mercado-products";
             const key = mercadoListMode === "collection" ? "collection_item_ids" : "product_item_ids";
+            mercadoSelectionMutationBusy = true;
+            updateMercadoSelection();
             try {
                 const response = await fetch(endpoint, {
                     method: "DELETE",
@@ -21282,6 +21629,7 @@
             } catch (error) {
                 setMercadoListFeedback(`删除失败：${error.message || error}`, "error");
             } finally {
+                mercadoSelectionMutationBusy = false;
                 mercadoDeleteSelected.textContent = "删除所选";
                 updateMercadoSelection();
             }
@@ -21470,6 +21818,7 @@
         }
 
         async function publishSelectedMercadoProducts() {
+            if (mercadoPublishSubmitting || mercadoPublishRunning || mercadoSelectionMutationBusy) return;
             const itemIds = Array.from(selectedMercadoCollectionIds);
             const selectionMode = mercadoPublishMode.value === "groups" ? "groups" : "accounts";
             const groupPublishMode = mercadoGroupPublishMode.value === "polling" ? "polling" : "random";
@@ -21543,6 +21892,8 @@
                 ? `将在 ${scheduleDate.toLocaleString()} 定时上架`
                 : "现在立即上架";
             if (!window.confirm(`确定${scheduleNote}吗？${canChangeTaskWorkers ? `使用 ${workerCount} 个线程，` : ""}把 ${publishableRows.length} 件有效产品上架到 ${targetSummary}、${siteIds.length} 个站点。${publishPlan}，每件库存 ${quantity}；最终上架售价 = 产品净收益 × 分类上架比例 × 店铺站点比例 × 本次上架比例（${listingRatio}%），跨站点属性将使用本地规则匹配，不调用翻译模型${blockedNote}。`)) return;
+            mercadoPublishSubmitting = true;
+            updateMercadoSelection();
             mercadoPublishSelected.disabled = true;
             mercadoPublishStatus.textContent = "正在创建批量上架任务...";
             try {
@@ -21556,6 +21907,8 @@
                     quantity,
                     net_proceeds_ratio: listingRatio,
                 };
+                const attributeDrafts = window.mercadoAttributeDraftRevisions?.();
+                if (attributeDrafts) publishPayload.draft_revisions = attributeDrafts;
                 if (scheduleDate) publishPayload.scheduled_at = scheduleDate.toISOString();
                 if (canChangeTaskWorkers) publishPayload.worker_count = workerCount;
                 const response = await fetch("/api/mercado-products/publish", {
@@ -21581,6 +21934,9 @@
             } catch (error) {
                 mercadoPublishStatus.textContent = `启动批量上架失败：${error.message || error}`;
                 mercadoPublishRunning = false;
+                updateMercadoSelection();
+            } finally {
+                mercadoPublishSubmitting = false;
                 updateMercadoSelection();
             }
         }
@@ -23741,23 +24097,41 @@
 
         async function preSaleAggregateRequest(stores, filters) {
             const workerCount = Math.max(1, Math.min(12, 8, stores.length));
-            const requestData = {
-                token_ids: stores.map(store => Number(store.id)),
-                ...filters,
-                status: preSaleStatus,
-            };
-            if (canChangeTaskWorkers) requestData.workers = workerCount;
-            const response = await fetch("/api/mercado-communications/pre-sale-aggregate", {
-                method: "POST",
-                headers: {"Accept": "application/json", "Content-Type": "application/json"},
-                cache: "no-store",
-                body: JSON.stringify(requestData),
-            });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok || payload.status !== "success") {
-                throw new Error(payload.message || `查询失败：${response.status}`);
+            const status = preSaleStatus;
+            const aggregate = {stores: [], failures: [], total_stores: stores.length, workers: workerCount, elapsed_seconds: 0};
+            const started = Date.now();
+            for (let offset = 0; offset < stores.length; offset += 100) {
+                const batch = stores.slice(offset, offset + 100);
+                const requestData = {
+                    ...filters,
+                    token_ids: batch.map(store => Number(store.id)),
+                    status,
+                };
+                if (canChangeTaskWorkers) requestData.workers = workerCount;
+                try {
+                    const response = await fetch("/api/mercado-communications/pre-sale-aggregate", {
+                        method: "POST",
+                        headers: {"Accept": "application/json", "Content-Type": "application/json"},
+                        cache: "no-store",
+                        body: JSON.stringify(requestData),
+                    });
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok || payload.status !== "success") {
+                        throw new Error(payload.message || `查询失败：${response.status}`);
+                    }
+                    const data = payload.data || {};
+                    aggregate.stores.push(...(Array.isArray(data.stores) ? data.stores : []));
+                    aggregate.failures.push(...(Array.isArray(data.failures) ? data.failures : []));
+                    aggregate.workers = Math.max(aggregate.workers, Number(data.workers || 0));
+                } catch (error) {
+                    aggregate.failures.push(...batch.map(store => ({token_id: Number(store.id), message: error.message || String(error)})));
+                }
+                setPreSaleMessage(`已查询 ${Math.min(offset + batch.length, stores.length)}/${stores.length} 家店铺，成功 ${aggregate.stores.length} 家${aggregate.failures.length ? `，失败 ${aggregate.failures.length} 家` : ""}...`);
             }
-            return payload.data || {};
+            aggregate.success_stores = aggregate.stores.length;
+            aggregate.failed_stores = aggregate.failures.length;
+            aggregate.elapsed_seconds = (Date.now() - started) / 1000;
+            return aggregate;
         }
 
         function preSaleFilterPayload() {
@@ -25954,6 +26328,14 @@
 
         function storeLinkMarkers(row) {
             const markers = [];
+            const clearanceLabels = {enrolled: "已参加清仓", not_enrolled: "未参加清仓", unknown: "清仓待同步"};
+            const clearanceStatus = row?.clearance_status || "unknown";
+            const clearanceHint = clearanceStatus === "unknown"
+                ? "请在活动管理同步该店铺；清仓状态以最近 24 小时内完整同步结果为准"
+                : `清仓活动同步时间：${row.clearance_checked_at || "未知"}`;
+            if (/半托管/.test(`${row?.group_name || ""} ${row?.store_name || ""}`)) {
+                markers.push(`<span class="store-link-marker ${clearanceStatus === "enrolled" ? "promotion" : ""}" title="${escapeHtml(clearanceHint)}">${clearanceLabels[clearanceStatus] || "清仓待同步"}</span>`);
+            }
             if (row?.promotion_applied || row?.activity_applied || row?.has_promotion || row?.has_activity) {
                 markers.push('<span class="store-link-marker promotion" title="该商品已报名活动">已报活动</span>');
             }
@@ -27694,6 +28076,9 @@
             loadStoreLinks(1);
         }
 
+        let storeLinkSelectionScope = "";
+        let storeLinkSubmitting = false;
+        let storeLinkListLoading = false;
         async function loadStoreLinks(page = 1) {
             if (!storeLinkBody) return;
             updateStoreLinkSortButtons();
@@ -27725,6 +28110,16 @@
                 current_only: "1",
             });
             mercadoSelectedValues(storeLinkStoreFilter).forEach(value => query.append("token_id", value));
+            const scope = new URLSearchParams(query);
+            ["page", "page_size", "sort_by", "sort_order", "sales_sort"].forEach(key => scope.delete(key));
+            scope.sort();
+            if (scope.toString() !== storeLinkSelectionScope) {
+                selectedStoreLinkIds.clear();
+                storeLinkSelectionScope = scope.toString();
+            }
+            storeLinkListLoading = true;
+            updateStoreLinkSelection();
+            globalThis.WorkbenchUI?.tableState(storeLinkBody, "loading", "正在加载店铺链接…");
             try {
                 const response = await fetch(`/api/store-links?${query.toString()}`, {
                     cache: "no-store",
@@ -27733,12 +28128,14 @@
                 const payload = await response.json();
                 if (requestId !== storeLinkLoadRequestId) return;
                 if (!response.ok || payload.status !== "success") {
-                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                    throw Object.assign(new Error(payload.message || `接口请求失败：${response.status}`), {status: response.status});
                 }
                 const data = payload.data || {};
                 storeLinkPage = Number(data.page || 1);
                 storeLinkPages = Number(data.pages || 1);
+                if (storeLinkBody.dataset) storeLinkBody.dataset.uiState = "";
                 renderStoreLinkRows(data.rows || []);
+                if (!storeLinkRows.length) globalThis.WorkbenchUI?.tableState(storeLinkBody, "empty", "没有匹配的店铺链接");
                 renderStoreLinkStores(data.stores || [], data.store_groups || {});
                 renderStoreLinkSites(data.sites || []);
                 renderStoreLinkGroups(data.groups || []);
@@ -27754,9 +28151,14 @@
             } catch (error) {
                 if (error?.name === "AbortError" || requestId !== storeLinkLoadRequestId) return;
                 storeLinkBody.innerHTML = `<tr><td class="empty-state" colspan="14">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
-                storeLinkMessage.textContent = `加载失败：${error.message || error}`;
+                const kind = globalThis.WorkbenchUI?.errorKind(error) || "error";
+                globalThis.WorkbenchUI?.tableState(storeLinkBody, kind, kind === "denied" ? "当前账号无权查看这些链接" : `加载失败：${error.message || error}`, () => loadStoreLinks(page));
+                storeLinkMessage.textContent = kind === "denied" ? "权限不足，请联系管理员确认店铺授权范围。" : `加载失败：${error.message || error}`;
+                globalThis.WorkbenchUI?.feedback(storeLinkMessage, kind);
             } finally {
                 if (requestId === storeLinkLoadRequestId) {
+                    storeLinkListLoading = false;
+                    updateStoreLinkSelection();
                     storeLinkLoadController = null;
                     storeLinkRefreshButton.disabled = false;
                 }
@@ -27802,32 +28204,33 @@
             });
             storeLinkSelectAll.checked = Boolean(inputs.length && selected.length === inputs.length);
             storeLinkSelectAll.indeterminate = selected.length > 0 && selected.length < inputs.length;
-            storeLinkSelectionCount.textContent = `已选 ${selectedStoreLinkIds.size} 条（可跨页）`;
+            storeLinkSelectionCount.textContent = `已选 ${selectedStoreLinkIds.size} 条（跨页累计；当前勾选仅本页）`;
             const clearButton = document.getElementById("store-link-clear-selection");
             if (clearButton) clearButton.disabled = selectedStoreLinkIds.size === 0;
             storeLinkAdvertiseButton.disabled = (
                 selectedStoreLinkIds.size === 0
-                || storeLinkAdvertiseBusy
+                || storeLinkAdvertiseBusy || storeLinkSubmitting || storeLinkListLoading
             );
             storeLinkPauseButton.disabled = (
                 selectedStoreLinkIds.size === 0
-                || storeLinkRemoteUpdateRunning
+                || storeLinkRemoteUpdateRunning || storeLinkSubmitting || storeLinkListLoading
             );
             storeLinkActivateButton.disabled = (
                 selectedStoreLinkIds.size === 0
-                || storeLinkRemoteUpdateRunning
+                || storeLinkRemoteUpdateRunning || storeLinkSubmitting || storeLinkListLoading
             );
             storeLinkBulkButton.disabled = (
                 selectedStoreLinkIds.size === 0
-                || storeLinkRemoteUpdateRunning
+                || storeLinkRemoteUpdateRunning || storeLinkSubmitting || storeLinkListLoading
             );
             storeLinkDeleteButton.disabled = (
                 selectedStoreLinkIds.size === 0
-                || storeLinkRemoteUpdateRunning
+                || storeLinkRemoteUpdateRunning || storeLinkSubmitting || storeLinkListLoading
             );
         }
 
         async function deleteSelectedStoreLinks() {
+            if (storeLinkSubmitting || storeLinkListLoading) return;
             const linkIds = Array.from(selectedStoreLinkIds);
             if (!linkIds.length || storeLinkRemoteUpdateRunning) return;
             if (!window.confirm(`确定从美客多删除选中的 ${linkIds.length} 条站点链接吗？删除无法撤销；成功后保留记录并标记为“已删除”。`)) return;
@@ -27835,6 +28238,9 @@
             updateStoreLinkSelection();
             storeLinkDeleteButton.disabled = true;
             storeLinkMessage.textContent = `正在删除 ${linkIds.length} 条店铺链接...`;
+            storeLinkSubmitting = true;
+            updateStoreLinkSelection();
+            globalThis.WorkbenchUI?.feedback(storeLinkMessage, "loading");
             try {
                 const response = await fetch("/api/store-links/delete", {
                     method: "POST",
@@ -27849,16 +28255,19 @@
                 renderStoreLinkRemoteUpdateStatus(payload.data || {});
                 loadStoreLinkRemoteUpdateStatus();
             } catch (error) {
+                globalThis.WorkbenchUI?.feedback(storeLinkMessage, "error");
                 storeLinkRemoteUpdateRunning = false;
                 storeLinkMessage.textContent = `删除失败：${error.message || error}`;
             } finally {
+                storeLinkSubmitting = false;
                 updateStoreLinkSelection();
             }
         }
 
         async function bulkUpdateStoreLinks() {
+            if (storeLinkSubmitting || storeLinkListLoading) return;
             const linkIds = Array.from(selectedStoreLinkIds);
-            if (!linkIds.length) return;
+            if (!linkIds.length || storeLinkRemoteUpdateRunning) return;
             const fields = {
                 price: "store-link-bulk-price",
                 weight_g: "store-link-bulk-weight",
@@ -27878,6 +28287,9 @@
             }
             storeLinkBulkButton.disabled = true;
             storeLinkMessage.textContent = `正在启动 ${linkIds.length} 条美客多后台修改...`;
+            storeLinkSubmitting = true;
+            updateStoreLinkSelection();
+            globalThis.WorkbenchUI?.feedback(storeLinkMessage, "loading");
             try {
                 const response = await fetch("/api/store-links/bulk-update", {
                     method: "POST",
@@ -27893,8 +28305,10 @@
                 renderStoreLinkRemoteUpdateStatus(payload.data || {});
                 loadStoreLinkRemoteUpdateStatus();
             } catch (error) {
+                globalThis.WorkbenchUI?.feedback(storeLinkMessage, "error");
                 storeLinkMessage.textContent = `后台修改启动失败：${error.message || error}`;
             } finally {
+                storeLinkSubmitting = false;
                 updateStoreLinkSelection();
             }
         }
@@ -27927,10 +28341,14 @@
         }
 
         async function submitStoreLinkStatus(linkIds, status, clearSelection) {
+            if (storeLinkSubmitting || storeLinkListLoading || storeLinkRemoteUpdateRunning) return;
             const ids = Array.from(new Set((linkIds || []).map(Number).filter(Number.isInteger)));
             if (!ids.length) return;
             const label = status === "paused" ? "暂停" : "上架";
             storeLinkMessage.textContent = `正在启动 ${ids.length} 条链接${label}任务...`;
+            storeLinkSubmitting = true;
+            updateStoreLinkSelection();
+            globalThis.WorkbenchUI?.feedback(storeLinkMessage, "loading");
             try {
                 const response = await fetch("/api/store-links/bulk-update", {
                     method: "POST",
@@ -27945,8 +28363,10 @@
                 renderStoreLinkRemoteUpdateStatus(payload.data || {});
                 loadStoreLinkRemoteUpdateStatus();
             } catch (error) {
+                globalThis.WorkbenchUI?.feedback(storeLinkMessage, "error");
                 storeLinkMessage.textContent = `${label}任务启动失败：${error.message || error}`;
             } finally {
+                storeLinkSubmitting = false;
                 updateStoreLinkSelection();
             }
         }
@@ -27960,6 +28380,7 @@
             const partial = Number(data?.partial_count || 0);
             const failed = Number(data?.failed_count || 0);
             const logs = Array.isArray(data?.logs) ? data.logs : [];
+            globalThis.WorkbenchUI?.feedback(storeLinkMessage, data?.running ? "loading" : ((partial || (success && failed)) ? "partial" : failed ? "error" : "success"));
             if (storeLinkRemoteUpdateLog) {
                 storeLinkRemoteUpdateLog.textContent = logs.length
                     ? logs.join("\n")
@@ -28514,191 +28935,6 @@
                 await loadAppealPhrases(true);
             } catch (error) {
                 alert(`删除话术失败：${error.message || error}`);
-            }
-        }
-
-        function renderInfringementKnowledge(data) {
-            const summary = data?.summary || {};
-            document.getElementById("infringement-knowledge-total").textContent = Number(summary.total || 0).toLocaleString("zh-CN");
-            document.getElementById("infringement-knowledge-whitelist").textContent = Number(summary.whitelist || 0).toLocaleString("zh-CN");
-            document.getElementById("infringement-knowledge-blacklist").textContent = Number(summary.blacklist || 0).toLocaleString("zh-CN");
-            document.getElementById("infringement-knowledge-result-count").textContent = `当前显示 ${Number(data?.filtered_total || 0).toLocaleString("zh-CN")} 条，共 ${Number(summary.total || 0).toLocaleString("zh-CN")} 条记录`;
-
-            if (!infringementKnowledgeRows.length) {
-                infringementKnowledgeBody.innerHTML = '<tr><td class="empty-state" colspan="7">没有符合条件的品牌记录</td></tr>';
-                return;
-            }
-            const canManage = hasWorkbenchPermission("infringement_knowledge.manage");
-            infringementKnowledgeBody.innerHTML = infringementKnowledgeRows.map(row => {
-                const isBlacklist = row.list_type === "blacklist";
-                return `
-                    <tr>
-                        <td><span class="knowledge-brand">${escapeHtml(row.brand_name || "-")}</span></td>
-                        <td><span class="knowledge-list-badge ${isBlacklist ? "blacklist" : ""}">${isBlacklist ? "黑名单" : "白名单"}</span></td>
-                        <td><span class="status-tag ${isBlacklist ? "fail" : ""}">${isBlacklist ? "侵权" : "不侵权"}</span></td>
-                        <td><span class="status-tag ${row.source_type === "analysis" ? "" : "empty"}" title="${escapeHtml(row.source_detail || "")}">${row.source_type === "analysis" ? `AI · ${Number(row.evidence_count || 0)} 条` : "人工"}</span></td>
-                        <td><span class="knowledge-notes">${escapeHtml(row.notes || "-")}</span></td>
-                        <td title="${escapeHtml(row.updated_at || "")}">${escapeHtml(row.updated_at || "-")}</td>
-                        <td>
-                            ${canManage ? `
-                                <div class="appeal-phrase-actions">
-                                    <button class="secondary" type="button" onclick="openInfringementKnowledgeEditor(${Number(row.id)})">修改</button>
-                                    <button class="danger" type="button" onclick="deleteInfringementKnowledge(${Number(row.id)})">删除</button>
-                                </div>
-                            ` : "-"}
-                        </td>
-                    </tr>
-                `;
-            }).join("");
-        }
-
-        async function loadInfringementKnowledge(force = false) {
-            if (!infringementKnowledgeBody || (infringementKnowledgeLoaded && !force)) return;
-            infringementKnowledgeBody.innerHTML = '<tr><td class="empty-state" colspan="7">正在加载侵权知识库...</td></tr>';
-            const params = new URLSearchParams();
-            const listType = document.getElementById("infringement-knowledge-type-filter").value;
-            const search = document.getElementById("infringement-knowledge-search").value.trim();
-            if (listType) params.set("list_type", listType);
-            if (search) params.set("search", search);
-            try {
-                const response = await fetch(`/api/infringement-knowledge?${params.toString()}`, {cache: "no-store"});
-                const payload = await response.json();
-                if (!response.ok || payload.status !== "success") {
-                    throw new Error(payload.message || `接口请求失败：${response.status}`);
-                }
-                const data = payload.data || {};
-                infringementKnowledgeRows = Array.isArray(data.rows) ? data.rows : [];
-                infringementKnowledgeLoaded = true;
-                renderInfringementKnowledge(data);
-            } catch (error) {
-                infringementKnowledgeBody.innerHTML = `<tr><td class="empty-state" colspan="7">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
-            }
-        }
-
-        function openInfringementKnowledgeEditor(recordId = 0) {
-            if (!infringementKnowledgeForm || !hasWorkbenchPermission("infringement_knowledge.manage")) return;
-            const row = infringementKnowledgeRows.find(item => Number(item.id) === Number(recordId));
-            infringementKnowledgeId.value = row ? String(row.id) : "";
-            infringementKnowledgeBrand.value = row?.brand_name || "";
-            infringementKnowledgeListType.value = row?.list_type || "whitelist";
-            infringementKnowledgeNotes.value = row?.notes || "";
-            document.getElementById("infringement-knowledge-brand-hint").textContent = row
-                ? "修改模式一次只编辑一个品牌；保存后该记录转为人工维护"
-                : "每一行会作为一条独立记录，重复行自动忽略";
-            infringementKnowledgeForm.hidden = false;
-            infringementKnowledgeBrand.focus();
-            infringementKnowledgeForm.scrollIntoView({behavior: "smooth", block: "nearest"});
-        }
-
-        function closeInfringementKnowledgeEditor() {
-            if (!infringementKnowledgeForm) return;
-            infringementKnowledgeForm.reset();
-            infringementKnowledgeId.value = "";
-            infringementKnowledgeListType.value = "whitelist";
-            document.getElementById("infringement-knowledge-brand-hint").textContent = "每一行会作为一条独立记录，重复行自动忽略";
-            infringementKnowledgeForm.hidden = true;
-        }
-
-        function resetInfringementKnowledgeFilters() {
-            document.getElementById("infringement-knowledge-type-filter").value = "";
-            document.getElementById("infringement-knowledge-search").value = "";
-            infringementKnowledgeLoaded = false;
-            loadInfringementKnowledge(true);
-        }
-
-        async function deleteInfringementKnowledge(recordId) {
-            const row = infringementKnowledgeRows.find(item => Number(item.id) === Number(recordId));
-            if (!row || !window.confirm(`确定从侵权知识库删除品牌“${row.brand_name}”吗？`)) return;
-            try {
-                const response = await fetch(`/api/infringement-knowledge/${Number(recordId)}`, {method: "DELETE"});
-                const payload = await response.json();
-                if (!response.ok || payload.status !== "success") {
-                    throw new Error(payload.message || `接口请求失败：${response.status}`);
-                }
-                closeInfringementKnowledgeEditor();
-                infringementKnowledgeLoaded = false;
-                await loadInfringementKnowledge(true);
-            } catch (error) {
-                alert(`删除品牌失败：${error.message || error}`);
-            }
-        }
-
-        function renderInfringementKnowledgeAnalysisStatus(data) {
-            const running = Boolean(data?.running);
-            const globalIpButton = document.getElementById("fetch-global-ip-btn");
-            if (globalIpButton) globalIpButton.disabled = running;
-            infringementAnalysisStatus.textContent = data?.message || "等待启动";
-            infringementAnalysisLog.textContent = Array.isArray(data?.logs) && data.logs.length
-                ? data.logs.join("\n")
-                : "自动分析尚未启动";
-            infringementAnalysisLog.scrollTop = infringementAnalysisLog.scrollHeight;
-            if (startInfringementAnalysisBtn) {
-                startInfringementAnalysisBtn.disabled = running;
-                startInfringementAnalysisBtn.textContent = running ? "分析进行中..." : "开始自动分析";
-            }
-            if (running) {
-                infringementAnalysisWasRunning = true;
-                if (!infringementAnalysisPollTimer) {
-                    infringementAnalysisPollTimer = window.setTimeout(
-                        () => loadInfringementKnowledgeAnalysisStatus(),
-                        2500,
-                    );
-                }
-            } else {
-                if (infringementAnalysisPollTimer) {
-                    window.clearTimeout(infringementAnalysisPollTimer);
-                    infringementAnalysisPollTimer = null;
-                }
-                if (infringementAnalysisWasRunning) {
-                    infringementAnalysisWasRunning = false;
-                    infringementKnowledgeLoaded = false;
-                    loadInfringementKnowledge(true);
-                }
-            }
-        }
-
-        async function loadInfringementKnowledgeAnalysisStatus() {
-            if (!infringementAnalysisStatus) return;
-            if (infringementAnalysisPollTimer) {
-                window.clearTimeout(infringementAnalysisPollTimer);
-                infringementAnalysisPollTimer = null;
-            }
-            try {
-                const response = await fetch("/api/infringement-knowledge/analysis/status", {cache: "no-store"});
-                const payload = await response.json();
-                if (!response.ok || payload.status !== "success") {
-                    throw new Error(payload.message || `接口请求失败：${response.status}`);
-                }
-                renderInfringementKnowledgeAnalysisStatus(payload.data || {});
-            } catch (error) {
-                infringementAnalysisStatus.textContent = `状态读取失败：${error.message || error}`;
-            }
-        }
-
-        async function startInfringementKnowledgeAnalysis(globalIp = false) {
-            if (!hasWorkbenchPermission("infringement_knowledge.manage")) return;
-            if (!globalIp && !window.confirm("自动分析会调用 AI，并把分析结果写入知识库。人工记录不会被覆盖，是否继续？")) return;
-            startInfringementAnalysisBtn.disabled = true;
-            try {
-                const response = await fetch("/api/infringement-knowledge/analysis/start", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({
-                        global_ip: globalIp,
-                        infraction_limit: Number(document.getElementById("infringement-analysis-infraction-limit").value || 10000),
-                        active_limit: Number(document.getElementById("infringement-analysis-active-limit").value || 5000),
-                        batch_size: 300,
-                    }),
-                });
-                const payload = await response.json();
-                if (!response.ok && response.status !== 409) {
-                    throw new Error(payload.message || `接口请求失败：${response.status}`);
-                }
-                infringementAnalysisWasRunning = true;
-                renderInfringementKnowledgeAnalysisStatus(payload.data || {running: true, message: payload.message});
-            } catch (error) {
-                startInfringementAnalysisBtn.disabled = false;
-                infringementAnalysisStatus.textContent = `启动失败：${error.message || error}`;
             }
         }
 
@@ -30056,52 +30292,11 @@
             return `<td class="reputation-change-cell ${className}" title="${escapeHtml(text)}">${escapeHtml(text)}</td>`;
         }
 
-        function conciseAccountRiskWarningText(value) {
-            const cleaned = String(value ?? "")
-                .replace(/\b\d+\s*\[?go\s+to\s+(?:restrictions?|warnings?)\]?(?:\([^)]*\))?/gi, "")
-                .split(/\r?\n/)
-                .map(line => line.trim())
-                .filter(line => line && !/^(?:restrictions?|warnings?)$/i.test(line))
-                .join("\n")
-                .trim();
-            if (!cleaned) return "-";
-
-            const lines = cleaned.split("\n").map(line => line.trim()).filter(Boolean);
-            const timePattern = /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:\s*,?\s*(?:at|a\s+las)\s+\d{1,2}:\d{2})?\b/i;
-            const ignoredTitle = /^(?:active(?:\s+restrictions?)?|paused\s+features?|affected\s+features?|filter\s+and\s+sort)$/i;
-            const actionTitle = /^(?:edit|remove|delete|reactivate|resume|pause|review|appeal|contact)\b/i;
-            const details = [];
-
-            lines.forEach((line, index) => {
-                const timeMatch = line.match(timePattern);
-                if (!timeMatch) return;
-                let title = line.slice(0, timeMatch.index).trim();
-                if (!title) {
-                    for (let previous = index - 1; previous >= 0; previous -= 1) {
-                        const candidate = lines[previous];
-                        if (
-                            !timePattern.test(candidate) &&
-                            !ignoredTitle.test(candidate) &&
-                            !actionTitle.test(candidate)
-                        ) {
-                            title = candidate;
-                            break;
-                        }
-                    }
-                }
-                if (title) {
-                    const detail = `${title} ${timeMatch[0]}`;
-                    if (!details.includes(detail)) details.push(detail);
-                }
-            });
-            return details.length ? details.join("\n") : cleaned;
-        }
-
         function renderReputationWarningCell(value) {
-            const text = conciseAccountRiskWarningText(value);
+            const text = String(value ?? "").trim() || "-";
             const hasDetail = text !== "-" && text !== "正常";
             const detailAttrs = hasDetail
-                ? ` data-warning-detail="${escapeHtml(text)}" title="点击查看完整告警" tabindex="0" role="button" onclick="showReputationWarningDetail(this, event)" onkeydown="handleReputationWarningKeydown(event, this)"`
+                ? ` data-warning-detail="${escapeHtml(text)}" data-tooltip="${escapeHtml(text)}" title="鼠标悬停或点击查看完整告警" tabindex="0" role="button" onclick="showReputationWarningDetail(this, event)" onkeydown="handleReputationWarningKeydown(event, this)"`
                 : ` title="${escapeHtml(text)}"`;
             return `<td class="reputation-warning-cell${hasDetail ? " has-detail" : ""}"${detailAttrs}><span class="reputation-warning-preview">${escapeHtml(text)}</span></td>`;
         }
@@ -30199,20 +30394,54 @@
             trafficTooltip.style.top = `${Math.max(8, top)}px`;
         }
 
+        function hideTrafficTooltip() {
+            clearTimeout(reputationWarningTooltipCloseTimer);
+            reputationWarningTooltipCloseTimer = null;
+            if (!trafficTooltip) return;
+            trafficTooltip.style.display = "none";
+            trafficTooltip.classList.remove("reputation-warning-tooltip");
+        }
+
+        function scheduleReputationWarningTooltipClose() {
+            clearTimeout(reputationWarningTooltipCloseTimer);
+            reputationWarningTooltipCloseTimer = setTimeout(hideTrafficTooltip, 180);
+        }
+
         function bindTrafficTooltips() {
-            document.querySelectorAll(".traffic-cell, .reason-cell").forEach(cell => {
+            document.querySelectorAll(".traffic-cell, .reason-cell, .reputation-warning-cell.has-detail").forEach(cell => {
                 if (cell.dataset.tooltipBound === "1") return;
                 cell.dataset.tooltipBound = "1";
                 cell.addEventListener("mouseenter", event => {
                     if (!trafficTooltip) return;
+                    clearTimeout(reputationWarningTooltipCloseTimer);
+                    reputationWarningTooltipCloseTimer = null;
+                    trafficTooltip.classList.toggle("reputation-warning-tooltip", cell.classList.contains("reputation-warning-cell"));
                     trafficTooltip.textContent = cell.dataset.tooltip || "暂无详细内容";
                     trafficTooltip.style.display = "block";
+                    trafficTooltip.scrollTop = 0;
                     moveTrafficTooltip(event);
                 });
                 cell.addEventListener("mousemove", moveTrafficTooltip);
                 cell.addEventListener("mouseleave", () => {
-                    if (trafficTooltip) trafficTooltip.style.display = "none";
+                    if (cell.classList.contains("reputation-warning-cell")) {
+                        scheduleReputationWarningTooltipClose();
+                    } else {
+                        hideTrafficTooltip();
+                    }
                 });
+            });
+        }
+
+        if (trafficTooltip) {
+            trafficTooltip.addEventListener("mouseenter", () => {
+                if (!trafficTooltip.classList.contains("reputation-warning-tooltip")) return;
+                clearTimeout(reputationWarningTooltipCloseTimer);
+                reputationWarningTooltipCloseTimer = null;
+            });
+            trafficTooltip.addEventListener("mouseleave", () => {
+                if (trafficTooltip.classList.contains("reputation-warning-tooltip")) {
+                    scheduleReputationWarningTooltipClose();
+                }
             });
         }
 
@@ -30980,7 +31209,7 @@
                     `发现文件：${data.files_discovered || 0}`,
                     `成功读取：${data.files_processed || 0}`,
                     `读取订单行：${data.raw_rows || 0}`,
-                    `重复订单覆盖：${data.duplicate_rows || 0}`,
+                    `本批重复合并：${data.duplicate_rows || 0}`,
                     `空订单编号跳过：${data.blank_order_ids || 0}`,
                     `唯一订单入库：${data.imported_orders || 0}`,
                 ];
@@ -31037,10 +31266,18 @@
             loadHighAfterSaleAlerts();
         }
 
+        function renderOrderAnalysisImage(row) {
+            const imageUrl = String(row.image || "").trim();
+            if (!/^https?:\/\//i.test(imageUrl)) {
+                return '<span class="analysis-image-placeholder">暂无图片</span>';
+            }
+            return `<a class="analysis-product-image" href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener noreferrer" title="打开产品原图"><img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(row.product_id || '产品')}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add('missing');this.parentElement.removeAttribute('href');this.parentElement.removeAttribute('target');this.parentElement.title='图片加载失败';this.remove()"><span>暂无图片</span></a>`;
+        }
+
         function renderHighAfterSaleRows(rows) {
             if (!afterSaleAlertBody) return;
             if (!Array.isArray(rows) || !rows.length) {
-                afterSaleAlertBody.innerHTML = '<tr><td class="empty-state" colspan="8">所选时间段没有“取消-发货后”订单</td></tr>';
+                afterSaleAlertBody.innerHTML = '<tr><td class="empty-state" colspan="9">所选时间段没有“取消-发货后”订单</td></tr>';
                 return;
             }
             afterSaleAlertBody.innerHTML = rows.map(row => {
@@ -31048,8 +31285,9 @@
                 const rateClass = rate >= 10 ? "after-sale-rate-high" : "";
                 return `
                     <tr>
-                        <td>${escapeHtml(row.product_id || "-")}</td>
-                        <td title="${escapeHtml(row.title || "")}">${escapeHtml(row.title || "-")}</td>
+                        <td class="analysis-product-id">${escapeHtml(row.product_id || "-")}</td>
+                        <td>${renderOrderAnalysisImage(row)}</td>
+                        <td class="analysis-product-title" title="${escapeHtml(row.title || "")}">${escapeHtml(row.title || "-")}</td>
                         <td>${escapeHtml(row.sites || "-")}</td>
                         <td>${Number(row.total_quantity || 0).toLocaleString("zh-CN")}</td>
                         <td><strong>${Number(row.after_sale_quantity || 0).toLocaleString("zh-CN")}</strong></td>
@@ -31064,12 +31302,12 @@
             if (!afterSaleAlertBody || !loadAfterSaleAlertsBtn) return;
             if (afterSaleDateFrom.value && afterSaleDateTo.value
                 && afterSaleDateFrom.value > afterSaleDateTo.value) {
-                afterSaleAlertBody.innerHTML = '<tr><td class="empty-state" colspan="8">开始时间不能晚于结束时间</td></tr>';
+                afterSaleAlertBody.innerHTML = '<tr><td class="empty-state" colspan="9">开始时间不能晚于结束时间</td></tr>';
                 return;
             }
             loadAfterSaleAlertsBtn.disabled = true;
             loadAfterSaleAlertsBtn.textContent = "正在查询...";
-            afterSaleAlertBody.innerHTML = '<tr><td class="empty-state" colspan="8">正在汇总订单...</td></tr>';
+            afterSaleAlertBody.innerHTML = '<tr><td class="empty-state" colspan="9">正在汇总订单...</td></tr>';
             const params = new URLSearchParams({
                 sort_by: highAfterSaleSortBy,
                 sort_dir: "desc",
@@ -31095,7 +31333,7 @@
                 afterSaleOverallRate.textContent = `${Number(summary.after_sale_rate || 0).toFixed(2)}%`;
                 renderHighAfterSaleRows(data.rows || []);
             } catch (err) {
-                afterSaleAlertBody.innerHTML = `<tr><td class="empty-state" colspan="8">读取失败：${escapeHtml(err.message || err)}</td></tr>`;
+                afterSaleAlertBody.innerHTML = `<tr><td class="empty-state" colspan="9">读取失败：${escapeHtml(err.message || err)}</td></tr>`;
             } finally {
                 loadAfterSaleAlertsBtn.disabled = false;
                 loadAfterSaleAlertsBtn.textContent = "查询告警";
@@ -31143,7 +31381,7 @@
         function renderHighProfitRows(rows) {
             if (!highProfitBody) return;
             if (!Array.isArray(rows) || !rows.length) {
-                highProfitBody.innerHTML = '<tr><td class="empty-state" colspan="8">所选时间段没有盈利产品</td></tr>';
+                highProfitBody.innerHTML = '<tr><td class="empty-state" colspan="9">所选时间段没有盈利产品</td></tr>';
                 return;
             }
             highProfitBody.innerHTML = rows.map(row => {
@@ -31151,8 +31389,9 @@
                 const rateClass = rate >= 30 ? "profit-rate-high" : "";
                 return `
                     <tr>
-                        <td>${escapeHtml(row.product_id || "-")}</td>
-                        <td title="${escapeHtml(row.title || "")}">${escapeHtml(row.title || "-")}</td>
+                        <td class="analysis-product-id">${escapeHtml(row.product_id || "-")}</td>
+                        <td>${renderOrderAnalysisImage(row)}</td>
+                        <td class="analysis-product-title" title="${escapeHtml(row.title || "")}">${escapeHtml(row.title || "-")}</td>
                         <td>${escapeHtml(row.sites || "-")}</td>
                         <td>${Number(row.total_quantity || 0).toLocaleString("zh-CN")}</td>
                         <td>${formatRenminbi(row.total_income)}</td>
@@ -31167,12 +31406,12 @@
             if (!highProfitBody || !loadHighProfitBtn) return;
             if (profitDateFrom.value && profitDateTo.value
                 && profitDateFrom.value > profitDateTo.value) {
-                highProfitBody.innerHTML = '<tr><td class="empty-state" colspan="8">开始时间不能晚于结束时间</td></tr>';
+                highProfitBody.innerHTML = '<tr><td class="empty-state" colspan="9">开始时间不能晚于结束时间</td></tr>';
                 return;
             }
             loadHighProfitBtn.disabled = true;
             loadHighProfitBtn.textContent = "正在查询...";
-            highProfitBody.innerHTML = '<tr><td class="empty-state" colspan="8">正在汇总利润...</td></tr>';
+            highProfitBody.innerHTML = '<tr><td class="empty-state" colspan="9">正在汇总利润...</td></tr>';
             const params = new URLSearchParams({
                 sort_by: highProfitSortBy,
                 sort_dir: "desc",
@@ -31198,7 +31437,7 @@
                 profitOverallRate.textContent = `${Number(summary.profit_rate || 0).toFixed(2)}%`;
                 renderHighProfitRows(data.rows || []);
             } catch (err) {
-                highProfitBody.innerHTML = `<tr><td class="empty-state" colspan="8">读取失败：${escapeHtml(err.message || err)}</td></tr>`;
+                highProfitBody.innerHTML = `<tr><td class="empty-state" colspan="9">读取失败：${escapeHtml(err.message || err)}</td></tr>`;
             } finally {
                 loadHighProfitBtn.disabled = false;
                 loadHighProfitBtn.textContent = "查询产品";
@@ -32478,7 +32717,7 @@
 
         async function loadLatestReputation() {
             reputationLoaded = false;
-            reputationBody.innerHTML = '<tr><td class="empty-state" colspan="16">正在加载最新声誉数据...</td></tr>';
+            reputationBody.innerHTML = '<tr><td class="empty-state" colspan="17">正在加载最新声誉数据...</td></tr>';
             if (reputationSelectAll) reputationSelectAll.disabled = true;
             try {
                 const response = await fetch("/api/reputation/latest", {cache: "no-store"});
@@ -32495,7 +32734,7 @@
                 updateReputationFilterOptions(reputationRows);
 
                 if (!rows.length) {
-                    reputationBody.innerHTML = '<tr><td class="empty-state" colspan="16">暂无最新声誉数据</td></tr>';
+                    reputationBody.innerHTML = '<tr><td class="empty-state" colspan="17">暂无最新声誉数据</td></tr>';
                     reputationTotal.textContent = "0";
                     reputationGreen.textContent = "0";
                     reputationRisk.textContent = "0";
@@ -32509,7 +32748,7 @@
                 await loadCollectionOptions(true);
             } catch (err) {
                 reputationRows = [];
-                reputationBody.innerHTML = `<tr><td class="empty-state" colspan="16">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+                reputationBody.innerHTML = `<tr><td class="empty-state" colspan="17">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
                 updateReputationTableSelection();
             }
         }
@@ -32552,13 +32791,14 @@
         }
 
         const REPUTATION_SORT_KEYS = new Set([
-            "infraction_count", "rights_holder_count", "color", "order_total",
+            "infraction_count", "rights_holder_count", "color", "order_total", "orders_7d",
             "complaint_rate", "delay_rate", "cancellation_rate", "change_direction",
         ]);
 
         function reputationCountSortNumber(value) {
-            if (value === null || value === undefined || value === "") return null;
-            const number = Number(String(value).replace(/[,，\s]/g, ""));
+            const text = String(value ?? "").trim();
+            if (!text) return null;
+            const number = Number(text.replace(/[,，\s]/g, ""));
             if (!Number.isFinite(number) || number < 0) return null;
             return number;
         }
@@ -32589,6 +32829,7 @@
                 rights_holder_count: reputationCountSortNumber(row["权利人数量"]),
                 color: reputationColorSortRank(row["声誉颜色"]),
                 order_total: reputationCountSortNumber(row["总单量"]),
+                orders_7d: reputationCountSortNumber(row["七天单量"] ?? row.orders_current_7d),
                 complaint_rate: parseReputationPercentage(row["投诉率"]),
                 delay_rate: parseReputationPercentage(row["延误率"]),
                 cancellation_rate: parseReputationPercentage(row["取消率"]),
@@ -32662,7 +32903,7 @@
                 reputationFilterSummary.textContent = `显示 ${rows.length.toLocaleString("zh-CN")} / ${reputationRows.length.toLocaleString("zh-CN")} 条`;
             }
             if (!rows.length) {
-                reputationBody.innerHTML = '<tr><td class="empty-state" colspan="16">暂无符合业务员、账号组和名字筛选条件的声誉数据</td></tr>';
+                reputationBody.innerHTML = '<tr><td class="empty-state" colspan="17">暂无符合业务员、账号组和名字筛选条件的声誉数据</td></tr>';
                 updateReputationTableSelection();
                 return;
             }
@@ -32679,6 +32920,7 @@
                         <td>${renderReputationOfficialCount(row["权利人数量"])}</td>
                         <td title="${escapeHtml(row["声誉颜色"])}">${renderReputationColor(row["声誉颜色"])}</td>
                         <td title="${escapeHtml(row["总单量"])}">${escapeHtml(row["总单量"])}</td>
+                        <td title="${escapeHtml(row["七天单量"] ?? row.orders_current_7d ?? "-")}">${escapeHtml(row["七天单量"] ?? row.orders_current_7d ?? "-")}</td>
                         ${renderReputationRateCell("投诉率", row["投诉率"])}
                         ${renderReputationRateCell("延误率", row["延误率"])}
                         ${renderReputationRateCell("取消率", row["取消率"])}
@@ -33815,57 +34057,6 @@
             }
         });
 
-        infringementKnowledgeForm?.addEventListener("submit", async event => {
-            event.preventDefault();
-            const recordId = Number(infringementKnowledgeId.value || 0);
-            const brandName = infringementKnowledgeBrand.value.trim();
-            if (!brandName) {
-                alert("品牌名称不能为空");
-                infringementKnowledgeBrand.focus();
-                return;
-            }
-            if (recordId && brandName.split(/\r?\n/).filter(line => line.trim()).length > 1) {
-                alert("修改记录时一次只能填写一个品牌");
-                infringementKnowledgeBrand.focus();
-                return;
-            }
-            const saveButton = document.getElementById("save-infringement-knowledge-btn");
-            saveButton.disabled = true;
-            try {
-                const response = await fetch(
-                    recordId ? `/api/infringement-knowledge/${recordId}` : "/api/infringement-knowledge/bulk",
-                    {
-                        method: recordId ? "PUT" : "POST",
-                        headers: {"Content-Type": "application/json"},
-                        body: JSON.stringify(recordId ? {
-                            brand_name: brandName,
-                            list_type: infringementKnowledgeListType.value,
-                            notes: infringementKnowledgeNotes.value.trim(),
-                        } : {
-                            brands_text: brandName,
-                            list_type: infringementKnowledgeListType.value,
-                            notes: infringementKnowledgeNotes.value.trim(),
-                        }),
-                    },
-                );
-                const payload = await response.json();
-                if (!response.ok || payload.status !== "success") {
-                    throw new Error(payload.message || `接口请求失败：${response.status}`);
-                }
-                if (!recordId) {
-                    const result = payload.data || {};
-                    alert(`批量处理完成：新增 ${Number(result.inserted || 0)} 条，恢复 ${Number(result.restored || 0)} 条，已存在跳过 ${Number(result.skipped || 0)} 条`);
-                }
-                closeInfringementKnowledgeEditor();
-                infringementKnowledgeLoaded = false;
-                await loadInfringementKnowledge(true);
-            } catch (error) {
-                alert(`保存品牌失败：${error.message || error}`);
-            } finally {
-                saveButton.disabled = false;
-            }
-        });
-
         async function stopTask() {
             if (!activeAppealTaskId || appealStopRequested) {
                 return;
@@ -33993,10 +34184,16 @@
         }
 
     </script>
+    <script src="{{ url_for('static', filename='salesperson-stats.js') }}?v=20261003"></script>
     <script src="{{ url_for('static', filename='store-analysis.js') }}?v=20260929-order-trend"></script>
     <script src="{{ url_for('static', filename='collection-ai.js') }}?v=20260927-agent"></script>
 <script src="{{ url_for('static', filename='order-management-details.js') }}?v=20260929-outbound-detail"></script>
-    <script src="{{ url_for('static', filename='console-workflow.js') }}?v=20260930"></script>
+    <script src="{{ url_for('static', filename='console-navigation.js') }}?v=20261003"></script>
+    <script src="{{ url_for('static', filename='console-workflow.js') }}?v=20261002-ui"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='mercado-attribute-preflight.css') }}?v=20261003">
+    <script src="{{ url_for('static', filename='mercado-attribute-preflight.js') }}?v=20261003"></script>
     <script src="{{ url_for('static', filename='service-health.js') }}?v=20260930"></script>
+    <script src="{{ url_for('static', filename='wipo-sync.js') }}?v=20261003"></script>
+    <script src="{{ url_for('static', filename='infringement-knowledge.js') }}?v=20261003"></script>
 </body>
 </html>

@@ -262,7 +262,7 @@ def _order_total(
         access_token,
         ORDERS_SEARCH_PATH,
         params={
-            "seller": str(seller_id),
+            "seller.id": str(seller_id),
             "site": normalized_site_id,
             "date_created.from": _api_datetime(date_from),
             "date_created.to": _api_datetime(date_to),
@@ -275,7 +275,11 @@ def _order_total(
     )
     if not isinstance(payload, Mapping):
         raise MercadoReputationError("美客多订单接口返回格式错误")
-    return _paging_total(payload)
+    raw_total = _mapping(payload.get("paging")).get("total", payload.get("total"))
+    total = _number(raw_total)
+    if isinstance(raw_total, bool) or not isinstance(total, int) or total < 0:
+        raise MercadoReputationError("美客多订单接口未返回有效订单总数")
+    return total
 
 
 def _format_change_rate(current: int, previous: int) -> tuple[str, str, float]:
@@ -401,15 +405,23 @@ def _sample_site_listing_status(
         raise MercadoReputationError("缺少站点 seller_id，无法读取刊登")
     sampled_ids = []
     expected_count = None
+    search_error = ""
     for offset in range(0, size, 50):
-        payload = _fetch_json(
-            access_token, f"/marketplace/users/{seller}/items/search",
-            params={"limit": min(50, size - offset), "offset": offset,
-                    "orders": "start_time_desc"},
-            http=http, timeout=timeout, label="站点最新刊登接口",
-        )
+        try:
+            payload = _fetch_json(
+                access_token, f"/marketplace/users/{seller}/items/search",
+                params={"limit": min(50, size - offset), "offset": offset,
+                        "orders": "start_time_desc"},
+                http=http, timeout=timeout, label="站点最新刊登接口",
+            )
+        except MercadoReputationError as exc:
+            if exc.status_code == 401:
+                raise
+            search_error = str(exc)
+            break
         if not isinstance(payload, Mapping) or not isinstance(payload.get("results"), list):
-            raise MercadoReputationError("站点最新刊登接口返回格式错误")
+            search_error = "站点最新刊登接口返回格式错误"
+            break
         ids = [str(value).strip() for value in payload["results"] if str(value or "").strip()]
         if expected_count is None:
             total = _mapping(payload.get("paging")).get("total")
@@ -426,12 +438,15 @@ def _sample_site_listing_status(
 
     sample = {
         "listing_sample_source": "official_listing_api",
+        "listing_sample_expected_count": expected_count,
         "listing_sample_requested_count": len(sampled_ids),
         "listing_sample_count": 0,
         "listing_sample_active_count": 0,
         "listing_sample_inactive_count": 0,
         "listing_sample_status": None,
     }
+    if search_error:
+        sample["listing_sample_error"] = search_error
     if not sampled_ids:
         return sample
 
@@ -494,6 +509,8 @@ def _apply_listing_sample_status(
 
     row.update(dict(sample))
     sample_status = sample.get("listing_sample_status")
+    row.setdefault("site_status_official_display", row.get("site_status_display"))
+    row.setdefault("site_status_official_account_status", row.get("account_status"))
     row.update({"suspension_until": "", "suspension_days": None,
                 "suspension_remaining_days": None, "suspension_total_days": None})
     if sample_status not in ("active", "inactive"):
@@ -501,8 +518,6 @@ def _apply_listing_sample_status(
                     "site_status_source": "official_listing_api"})
         return
 
-    row.setdefault("site_status_official_display", row.get("site_status_display"))
-    row.setdefault("site_status_official_account_status", row.get("account_status"))
     if sample_status == "active":
         row.update({
             "account_status": "normal",
@@ -706,56 +721,51 @@ def enrich_reputation_with_official_data(
                     timeout=timeout,
                 )
                 _apply_listing_sample_status(row, listing_sample)
+                if listing_sample.get("listing_sample_error"):
+                    errors.append(f"站点最新刊登：{listing_sample['listing_sample_error']}")
             except MercadoReputationError as exc:
                 if exc.status_code == 401:
                     raise
                 _apply_listing_sample_status(row, {})
                 errors.append(f"站点最新刊登：{exc}")
 
-        try:
-            previous_orders = _order_total(
-                access_token,
-                seller_id,
-                site_id,
-                previous_start,
-                current_start,
-                http=http,
-                timeout=timeout,
-            )
-            current_orders = _order_total(
-                access_token,
-                seller_id,
-                site_id,
-                current_start,
-                current_time,
-                http=http,
-                timeout=timeout,
-            )
+        order_counts = {}
+        for key, date_from, date_to, label in (
+            ("orders_previous_7d", previous_start, current_start, "前七天单量"),
+            ("orders_current_7d", current_start, current_time, "七天单量"),
+        ):
+            try:
+                order_counts[key] = _order_total(
+                    access_token, seller_id, site_id, date_from, date_to,
+                    http=http, timeout=timeout,
+                )
+            except MercadoReputationError as exc:
+                if exc.status_code == 401:
+                    raise
+                order_counts[key] = None
+                errors.append(f"{label}：{exc}")
+        row.update(order_counts)
+        row.update({
+            "gradient_source": "official_orders_api",
+            "gradient_disclaimer": SEVEN_DAY_RATE_DISCLAIMER,
+        })
+        previous_orders = order_counts["orders_previous_7d"]
+        current_orders = order_counts["orders_current_7d"]
+        if previous_orders is not None and current_orders is not None:
             direction, rate_text, rate = _format_change_rate(
                 current_orders, previous_orders
             )
             row.update({
-                "orders_current_7d": current_orders,
-                "orders_previous_7d": previous_orders,
                 "direction": direction,
                 "gradient_rate": rate_text,
                 "gradient_rate_percent": rate,
-                "gradient_source": "official_orders_api",
-                "gradient_disclaimer": SEVEN_DAY_RATE_DISCLAIMER,
             })
-        except MercadoReputationError as exc:
-            if exc.status_code == 401:
-                raise
+        else:
             row.update({
-                "orders_current_7d": None,
-                "orders_previous_7d": None,
                 "direction": "获取失败",
                 "gradient_rate": "-",
                 "gradient_rate_percent": None,
-                "gradient_source": "official_orders_api",
-                "gradient_disclaimer": SEVEN_DAY_RATE_DISCLAIMER,
             })
-            errors.append(f"七天变化率：{exc}")
 
         try:
             row["infraction_count"] = _infraction_total(

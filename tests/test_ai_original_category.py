@@ -47,8 +47,11 @@ def test_discovery_uses_product_identity_and_maps_only_live_schema():
 
 
 def test_empty_recommendation_does_not_keep_old_category():
-    with pytest.raises(ValueError, match='未推荐对应分类'):
-        complete_marketplace_category({}, {'product_type_en': 'Bottle'}, Client([]))
+    with pytest.raises(ValueError, match='无法从平台候选'):
+        complete_marketplace_category(
+            {}, {'product_type_en': 'Bottle'}, Client([]),
+            chat=lambda *a, **k: json.dumps({'category_id': '', 'search_query': 'Bottle'}),
+        )
 
 
 def test_missing_identity_does_not_query_with_marketing_title():

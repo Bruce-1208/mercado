@@ -43,6 +43,8 @@
     let taskReady = false;
     let busy = false;
     let busyMode = "";
+    let executionSubmitted = false;
+    let stopPending = false;
     let refreshPending = false;
     let pollGeneration = 0;
     const selectedOrderNumbers = new Set();
@@ -207,7 +209,7 @@
             render(currentRecords);
         });
         selectHead.appendChild(selectAll); header.appendChild(selectHead);
-        columns.forEach(([, label]) => { const th = document.createElement("th"); th.textContent = label; th.title = label; header.appendChild(th); });
+        columns.forEach(([key, label]) => { const th = document.createElement("th"); th.textContent = label; th.title = label; if (key.startsWith("declared_")) th.className = "wdr-old-value"; if (key.startsWith("actual_")) th.className = "wdr-new-value"; header.appendChild(th); });
         head.appendChild(header);
         if (!currentRecords.length) {
             const tr = document.createElement("tr"); const td = document.createElement("td");
@@ -234,6 +236,8 @@
             selectCell.appendChild(checkbox); tr.appendChild(selectCell);
             columns.forEach(([key]) => {
                 const td = document.createElement("td");
+                if (key.startsWith("declared_")) td.className = "wdr-old-value";
+                if (key.startsWith("actual_")) td.className = "wdr-new-value";
                 if (key === "image_url") {
                     const src = safeImageUrl(row[key]);
                     if (src) { const img = document.createElement("img"); img.src = src; img.alt = "产品图片"; img.loading = "lazy"; td.appendChild(img); } else td.textContent = "—";
@@ -323,7 +327,9 @@
                     : data.execute_status === "running" ? "执行中，正在处理"
                         : "正在执行";
                 status(`${data.execute_message || phase}（${data.execute_processed || 0}/${data.execute_total || 0}）`);
-                if (data.execute_status === "completed") { busy = false; status(data.execute_message); updateButtons(); break; }
+                stopPending = data.execute_status === "stopping";
+                updateButtons();
+                if (["completed", "stopped"].includes(data.execute_status)) { busy = false; executionSubmitted = false; stopPending = false; status(data.execute_message); updateButtons(); break; }
             }
             await new Promise((resolve) => window.setTimeout(resolve, 3000));
         }
@@ -341,6 +347,8 @@
         $("wdr-select-all-matching").textContent = allMatchingSelected ? "取消全选" : "全选筛选结果";
         $("wdr-zeshun-execute").disabled = !permission || busy || !hasRows || (allMatchingSelected ? !recordTotal : !selected.some((row) => canAction(row, "zeshun")));
         $("wdr-zying-execute").disabled = !permission || busy || !hasRows || (allMatchingSelected ? !recordTotal : !selected.some((row) => canAction(row, "zying")));
+        $("wdr-task-stop").disabled = !permission || !busy || busyMode !== "execute" || !executionSubmitted || stopPending;
+        $("wdr-task-stop").textContent = stopPending ? "正在终结…" : "任务终结";
         $("wdr-upload").disabled = busy;
         $("wdr-refresh-changed").disabled = refreshPending || (busy && busyMode !== "query");
         $("wdr-filter-apply").disabled = refreshPending || busy;
@@ -414,11 +422,23 @@
             : `已选 ${rows.length} 条订单`;
         const scope = action === "zeshun" ? "将同时更新授权店铺内所有已同步的同名链接（标题完全相同），每条链接保留并重新提交各自当前净收益。" : "";
         if (!window.confirm(`确认更新${selectionDescription}的${label}吗？${scope}`)) return;
+        executionSubmitted = false; stopPending = false;
         busyMode = "execute"; busy = true; updateButtons(); status(`正在提交${label}更新…`);
         try {
             await api(`/api/weight-dimensions-records/${encodeURIComponent(taskId)}/execute`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({action, execution_target: executionTarget, select_all_matching: allMatchingSelected, excluded_order_numbers: allMatchingSelected ? Array.from(excludedOrderNumbers) : [], order_numbers: allMatchingSelected ? [] : rows.map((row) => row.order_number), agent_id: $("wdr-agent-id")?.value || ""}) });
+            executionSubmitted = true; updateButtons();
             await poll("execute");
         } catch (error) { busy = false; status(`执行失败：${errorMessage(error)}`); updateButtons(); }
+    }
+    async function stopExecution() {
+        if (!taskId || !busy || !executionSubmitted || stopPending) return;
+        stopPending = true; updateButtons();
+        try {
+            const data = await api(`/api/weight-dimensions-records/${encodeURIComponent(taskId)}/stop`, {method: "POST"});
+            status(data.message || "正在终结任务，当前产品处理结束后停止后续更新");
+        } catch (error) {
+            stopPending = false; status(`任务终结失败：${errorMessage(error)}`); updateButtons();
+        }
     }
     async function loadAgents() {
         const select = $("wdr-agent-id"); if (!select) return;
@@ -454,6 +474,7 @@
             render(currentRecords);
         });
         $("wdr-zeshun-execute").addEventListener("click", () => execute("zeshun")); $("wdr-zying-execute").addEventListener("click", () => execute("zying"));
+        $("wdr-task-stop").addEventListener("click", stopExecution);
         $("wdr-agent-refresh").addEventListener("click", loadAgents);
         $("wdr-execution-target")?.addEventListener("change", () => {
             const server = $("wdr-execution-target").value === "server";

@@ -73,26 +73,33 @@ class ReputationSortingTests(unittest.TestCase):
             {"侵权数量": 1, "权利人数量": 0},
         )
 
-    def test_latest_reputation_is_sorted_by_shop_total_traffic_across_sites(self):
+    def test_latest_reputation_is_sorted_by_site_seven_day_orders(self):
         rows = [
             {
                 "店铺名": "多站点店铺",
                 "站点": "墨西哥",
                 "总单量": "10",
+                "七天单量": 120,
                 "一周流量趋势": "[60, 60]",
             },
             {
                 "店铺名": "单站点店铺",
                 "站点": "巴西",
                 "总单量": "999",
+                "七天单量": 200,
                 "一周流量趋势": "[200]",
             },
             {
                 "店铺名": "多站点店铺",
                 "站点": "阿根廷",
                 "总单量": "20",
+                "七天单量": 100,
                 "一周流量趋势": "[50, 50]",
             },
+            {"店铺名": "未知单量店铺", "站点": "墨西哥", "总单量": 9999,
+             "七天单量": None, "一周流量趋势": "[9999]"},
+            {"店铺名": "零单量店铺", "站点": "巴西", "总单量": 9999,
+             "七天单量": 0, "一周流量趋势": "[9999]"},
         ]
         with (
             mock.patch.object(bit_mysql, "_ensure_column"),
@@ -103,6 +110,8 @@ class ReputationSortingTests(unittest.TestCase):
                     {"店铺名": "多站点店铺", "站点": "墨西哥"},
                     {"店铺名": "多站点店铺", "站点": "阿根廷"},
                     {"店铺名": "单站点店铺", "站点": "巴西"},
+                    {"店铺名": "未知单量店铺", "站点": "墨西哥"},
+                    {"店铺名": "零单量店铺", "站点": "巴西"},
                 ],
             ),
             mock.patch.object(
@@ -121,11 +130,14 @@ class ReputationSortingTests(unittest.TestCase):
         self.assertEqual(
             [(row["店铺名"], row["站点"]) for row in data["rows"]],
             [
+                ("单站点店铺", "巴西"),
                 ("多站点店铺", "墨西哥"),
                 ("多站点店铺", "阿根廷"),
-                ("单站点店铺", "巴西"),
+                ("零单量店铺", "巴西"),
+                ("未知单量店铺", "墨西哥"),
             ],
         )
+        self.assertEqual([row["orders_current_7d"] for row in data["rows"]], [200, 120, 100, 0, None])
         self.assertTrue(all(row["侵权数量"] == 0 for row in data["rows"]))
         self.assertTrue(all(row["权利人数量"] == 0 for row in data["rows"]))
         self.assertTrue(all(row["侵权统计天数"] == 100 for row in data["rows"]))
@@ -136,6 +148,8 @@ class ReputationSortingTests(unittest.TestCase):
                 ("多站点店铺", "墨西哥"),
                 ("多站点店铺", "阿根廷"),
                 ("单站点店铺", "巴西"),
+                ("未知单量店铺", "墨西哥"),
+                ("零单量店铺", "巴西"),
             },
         )
 

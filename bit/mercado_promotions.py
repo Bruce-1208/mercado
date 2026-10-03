@@ -90,6 +90,7 @@ def sync_promotions(
                 for account in accounts:
                     user_id = str(account.get("user_id") or "")
                     site_id = str(account.get("site_id") or "").upper()
+                    store.record_scope_sync(token_id, site_id, 'running')
                     site_setting = next(
                         (
                             setting for setting in summary.get("site_settings") or ()
@@ -97,6 +98,7 @@ def sync_promotions(
                         ),
                         {},
                     )
+                    seen_promotion_ids = []
                     for promotion in adapter.iter_promotions(user_id):
                         local_id = store.upsert_promotion(
                             token_id=token_id,
@@ -110,11 +112,13 @@ def sync_promotions(
                         )
                         promotion_count += 1
                         promotion_id = str(promotion.get("id") or "").strip()
+                        seen_promotion_ids.append(promotion_id)
                         if not promotion_id:
                             continue
                         # Replace only after the iterator finishes completely.
                         items = list(adapter.iter_items(user_id, promotion_id))
                         item_count += store.replace_items(local_id, items)
+                    store.record_scope_sync(token_id, site_id, 'succeeded', seen_promotion_ids)
                 total_promotions += promotion_count
                 total_items += item_count
                 results.append({

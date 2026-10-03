@@ -203,6 +203,45 @@ def test_new_batch_reprocesses_historical_first_product_before_reading_second(tm
                if event['task_id'] == '1')
 
 
+@pytest.mark.parametrize('historical_status', ['risk', 'blocked', 'success', 'skipped'])
+def test_resume_rechecks_old_batch_but_preserves_current_batch(tmp_path, monkeypatch, historical_status):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    for key in ('1', '2'):
+        service.store.add({'erp_goods_id': key, 'title': '历史商品',
+                           'main_image_url': f'https://img.example/{key}.jpg'})
+        service.store.update(key, status=historical_status, stage='done',
+                             decision_reason='历史处理结果')
+    service.store.record_run_item('older-batch', '1', execution_result='风险')
+    service.store.record_run_item('image-ten', '2', execution_result='处理完成')
+    monkeypatch.setattr(service.config, 'load', lambda: dict(config))
+    monkeypatch.setattr(service, 'require_login', lambda cfg: None)
+    monkeypatch.setattr(service, 'preflight', lambda *args: None)
+    captured = []
+
+    class DeferredThread:
+        def __init__(self, target, args, **kwargs):
+            captured.append((target, args))
+        def start(self): pass
+        def is_alive(self): return False
+
+    monkeypatch.setattr('erp.ai_weight_price.service.threading.Thread', DeferredThread)
+    checked = []
+    def read_review_status(task):
+        checked.append(task['erp_goods_id'])
+        return browser.records[task['erp_goods_id']]['review_status']
+    browser.read_review_status = read_review_status
+    service.start('pipeline', selection=config['run_selection'], max_items=10, resume=True)
+    target, args = captured[0]
+    browser.config = args[0]
+    target(*args)
+
+    assert browser.operations[:4] == [('collect', '1'), ('image', '1'), ('detail', '1'), ('save', '1')]
+    assert '1' in checked and '2' not in checked
+    assert ('image', '2') not in browser.operations
+    assert ('save', '2') not in browser.operations
+    assert service.store.get('1')['retry_history'][-1]['reason'] == '历史处理结果'
+
+
 def test_official_sku_weight_skips_redundant_supplier_model_call(tmp_path, monkeypatch):
     service, browser, config = make_service(tmp_path, monkeypatch)
     config['max_items'] = 1

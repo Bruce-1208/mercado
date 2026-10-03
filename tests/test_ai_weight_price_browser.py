@@ -1416,3 +1416,180 @@ def test_missing_product_search_pauses_instead_of_skipping(page, monkeypatch):
     with pytest.raises(CircuitOpen, match='当前匹配 0 个'):
         adapter._search_zying_product(page, '123')
     assert retained == [page]
+
+
+@pytest.mark.parametrize('selector', ['', '#legacy-dimensions', '.dimension-side'])
+def test_zying_package_three_fields_follow_axis_labels_and_survive_reload(page, monkeypatch, selector):
+    html = '''<meta charset="utf-8"><div class="curd-detail-wrap">
+      <div class="crud-detail-header"><h1 class="h1">123</h1></div>
+      <input id="weight" value="100">
+      <div class="ant-form-item"><div class="ant-form-item-label">包装尺寸</div>
+        <input id="legacy-dimensions" value="old">
+        <input class="dimension-side" id="h" placeholder="高（cm）" value="3">
+        <input class="dimension-side" id="l" placeholder="长(cm)" value="1">
+        <input class="dimension-side" id="w" aria-label="包装宽度（厘米）" value="2">
+      </div>
+      <div class="ant-form-item"><div class="ant-form-item-label">产品级别</div>
+        <select id="level"><option>普通</option><option>重点</option></select>
+      </div>
+      <button id="save">保存</button><span id="saved" hidden>保存成功</span>
+    </div><script>
+      const fields=['weight','l','w','h','level','legacy-dimensions'];
+      const saved=JSON.parse(localStorage.getItem('package')||'null');
+      if(saved) fields.forEach(id=>document.getElementById(id).value=saved[id]);
+      document.getElementById('save').onclick=()=>{
+        localStorage.setItem('package',JSON.stringify(Object.fromEntries(fields.map(id=>[id,document.getElementById(id).value]))));
+        document.getElementById('saved').hidden=false;
+      };
+    </script>'''
+    page.route('https://meli.zying.net/**', lambda route: route.fulfill(content_type='text/html', body=html))
+    page.goto('https://meli.zying.net/product')
+    config = validate({'selectors': {'erp_save': '#save', 'erp_saved': '#saved', 'erp_dimensions_input': selector}})
+    adapter = Browser(config, threading.Event(), lambda *a: None)
+    monkeypatch.setattr(adapter, 'page', lambda *a: page)
+    monkeypatch.setattr(adapter, 'release', lambda *a: None)
+    monkeypatch.setattr(adapter, '_open_zying_product_by_id', lambda *a: None)
+    result = adapter.update_package_by_product_id('123', '450', '30x20x10')
+    assert result['dimensions_cm'] == '30x20x10'
+    assert [page.locator(f'#{axis}').input_value() for axis in ('l', 'w', 'h')] == ['30', '20', '10']
+    assert page.locator('#legacy-dimensions').input_value() == 'old'
+    assert page.locator('#weight').input_value() == '450'
+    assert page.locator('#level').input_value() == '重点'
+
+
+def test_zying_three_dimension_fields_reject_duplicate_axis(page):
+    page.set_content('''<div id="root"><input placeholder="长(cm)"><input placeholder="长(cm)">
+        <input placeholder="宽(cm)"><input placeholder="高(cm)"></div>''')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    with pytest.raises(ValueError, match='唯一定位'):
+        adapter._zying_package_dimension_controls(page.locator('#root'))
+
+
+@pytest.mark.parametrize('prefix,selector', [('', ''), ('product_', '#product_sizeLength')])
+def test_package_update_current_zying_form_waits_for_lazy_list_and_detail(page, monkeypatch, prefix, selector):
+    # Layout observed in Zying's 260928-173241 product bundle: only sizeLength
+    # has the 包装尺寸 label, while sizeWidth/sizeHeight are unlabeled siblings.
+    html = r'''<meta charset="utf-8"><main id="app">加载中</main><script>
+    const prefix = PREFIX;
+    setTimeout(() => {
+      document.querySelector('#app').innerHTML = '<form id="filters"><input placeholder="产品编号"><button>搜索</button></form><div id="list"></div>';
+      document.querySelector('#filters').onsubmit = e => {
+        e.preventDefault();
+        localStorage.setItem('searches', Number(localStorage.getItem('searches') || 0) + 1);
+        document.querySelector('#list').innerHTML = '<div class="product-item"><span class="product-id">123</span><button type="button" class="product-title">样品</button></div>';
+        document.querySelector('.product-title').onclick = openDetail;
+      };
+    }, 250);
+    function openDetail() {
+      document.body.insertAdjacentHTML('beforeend', `<div class="curd-detail-wrap">
+        <div class="crud-detail-header"><div class="h1">产品编号：123</div></div>
+        <div id="loading" class="ant-spin-spinning">加载详情</div>
+        <form id="detail"><div class="ant-form-item"><div class="ant-form-item-label">包装毛重</div>
+          <div class="ant-form-item"><input id="weight" disabled></div>
+          <div class="ant-form-item"><div class="ant-form-item-label">包装尺寸</div><input id="${prefix}sizeLength"></div>X
+          <div class="ant-form-item"><input id="${prefix}sizeWidth"></div>X
+          <div class="ant-form-item"><input id="${prefix}sizeHeight"></div>厘米
+        </div>
+        <div class="ant-form-item"><div class="ant-form-item-label">产品级别</div>
+          <select id="level"><option>普通</option><option>重点</option></select>
+        </div><button type="submit">确认保存</button><p id="saved" hidden>保存成功</p></form></div>`);
+      setTimeout(() => {
+        const old=JSON.parse(localStorage.getItem('package') || '{"weight":"100","sizeLength":"1","sizeWidth":"2","sizeHeight":"3","level":"普通"}');
+        for(const [name,value] of Object.entries(old)) document.getElementById(name.startsWith('size') ? prefix+name : name).value=value;
+        document.querySelector('#weight').disabled=false;
+        document.querySelector('#loading').remove();
+      }, 250);
+      document.querySelector('#detail').onsubmit = e => {
+        e.preventDefault();
+        const result={level:document.querySelector('#level').value};
+        for(const name of ['weight','sizeLength','sizeWidth','sizeHeight']) {
+          result[name]=Number(document.getElementById(name.startsWith('size') ? prefix+name : name).value).toFixed(2);
+        }
+        localStorage.setItem('package',JSON.stringify(result));
+        document.querySelector('#saved').hidden=false;
+      };
+    }
+    </script>'''.replace('PREFIX', repr(prefix))
+    page.route('https://meli.zying.net/**', lambda route: route.fulfill(body=html, content_type='text/html'))
+    page.goto('https://meli.zying.net/#/product')
+    adapter = Browser(validate({'selectors': {'erp_dimensions_input': selector}}), threading.Event(), lambda *a, **kw: None)
+    monkeypatch.setattr(adapter, 'page', lambda *a: page)
+    monkeypatch.setattr(adapter, 'release', lambda *a: None)
+    result = adapter.update_package_by_product_id('123', '664', '37x33x8')
+    assert result['dimensions_cm'] == '37x33x8'
+    assert [page.locator(f'#{prefix}{name}').input_value() for name in ('sizeLength','sizeWidth','sizeHeight')] == ['37.00','33.00','8.00']
+    assert page.locator('#weight').input_value() == '664.00'
+    assert page.evaluate("localStorage.getItem('searches')") == '2'
+
+
+def test_current_zying_partial_size_fields_never_fall_back_to_combined_input(page):
+    page.set_content('''<div id="root"><div class="ant-form-item">
+      <div class="ant-form-item-label">包装尺寸</div><input id="sizeLength"></div></div>''')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    with pytest.raises(ValueError, match='三个尺寸框'):
+        adapter._zying_package_dimension_controls(page.locator('#root'))
+
+
+def test_product_search_wait_is_cancellable(page):
+    page.set_content('<main>加载中</main>')
+    stop = threading.Event()
+    stop.set()
+    from erp.ai_weight_price.browser import Stopped
+    adapter = Browser(validate({}), stop, lambda *a: None)
+    with pytest.raises(Stopped):
+        adapter._search_zying_product(page, '123')
+
+
+@pytest.mark.parametrize('initial_count,delay', [(2, 6200), (1, 2300), (0, 300)])
+def test_product_number_search_waits_for_delayed_results(page, initial_count, delay):
+    page.set_content('''<form><input placeholder="产品编号"><button>搜索</button></form>
+      <div id="list"></div><script>
+      const list=document.querySelector('#list');
+      function card(id) {return `<div class="product-item"><span class="product-id">${id}</span>
+        <button class="product-title" onclick="window.opened='${id}';document.querySelector('#detail').hidden=false">样品</button></div>`;}
+      document.querySelector('form').onsubmit=e=>{e.preventDefault();
+        setTimeout(()=>{list.innerHTML=card('734690209')}, DELAY);};
+      list.innerHTML=Array.from({length:COUNT},(_,i)=>card(String(i+1))).join('');
+      </script><div id="detail" class="curd-detail-wrap" hidden>
+      <div class="crud-detail-header"><h1 class="h1">734690209</h1></div></div>
+    '''.replace('DELAY', str(delay)).replace('COUNT', str(initial_count)))
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    adapter._open_zying_product_by_id(page, '734690209')
+    assert page.evaluate('window.opened') == '734690209'
+
+
+@pytest.mark.parametrize('loading', [False, True])
+def test_product_number_search_never_opens_wrong_or_loading_card(page, loading):
+    page.set_content('''<input placeholder="产品编号"><button>搜索</button>
+      <div class="product-item"><span class="product-id">999</span>
+      <button class="product-title" onclick="window.opened=true">样品</button></div>''')
+    if loading:
+        page.locator('.product-id').evaluate("e=>e.textContent='734690209'")
+        page.evaluate("document.body.insertAdjacentHTML('beforeend','<div class=\"ant-spin-spinning\">加载中</div>')")
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    with pytest.raises(ValueError, match='列表仍在加载' if loading else '当前可见卡片 1 个'):
+        adapter._open_zying_product_by_id(page, '734690209', timeout=.2)
+    assert page.evaluate('window.opened || false') is False
+
+
+def test_product_number_search_ignores_hidden_duplicate_card(page):
+    page.set_content('''<input placeholder="产品编号"><button>搜索</button>
+      <div class="product-item" hidden><span class="product-id">734690209</span></div>
+      <div class="product-item"><span class="product-id">734690209</span>
+      <button class="product-title" onclick="document.querySelector('#detail').hidden=false">样品</button></div>
+      <div id="detail" class="curd-detail-wrap" hidden>
+      <div class="crud-detail-header"><h1 class="h1">734690209</h1></div></div>''')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    adapter._open_zying_product_by_id(page, '734690209')
+    assert page.locator('#detail').is_visible()
+
+
+def test_product_number_search_idless_fallback_still_checks_detail(page):
+    page.set_content('''<input placeholder="产品编号"><button>搜索</button>
+      <div class="product-item">
+      <button class="product-title" onclick="document.querySelector('#detail').hidden=false">样品</button></div>
+      <div id="detail" class="curd-detail-wrap" hidden>
+      <div class="crud-detail-header"><h1 class="h1">999</h1></div></div>''')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    with pytest.raises(ValueError, match='打开的智赢商品编号不匹配'):
+        adapter._open_zying_product_by_id(page, '734690209', timeout=.2)

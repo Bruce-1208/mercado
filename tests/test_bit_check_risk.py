@@ -239,6 +239,79 @@ def test_whitelist_match_is_sent_to_deepseek_as_non_infringing_constraint(monkey
     assert result[0]["risk_level"] == 0
 
 
+@pytest.mark.parametrize("source_type,list_type", [
+    ("manual", "pending"),
+    ("auto", "blacklist"),
+    ("auto", "whitelist"),
+    ("wipo", "blacklist"),
+    ("wikidata", "blacklist"),
+])
+def test_unreviewed_knowledge_neither_blocks_nor_allows_products(monkeypatch, source_type, list_type):
+    captured = {}
+
+    def fake_chat(messages, **kwargs):
+        captured["products"] = json.loads(messages[1]["content"].split("\n", 1)[1])
+        return json.dumps([{
+            "row_id": "9", "risk_level": 1, "keywords": ["Example"],
+            "reason": "根据标题独立判断，需人工复核",
+        }])
+
+    monkeypatch.setattr(bit_check_risk, "chat_deepseek", fake_chat)
+    summary = bit_check_risk.scan_products(
+        candidate_reader=lambda **kwargs: [{"row_id": 9, "title": "Example toy"}],
+        dry_run=True,
+        retries=0,
+        knowledge_records=[{
+            "brand_name": "Example", "source_type": source_type, "list_type": list_type,
+        }],
+    )
+
+    assert captured["products"][0]["knowledge"] == {"blacklist": [], "whitelist": []}
+    assert summary["results"][0]["risk_level"] == 1
+    assert summary["updated"] == 0
+
+
+def test_manual_allow_rule_cannot_mask_a_different_blocked_brand(monkeypatch):
+    def unexpected_ai(*args, **kwargs):
+        raise AssertionError("人工放行另一品牌不能掩盖人工风险拦截")
+
+    monkeypatch.setattr(bit_check_risk, "classify_risk_records", unexpected_ai)
+    summary = bit_check_risk.scan_products(
+        candidate_reader=lambda **kwargs: [{"row_id": 10, "title": "AllowedCo Pokemon toy"}],
+        dry_run=True,
+        knowledge_records=[
+            {"brand_name": "AllowedCo", "list_type": "whitelist", "source_type": "manual"},
+            {"brand_name": "Pokemon", "list_type": "blacklist", "source_type": "manual"},
+        ],
+    )
+
+    assert summary["results"][0]["risk_level"] == 2
+    assert summary["results"][0]["keywords"] == ["Pokemon"]
+
+
+def test_manual_allow_rule_preserves_independent_ai_risk(monkeypatch):
+    def fake_chat(messages, **kwargs):
+        products = json.loads(messages[1]["content"].split("\n", 1)[1])
+        assert products[0]["knowledge"]["whitelist"] == ["AllowedCo"]
+        return json.dumps([{
+            "row_id": "11", "risk_level": 2, "keywords": ["Pokemon"],
+            "reason": "独立 IP 风险",
+        }])
+
+    monkeypatch.setattr(bit_check_risk, "chat_deepseek", fake_chat)
+    summary = bit_check_risk.scan_products(
+        candidate_reader=lambda **kwargs: [{"row_id": 11, "title": "AllowedCo Pokemon toy"}],
+        dry_run=True,
+        retries=0,
+        knowledge_records=[
+            {"brand_name": "AllowedCo", "list_type": "whitelist", "source_type": "manual"},
+        ],
+    )
+
+    assert summary["results"][0]["risk_level"] == 2
+    assert summary["results"][0]["keywords"] == ["Pokemon"]
+
+
 def test_update_zying_product_risks_clears_keywords_for_level_zero(monkeypatch):
     calls = []
 

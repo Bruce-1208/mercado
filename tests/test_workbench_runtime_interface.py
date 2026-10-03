@@ -175,6 +175,7 @@ def test_client_mode_skips_all_central_background_services(monkeypatch):
     monkeypatch.setattr(bit_interface, "USE_DB_API", True)
     called = []
     service_names = (
+        "start_wipo_scheduler_bootstrap",
         "start_interrupted_collection_recovery",
         "start_store_link_scheduler_bootstrap",
         "start_prohibited_listing_scheduler_bootstrap",
@@ -202,6 +203,7 @@ def test_test_server_mode_skips_all_central_background_services(monkeypatch):
     monkeypatch.setenv("BIT_BACKGROUND_SERVICES_DISABLED", "1")
     called = []
     service_names = (
+        "start_wipo_scheduler_bootstrap",
         "start_interrupted_collection_recovery",
         "start_store_link_scheduler_bootstrap",
         "start_prohibited_listing_scheduler_bootstrap",
@@ -272,6 +274,7 @@ def test_server_mode_starts_reputation_and_order_sync_schedulers(monkeypatch):
     monkeypatch.setattr(bit_interface, "USE_DB_API", False)
     monkeypatch.delenv("BIT_BACKGROUND_SERVICES_DISABLED", raising=False)
     for name in (
+        "start_wipo_scheduler_bootstrap",
         "start_interrupted_collection_recovery",
         "start_store_link_scheduler_bootstrap",
         "start_prohibited_listing_scheduler_bootstrap",
@@ -559,3 +562,37 @@ def test_live_infraction_background_job_avoids_long_http_request(monkeypatch):
     assert state["status"] == "completed"
     assert state["result"]["data"] == [{"编号": "MLM456"}]
     assert calls == [(targets, {"recent_days": 45, "max_workers": 2})]
+
+
+def test_live_infraction_background_job_reuses_identical_running_scan(monkeypatch):
+    release = bit_interface.threading.Event()
+    entered = bit_interface.threading.Event()
+    calls = []
+    monkeypatch.setattr(bit_interface, "_live_infraction_jobs", {})
+
+    def collect(targets, **kwargs):
+        calls.append((targets, kwargs))
+        entered.set()
+        assert release.wait(2)
+        return {"data": [], "results": [], "failed_stores": []}
+
+    monkeypatch.setattr(
+        bit_interface.mercado_infraction_sync,
+        "collect_live_detection_infractions",
+        collect,
+    )
+    targets = [{"token_id": 9, "name": "授权店铺", "site_ids": ["MLM", "MLB"]}]
+
+    first = bit_interface._start_live_infraction_job(
+        targets, recent_days=100, max_workers=8
+    )
+    assert entered.wait(2)
+    second = bit_interface._start_live_infraction_job(
+        [{**targets[0], "site_ids": ["MLB", "MLM"]}],
+        recent_days=100,
+        max_workers=8,
+    )
+    release.set()
+
+    assert second["job_id"] == first["job_id"]
+    assert len(calls) == 1

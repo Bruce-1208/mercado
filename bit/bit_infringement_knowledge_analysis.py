@@ -159,7 +159,7 @@ def _brand_evidence(name, rows):
         title = str((row or {}).get("title") or "").strip()
         if keyword and keyword in _normalized_search_text(title):
             matches.append(title)
-    return max(1, len(matches)), matches[:2]
+    return len(matches), matches[:2]
 
 
 def analyze_knowledge_sources(
@@ -170,7 +170,7 @@ def analyze_knowledge_sources(
     batch_size=150,
     log_callback=None,
 ):
-    """黑名单优先；人工记录是否覆盖由数据库写入层决定。"""
+    """从来源提取待复核线索；销量或处罚标题都不能替代人工判断。"""
     source_data = dict(sources or {})
     infraction_rows = list(source_data.get("infraction_rows") or [])
     active_rows = list(source_data.get("active_rows") or [])
@@ -201,8 +201,8 @@ def analyze_knowledge_sources(
         records.append(
             {
                 "brand_name": name,
-                "list_type": "blacklist",
-                "notes": f"自动分析：在侵权记录中命中 {evidence_count} 条。",
+                "list_type": "pending",
+                "notes": f"待复核：在侵权记录中命中 {evidence_count} 条；需核实具体侵权原因。",
                 "evidence_count": evidence_count,
                 "source_detail": "；".join(examples)[:1000],
             }
@@ -212,10 +212,10 @@ def analyze_knowledge_sources(
         records.append(
             {
                 "brand_name": name,
-                "list_type": "whitelist",
+                "list_type": "pending",
                 "notes": (
-                    f"自动分析：在当前 active 且已有销量的链接中命中 "
-                    f"{evidence_count} 条，未在侵权记录提取结果中命中。"
+                    f"待复核：在当前 active 且已有销量的链接中命中 "
+                    f"{evidence_count} 条；在售或有销量不代表已获授权或无侵权风险。"
                 ),
                 "evidence_count": evidence_count,
                 "source_detail": "；".join(examples)[:1000],
@@ -224,14 +224,17 @@ def analyze_knowledge_sources(
 
     if log_callback:
         log_callback(
-            f"分析得到黑名单 {len(black_names)} 个、白名单 {len(white_names)} 个；"
-            "同名冲突已按黑名单优先处理"
+            f"提取待复核线索 {len(records)} 个：侵权记录 {len(black_names)} 个，"
+            f"在售链接 {len(white_names)} 个；同名线索优先保留侵权记录证据"
         )
     write_result = writer(records)
     return {
         "infraction_titles": len(infraction_rows),
         "active_titles": len(active_rows),
-        "blacklist_candidates": len(black_names),
-        "whitelist_candidates": len(white_names),
+        "pending_candidates": len(records),
+        "infraction_candidates": len(black_names),
+        "active_candidates": len(white_names),
+        "blacklist_candidates": 0,
+        "whitelist_candidates": 0,
         "write_result": write_result or {},
     }

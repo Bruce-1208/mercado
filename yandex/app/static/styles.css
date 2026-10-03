@@ -544,3 +544,33 @@ body.embedded .topbar { margin-bottom: 20px; }
   .return-decision-row strong { grid-column: 1 / -1; }
   .todo-card { grid-template-columns: 1fr; }
 }
+
+/* Shared workbench visual scale; retain yellow only for the platform mark. */
+:root { --ink:#172033; --muted:#64748b; --paper:#f3f5f9; --soft:#f8fafc; --line:#dce3ec; --blue:#2563eb; --shadow:0 2px 10px rgba(15,23,42,.045); }
+body { font-family:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif; font-size:13px; line-height:1.5; }
+.sidebar { background:#fff; color:var(--ink); border-color:var(--line); }
+.brand small, .sidebar-note small { color:var(--muted); }
+.nav-item { color:#475569; border-radius:8px; font-weight:500; }
+.nav-item:hover, .nav-item.active { background:#eff6ff; color:#1d4ed8; }
+.nav-icon { background:#f1f5f9; color:#64748b; }
+.nav-item.active .nav-icon { background:#dbeafe; color:#1d4ed8; }
+.sidebar-note { border-color:var(--line); background:var(--soft); }
+.workspace { padding:24px 24px 40px; }
+h1 { font-size:24px; letter-spacing:normal; line-height:1.4; }
+h2 { font-size:18px; letter-spacing:normal; }
+.panel, .metric-card { border-radius:12px; box-shadow:var(--shadow); }
+.metric-card.accent { background:#eff6ff; border-color:#bfdbfe; }
+.button { min-height:38px; border-radius:8px; font-size:13px; font-weight:600; }
+.button.primary { background:var(--blue); color:#fff; }
+.button.primary:hover:not(:disabled) { background:#1d4ed8; }
+.button.secondary { border-color:var(--line); color:#475569; }
+input:not([type=checkbox]):not([type=radio]), select, textarea { border-radius:8px; border-color:var(--line); font-size:13px; }
+input:not([type=checkbox]):not([type=radio]), select { min-height:38px; }
+.order-status-options input:checked + span { background:#eff6ff; color:#1d4ed8; border-color:#93c5fd; box-shadow:none; }
+.order-status-options input:focus-visible + span { outline-color:var(--blue); }
+.order-table { font-size:13px; }
+.order-table th { background:var(--soft); color:#526176; font-size:12px; letter-spacing:normal; }
+.order-table-wrap { max-width:100%; overscroll-behavior-x:contain; }
+.order-filters, .ops-filters { background:var(--soft); gap:12px; }
+.order-id span, .order-date, .delivery-detail, .order-product-title { font-size:12px; }
+@media(max-width:760px) { .workspace, body.embedded .workspace { padding:16px 12px 36px; } .topbar { gap:12px; } .toolbar-actions { flex-wrap:wrap; gap:8px; } }

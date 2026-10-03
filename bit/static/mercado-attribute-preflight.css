@@ -1,0 +1,27 @@
+.market-attribute-preflight {
+    display: grid;
+    grid-template-columns: max-content max-content 1fr;
+    gap: 12px;
+    min-width: 0;
+    padding: 16px;
+    border-top: 1px solid #e2e8f0;
+}
+.market-attribute-preflight > div { grid-column: 1 / -1; min-width: 0; }
+.market-attribute-preflight article { padding: 12px 0; border-bottom: 1px solid #e2e8f0; }
+.market-attribute-preflight fieldset {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 12px 0;
+    padding: 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    min-width: 0;
+}
+.market-attribute-preflight fieldset input,
+.market-attribute-preflight fieldset select { flex: 1 1 220px; min-width: 0; max-width: 100%; }
+.market-attribute-preflight fieldset small { flex-basis: 100%; color: #475569; }
+.market-attribute-preflight td { overflow-wrap: anywhere; white-space: normal; }
+@media (max-width: 600px) {
+    .market-attribute-preflight { grid-template-columns: 1fr; padding: 12px; }
+}

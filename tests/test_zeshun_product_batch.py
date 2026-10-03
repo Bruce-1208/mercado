@@ -20,6 +20,8 @@ const stored = {};
 global.storageGet = async () => structuredClone(stored);
 global.storageSet = async (_, value) => { Object.assign(stored, structuredClone(value)); };
 global.authSession = async () => ({token:'test'});
+global.assertManagementCategorySession = () => {};
+global.apiRequest = async path => { assert.equal(path, '/api/browser-extension/mercado-data/status'); return {ready:true}; };
 let sequence = 0, active = 0, peak = 0, uploads = [], reads = [], failUpload = false;
 const tabCreates = [], activations = [], listAttempts = new Map(), detailAttempts = new Map();
 let currentActiveTab = 99;
@@ -60,7 +62,7 @@ const lists = {
 };
 global.sendTabMessage = async (id, message) => {
   const url = tabs.get(id).pendingUrl || tabs.get(id).url;
-  if(message.type==='CHECK_ZYING_PLUGIN') return {ok:true,found:true,logged_in:true};
+  assert.notEqual(message.type,'CHECK_ZYING_PLUGIN');
   if(message.type==='READ_PRODUCT_LIST') {
     reads.push(url);
     if(id!==99) {
@@ -87,7 +89,7 @@ global.uploadProduct = async (product, options) => {
   if(failUpload) throw Error('Upload failed');
   uploads.push(product.source_item_id);
 };
-const params = {max_items:4,concurrency:2};
+const params = {max_items:4,concurrency_mode:'gentle',success_rest_seconds:0};
 async function waitDone() { while(productBatchRun) await pause(5); return getProductBatchStatus(); }
 (async () => {
   for(const [country,host] of Object.entries(PRODUCT_SEARCH_HOSTS)) {
@@ -99,7 +101,7 @@ async function waitDone() { while(productBatchRun) await pause(5); return getPro
   assert.throws(()=>productBatchUrl('https://mercadolibre.com.mx.evil.test/'));
   assert.match(forceInternationalUrl(origin+'toy'),/SHIPPING\*ORIGIN_10215069/);
   assert.equal(forceInternationalUrl(productSearchUrl('MLM','toy')),productSearchUrl('MLM','toy'));
-  for(const change of [{concurrency:0},{concurrency:11},{concurrency:1.5},{max_items:''},{max_items:501}])
+  for(const change of [{concurrency_mode:'invalid'},{max_items:''},{max_items:501}])
     assert.throws(()=>productBatchParams({...params,...change}));
   assert.throws(()=>productBatchParams({...params,min_sales:20,max_sales:10}));
   assert.equal(productBatchParams({...params,min_sales:20,max_sales:40}).min_sales,20);
@@ -111,12 +113,12 @@ async function waitDone() { while(productBatchRun) await pause(5); return getPro
   const starts=await Promise.allSettled([startProductBatch({tab_id:99,params}),startProductBatch({tab_id:99,params})]);
   assert.equal(starts.filter(x=>x.status==='fulfilled').length,1);
   const state=await waitDone();
-  assert.equal(state.phase,'completed'); assert.equal(state.candidate_count,7);
+  assert.equal(state.phase,'completed'); assert.equal(state.candidate_count,6);
   assert.equal(state.execution_window,'new_edge_window'); assert.equal(createdWindows.length,1);
   assert.deepEqual(closedWindows,[createdWindows[0].id]);
   assert.equal(state.completed_count,4); assert.equal(state.processed_count,6); assert.equal(state.skipped,2);
   assert.deepEqual(uploads.sort(),['CBT-4','MLM-1','MLM-5','MLM-6']);
-  assert.equal(peak,2); assert.equal(tabs.size,1);
+  assert.equal(peak,1); assert.equal(tabs.size,1);
   assert(!reads.some(url=>url.includes('page4'))); assert(tabs.has(99));
   const firstRunCreates=tabCreates.slice();
   const detailTabs=firstRunCreates.filter(tab=>/\/(?:MLM|CBT)-/.test(tab.url));
@@ -131,8 +133,17 @@ async function waitDone() { while(productBatchRun) await pause(5); return getPro
   await startProductBatch({tab_id:99,params:{...params,max_items:1}});
   const failed=await waitDone();
   assert.equal(failed.phase,'partial'); assert.equal(failed.failed_count,5);
-  assert.equal(failed.completed_count,0); assert.equal(failed.last_error,'Upload failed');
+  assert.equal(failed.completed_count,0); assert.match(failed.last_error,/Upload failed$/);
   failUpload=false; uploads=[];
+  const originalSend = global.sendTabMessage;
+  global.sendTabMessage = async (id, message) => message.type === 'EXTRACT_BATCH_PRODUCT'
+    ? {ok:false, retryable:false, error:'商品数据服务繁忙'} : originalSend(id, message);
+  await startProductBatch({tab_id:99,params:{...params,max_items:1}});
+  const dataFailed=await waitDone();
+  assert.equal(dataFailed.failed_count,7);
+  assert.equal(dataFailed.skipped,0);
+  assert.match(dataFailed.last_error,/商品数据服务繁忙$/);
+  global.sendTabMessage=originalSend;
   await startProductBatch({tab_id:99,params});
   while(!active) await pause(1);
   await stopProductBatch();

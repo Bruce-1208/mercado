@@ -409,3 +409,29 @@ def test_bit_db_api_forwards_multisource_candidate_scope(monkeypatch):
     assert captured["json"]["group_names"] == ["账户组 A"]
     assert captured["json"]["token_ids"] == [9]
     assert captured["json"]["recheck"] is True
+
+
+def test_risk_job_loads_every_knowledge_page_beyond_5000(monkeypatch):
+    calls, captured = [], {}
+    def read(**kwargs):
+        calls.append(kwargs)
+        if "after_id" not in kwargs:
+            return {"summary": {"total": 5001, "blacklist": 5001}, "rows": [{"id": 5001}]}
+        if kwargs["after_id"] == 0:
+            return {"rows": [{"id": 1, "brand_name": "Older Brand", "list_type": "blacklist"}],
+                    "has_more": True, "next_after_id": 5000}
+        return {"rows": [{"id": 5001, "brand_name": "WIPO Brand", "list_type": "blacklist"}], "has_more": False}
+    monkeypatch.setattr(bit_interface, "db_list_infringement_knowledge", read)
+    def scan(**kwargs):
+        captured.update(kwargs)
+        return {"checked": 0}
+    monkeypatch.setattr(bit_interface.bit_check_risk, "scan_products", scan)
+    class Lock:
+        released = False
+        def release(self):
+            self.released = True
+    lock = Lock()
+    bit_interface.run_risk_check_job({"sources": ["pulled"]}, lock)
+    assert [row["brand_name"] for row in captured["knowledge_records"]] == ["Older Brand", "WIPO Brand"]
+    assert [call.get("after_id") for call in calls] == [None, 0, 5000]
+    assert lock.released

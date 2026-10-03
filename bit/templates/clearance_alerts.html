@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>半托管清退告警 · 泽顺运营中心</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261002-ui">
+  <link rel="stylesheet" href="{{ url_for('static', filename='clearance-alerts.css') }}?v=20261001-1">
+    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261002-ui"></script>
+</head>
+<body class="zs-standalone{{ ' ca-embedded' if embedded else '' }}">
+  <main id="clearance-alerts" class="ca-shell" data-can-manage="{{ 'true' if can_manage else 'false' }}">
+    <header class="ca-header">
+      <div><div class="ca-eyebrow">MERCADO LIBRE · SKU MONITOR</div><h1>半托管清退告警</h1><p class="ca-subtitle">每日检查半托管店铺在售、有库存的 SKU，及时识别清退风险和待补资料。</p></div>
+      <div class="ca-header-actions">{% if not embedded %}<span class="ca-user">{{ current_user.display_name or current_user.username }}</span><a class="ca-button" href="/">返回工作台</a>{% endif %}<button id="ca-refresh" class="ca-button primary" type="button" {% if not can_manage %}disabled{% endif %}>立即检测</button></div>
+    </header>
+
+    <div id="ca-error" class="ca-message ca-message-error" role="alert" hidden></div>
+    <div id="ca-update" class="ca-message ca-message-info" role="status" aria-live="polite" hidden></div>
+    <div class="ca-scope"><span class="ca-scope-tag">仅半托管</span><span>按 SKU / 规格独立判断；数据不足时保留“待补资料”，不会按 0 销量或 0 访问量判定。</span><span id="ca-checked" class="ca-checked">尚未检测</span></div>
+
+    <section class="ca-metrics" aria-label="清退状态统计">
+      <button class="ca-metric ca-risk" type="button" data-status="risk" aria-pressed="false"><span class="ca-metric-label">清退风险</span><strong id="ca-count-risk">—</strong><span class="ca-metric-hint">触发规则且无豁免</span></button>
+      <button class="ca-metric ca-pending" type="button" data-status="pending_data" aria-pressed="false"><span class="ca-metric-label">待补资料</span><strong id="ca-count-pending_data">—</strong><span class="ca-metric-hint">尚不能排除清退风险</span></button>
+      <button class="ca-metric ca-exempt" type="button" data-status="exempt" aria-pressed="false"><span class="ca-metric-label">符合豁免</span><strong id="ca-count-exempt">—</strong><span class="ca-metric-hint">新品 / 新补货 / 低曝光</span></button>
+      <button class="ca-metric ca-normal" type="button" data-status="normal" aria-pressed="false"><span class="ca-metric-label">当前正常</span><strong id="ca-count-normal">—</strong><span class="ca-metric-hint">未触发清退规则</span></button>
+    </section>
+
+    <details class="ca-rules">
+      <summary>判断规则与操作时限 <span>7 / 14 天销量 · 21 / 14 天豁免 · 3 / 21 / 5 天处理</span></summary>
+      <div class="ca-rule-grid">
+        <div><h2>任一触发条件</h2><p>过去 <b>7 天销量为 0</b>，或过去 <b>14 天销量少于 7 件</b>。</p></div>
+        <div><h2>任一豁免条件</h2><p>首次入仓后 21 天内；缺货后新补货入仓后 14 天内；过去 30 天日均访问量 ≤ 10。访问量须为该 SKU 的完整 30 天数据。</p></div>
+        <div><h2>平台清退流程</h2><p>邮件通知后 3 天内可自主申请退仓；促销期满第 21 天仍触发规则时推送退仓单；退仓单下发后 5 天内完成提货。</p></div>
+      </div>
+      <p class="ca-rule-note">本页提供风险告警与日期提醒。操作时限依据录入的平台实际通知、促销开始（含明确排期）和退仓单日期计算；最终以平台邮件和退仓单为准。促销期间可自主退仓，售罄可继续补货，期满销量达标则退出清仓流程。</p>
+    </details>
+
+    <section class="ca-panel" aria-labelledby="ca-list-heading">
+      <div class="ca-panel-heading"><div><h2 id="ca-list-heading">SKU 检测明细</h2><p>销量来自平台完整近 14 天订单检测；入仓历史和 SKU 访问量可在“补充资料”中核实。</p></div><button id="ca-reload" class="ca-button" type="button">刷新列表</button></div>
+      <form id="ca-filters" class="ca-filters">
+        <label>半托管店铺<select id="ca-store" name="token_id"><option value="">全部半托管店铺</option></select></label>
+        <label>站点<select id="ca-site" name="site_id"><option value="">全部站点</option><option value="MLM">墨西哥 · MLM</option><option value="MLB">巴西 · MLB</option><option value="MLC">智利 · MLC</option><option value="MCO">哥伦比亚 · MCO</option><option value="MLA">阿根廷 · MLA</option><option value="MPE">秘鲁 · MPE</option><option value="MLU">乌拉圭 · MLU</option></select></label>
+        <label>检测状态<select id="ca-status" name="alert_status"><option value="">全部状态</option><option value="risk">清退风险</option><option value="pending_data">待补资料</option><option value="exempt">符合豁免</option><option value="normal">当前正常</option></select></label>
+        <label class="ca-search">搜索 SKU / 商品<input id="ca-search" name="search" type="search" maxlength="200" placeholder="SKU、商品 ID 或标题"></label>
+        <button class="ca-button primary" type="submit">查询</button><button id="ca-reset" class="ca-button" type="button">重置</button>
+      </form>
+      <div class="ca-table-wrap"><table class="ca-table"><thead><tr><th scope="col">SKU / 商品</th><th scope="col">库存</th><th scope="col">滚动销量</th><th scope="col">30 天访问量</th><th scope="col">检测结论</th><th scope="col">平台流程提醒</th><th scope="col">操作</th></tr></thead><tbody id="ca-rows"><tr><td colspan="7" class="ca-empty">正在读取半托管 SKU…</td></tr></tbody></table></div>
+      <footer class="ca-pagination"><span id="ca-page-summary" role="status" aria-live="polite">正在加载…</span><div><label>每页 <select id="ca-page-size"><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label><button id="ca-prev" class="ca-button" type="button" disabled>上一页</button><button id="ca-next" class="ca-button" type="button" disabled>下一页</button></div></footer>
+    </section>
+    {% if not can_manage %}<p class="ca-readonly">当前账号可查看清退告警；检测与资料维护需由具有订单分析执行权限的账号操作。</p>{% endif %}
+  </main>
+
+  <dialog id="ca-facts-dialog" class="ca-dialog" aria-labelledby="ca-dialog-title">
+    <form id="ca-facts-form">
+      <header class="ca-dialog-header"><div><h2 id="ca-dialog-title">补充 SKU 资料</h2><p id="ca-dialog-sku"></p></div><button id="ca-dialog-close" class="ca-icon-button" type="button" aria-label="关闭资料弹窗">×</button></header>
+      <div class="ca-dialog-body">
+        <div id="ca-form-error" class="ca-message ca-message-error" role="alert" hidden></div>
+        <fieldset><legend>入仓与缺货记录</legend><p class="ca-form-hint">请核对仓库记录。未知资料可以留空；只有已核实的日期才能支持入仓豁免。</p><div class="ca-form-grid">
+          <label>入仓历史核实情况 <span class="ca-required">必选</span><select name="inbound_history_confirmed" required><option value="">请选择核实情况</option><option value="true">已核实该 SKU 入仓历史</option><option value="false">尚未核实完整入仓历史</option></select></label>
+          <label>首次入仓日期<input name="first_inbound_at" type="date"></label>
+          <label>本次补货是否发生在缺货后<select name="restock_after_stockout"><option value="">未知 / 尚未核实</option><option value="true">是，缺货后重新补货</option><option value="false">否，并非缺货后补货</option></select></label>
+          <label>最近补货批次入仓日期<input name="last_restock_at" type="date"></label>
+        </div></fieldset>
+        <fieldset><legend>SKU 访问量</legend><p class="ca-form-hint">录入平台后台该 SKU 截至今天的完整过去 30 天访问总量。商品链接 API 的访问量可能延迟且由多个规格共享，仅作参考。</p><div class="ca-form-grid">
+          <label>过去 30 天访问总量<input name="visits_30d" type="number" min="0" step="1" placeholder="未知时留空，0 仅表示已核实为零"></label>
+          <label>访问量统计截至日期<input name="visits_as_of" type="date"></label>
+        </div><p id="ca-reference-visits" class="ca-form-hint"></p></fieldset>
+        <fieldset><legend>平台流程日期</legend><p class="ca-form-hint">收到平台邮件、明确促销排期或退仓单后填写日期。系统风险告警不等于平台已经发出通知；日期留空时不推算已进入平台流程。</p><div class="ca-form-grid">
+          <label>平台邮件通知日期<input name="notice_at" type="date"><small>用于计算 3 天自主退仓提醒</small></label>
+          <label>平台促销开始日期（实际 / 已排期）<input name="promotion_start_at" type="date"><small>可填写平台明确的未来排期，用于计算第 21 天期满提醒</small></label>
+          <label>平台退仓单下发日期<input name="return_order_at" type="date"><small>用于计算 5 天提货截止提醒</small></label>
+        </div></fieldset>
+      </div>
+      <footer class="ca-dialog-footer"><span>保存后重新判断本 SKU；平台退仓仍需在平台完成。</span><button id="ca-dialog-cancel" class="ca-button" type="button">取消</button><button id="ca-save" class="ca-button primary" type="submit">保存并重新判断</button></footer>
+    </form>
+  </dialog>
+  <div id="ca-toast" class="ca-toast" role="status" aria-live="polite" hidden></div>
+  <script defer src="{{ url_for('static', filename='clearance-alerts.js') }}?v=20261001-1"></script>
+</body>
+</html>

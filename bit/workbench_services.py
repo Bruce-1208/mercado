@@ -4,6 +4,8 @@ Run: python -m bit.workbench_services
 Both children use the same checkout, secret file and persistent data paths.
 """
 import os
+import json
+from pathlib import Path
 import signal
 import subprocess
 import sys
@@ -15,6 +17,18 @@ from bit.bit_runtime_lock import InterProcessLock
 
 def child_environment(mode):
     env = os.environ.copy()
+    # Keep private product-source paths persistent even when launchd/systemd
+    # does not inherit the interactive shell's environment. Explicit env wins.
+    config_file = Path(__file__).resolve().parents[1] / '.private/mercado-data/service-env.json'
+    if config_file.is_file():
+        configured = json.loads(config_file.read_text(encoding='utf-8'))
+        if not isinstance(configured, dict):
+            raise ValueError('Private Mercado service configuration must be an object')
+        for key in ('ZESHUN_MERCADO_EXTENSION_DIR', 'ZESHUN_MERCADO_SESSION_FILE',
+                    'ZESHUN_MERCADO_NODE', 'ZESHUN_MERCADO_CACHE_DIR', 'ZESHUN_MERCADO_RENEW_SECONDS'):
+            value = configured.get(key)
+            if isinstance(value, str) and value.strip() and not env.get(key):
+                env[key] = value
     env['BIT_RUNTIME_ROLE'] = 'server'
     env['BIT_SERVICE_MODE'] = mode
     env['PYTHONUNBUFFERED'] = '1'

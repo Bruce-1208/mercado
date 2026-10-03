@@ -483,7 +483,20 @@ def test_ai_weight_price_product_extraction_filters_selected_developer(browser):
     page.close()
 
 
-def test_product_batch_inputs_search_and_start(popup):
+def test_product_batch_inputs_search_and_start(browser):
+    popup = browser.new_page(viewport={"width": 420, "height": 950})
+    popup.route("https://extension.test/**", lambda route: route.fulfill(
+        path=str(EXTENSION / route.request.url.rsplit("/", 1)[-1])))
+    popup.add_init_script("""
+      window.messages = [];
+      window.savedOptions = {};
+      window.chrome = {
+        storage:{local:{get:async()=>savedOptions,set:async value=>Object.assign(savedOptions,value)}},
+        tabs:{query:async()=>[]},
+        runtime:{sendMessage:(message,cb)=>cb({ok:true,authenticated:true,user:{username:'test'},categories:[]})}
+      };
+    """)
+    popup.goto("https://extension.test/popup.html")
     popup.evaluate("""() => {
       chrome.tabs.query=async () => [
         {id:7,title:'墨西哥搜索',url:'https://listado.mercadolibre.com.mx/toy',active:true},
@@ -493,7 +506,7 @@ def test_product_batch_inputs_search_and_start(popup):
       window.batch={running:false};
       chrome.runtime.sendMessage=(message,cb) => {
         messages.push(message);
-        if(message.type==='CHECK_PRODUCT_ZYING') return cb({ok:true,found:true,logged_in:true,message:'智赢插件已检测并处于登录状态'});
+        if(message.type==='GET_MERCADO_DATA_STATUS') return cb({ok:true,ready:true,message:'泽顺商品数据已就绪'});
         if(message.type==='START_PRODUCT_BATCH') batch={running:true,message:'正在采集第 2 页'};
         if(message.type==='STOP_PRODUCT_BATCH') batch={running:false,message:'已停止采集'};
         cb({ok:true,state:batch,tab_id:8});
@@ -509,12 +522,16 @@ def test_product_batch_inputs_search_and_start(popup):
     search = popup.evaluate("messages.find(m => m.type === 'OPEN_PRODUCT_SEARCH')")
     assert search == {"type": "OPEN_PRODUCT_SEARCH", "country": "MLB", "keyword": "brinquedo infantil"}
     popup.locator("#product-max-items").fill("17")
+    assert popup.locator("#product-success-rest-seconds").input_value() == "3"
+    popup.locator("#product-success-rest-seconds").fill("1.5")
     assert popup.locator("#product-concurrency-mode").input_value() == "normal"
     popup.locator("#product-concurrency-mode").select_option("gentle")
     popup.locator("#product-batch-start").click()
     gentle_message = popup.evaluate("messages.find(m => m.type === 'START_PRODUCT_BATCH')")
     assert gentle_message["params"]["concurrency_mode"] == "gentle"
     assert gentle_message["params"]["concurrency"] == 1
+    assert gentle_message["params"]["success_rest_seconds"] == 1.5
+    assert popup.locator("#product-success-rest-seconds").is_disabled()
     assert popup.locator("#product-batch-start").is_disabled()
     assert popup.locator("#product-concurrency-mode").is_disabled()
     popup.locator("#product-batch-stop").click()
@@ -526,12 +543,15 @@ def test_product_batch_inputs_search_and_start(popup):
     message = popup.evaluate("messages.filter(m => m.type === 'START_PRODUCT_BATCH').pop()")
     assert message == {"type": "START_PRODUCT_BATCH", "tab_id": 8, "params": {
         "max_items": 17, "concurrency_mode": "normal", "concurrency": 5,
+        "success_rest_seconds": 1.5, "management_category_id": None,
         "min_sales": 20, "max_sales": 200}}
     assert popup.locator("#product-batch-start").is_disabled()
     assert popup.locator("#product-concurrency-mode").is_disabled()
     popup.locator("#product-batch-stop").click()
     assert popup.locator("#product-batch-start").is_enabled()
     assert popup.locator("#product-batch-status").inner_text() == "已停止采集"
+    assert popup.evaluate("savedOptions.productBatchOptions['success-rest-seconds']") == "1.5"
+    popup.close()
 
 
 def test_product_list_reads_actual_pagination_international_and_shipping_profile(browser):
@@ -581,7 +601,7 @@ def test_mercado_collection_requires_logged_in_zying_plugin(browser):
     page.close()
 
 
-def test_mercado_collection_reads_sibling_origin_icon_inside_zying_shadow_root(browser):
+def test_mercado_native_extraction_ignores_zying_shadow_root(browser):
     page = browser.new_page()
     page.set_content(
         "<h1 class='ui-pdp-title'>测试商品</h1>"
@@ -598,7 +618,9 @@ def test_mercado_collection_reads_sibling_origin_icon_inside_zying_shadow_root(b
     product = page.evaluate("""() => ZeshunCollectorCore.extractProduct(
       document, 'https://articulo.mercadolibre.com.mx/MLM-12345-test'
     )""")
-    assert product["plugin_snapshot"]["self_ship_origin"] == "CN"
+    assert product["plugin_snapshot"]["self_ship_origin"] == "unknown"
+    assert product.get("weight_g") is None
+    assert product["plugin_snapshot"]["read_method"] == "native_product_page"
     page.close()
 
 
@@ -2000,4 +2022,54 @@ def test_1688_list_redirect_cannot_submit_another_product(browser):
       catch(error) {return error.message;}
     }""")
     assert "跳转到了其他商品" in error
+    page.close()
+
+
+def test_purchase_tracking_direct_start_and_waiting_login_controls(browser):
+    popup = browser.new_page(viewport={"width": 460, "height": 950})
+    popup.route("https://extension.test/**", lambda route: route.fulfill(
+        path=str(EXTENSION / route.request.url.rsplit("/", 1)[-1])))
+    popup.add_init_script("""
+      window.messages=[];
+      window.chrome={tabs:{query:async()=>[]}, runtime:{sendMessage:(m, cb)=>{
+        messages.push(m);
+        cb(m.type==='GET_STATE' ? {authenticated:true,user:{username:'test'}} : {ok:true,phase:'idle'});
+      }}};
+    """)
+    popup.goto("https://extension.test/popup.html")
+    popup.locator('#purchase-mode').click()
+    popup.evaluate("renderPurchaseTrackingStatus({phase:'idle'})")
+    assert popup.locator('#purchase-open-login').is_enabled()
+    popup.locator('#purchase-platform').select_option('taobao')
+    popup.locator('#purchase-open-login').click()
+    assert popup.evaluate("messages.filter(m => m.type === 'OPEN_PURCHASE_TRACKING_LOGIN').length") == 0
+    popup.locator('#purchase-date-start').fill('2026-10-01')
+    popup.locator('#purchase-date-end').fill('2026-10-03')
+    popup.locator('#purchase-open-login').click()
+    popup.wait_for_function("messages.some(m => m.type === 'OPEN_PURCHASE_TRACKING_LOGIN' && m.platform === 'taobao' && m.date_start === '2026-10-01' && m.date_end === '2026-10-03')")
+    popup.evaluate("renderPurchaseTrackingStatus({request_id:'run-1', platform:'taobao', phase:'waiting_login', running:true, total:2})")
+    assert popup.locator('#purchase-confirm-login').is_enabled()
+    assert popup.locator('#purchase-platform').is_disabled()
+    popup.evaluate("renderPurchaseTrackingStatus({request_id:'run-1', platform:'taobao', phase:'syncing', running:true, total:2})")
+    assert popup.locator('#purchase-confirm-login').is_disabled()
+    assert popup.locator('#purchase-open-login').is_disabled()
+    popup.close()
+
+
+def test_purchase_tracking_does_not_read_another_orders_number(browser):
+    page = browser.new_page()
+    page.set_content('''<div><div><p>订单号：PO-1</p><button>查看物流</button></div>
+        <div><p>订单号：PO-2</p><p>运单号：SF99999999</p><button>查看物流</button></div></div>''')
+    page.evaluate("window.chrome={runtime:{onMessage:{addListener:fn=>window.purchaseListener=fn}}}")
+    page.add_script_tag(path=str(EXTENSION / 'purchase-tracking-content.js'))
+    result = page.evaluate("""async () => await new Promise(resolve => purchaseListener(
+        {type:'FETCH_PURCHASE_TRACKING', purchaseOrder:'PO-1'}, null, resolve))""")
+    assert result['status'] == 'pending'
+    assert not result.get('tracking_number')
+    result = page.evaluate("""async () => await new Promise(resolve => purchaseListener(
+        {type:'FETCH_PURCHASE_TRACKING', purchaseOrder:'PO-2'}, null, resolve))""")
+    assert result['tracking_number'] == 'SF99999999'
+    result = page.evaluate("""async () => await new Promise(resolve => purchaseListener(
+        {type:'FETCH_PURCHASE_TRACKING', purchaseOrder:'PO'}, null, resolve))""")
+    assert result['status'] == 'not_found'
     page.close()

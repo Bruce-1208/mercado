@@ -74,6 +74,9 @@ const weightPriceTaskStatus = document.getElementById("weight-price-task-status"
 const weightPriceCurrentMeta = document.getElementById("weight-price-current-meta");
 const weightPriceSummary = document.getElementById("weight-price-summary");
 const weightPriceLog = document.getElementById("weight-price-log");
+const purchaseDateStart = document.getElementById("purchase-date-start");
+const purchaseDateEnd = document.getElementById("purchase-date-end");
+const purchasePlatform = document.getElementById("purchase-platform");
 const purchasePageStatus = document.getElementById("purchase-page-status");
 const purchaseTaskMeta = document.getElementById("purchase-task-meta");
 const purchaseOpenLoginButton = document.getElementById("purchase-open-login");
@@ -84,10 +87,11 @@ const purchaseResults = document.getElementById("purchase-results");
 const zyingOpenLoginButton = document.getElementById("zying-open-login");
 let activeTab = null;
 let detailPage = false;
-let productDetailZyingLoggedIn = false;
+let productDetailDataReady = false;
 let authenticated = false;
 let pagePlatform = "mercado";
 let zyingContext = null;
+let zyingRefreshing = false;
 let zyingRunning = false;
 let zyingPollTimer = null;
 let zyingInfringementRunning = false;
@@ -105,17 +109,142 @@ let weightDimensionsPollTimer = null;
 let purchaseTrackingState = null;
 let purchaseTrackingPollTimer = null;
 const productBatchFields = Object.fromEntries([
-  "country", "keyword", "tab", "max-items", "concurrency-mode", "min-sales", "max-sales"
+  "country", "keyword", "tab", "max-items", "concurrency-mode", "success-rest-seconds", "min-sales", "max-sales"
 ].map(name => [name, document.getElementById(`product-${name}`)]));
 const productBatchStart = document.getElementById("product-batch-start");
 const productBatchStop = document.getElementById("product-batch-stop");
 let productBatchState = {};
 let productBatchBusy = false;
 let productBatchPollTimer = null;
-let productZyingLoggedIn = false;
+let productDataReady = false;
 let yandexRun = null;
 let yandexBusy = false;
 let yandexPollTimer = null;
+const zeshunCategoryPickers = Object.fromEntries(["product", "zying", "1688"].map(source => [source, {
+  select: document.getElementById(`${source}-management-category`),
+  refresh: document.getElementById(`${source}-refresh-management-categories`),
+  status: document.getElementById(`${source}-management-category-status`)
+}]));
+let zeshunCategories = [];
+let zeshunCategoriesLoading = false;
+let zeshunCategoriesRequested = false;
+let zeshunCategoriesError = "";
+let zeshunCategoryRestorePromise = null;
+let zeshunCategoryFetchPromise = null;
+
+function normalizeManagementCategoryId(value) {
+  if (value === null || value === undefined || String(value).trim() === "") return null;
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+function managementCategorySelection(source) {
+  const raw = zeshunCategoryPickers[source].select.value;
+  if (!raw) return null;
+  const id = normalizeManagementCategoryId(raw);
+  if (id === null || !zeshunCategories.some(category => category.id === id)) {
+    throw new Error("所选泽顺产品分类不可用，请刷新泽顺分类后重新选择。");
+  }
+  return id;
+}
+
+function renderZeshunCategories() {
+  for (const {select} of Object.values(zeshunCategoryPickers)) {
+    const previous = normalizeManagementCategoryId(select.value);
+    select.replaceChildren(new Option("不指定分类", ""));
+    for (const category of zeshunCategories) select.add(new Option(category.name, String(category.id)));
+    if (previous !== null) {
+      if (!zeshunCategories.some(category => category.id === previous)) {
+        const unavailable = new Option(`已保存分类 #${previous}（请刷新后重新选择）`, String(previous));
+        unavailable.disabled = true;
+        select.add(unavailable);
+      }
+      select.value = String(previous);
+    }
+  }
+  syncZeshunCategoryControls();
+}
+
+function syncZeshunCategoryControls() {
+  for (const [source, picker] of Object.entries(zeshunCategoryPickers)) {
+    const locked = source === "product" ? productBatchBusy || Boolean(productBatchState.running) : zyingRunning;
+    picker.select.disabled = !authenticated || zeshunCategoriesLoading || locked;
+    picker.refresh.disabled = !authenticated || zeshunCategoriesLoading || locked;
+    picker.refresh.textContent = zeshunCategoriesLoading ? "正在刷新泽顺分类…" : "刷新泽顺分类";
+    const id = normalizeManagementCategoryId(picker.select.value);
+    const unavailable = id !== null && !zeshunCategories.some(category => category.id === id);
+    let message;
+    if (!authenticated) message = "请先在设置登录泽顺账号，再选择产品分类。";
+    else if (zeshunCategoriesLoading) message = "正在读取泽顺产品分类…";
+    else if (zeshunCategoriesError) message = `读取泽顺分类失败：${zeshunCategoriesError}，请刷新重试。`;
+    else if (unavailable) message = "已保存的泽顺分类不可用，请重新选择。";
+    else if (!zeshunCategories.length) message = "尚无泽顺产品分类，可在控制台创建后刷新。";
+    else if (source === "1688") message = "自动记住此分类，后续 1688 采集默认使用；也可选择不指定分类。";
+    else message = source === "product"
+      ? "美客多批量和当前商品采集共用此分类；采集后自动归入所选分类。"
+      : "采集后自动归入所选泽顺分类；智赢来源分类仅用于筛选。";
+    picker.status.textContent = message;
+    picker.status.className = `zeshun-category-status${authenticated && !zeshunCategoriesLoading && (zeshunCategoriesError || unavailable) ? " error" : ""}`;
+  }
+}
+
+async function restoreZeshunCategoryOptions() {
+  if (!zeshunCategoryRestorePromise) {
+    zeshunCategoryRestorePromise = (async () => {
+      const saved = chrome.storage?.local
+        ? (await chrome.storage.local.get("zeshunCollectionCategoryOptions")).zeshunCollectionCategoryOptions || {}
+        : {};
+      for (const [source, {select}] of Object.entries(zeshunCategoryPickers)) {
+        const id = normalizeManagementCategoryId(saved[source]);
+        if (id !== null) {
+          select.add(new Option(`已保存分类 #${id}（正在读取）`, String(id)));
+          select.value = String(id);
+        }
+      }
+      syncZeshunCategoryControls();
+    })();
+  }
+  await zeshunCategoryRestorePromise;
+}
+
+async function saveZeshunCategoryOptions() {
+  if (!chrome.storage?.local) return;
+  await chrome.storage.local.set({zeshunCollectionCategoryOptions: Object.fromEntries(
+    Object.entries(zeshunCategoryPickers).map(([source, {select}]) => [source, normalizeManagementCategoryId(select.value)])
+  )});
+}
+
+async function refreshZeshunCategories() {
+  await restoreZeshunCategoryOptions();
+  if (!authenticated) { syncZeshunCategoryControls(); return; }
+  if (zeshunCategoryFetchPromise) return zeshunCategoryFetchPromise;
+  zeshunCategoriesLoading = true;
+  zeshunCategoriesError = "";
+  syncProductBatchControls();
+  zyingStartButton.disabled = true;
+  if (pagePlatform !== "1688") collectButton.disabled = true;
+  zeshunCategoryFetchPromise = (async () => {
+    try {
+      const response = await runtimeMessage({type: "GET_ZESHUN_CATEGORIES"});
+      if (!response.ok) throw new Error(response.error || "泽顺产品分类暂不可用");
+      if (!Array.isArray(response.categories)) throw new Error("泽顺分类返回格式异常");
+      zeshunCategories = response.categories.map(category => ({
+        id: normalizeManagementCategoryId(category.id), name: String(category.name || "").trim()
+      })).filter(category => category.id !== null && category.name);
+      renderZeshunCategories();
+    } catch (error) {
+      zeshunCategoriesError = error.message || String(error);
+    } finally {
+      zeshunCategoriesRequested = true;
+      zeshunCategoriesLoading = false;
+      zeshunCategoryFetchPromise = null;
+      syncProductBatchControls();
+      zyingStartButton.disabled = !authenticated || !zyingContext || zyingRunning || zyingRefreshing;
+      collectButton.disabled = !detailPage || !authenticated || !productDetailDataReady;
+    }
+  })();
+  return zeshunCategoryFetchPromise;
+}
 
 function syncYandexControls() {
   yandexStartButton.disabled = !authenticated || yandexBusy || ["queued", "running"].includes(yandexRun?.status);
@@ -166,7 +295,13 @@ function productBatchSelection() {
     if (!Number.isInteger(value) || value < 1 || value > max) throw new Error(`${label}须为 1–${max} 的整数`);
     params[key] = value;
   }
+  const restSeconds = Number(productBatchFields["success-rest-seconds"].value || 3);
+  if (!Number.isFinite(restSeconds) || restSeconds < 0 || restSeconds > 3600) {
+    throw new Error("成功后休息时间须为 0–3600 秒");
+  }
+  params.success_rest_seconds = restSeconds;
   const concurrencyMode = productBatchFields["concurrency-mode"].value;
+  params.management_category_id = managementCategorySelection("product");
   params.concurrency_mode = concurrencyMode;
   params.concurrency = concurrencyMode === "gentle" ? 1 : 5;
   for (const [field, key, label] of [
@@ -182,17 +317,18 @@ function productBatchSelection() {
     throw new Error("最高销量不能低于最低销量");
   }
   if (!productBatchFields.tab.value) throw new Error("请选择已打开的 Mercado Libre 搜索列表页");
-  if (!productZyingLoggedIn) throw new Error("请先确认所选美客多页面中的智赢插件已登录");
+  if (!productDataReady) throw new Error("请先确认泽顺商品数据服务已配置");
   return {tab_id: Number(productBatchFields.tab.value), params};
 }
 
 function syncProductBatchControls() {
   const locked = productBatchBusy || Boolean(productBatchState.running);
-  productBatchStart.disabled = locked || !authenticated || !productZyingLoggedIn;
+  productBatchStart.disabled = locked || !authenticated || !productDataReady || zeshunCategoriesLoading;
   productBatchStop.disabled = productBatchBusy || !productBatchState.running;
   for (const field of Object.values(productBatchFields)) field.disabled = locked;
   document.getElementById("product-search").disabled = locked;
   document.getElementById("product-refresh-tabs").disabled = locked;
+  syncZeshunCategoryControls();
 }
 
 function renderProductBatch(state = {}) {
@@ -223,25 +359,25 @@ function renderProductBatch(state = {}) {
   syncProductBatchControls();
 }
 
-async function checkProductZyingStatus() {
+async function checkProductDataStatus() {
   const status = document.getElementById("product-zying-status");
   const tabId = Number(productBatchFields.tab.value || 0);
-  productZyingLoggedIn = false;
+  productDataReady = false;
   status.className = "plugin-login-status checking";
   if (!tabId) {
-    status.textContent = "智赢插件：请先选择美客多列表页面";
+    status.textContent = "泽顺数据服务：请先选择美客多列表页面";
     syncProductBatchControls();
     return;
   }
-  status.textContent = "智赢插件：正在检查登录状态…";
+  status.textContent = "泽顺数据服务：正在检查服务状态…";
   try {
-    const response = await runtimeMessage({type: "CHECK_PRODUCT_ZYING", tab_id: tabId});
+    const response = await runtimeMessage({type: "GET_MERCADO_DATA_STATUS", tab_id: tabId});
     if (!response.ok) throw new Error(response.error || "检查失败");
-    productZyingLoggedIn = Boolean(response.logged_in);
-    status.textContent = `智赢插件：${response.message || (productZyingLoggedIn ? "已登录" : "未登录")}`;
-    status.className = `plugin-login-status ${productZyingLoggedIn ? "ok" : "error"}`;
+    productDataReady = Boolean(response.ready);
+    status.textContent = `泽顺数据服务：${response.message || (productDataReady ? "已配置" : "未配置")}`;
+    status.className = `plugin-login-status ${productDataReady ? "ok" : "error"}`;
   } catch (error) {
-    status.textContent = `智赢插件：${error.message || error}`;
+    status.textContent = `泽顺数据服务：${error.message || error}`;
     status.className = "plugin-login-status error";
   }
   syncProductBatchControls();
@@ -269,7 +405,7 @@ async function refreshProductTabs(preferredId) {
   for (const tab of tabs) productBatchFields.tab.add(new Option(`${tab.title || "Mercado Libre"} — ${new URL(tab.url).hostname}`, String(tab.id)));
   const selected = tabs.find(tab => String(tab.id) === previous) || tabs.find(tab => tab.active) || tabs[0];
   if (selected) productBatchFields.tab.value = String(selected.id);
-  await checkProductZyingStatus();
+  await checkProductDataStatus();
 }
 
 async function saveProductBatchOptions() {
@@ -373,13 +509,22 @@ async function refreshState() {
     authStatus.className = "auth-line logged-in";
   } else {
     authStatus.textContent = "泽顺账号：未登录，请在设置登录，或从控制台重新下载插件";
-    authStatus.className = "auth-line";
+    authStatus.className = "auth-line logged-out";
   }
-  collectButton.disabled = !detailPage || !authenticated || !productDetailZyingLoggedIn;
+  await restoreZeshunCategoryOptions();
+  if (!authenticated) {
+    zeshunCategoriesRequested = false;
+    zeshunCategories = [];
+    zeshunCategoriesError = "";
+    renderZeshunCategories();
+  } else if (!zeshunCategoriesRequested) {
+    await refreshZeshunCategories();
+  }
+  collectButton.disabled = !detailPage || !authenticated || !productDetailDataReady || (pagePlatform !== "1688" && zeshunCategoriesLoading);
   syncProductBatchControls();
   syncYandexControls();
-  zyingStartButton.disabled = !authenticated || !zyingContext || zyingRunning;
-  zyingInfringementStartButton.disabled = !authenticated || !zyingContext || zyingInfringementRunning;
+  zyingStartButton.disabled = !authenticated || !zyingContext || zyingRunning || zyingRefreshing || zeshunCategoriesLoading;
+  zyingInfringementStartButton.disabled = !authenticated || !zyingContext || zyingInfringementRunning || zyingRefreshing;
   syncWeightPriceControls();
   syncWeightDimensionsControls();
   if (response.purchaseTracking) renderPurchaseTrackingStatus(response.purchaseTracking);
@@ -405,15 +550,16 @@ async function initialize() {
     const response = await tabMessage(activeTab.id, {type: "PING_PAGE"});
     if (response.ok && response.detail) {
       detailPage = true;
-      productDetailZyingLoggedIn = Boolean(response.zying?.logged_in);
+      const dataStatus = response.platform === "1688" ? {ready: true} : await runtimeMessage({type: "GET_MERCADO_DATA_STATUS"});
+      productDetailDataReady = Boolean(dataStatus.ready);
       pagePlatform = response.platform === "1688" ? "1688" : "mercado";
       platformBadge.hidden = false;
       platformBadge.textContent = pagePlatform === "1688" ? "1688" : "Mercado";
       platformBadge.className = `platform-badge ${pagePlatform === "1688" ? "source-1688" : "mercado"}`;
       pageStatus.textContent = pagePlatform === "1688"
         ? "已识别 1688 商品详情页，将采集到“AI原创产品”。"
-        : `已识别 Mercado Libre 商品详情页。${response.zying?.message || "正在检查智赢插件"}`;
-      if (pagePlatform === "1688") productDetailZyingLoggedIn = true;
+        : `已识别 Mercado Libre 商品详情页。${dataStatus.message || dataStatus.error || "商品信息由泽顺后台提供"}`;
+      if (pagePlatform === "1688") productDetailDataReady = true;
       collectButton.textContent = pagePlatform === "1688" ? "采集到 AI原创产品" : "采集当前商品";
     } else {
       platformBadge.hidden = true;
@@ -437,7 +583,7 @@ function zyingCategoryDisplayName(row) {
   return "";
 }
 
-function renderZyingOptions(data) {
+function renderZyingOptions(data, {preserveMissingDevelopers = false} = {}) {
   const categories = Array.isArray(data.categories) ? data.categories : [];
   const developers = Array.isArray(data.developers) ? data.developers : [];
   const categoryHtml = '<option value="">全部分类</option>' + categories.map(row => {
@@ -453,10 +599,13 @@ function renderZyingOptions(data) {
     [zyingInfringementCategory, zyingInfringementDeveloper]
   ]) {
     const previousCategory = categorySelect.value;
-    const previousDeveloper = developerSelect.value;
     categorySelect.innerHTML = categoryHtml;
-    developerSelect.innerHTML = developerHtml;
     if ([...categorySelect.options].some(option => option.value === previousCategory && !option.disabled)) categorySelect.value = previousCategory;
+    // A page preview may have no personnel while server supplementation is
+    // pending. Keep the current selection until the completed directory arrives.
+    if (preserveMissingDevelopers && !developers.length) continue;
+    const previousDeveloper = developerSelect.value;
+    developerSelect.innerHTML = developerHtml;
     if ([...developerSelect.options].some(option => option.value === previousDeveloper)) developerSelect.value = previousDeveloper;
   }
 }
@@ -491,15 +640,16 @@ function renderPurchaseTrackingStatus(state = {}) {
   const synced = Number(state.synced || 0);
   const pending = Number(state.pending || 0);
   const failed = Number(state.failed || 0);
+  const skipped = Number(state.skipped || 0);
   purchasePageStatus.textContent = hasTask
-    ? `${purchasePlatformLabels[state.platform] || state.platform || "采购平台"} · 已选择 ${total} 个订单`
-    : "请先在泽顺控制台订单页创建物流号同步任务。";
+    ? `${purchasePlatformLabels[state.platform] || state.platform || "采购平台"} · 待同步 ${total} 个订单`
+    : "选择美客多下单日期范围和采购平台，仅同步有采购订单号、无采购物流号的订单；未找到的跳过。";
   purchaseTaskMeta.hidden = !hasTask;
   purchaseTaskMeta.textContent = hasTask
     ? `任务 ${state.request_id.slice(0, 8)}… · ${purchasePlatformLabels[state.platform] || state.platform} · ${total} 单`
     : "";
   purchaseTaskStatus.textContent = state.message || (running ? "同步进行中…" : "等待同步任务");
-  purchaseSummary.textContent = `成功 ${synced} · 待发货 ${pending} · 未同步 ${failed}`;
+  purchaseSummary.textContent = `成功 ${synced} · 待发货 ${pending} · 跳过 ${skipped} · 失败 ${failed}`;
   const statusLabels = {synced: "已同步", pending: "待发货", not_found: "未找到", failed: "失败"};
   purchaseResults.innerHTML = (state.results || []).map(item => `
     <div class="purchase-result">
@@ -507,10 +657,14 @@ function renderPurchaseTrackingStatus(state = {}) {
       <span>${escapeHtml(item.tracking_number || item.message || statusLabels[item.status] || item.status || "-")}</span>
     </div>
   `).join("");
-  purchaseOpenLoginButton.disabled = !authenticated || !hasTask || phase === "completed" || phase === "error";
-  purchaseConfirmLoginButton.disabled = !authenticated || !hasTask || running || phase === "completed" || phase === "error";
-  purchaseOpenLoginButton.textContent = phase === "waiting_login" ? "重新打开采购平台" : "打开采购平台登录";
-  purchaseConfirmLoginButton.textContent = running ? "同步进行中…" : "确定登录并开始同步";
+  purchaseOpenLoginButton.disabled = !authenticated || phase === "syncing";
+  purchasePlatform.disabled = hasTask && !["completed", "error", "idle"].includes(phase);
+  purchaseDateStart.disabled = purchasePlatform.disabled;
+  purchaseDateEnd.disabled = purchasePlatform.disabled;
+  if (purchasePlatform.disabled) purchasePlatform.value = state.platform;
+  purchaseConfirmLoginButton.disabled = !authenticated || !hasTask || !["waiting_login", "waiting_plugin"].includes(phase);
+  purchaseOpenLoginButton.textContent = phase === "waiting_login" ? "重新打开采购平台" : "启动并打开采购平台";
+  purchaseConfirmLoginButton.textContent = phase === "syncing" ? "同步进行中…" : "确定登录并开始同步";
   schedulePurchaseTrackingPoll();
 }
 
@@ -530,9 +684,15 @@ purchaseOpenLoginButton.addEventListener("click", async () => {
   purchaseOpenLoginButton.disabled = true;
   purchasePageStatus.textContent = "正在打开采购平台…";
   try {
+    if (!purchasePlatform.disabled && (!purchaseDateStart.value || !purchaseDateEnd.value || purchaseDateStart.value > purchaseDateEnd.value)) {
+      throw new Error("请选择有效的美客多订单开始和结束日期，开始日期不能晚于结束日期");
+    }
     const response = await runtimeMessage({
       type: "OPEN_PURCHASE_TRACKING_LOGIN",
-      request: purchaseTrackingState
+      request: purchaseTrackingState,
+      platform: purchasePlatform.value,
+      date_start: purchaseDateStart.value,
+      date_end: purchaseDateEnd.value
     });
     if (!response.ok) throw new Error(response.error || "打开采购平台失败");
     purchaseTaskStatus.textContent = response.message || "请手动登录采购平台后点击确定登录";
@@ -558,25 +718,28 @@ purchaseConfirmLoginButton.addEventListener("click", async () => {
 });
 
 async function refreshZyingOptions() {
+  if (zyingRefreshing) return;
+  zyingRefreshing = true;
+  zyingRefreshButton.disabled = true;
+  zyingInfringementRefreshButton.disabled = true;
+  zyingStartButton.disabled = true;
+  zyingInfringementStartButton.disabled = true;
+  zyingRefreshButton.textContent = "正在读取本地智赢网页…";
   // The extension UI is a persistent standalone window. `activeTab` therefore
   // becomes stale after this window opens/focuses a ZYing tab. Resolve the tab
   // again for every read so a logged-in product page is never mistaken for a
   // missing page and redirected back to the login route.
-  const zyingTab = await findZyingPageTab();
-  if (!zyingTab) {
-    zyingContext = null;
-    zyingPageStatus.textContent = "正在打开智赢网页版登录页面；登录后重新打开插件并点击读取。";
-    zyingInfringementPageStatus.textContent = zyingPageStatus.textContent;
-    try { await runtimeMessage({type: "OPEN_ZYING_LOGIN"}); }
-    catch (error) { zyingPageStatus.textContent = error.message || String(error); }
-    await refreshState();
-    return;
-  }
-  activeTab = zyingTab;
-  zyingRefreshButton.disabled = true;
-  zyingInfringementRefreshButton.disabled = true;
-  zyingRefreshButton.textContent = "正在读取本地智赢网页…";
+  let pageRead = false;
   try {
+    const zyingTab = await findZyingPageTab();
+    if (!zyingTab) {
+      zyingContext = null;
+      zyingPageStatus.textContent = "正在打开智赢网页版登录页面；登录后重新打开插件并点击读取。";
+      zyingInfringementPageStatus.textContent = zyingPageStatus.textContent;
+      await runtimeMessage({type: "OPEN_ZYING_LOGIN"});
+      return;
+    }
+    activeTab = zyingTab;
     const contextResponse = await runtimeMessage({type: "READ_ZYING_CONTEXT", tabId: zyingTab.id});
     if (!contextResponse.ok) throw new Error(contextResponse.error || "未读取到智赢登录状态");
     zyingContext = {
@@ -584,8 +747,19 @@ async function refreshZyingOptions() {
       categories: contextResponse.categories || [],
       developers: contextResponse.developers || []
     };
+    pageRead = true;
+    // Display the live page immediately, while optional server supplementation
+    // runs. A worker outage must not discard categories already read here.
+    renderZyingOptions(zyingContext, {preserveMissingDevelopers: true});
+    zyingPageStatus.textContent = `已读取当前智赢网页：${zyingContext.categories.length} 个分类，${zyingContext.developers.length} 位产品开发。`;
+    zyingInfringementPageStatus.textContent = zyingPageStatus.textContent;
     const options = await runtimeMessage({type: "GET_ZYING_OPTIONS", context: zyingContext});
     if (!options.ok) throw new Error(options.error || "读取智赢筛选项失败");
+    zyingContext = {
+      ...zyingContext,
+      categories: options.categories || zyingContext.categories,
+      developers: options.developers || zyingContext.developers
+    };
     renderZyingOptions(options);
     zyingPageStatus.textContent = `已连接当前智赢网页：${Number(options.categories?.length || 0)} 个分类，${Number(options.developers?.length || 0)} 位产品开发。`;
     if (options.developer_warning) zyingPageStatus.textContent += ` ${options.developer_warning}`;
@@ -594,10 +768,13 @@ async function refreshZyingOptions() {
     }
     zyingInfringementPageStatus.textContent = zyingPageStatus.textContent;
   } catch (error) {
-    zyingContext = null;
-    zyingPageStatus.textContent = error.message || String(error);
+    if (!pageRead) zyingContext = null;
+    zyingPageStatus.textContent = pageRead
+      ? `已保留当前网页分类与开发；后台同步失败：${error.message || String(error)}`
+      : error.message || String(error);
     zyingInfringementPageStatus.textContent = zyingPageStatus.textContent;
   } finally {
+    zyingRefreshing = false;
     zyingRefreshButton.disabled = zyingRunning;
     zyingInfringementRefreshButton.disabled = zyingInfringementRunning;
     zyingRefreshButton.textContent = "读取当前网页分类与开发";
@@ -621,13 +798,14 @@ async function loadZyingStatus() {
     const logs = Array.isArray(response.logs) ? response.logs : [];
     zyingLog.textContent = logs.length ? logs.slice(-80).join("\n") : "等待任务启动…";
     zyingLog.scrollTop = zyingLog.scrollHeight;
-    zyingStartButton.disabled = !authenticated || !zyingContext || zyingRunning;
+    zyingStartButton.disabled = !authenticated || !zyingContext || zyingRunning || zyingRefreshing || zeshunCategoriesLoading;
     zyingStopButton.disabled = !zyingRunning || response.status === "stopping";
     zyingStartProductId.disabled = zyingRunning;
     zyingMaxItems.disabled = zyingRunning;
     zyingCategory.disabled = zyingRunning;
     zyingDeveloper.disabled = zyingRunning;
-    zyingRefreshButton.disabled = zyingRunning;
+    zyingRefreshButton.disabled = zyingRunning || zyingRefreshing;
+    syncZeshunCategoryControls();
   } catch (error) {
     zyingTaskStatus.textContent = error.message || String(error);
   } finally {
@@ -657,13 +835,13 @@ async function loadZyingInfringementStatus() {
     const logs = Array.isArray(response.logs) ? response.logs : [];
     zyingInfringementLog.textContent = logs.length ? logs.slice(-80).join("\n") : "等待任务启动…";
     zyingInfringementLog.scrollTop = zyingInfringementLog.scrollHeight;
-    zyingInfringementStartButton.disabled = !authenticated || !zyingContext || zyingInfringementRunning;
+    zyingInfringementStartButton.disabled = !authenticated || !zyingContext || zyingInfringementRunning || zyingRefreshing;
     zyingInfringementStopButton.disabled = !zyingInfringementRunning || response.status === "stopping";
     for (const input of [
       zyingInfringementStartProductId, zyingInfringementMaxItems,
       zyingInfringementCategory, zyingInfringementDeveloper
     ]) input.disabled = zyingInfringementRunning;
-    zyingInfringementRefreshButton.disabled = zyingInfringementRunning;
+    zyingInfringementRefreshButton.disabled = zyingInfringementRunning || zyingRefreshing;
   } catch (error) {
     zyingInfringementTaskStatus.textContent = error.message || String(error);
   } finally {
@@ -956,8 +1134,13 @@ collectButton.addEventListener("click", async () => {
   collectButton.disabled = true;
   collectButton.textContent = "正在读取商品…";
   try {
+    const managementCategoryId = managementCategorySelection(pagePlatform === "1688" ? "1688" : "product");
+    await saveZeshunCategoryOptions();
     const extracted = await tabMessage(activeTab.id, {type: "EXTRACT_PRODUCT"});
     if (!extracted.ok) throw new Error(extracted.error || "无法读取商品详情");
+    if (["mercado", "1688"].includes(pagePlatform)) {
+      extracted.product.management_category_id = managementCategoryId;
+    }
     collectButton.textContent = "正在上传…";
     const response = await runtimeMessage({type: "SUBMIT_PRODUCT", product: extracted.product});
     if (!response.ok) throw new Error(response.error || "采集失败");
@@ -1211,12 +1394,15 @@ zyingStartButton.addEventListener("click", async () => {
   zyingStartButton.disabled = true;
   zyingStartButton.textContent = "正在启动…";
   try {
+    const managementCategoryId = managementCategorySelection("zying");
+    await saveZeshunCategoryOptions();
     const response = await runtimeMessage({
       type: "START_ZYING_COLLECTION",
       context: zyingContext,
       params: {
         start_product_id: startProductId,
         max_items: maxItems,
+        management_category_id: managementCategoryId,
         category: zyingCategory.value,
         category_name: zyingCategory.selectedOptions[0]?.textContent || "",
         product_developer_id: zyingDeveloper.value,
@@ -1230,6 +1416,7 @@ zyingStartButton.addEventListener("click", async () => {
     showResult(error.message || String(error), "error");
   } finally {
     zyingStartButton.textContent = "启动产品采集";
+    zyingStartButton.disabled = !authenticated || !zyingContext || zyingRunning || zyingRefreshing || zeshunCategoriesLoading;
   }
 });
 
@@ -1301,13 +1488,21 @@ zyingInfringementStopButton.addEventListener("click", async () => {
   }
 });
 
+for (const {select, refresh} of Object.values(zeshunCategoryPickers)) {
+  select.addEventListener("change", () => {
+    syncZeshunCategoryControls();
+    saveZeshunCategoryOptions().catch(error => showResult(error.message || String(error), "error"));
+  });
+  refresh.addEventListener("click", refreshZeshunCategories);
+}
+
 for (const field of Object.values(productBatchFields)) {
   field.addEventListener("change", () => {
     saveProductBatchOptions().catch(error => showResult(error.message, "error"));
     if (field === productBatchFields["concurrency-mode"] && !productBatchState.running) {
       renderProductBatch(productBatchState);
     }
-    if (field === productBatchFields.tab) checkProductZyingStatus();
+    if (field === productBatchFields.tab) checkProductDataStatus();
   });
 }
 document.getElementById("product-refresh-tabs").addEventListener("click", () => {
@@ -1323,7 +1518,7 @@ document.getElementById("product-search").addEventListener("click", async () => 
     if (!response.ok) throw new Error(response.error || "打开搜索页面失败");
     await refreshProductTabs(response.tab_id);
     await saveProductBatchOptions();
-    showResult("已打开 Internacional 搜索页。页面加载完成后重新打开插件，确认智赢插件已登录再启动。", "");
+    showResult("已打开 Internacional 搜索页。页面加载完成后重新打开插件，确认泽顺数据服务已配置再启动。", "");
   } catch (error) { showResult(error.message || String(error), "error"); }
   finally { syncProductBatchControls(); }
 });
@@ -1336,6 +1531,7 @@ productBatchStart.addEventListener("click", async () => {
     productBatchBusy = true;
     syncProductBatchControls();
     await saveProductBatchOptions();
+    await saveZeshunCategoryOptions();
     const response = await runtimeMessage({type: "START_PRODUCT_BATCH", ...selection});
     if (!response.ok) throw new Error(response.error || "启动采集失败");
     renderProductBatch(response.state);

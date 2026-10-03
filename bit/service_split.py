@@ -18,6 +18,12 @@ HOP_HEADER = "X-Workbench-Worker-Auth"
 HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
               "te", "trailer", "transfer-encoding", "upgrade", "host", "content-length"}
 STATEFUL_PREFIXES = (
+    "/api/ai-original-products/publish",
+    "/api/browser-extension/purchase-tracking/",
+    "/api/browser-extension/mercado-data/",
+    "/api/infringement-knowledge/wipo/", "/api/db/infringement-knowledge/wipo/",
+    "/api/size-charts/", "/api/db/size-charts/",
+    "/api/clearance-alerts", "/api/db/clearance-alerts",
     "/api/local-agents/zying-sync/",
     "/api/order-sync/", "/api/db/order-sync/", "/api/store-links/sync/",
     "/api/db/store-links/sync/", "/api/prohibited-listings/sync/",
@@ -27,7 +33,7 @@ STATEFUL_PREFIXES = (
     "/api/exports/", "/api/tasks/daily/", "/api/run_shensu",
     "/api/mercado-collection/", "/api/db/mercado-collection/",
     "/api/mercado-products/", "/api/db/mercado-products/",
-    "/api/browser-extension/zying/", "/api/local-executor/tasks/daily/",
+    "/api/local-executor/tasks/daily/",
     "/api/local-executor/run_shensu",
     "/api/browser-extension/ai-weight-price/client/",
     "/api/browser-extension/weight-dimensions-records/",
@@ -47,6 +53,8 @@ STATEFUL_PATHS = {
     "/api/store-links/delete", "/api/db/store-links/delete",
     "/api/mercado/notifications", "/api/mercado/today/tasks",
     "/api/db/mercado-action-center",
+    "/api/browser-extension/zying/start", "/api/browser-extension/zying/status",
+    "/api/browser-extension/zying/stop",
 }
 RETRYABLE_STATUS_PATHS = {
     "/api/store-links/sync/status",

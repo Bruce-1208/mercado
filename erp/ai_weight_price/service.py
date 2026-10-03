@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 
 from bit.bit_runtime_lock import InterProcessLock
-from .browser import Browser, CircuitOpen, Stopped, NoExactMatch, WritebackMismatch
+from .browser import Browser, CircuitOpen, Stopped, NoExactMatch, WritebackMismatch, ZyingLoginRequired
 from .config import Config, selection_key, selection_params
 from .credentials import api_key
 from .edge import debugger_identity, open_edge
@@ -126,9 +126,22 @@ class Service:
         """Reuse the configured, signed-in visible Edge session for the package RPA."""
         with self.idle():
             config = self.config.load()
+            open_edge(config["cdp_url"], self.store.root)
             with self.browser_factory(config, threading.Event(), log) as browser:
-                browser.confirm_login()
+                try:
+                    browser.confirm_login()
+                except ZyingLoginRequired as exc:
+                    browser.open_login()
+                    raise ValueError(
+                        "智赢尚未登录，已保留专用 Edge 登录页面。"
+                        "请在当前执行电脑的该窗口完成智赢登录，再重新点击“更新智赢产品”"
+                    ) from exc
                 yield browser
+
+    def check_weight_dimensions_browser(self):
+        """Check the execution browser without updating products or saved login state."""
+        with self.weight_dimensions_browser(lambda *args, **kwargs: None):
+            pass
 
     def status(self):
         lock = self.lock()
@@ -372,10 +385,10 @@ class Service:
                 config["max_items"] = (int(previous_run.get("max_items") or max_items)
                                         if resuming_run else (1 if task_id else max_items))
                 config["run_id"] = previous_run.get("run_id") if resume and previous_run.get("run_id") else uuid.uuid4().hex
-                # A new range run must execute retained historical products
-                # again from the first selected card. A resume keeps completed
-                # items from the same batch and continues after them.
-                config["reprocess_historical"] = mode == "pipeline" and not resume
+                # Both new and resumed pipelines must recheck historical rows.
+                # complete_one uses run membership to preserve only this batch's
+                # completed items; resume must not exempt older batches too.
+                config["reprocess_historical"] = mode == "pipeline"
                 batch = {"run_id": config["run_id"], "mode": mode, "selection": selection,
                          "max_items": config["max_items"], "started_at": time.time(), "outcome": "preflight"}
                 try:
@@ -788,6 +801,8 @@ class Service:
             self.store.log("检测到上次任务的历史结论；本次已从该商品重新排队并逐件执行", key)
             task = self.store.get(key)
         if task["status"] in COMPLETED:
+            self.store.log("商品已有处理结果，保留进度并跳过重复执行"
+                           f"（本地状态：{task['status']}）", key)
             current = self.store.state("pipeline_current", {}) or {}
             if current.get("task_id") == key:
                 self.store.set_state("pipeline_current", None)

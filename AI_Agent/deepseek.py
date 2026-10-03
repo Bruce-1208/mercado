@@ -85,7 +85,7 @@ def _get_client(
     )
 
 
-def chat_deepseek(
+def chat_deepseek_with_usage(
     messages: Iterable[dict],
     model: str | None = None,
     temperature: float | None = None,
@@ -96,7 +96,12 @@ def chat_deepseek(
     thinking: bool | None = None,
     timeout: float | None = None,
     max_retries: int | None = None,
-) -> str:
+) -> dict:
+    """Return content and provider usage for callers that account for API costs.
+
+    Unchanged callers can keep using ``chat_deepseek`` below.  Usage is left
+    absent when the provider omits it; callers must not interpret that as zero.
+    """
     kwargs = {
         "model": model or DEEPSEEK_MODEL,
         "messages": list(messages),
@@ -122,7 +127,40 @@ def chat_deepseek(
     if options:
         client = client.with_options(**options)
     response = client.chat.completions.create(**kwargs)
-    return response.choices[0].message.content or ""
+    usage = getattr(response, "usage", None)
+    if usage is not None and hasattr(usage, "model_dump"):
+        usage = usage.model_dump()
+    elif usage is not None and not isinstance(usage, dict):
+        usage = vars(usage)
+    choice = response.choices[0]
+    return {
+        "content": choice.message.content or "",
+        "usage": usage,
+        "model": getattr(response, "model", kwargs["model"]),
+        "id": getattr(response, "id", ""),
+        "created": getattr(response, "created", None),
+        "finish_reason": getattr(choice, "finish_reason", None),
+    }
+
+
+def chat_deepseek(
+    messages: Iterable[dict],
+    model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    response_format: dict | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
+    thinking: bool | None = None,
+    timeout: float | None = None,
+    max_retries: int | None = None,
+) -> str:
+    return chat_deepseek_with_usage(
+        messages=messages, model=model, temperature=temperature,
+        max_tokens=max_tokens, response_format=response_format,
+        api_key=api_key, base_url=base_url, thinking=thinking,
+        timeout=timeout, max_retries=max_retries,
+    )["content"]
 
 
 def get_ai_response(message: str) -> str:

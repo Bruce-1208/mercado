@@ -507,7 +507,8 @@
             .back-link { padding: 7px 9px; }
         }
     </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20260930-unified1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261002-ui">
+    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261002-ui"></script>
 </head>
 <body class="zs-standalone{% if embedded %} embedded{% endif %}{% if ip_rights_mode %} ip-rights{% endif %}">
     <header class="topbar">
@@ -1007,15 +1008,24 @@
             return params;
         }
 
+        let dashboardLoadSequence = 0;
+        let dashboardLoadController = null;
         async function loadData() {
-            if (state.loading) return;
+            const sequence = ++dashboardLoadSequence;
+            dashboardLoadController?.abort();
+            const controller = new AbortController();
+            dashboardLoadController = controller;
+            const timer = setTimeout(() => controller.abort(), 30000);
+            showStatus("正在加载，请稍候…");
+            globalThis.WorkbenchUI?.feedback(elements.status, "loading");
             state.loading = true;
             const params = dashboardParams();
             try {
                 const endpoint = ipRightsMode ? "/api/official-ip-rights/dashboard" : "/api/official-infractions/dashboard";
-                const response = await fetch(`${endpoint}?${params.toString()}`);
+                const response = await fetch(`${endpoint}?${params.toString()}`, {signal: controller.signal});
                 const payload = await response.json();
-                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "读取违规商品数据失败");
+                if (sequence !== dashboardLoadSequence) return;
+                if (!response.ok || payload.status !== "success") throw Object.assign(new Error(payload.message || "读取违规商品数据失败"), {status: response.status});
                 const data = payload.data || {};
                 state.page = Number(data.page || 1);
                 state.pages = Number(data.pages || 1);
@@ -1025,7 +1035,9 @@
                 renderMetrics(data.summary || {}, Number(data.filters?.days || elements.days.value), viewMode);
                 if (ipRightsMode) renderStoreRankings(data.store_rankings || []);
                 else renderGroups(data.account_groups || []);
+                elements.details.dataset.uiState = "";
                 renderRows(data.rows || [], data.total || 0);
+                if (!data.rows?.length) globalThis.WorkbenchUI?.tableState(elements.details, "empty", "没有符合当前条件的违规商品");
                 if (elements.group) fillSelect(elements.group, data.filters?.groups || [], "全部账户组");
                 fillSelect(elements.salesperson, data.filters?.salespeople || [], "全部业务员");
                 fillCategorySelect(data.filters?.categories || []);
@@ -1041,11 +1053,17 @@
                 }
                 showStatus("");
             } catch (error) {
+                if (sequence !== dashboardLoadSequence) return;
+                if (controller.signal.aborted) error = new Error("查询超时，请缩小筛选范围后重试");
                 showStatus(error.message || String(error), true);
                 elements.groups.innerHTML = `<div class="empty-state">${ipRightsMode ? "店铺排名" : "违规商品分组"}加载失败，请稍后重试。</div>`;
                 elements.details.innerHTML = '<tr><td colspan="8" class="empty-state">违规商品明细加载失败。</td></tr>';
+                const kind = globalThis.WorkbenchUI?.errorKind(error) || "error";
+                globalThis.WorkbenchUI?.feedback(elements.status, kind);
+                globalThis.WorkbenchUI?.tableState(elements.details, kind, kind === "denied" ? "当前账号没有查看权限" : error.message, () => loadData());
             } finally {
-                state.loading = false;
+                clearTimeout(timer);
+                if (sequence === dashboardLoadSequence) { dashboardLoadController = null; state.loading = false; }
             }
         }
 

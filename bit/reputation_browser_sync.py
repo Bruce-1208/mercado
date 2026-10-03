@@ -49,7 +49,7 @@ def collect_site(session, name, site):
         # Re-select independently so a failed traffic step cannot leak another site's warnings.
         open_site(session, reputation.SALES_SUMMARY_URL, site, choose_site=True)
         open_site(session, reputation.ACCOUNT_RISK_URL, site)
-        summary = reputation._extract_account_risk_page_text(scripts)
+        summary = reputation._wait_account_risk_summary(scripts)
         kinds = reputation._account_risk_kinds_from_summary(summary, reputation._get_account_risk_links(scripts))
         if not kinds and any(reputation._account_risk_summary_count(summary, kind) != 0
                              for kind in ("restriction", "warning")):
@@ -57,11 +57,11 @@ def collect_site(session, name, site):
         messages = []
         for kind in kinds:
             open_site(session, reputation.ACCOUNT_RISK_URLS[kind], site)
-            details = reputation._normalize_account_risk_details(reputation._extract_account_risk_details(scripts))
+            details = reputation._wait_account_risk_details(scripts)
             if not details:
                 raise RuntimeError("无法读取系统告警详情")
             messages.extend(details)
-        row["system_warning"] = "\n".join(dict.fromkeys(messages)) or "正常"
+        row["system_warning"] = reputation._latest_account_risk_message(messages) or "正常"
     except Exception as exc:
         errors.append(f"系统告警：{exc}")
     row["error"] = "；".join(errors)

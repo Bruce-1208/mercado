@@ -1328,6 +1328,46 @@ def list_mercado_store_links(
     return _request("GET", "/api/db/store-links", params=params)
 
 
+def size_chart_call(action, payload, *, organization_key, allowed_token_ids=None):
+    """Keep templates and chart submissions on the central workbench server."""
+    if DB_MODE == "mysql":
+        from bit.size_charts import dispatch
+        return dispatch(action, payload, organization_key=organization_key,
+                        allowed_token_ids=allowed_token_ids)
+    return _request("POST", f"/api/db/size-charts/{action}", json={
+        "payload": payload, "organization_key": organization_key,
+        "allowed_token_ids": sorted(allowed_token_ids) if allowed_token_ids is not None else None,
+    }, timeout=(15, 600), max_attempts=1)
+
+
+def list_clearance_alerts(*, allowed_token_ids=None, **filters):
+    if DB_MODE == "mysql":
+        from bit.clearance_alerts import list_alerts
+        return list_alerts(allowed_token_ids=allowed_token_ids, **filters)
+    params = {key: value for key, value in filters.items() if value is not None}
+    if allowed_token_ids is not None:
+        params["allowed_token_ids"] = sorted(allowed_token_ids) or [""]
+    return _request("GET", "/api/db/clearance-alerts", params=params)
+
+
+def refresh_clearance_alerts(*, allowed_token_ids=None, **filters):
+    if DB_MODE == "mysql":
+        from bit.clearance_alerts import start_refresh
+        return start_refresh(allowed_token_ids=allowed_token_ids, **filters)
+    return _request("POST", "/api/db/clearance-alerts/refresh", json={
+        **filters, "allowed_token_ids": sorted(allowed_token_ids) if allowed_token_ids is not None else None,
+    })
+
+
+def save_clearance_facts(link_id, facts, *, allowed_token_ids=None):
+    if DB_MODE == "mysql":
+        from bit.clearance_alerts import save_facts
+        return save_facts(link_id, facts, allowed_token_ids=allowed_token_ids)
+    return _request("PATCH", f"/api/db/clearance-alerts/{int(link_id)}/facts", json={
+        "facts": facts, "allowed_token_ids": sorted(allowed_token_ids) if allowed_token_ids is not None else None,
+    })
+
+
 def bulk_update_mercado_store_links(link_ids, **changes):
     payload = {"link_ids": [int(value) for value in link_ids or []], "changes": changes}
     if DB_MODE == "mysql":
@@ -1463,10 +1503,14 @@ def bulk_update_orders(order_ids, operator_id=None, operator_name="", allowed_to
     return _request("POST", "/api/db/orders/bulk-update", json=payload)
 
 
-def get_purchase_tracking_orders(order_ids):
+def get_purchase_tracking_orders(order_ids, *, all_orders=False, date_start=None, date_end=None, missing_tracking=False):
     payload = {"order_ids": [str(value) for value in order_ids or []]}
+    if all_orders:
+        payload["all_orders"] = True
+    filters = {"date_start": date_start, "date_end": date_end, "missing_tracking": missing_tracking} if date_start or date_end or missing_tracking else {}
+    payload.update(filters)
     if DB_MODE == "mysql":
-        return _local_call("get_mercado_purchase_tracking_orders", payload["order_ids"])
+        return _local_call("get_mercado_purchase_tracking_orders", payload["order_ids"], **({"all_orders": True} if all_orders else {}), **filters)
     return _request("POST", "/api/db/orders/purchase-tracking", json=payload)
 
 
@@ -1635,18 +1679,21 @@ def delete_appeal_phrase(phrase_id):
     return _request("DELETE", f"/api/db/appeal-phrases/{int(phrase_id)}")
 
 
-def list_infringement_knowledge(list_type="", search="", limit=2000):
+def list_infringement_knowledge(list_type="", search="", limit=2000, after_id=None,
+                                source_type="", page=None, page_size=50):
+    filters = {"list_type": list_type, "search": search, "limit": limit}
+    if source_type:
+        filters["source_type"] = source_type
+    if page is not None:
+        filters.update(page=page, page_size=page_size)
+    if after_id is not None:
+        filters["after_id"] = after_id
     if DB_MODE == "mysql":
-        return _local_call(
-            "list_infringement_knowledge",
-            list_type=list_type,
-            search=search,
-            limit=limit,
-        )
+        return _local_call("list_infringement_knowledge", **filters)
     return _request(
         "GET",
         "/api/db/infringement-knowledge",
-        params={"list_type": list_type, "search": search, "limit": limit},
+        params=filters,
     )
 
 
@@ -1712,6 +1759,17 @@ def upsert_analyzed_infringement_knowledge(records):
     return _request(
         "POST",
         "/api/db/infringement-knowledge/analyzed",
+        json={"records": list(records or [])},
+        timeout=120,
+    )
+
+
+def upsert_wipo_infringement_knowledge(records):
+    if DB_MODE == "mysql":
+        return _local_call("upsert_wipo_infringement_knowledge", records)
+    return _request(
+        "POST",
+        "/api/db/infringement-knowledge/wipo/records",
         json={"records": list(records or [])},
         timeout=120,
     )
@@ -2344,6 +2402,7 @@ def list_mercado_product_items(
     date_from="", date_to="", management_category_id=None,
     mercado_category="", zying_category="", product_developer_id="", token_ids=None,
     collector_salesperson="", generator_salesperson="", weight_status="",
+    collector_salesperson_exact=False, target_platform="mercadolibre",
 ):
     params = {
         "weight_status": str(weight_status or "").strip().lower(),
@@ -2352,6 +2411,7 @@ def list_mercado_product_items(
         "offset": offset,
         "source_type": str(source_type or "").strip().lower(),
         "ai_status": str(ai_status or "").strip().lower(),
+        "target_platform": str(target_platform or "mercadolibre").strip().lower(),
         "review_status": str(review_status or "").strip().lower(),
         "publish_status": str(publish_status or "").strip().lower(),
         "weight_min": weight_min,
@@ -2369,6 +2429,8 @@ def list_mercado_product_items(
     }
     if collector_salesperson:
         params["collector_salesperson"] = str(collector_salesperson).strip()
+        if collector_salesperson_exact:
+            params["collector_salesperson_exact"] = True
     if generator_salesperson:
         params["generator_salesperson"] = str(generator_salesperson).strip()
     if token_ids is not None:
@@ -2393,6 +2455,37 @@ def list_mercado_product_items(
         return _collection_store_call(
             "list_product_items", **params
         )
+
+
+def get_1688_product_options():
+    if DB_MODE == "mysql":
+        return _collection_store_call("get_1688_product_options")
+    path = "/api/db/1688-products/options"
+    try:
+        return _request("GET", path, timeout=(3, 25), max_attempts=1)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("get_1688_product_options")
+
+
+def update_1688_product(product_item_id, changes):
+    from erp.mercadolibre_collection_store import normalize_1688_product_changes
+
+    row_id = int(product_item_id)
+    normalize_1688_product_changes(changes)
+    payload = dict(changes)
+    if DB_MODE == "mysql":
+        return _collection_store_call("update_1688_product", row_id, payload)
+    path = f"/api/db/1688-products/{row_id}"
+    try:
+        return _request("PATCH", path, json=payload)
+    except RuntimeError as exc:
+        if "1688 产品不存在" in str(exc):
+            raise KeyError("1688 产品不存在") from exc
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("update_1688_product", row_id, payload)
 
 
 def upsert_ai_original_product(product, created_by=""):
@@ -3294,3 +3387,13 @@ def get_ai_appeal_product_contexts(shop_name, product_ids):
         return fetch_store_product_contexts(shop_name, product_ids)
     return _request("POST", "/api/db/ai-appeal-product-contexts", timeout=120,
                     json={"shop_name": shop_name, "product_ids": product_ids})
+
+
+def list_salesperson_stats(start_date="", end_date="", *, allowed_token_ids=None):
+    if DB_MODE == "mysql":
+        from bit.salesperson_stats import list_stats
+        return list_stats(start_date, end_date, allowed_token_ids=allowed_token_ids)
+    params = {"start_date": start_date, "end_date": end_date}
+    if allowed_token_ids is not None:
+        params.update(scope_limited="1", allowed_token_id=sorted(allowed_token_ids))
+    return _request("GET", "/api/db/salesperson-stats", params=params)

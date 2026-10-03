@@ -143,6 +143,15 @@
     font-size: 11px;
 }
 
+.p1688-toolbar-note.error,
+.p1688-edit-message.error {
+    color: #b24444;
+}
+
+.p1688-toolbar-note.success {
+    color: #237445;
+}
+
 .p1688-batch-bar {
     display: flex;
     align-items: center;
@@ -210,7 +219,7 @@
 
 .p1688-table {
     width: 100%;
-    min-width: 1450px;
+    min-width: 1630px;
     table-layout: fixed;
     border-collapse: collapse;
     color: #344256;
@@ -227,7 +236,8 @@
 .p1688-table col:nth-child(8) { width: 102px !important; }
 .p1688-table col:nth-child(9) { width: 100px !important; }
 .p1688-table col:nth-child(10) { width: 135px !important; }
-.p1688-table col:nth-child(11) { width: 228px !important; }
+.p1688-table col:nth-child(11) { width: 145px !important; }
+.p1688-table col:nth-child(12) { width: 275px !important; }
 
 .p1688-table th {
     position: sticky;
@@ -372,6 +382,7 @@
 
 .p1688-row-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     white-space: nowrap;
 }
@@ -472,6 +483,55 @@
     overflow: auto;
     max-height: calc(100vh - 160px);
     padding: 20px 22px 24px;
+}
+
+.p1688-edit-dialog {
+    width: min(640px, calc(100vw - 32px));
+}
+
+.p1688-edit-dialog .p1688-dialog-head p {
+    max-width: 500px;
+    overflow-wrap: anywhere;
+    line-height: 1.6;
+}
+
+.p1688-edit-help {
+    margin: 0 0 18px;
+    color: #69788d;
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.p1688-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.p1688-edit-grid .p1688-field {
+    min-width: 0;
+}
+
+.p1688-edit-message {
+    min-height: 20px;
+    margin: 16px 0 0;
+    color: #69788d;
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.p1688-edit-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 9px;
+    padding: 14px 22px;
+    border-top: 1px solid var(--p1688-line);
+    background: #fafbfd;
+}
+
+.p1688-edit-footer button {
+    width: auto;
+    min-width: 90px;
 }
 
 .p1688-detail-top {
@@ -664,6 +724,9 @@
 }
 
 @media (max-width: 650px) {
+    .p1688-edit-grid {
+        grid-template-columns: 1fr;
+    }
     .p1688-summary-grid {
         grid-template-columns: 1fr;
     }

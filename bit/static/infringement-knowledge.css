@@ -1,0 +1,77 @@
+/* Brand review workspace. Keep styling scoped to avoid changing other modules. */
+#tab-infringement-knowledge { --knowledge-line: var(--zs-stroke, #dce3ec); }
+#tab-infringement-knowledge [hidden] { display: none !important; }
+#tab-infringement-knowledge .knowledge-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+#tab-infringement-knowledge .knowledge-heading h2 { margin: 4px 0 6px; }
+#tab-infringement-knowledge .knowledge-eyebrow { font-size: 11px; letter-spacing: 1px; color: #64748b; }
+#tab-infringement-knowledge .knowledge-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; margin: 22px 0; }
+#tab-infringement-knowledge .knowledge-metric { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding: 18px 20px; border: 1px solid var(--knowledge-line); border-radius: 12px; background: #fff; color: #344054; text-align: left; box-shadow: none; white-space: normal; }
+#tab-infringement-knowledge .knowledge-metric.selected { border-color: #2563eb; box-shadow: inset 0 0 0 1px #2563eb; background: #f8fbff; }
+#tab-infringement-knowledge .knowledge-metric span { font-size: 13px; font-weight: 600; }
+#tab-infringement-knowledge .knowledge-metric strong { font-size: 29px; line-height: 1.2; font-variant-numeric: tabular-nums; color: #172033; }
+#tab-infringement-knowledge .knowledge-metric.pending strong { color: #b45309; }
+#tab-infringement-knowledge .knowledge-metric small { color: #64748b; font-size: 11px; font-weight: 400; }
+#tab-infringement-knowledge .knowledge-metric i { font-size: 10px; font-style: normal; background: #fff3d8; color: #a15c08; border-radius: 4px; padding: 2px 5px; margin-left: 5px; }
+#tab-infringement-knowledge .knowledge-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--knowledge-line); margin: 0 0 18px; }
+#tab-infringement-knowledge .knowledge-tabs button { background: transparent; color: #64748b; border: 0; border-bottom: 2px solid transparent; border-radius: 0; box-shadow: none; padding: 12px 2px; font-weight: 600; }
+#tab-infringement-knowledge .knowledge-tabs button[aria-pressed="true"] { border-bottom-color: #2563eb; color: #1d4ed8; }
+#tab-infringement-knowledge #knowledge-records-panel { padding: 20px; min-width: 0; }
+#tab-infringement-knowledge .knowledge-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+#tab-infringement-knowledge h3 { font-size: 15px; margin: 0; color: #172033; }
+#tab-infringement-knowledge .knowledge-panel-head p { margin: 5px 0 0; color: #64748b; font-size: 12px; }
+#tab-infringement-knowledge .knowledge-rule-note { display: flex; gap: 12px; padding: 12px 14px; background: #f4f7fb; border-radius: 8px; color: #64748b; font-size: 12px; line-height: 1.7; margin-bottom: 18px; }
+#tab-infringement-knowledge .knowledge-rule-note strong { flex-shrink: 0; color: #475569; }
+#tab-infringement-knowledge .knowledge-filters { display: grid; grid-template-columns: minmax(200px,1fr) 170px 150px auto auto; align-items: end; gap: 12px; margin-bottom: 20px; }
+#tab-infringement-knowledge .field { min-width: 0; margin: 0; }
+#tab-infringement-knowledge .field label { display: block; font-size: 12px; color: #475569; margin-bottom: 6px; }
+#tab-infringement-knowledge .field :is(input,select,textarea) { width: 100%; box-sizing: border-box; }
+#tab-infringement-knowledge .knowledge-table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid var(--knowledge-line); border-radius: 8px; }
+#tab-infringement-knowledge .knowledge-table { width: 100%; min-width: 830px; table-layout: fixed; }
+#tab-infringement-knowledge .knowledge-table :is(th,td) { text-align: left; padding: 14px 12px; vertical-align: top; font-size: 12px; width: auto; }
+#tab-infringement-knowledge .knowledge-table th { background: #f8fafc; color: #64748b; font-weight: 500; }
+#tab-infringement-knowledge .knowledge-table :is(th,td):nth-child(1) { width: 17%; }
+#tab-infringement-knowledge .knowledge-table :is(th,td):nth-child(2) { width: 12%; }
+#tab-infringement-knowledge .knowledge-table :is(th,td):nth-child(3) { width: 15%; }
+#tab-infringement-knowledge .knowledge-table :is(th,td):nth-child(4) { width: 27%; }
+#tab-infringement-knowledge .knowledge-table :is(th,td):nth-child(5) { width: 16%; }
+#tab-infringement-knowledge .knowledge-table :is(th,td):nth-child(6) { width: 13%; }
+#tab-infringement-knowledge .knowledge-brand { overflow-wrap: anywhere; font-weight: 650; }
+#tab-infringement-knowledge .knowledge-notes { color: #64748b; font-size: 12px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+#tab-infringement-knowledge .knowledge-source-detail { display: block; color: #94a3b8; font-size: 11px; margin-top: 5px; }
+#tab-infringement-knowledge .knowledge-list-badge { font-size: 11px; border-radius: 5px; padding: 4px 7px; white-space: nowrap; background: #eaf7f0; color: #168153; }
+#tab-infringement-knowledge .knowledge-list-badge.pending { background: #fff4db; color: #9a610c; }
+#tab-infringement-knowledge .knowledge-list-badge.blacklist { background: #fef0ef; color: #b5473c; }
+#tab-infringement-knowledge .knowledge-row-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+#tab-infringement-knowledge .knowledge-row-actions button { font-size: 12px; padding: 0; min-height: 22px; border: 0; background: none; color: #2563eb; box-shadow: none; }
+#tab-infringement-knowledge .knowledge-row-actions .knowledge-delete { color: #64748b; }
+#tab-infringement-knowledge .knowledge-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #64748b; font-size: 12px; margin-top: 16px; }
+#tab-infringement-knowledge .knowledge-pagination > div { display: flex; align-items: center; gap: 12px; }
+#tab-infringement-knowledge .knowledge-feedback { background: #edf7f2; color: #176344; border: 1px solid #cae8d8; padding: 12px 16px; border-radius: 8px; font-size: 13px; }
+#tab-infringement-knowledge .knowledge-feedback.error, #knowledge-editor-error { color: #b42318; background: #fff1f0; padding: 10px; border-radius: 6px; }
+#tab-infringement-knowledge .knowledge-source-intro { padding: 6px 0 20px; }
+#tab-infringement-knowledge .knowledge-source-intro p, #tab-infringement-knowledge .knowledge-source-card p { color: #64748b; font-size: 12px; line-height: 1.8; margin: 6px 0 0; }
+#tab-infringement-knowledge .knowledge-source-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+#tab-infringement-knowledge .knowledge-source-card { padding: 22px; display: flex; align-items: flex-start; flex-direction: column; gap: 12px; }
+#tab-infringement-knowledge .knowledge-source-card > button { margin-top: auto; }
+#tab-infringement-knowledge .knowledge-source-tag { font-size: 11px; color: #64748b; background: #f1f5f9; padding: 4px 7px; border-radius: 4px; }
+#tab-infringement-knowledge .knowledge-source-card .knowledge-analysis-controls { grid-template-columns: 1fr 1fr; width: 100%; }
+#tab-infringement-knowledge .knowledge-task-panel { padding: 20px; margin: 18px 0; }
+#tab-infringement-knowledge details { margin-top: 12px; color: #64748b; font-size: 12px; }
+#tab-infringement-knowledge summary { cursor: pointer; padding: 6px 0; }
+#tab-infringement-knowledge #wipo-sync-panel { background: white; border: 1px solid var(--knowledge-line); border-radius: 12px; padding: 22px; margin-bottom: 0; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px; }
+#tab-infringement-knowledge #wipo-sync-form { display: flex; flex-direction: column; gap: 14px; margin: 8px 0; }
+#tab-infringement-knowledge #wipo-sync-form input[type="checkbox"] { width: auto; }
+#tab-infringement-knowledge .knowledge-analysis-log { height: auto; min-height: 80px; max-height: 260px; margin: 8px 0; background: #f8fafc; color: #475569; border: 1px solid var(--knowledge-line); }
+#tab-infringement-knowledge .knowledge-dialog { width: min(590px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); padding: 0; border: 1px solid var(--knowledge-line); border-radius: 14px; box-shadow: 0 24px 80px #17203333; color: #344054; }
+#tab-infringement-knowledge .knowledge-dialog::backdrop { background: #17203366; }
+#tab-infringement-knowledge #infringement-knowledge-form { display: flex; flex-direction: column; gap: 18px; padding: 24px; }
+#tab-infringement-knowledge .knowledge-dialog-head { display: flex; align-items: center; justify-content: space-between; }
+#tab-infringement-knowledge .knowledge-dialog-head h3 { font-size: 20px; margin-top: 5px; }
+#tab-infringement-knowledge .knowledge-dialog textarea { resize: vertical; }
+#tab-infringement-knowledge .knowledge-dialog .knowledge-rule-note { display: block; margin-bottom: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+#tab-infringement-knowledge .knowledge-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 16px; border-top: 1px solid var(--knowledge-line); }
+#tab-infringement-knowledge button:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+@media(max-width: 1150px) { #tab-infringement-knowledge .knowledge-filters { grid-template-columns: minmax(180px,1fr) 1fr 1fr; } #tab-infringement-knowledge .knowledge-filters > button { width: fit-content; } }
+@media(max-width: 760px) { #tab-infringement-knowledge .knowledge-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; } #tab-infringement-knowledge .knowledge-metric { padding: 14px; } #tab-infringement-knowledge .knowledge-source-grid, #tab-infringement-knowledge #wipo-sync-panel { grid-template-columns: 1fr; } #tab-infringement-knowledge .knowledge-heading { align-items: flex-start; } #tab-infringement-knowledge .knowledge-rule-note { flex-direction: column; gap: 4px; } #tab-infringement-knowledge .knowledge-filters { grid-template-columns: 1fr 1fr; } #tab-infringement-knowledge .knowledge-filters .field:first-child { grid-column: 1/-1; } #tab-infringement-knowledge .knowledge-pagination { flex-wrap: wrap; } #tab-infringement-knowledge #knowledge-records-panel { padding: 14px; } #tab-infringement-knowledge .knowledge-metric small { line-height: 1.5; } }
+#tab-infringement-knowledge .knowledge-heading > div { flex: 1; min-width: 0; }
+#tab-infringement-knowledge .knowledge-heading > button { flex: none; width: auto; }

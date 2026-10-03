@@ -72,24 +72,177 @@
     );
   }
 
-  async function extractZyingProduct() {
-    const plugin = core.pluginLoginStatus(document);
-    if (!plugin.logged_in) throw new Error(plugin.message);
-    const product = core.extractProductAsync
-      ? await core.extractProductAsync(document, location.href)
-      : core.extractProduct(document, location.href);
-    if (!product.plugin_snapshot?.dom_lines?.length) throw new Error("等待智赢插件读取当前商品信息");
-    if (product.plugin_snapshot.fulfillment_type === "unknown") throw new Error("智赢插件尚未给出发货方式，为避免误采已停止");
-    if (product.scrape_status !== "ok") {
-      throw new Error(product.error_message || "等待智赢插件读取重量和包装尺寸");
+  const dataCore = globalThis.ZeshunMercadoData;
+  const pendingData = new Map();
+  const dataCache = new Map();
+  let dataTimer;
+  let dataRunning = false;
+
+  function queryProduct(sku, price) {
+    const key = `${sku}:${price ?? ""}`;
+    const cached = dataCache.get(key);
+    if (cached && cached.until > Date.now()) return Promise.resolve(cached.value);
+    if (pendingData.has(key)) return pendingData.get(key).promise;
+    let resolve, reject;
+    const promise = new Promise((a, b) => { resolve = a; reject = b; });
+    pendingData.set(key, {key, sku, price, promise, resolve, reject, sent:false});
+    clearTimeout(dataTimer);
+    dataTimer = setTimeout(flushData, 80);
+    return promise;
+  }
+  async function flushData() {
+    if (dataRunning) return;
+    const batch = [...pendingData.values()].filter(v => !v.sent).slice(0, 50);
+    if (!batch.length) return;
+    dataRunning = true;
+    batch.forEach(v => {v.sent = true;});
+    try {
+      const response = await sendMessage({type:"GET_MERCADO_PRODUCT_INFO", items:batch.map(v => ({sku:v.sku, price:v.price}))});
+      if (!response.ok) throw Object.assign(Error(response.error || "商品查询失败"), {status: response.status});
+      for (const item of batch) {
+        const record = response.items.find(v => v.sku === item.sku && (v.requested_price ?? null) === (item.price > 0 ? item.price : null));
+        if (!record?.product) {item.reject(Error("数据源暂无该商品记录")); continue;}
+        record.warnings = response.warnings || [];
+        dataCache.set(item.key, {value:record, until:Date.now()+60000});
+        item.resolve(record);
+      }
+      while (dataCache.size > 500) dataCache.delete(dataCache.keys().next().value);
+    } catch (error) {batch.forEach(v => v.reject(error));}
+    finally {
+      batch.forEach(v => pendingData.delete(v.key));
+      dataRunning = false;
+      if (pendingData.size) dataTimer = setTimeout(flushData, 80);
     }
+  }
+
+  function nativeProduct() {
+    // Native facts only; measurements come from the same cache as Zeshun cards.
+    const product = core.extractProduct(document, location.href);
+    const listing = dataCore.listingId(location.href);
+    if (listing) {product.source_item_id = listing; product.source.id = listing;}
+    return product;
+  }
+  async function extractServerProduct() {
+    const product = nativeProduct();
+    let record;
+    try {
+      record = await queryProduct(product.source_item_id, currentPrice(document) ?? product.price);
+      dataCore.apply(product, record);
+    } catch (error) {
+      error.retryable = false;
+      throw error;
+    }
+    if (product.plugin_snapshot.fulfillment_type === "unknown") throw Object.assign(Error("数据源尚未给出发货方式，为避免误采已停止"), {retryable:false});
+    if (product.scrape_status !== "ok") throw Object.assign(Error(product.error_message), {retryable:false});
     return product;
   }
 
+  function attachDataCard(host, sku, price, detail = false) {
+    if (!sku) return;
+    const key = `${sku}:${price ?? ""}`;
+    const existing = host.querySelector(":scope > .zeshun-product-info");
+    if (existing?.dataset.productKey === key) return;
+    if (existing) existing.remove();
+    const panel = document.createElement("section");
+    panel.className = `zeshun-product-info${detail ? " zeshun-product-info--detail" : ""}`;
+    panel.dataset.productKey = key;
+    panel.setAttribute("aria-label", `泽顺 ERP · ${sku} 商品数据`);
+    panel.addEventListener("click", event => {event.stopPropagation();});
+    panel.addEventListener("keydown", event => event.stopPropagation());
+    host.appendChild(panel);
+    let loading = false;
+    const showState = (message, retry = false) => {
+      const state = document.createElement("div");
+      state.className = "zs-info-state";
+      const text = document.createElement("span");
+      text.className = "zs-info-state-message";
+      text.setAttribute("role", "status");
+      text.textContent = message;
+      state.appendChild(text);
+      if (retry) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "zs-info-refresh";
+        button.textContent = "重试";
+        button.addEventListener("click", event => {event.preventDefault(); event.stopPropagation(); load();});
+        state.appendChild(button);
+      }
+      panel.replaceChildren(state);
+    };
+    const load = async (refresh = false) => {
+      if (loading || !panel.isConnected) return;
+      loading = true;
+      if (refresh) dataCache.delete(key);
+      panel.setAttribute("aria-busy", "true");
+      showState("泽顺 · 正在读取商品数据…");
+      try {
+        const record = await queryProduct(sku, price);
+        if (!panel.isConnected) return;
+        dataCore.render(document, panel, record, {onRefresh: () => load(true)});
+      } catch (error) {
+        if (panel.isConnected) showState(`泽顺 · ${error.message}`, true);
+      } finally {
+        loading = false;
+        panel.setAttribute("aria-busy", "false");
+      }
+    };
+    if (typeof IntersectionObserver === "function") {
+      const observer = new IntersectionObserver(entries => {
+        if (entries.some(v => v.isIntersecting)) {observer.disconnect(); load();}
+      }, {rootMargin:"300px"});
+      observer.observe(panel);
+    } else load();
+  }
+  function listingCards() {
+    const seen = new Set();
+    const cards = [];
+    for (const candidate of core.cardCandidates(document)) {
+      // A result LI can wrap the native visual card. Use that card for both
+      // collection and data so the yellow footer shares its background/border.
+      const native = candidate.link.closest(".poly-card, .ui-search-result, [data-testid='result']");
+      const card = native && candidate.card.contains(native) ? native : candidate.card;
+      if (seen.has(card)) continue;
+      seen.add(card);
+      cards.push({...candidate, card});
+    }
+    return cards;
+  }
+  function listingDataHost(card) {
+    // Horizontal results keep the image beside the product information. Mount
+    // beneath that information rather than adding another horizontal column.
+    const horizontal = card.matches(".poly-card--list, .poly-card--horizontal, .ui-search-result") ||
+      card.closest(".ui-search-layout--list");
+    return horizontal && card.querySelector(".poly-card__content, .ui-search-result__content, .ui-search-result__content-wrapper") || card;
+  }
+  function currentPrice(root) {
+    const amounts = [...root.querySelectorAll(".poly-price__current .andes-money-amount, .ui-search-price__second-line .andes-money-amount, .ui-pdp-price__second-line .andes-money-amount")];
+    const amount = amounts.find(v => !v.classList.contains("andes-money-amount--previous") && v.tagName !== "S");
+    if (!amount) return null;
+    const fraction = amount.querySelector(".andes-money-amount__fraction")?.textContent?.replace(/\D/g, "");
+    const cents = amount.querySelector(".andes-money-amount__cents")?.textContent?.replace(/\D/g, "") || "00";
+    return fraction ? Number(`${fraction}.${cents}`) : null;
+  }
+  function installDataCards() {
+    if (looksLikeDetailPage()) {
+      try {
+        const product = nativeProduct();
+        const host = document.querySelector(".ui-pdp-container__col.col-2") ||
+          document.querySelector(".ui-pdp-container") || document.querySelector("main");
+        if (host) attachDataCard(host, product.source_item_id, currentPrice(document) ?? product.price, true);
+      } catch (_) {}
+      return;
+    }
+    for (const candidate of listingCards()) {
+      const sku = dataCore.listingId(candidate.url);
+      candidate.card.classList.add("zeshun-collector-product-card");
+      attachDataCard(listingDataHost(candidate.card), sku, currentPrice(candidate.card));
+    }
+  }
+
   async function extractEligibleProduct() {
-    const product = await extractZyingProduct();
+    const product = await extractServerProduct();
     if (!product.plugin_snapshot.fulfillment_eligible) {
-      throw new Error(`仅采集自发货和半托管；智赢识别为${product.plugin_snapshot.fulfillment_label || "非允许发货方式"}`);
+      throw new Error(`仅采集自发货和半托管；数据源识别为${product.plugin_snapshot.fulfillment_label || "非允许发货方式"}`);
     }
     return product;
   }
@@ -119,12 +272,17 @@
   }
 
   function installCardButtons() {
-    for (const candidate of core.cardCandidates(document)) {
-      if (candidate.card.querySelector(":scope > .zeshun-card-collect")) continue;
+    for (const candidate of listingCards()) {
+      const existing = candidate.card.querySelector(":scope > .zeshun-card-collect");
+      if (existing) {
+        existing.dataset.collectionUrl = candidate.url;
+        continue;
+      }
       candidate.card.classList.add("zeshun-collector-card-host");
       const button = document.createElement("button");
       button.type = "button";
       button.className = "zeshun-card-collect";
+      button.dataset.collectionUrl = candidate.url;
       button.textContent = "采集";
       button.title = "在后台读取详情并采集到泽顺控制台";
       button.addEventListener("click", async event => {
@@ -134,10 +292,10 @@
         button.disabled = true;
         button.textContent = "采集中…";
         try {
-          const detailTab = window.open(candidate.url, "_blank", "noopener");
+          const detailTab = window.open(button.dataset.collectionUrl, "_blank", "noopener");
           if (!detailTab) throw new Error("浏览器拦截了详情页，请允许弹出窗口后重试");
           button.textContent = "已打开";
-          showToast("正在打开详情页，采集时将以智赢发货方式为准", "info");
+          showToast("正在打开详情页，采集时将以泽顺后台发货方式为准", "info");
         } catch (error) {
           button.textContent = "重试";
           showToast(error.message || String(error), "error");
@@ -155,6 +313,7 @@
   function refreshUi() {
     installFloatingButton();
     installCardButtons();
+    installDataCards();
   }
 
   const observer = new MutationObserver(() => {
@@ -165,15 +324,12 @@
   setInterval(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
+      document.querySelectorAll(".zeshun-product-info").forEach(node => node.remove());
       setTimeout(refreshUi, 300);
     }
   }, 700);
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message && message.type === "CHECK_ZYING_PLUGIN") {
-      sendResponse({ok: true, ...core.pluginLoginStatus(document)});
-      return false;
-    }
     if (message && ["READ_PRODUCT_LIST", "EXTRACT_BATCH_PRODUCT"].includes(message.type)) {
       try {
         const pageText = `${document.title} ${(document.body?.innerText || "").slice(0, 16000)}`;
@@ -187,9 +343,9 @@
             sendResponse({ok: false, error: "等待商品详情加载"});
             return false;
           }
-          Promise.resolve(extractZyingProduct()).then(
+          Promise.resolve(extractServerProduct()).then(
             product => sendResponse({ok: true, product}),
-            error => sendResponse({ok: false, error: error.message || String(error)})
+            error => sendResponse({ok: false, error: error.message || String(error), retryable: error.retryable, status: error.status})
           );
           return true;
         } else {
@@ -199,13 +355,13 @@
       return false;
     }
     if (message && message.type === "PING_PAGE") {
-      sendResponse({ok: true, detail: looksLikeDetailPage(), url: location.href, zying: core.pluginLoginStatus(document)});
+      sendResponse({ok: true, detail: looksLikeDetailPage(), url: location.href, data_source: "zeshun_server"});
       return false;
     }
     if (message && message.type === "EXTRACT_PRODUCT") {
       Promise.resolve().then(() => extractEligibleProduct()).then(
         product => sendResponse({ok: true, product}),
-        error => sendResponse({ok: false, error: error.message || String(error)})
+        error => sendResponse({ok: false, error: error.message || String(error), retryable: error.retryable, status: error.status})
       );
       return true;
     }

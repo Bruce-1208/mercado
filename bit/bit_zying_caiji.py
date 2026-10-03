@@ -326,30 +326,32 @@ const done = arguments[arguments.length - 1];
             raise RuntimeError(f"智赢后台签名失败：{message}")
         return result["timestamp"], result["signature"]
 
+    def _restore_auth_storage_locked(self, auth_value):
+        # 智赢当前前端登录/刷新凭证时同时写入这两处；cookie:// 仅表示
+        # 凭证的采集来源，不能据此删除前端签名及登录检查所需的本地 token。
+        self.driver.execute_script(
+            "localStorage.setItem('token', JSON.stringify(arguments[0]));",
+            auth_value,
+        )
+        self.driver.add_cookie(
+            {
+                "name": "token",
+                "value": auth_value,
+                "domain": ".zying.net",
+                "path": "/",
+            }
+        )
+
     def _configure_credential_locked(self, credential):
         credential = _clean_text(credential)
         if self._credential == credential:
             return
-        auth_mode, auth_value = _split_zying_auth_credential(credential)
+        _, auth_value = _split_zying_auth_credential(credential)
         if not auth_value:
             raise ZyingAuthenticationError("智赢登录凭证为空，请重新登录")
         try:
             self.driver.get(f"{ZYING_API_ORIGIN}/")
-            if auth_mode == "cookie":
-                self.driver.execute_script("localStorage.removeItem('token');")
-                self.driver.add_cookie(
-                    {
-                        "name": "token",
-                        "value": auth_value,
-                        "domain": ".zying.net",
-                        "path": "/",
-                    }
-                )
-            else:
-                self.driver.execute_script(
-                    "localStorage.setItem('token', JSON.stringify(arguments[0]));",
-                    auth_value,
-                )
+            self._restore_auth_storage_locked(auth_value)
             self.driver.get(ZYING_PRODUCT_URL)
             WebDriverWait(self.driver, 45).until(
                 lambda driver: bool(
@@ -368,30 +370,16 @@ const done = arguments[arguments.length - 1];
             raise RuntimeError("智赢后台页面初始化失败，请稍后重试") from exc
         if "#/login" in str(self.driver.current_url or "").casefold():
             raise ZyingAuthenticationError(
-                "智赢登录状态已失效，请重新打开登录窗口并保存登录状态"
+                "智赢后台未能恢复登录状态，请在当前所选浏览器重新登录智赢后重新启动采集"
             )
         self._credential = credential
 
     def _prepare_seller_api_locked(self, credential):
-        auth_mode, auth_value = _split_zying_auth_credential(credential)
+        _, auth_value = _split_zying_auth_credential(credential)
         if not auth_value:
             raise ZyingAuthenticationError("智赢登录凭证为空，请重新登录")
         self.driver.get(f"{ZYING_SELLER_ORIGIN}/")
-        if auth_mode == "cookie":
-            self.driver.execute_script("localStorage.removeItem('token');")
-            self.driver.add_cookie(
-                {
-                    "name": "token",
-                    "value": auth_value,
-                    "domain": ".zying.net",
-                    "path": "/",
-                }
-            )
-        else:
-            self.driver.execute_script(
-                "localStorage.setItem('token', JSON.stringify(arguments[0]));",
-                auth_value,
-            )
+        self._restore_auth_storage_locked(auth_value)
         self.driver.get(f"{ZYING_SELLER_ORIGIN}/#/product/myproduct/productlist")
         WebDriverWait(self.driver, 45).until(
             lambda driver: bool(
@@ -1218,6 +1206,18 @@ def cache_zying_product_developers(auth_token, rows):
             "rows": [dict(row) for row in normalized],
         }
     return normalized
+
+
+def list_cached_zying_product_developers(auth_token):
+    """Read an existing directory without bootstrapping the ZYing API browser."""
+    token = _clean_text(auth_token)
+    if not token:
+        return []
+    with _ZYING_DEVELOPER_CACHE_LOCK:
+        entry = _ZYING_DEVELOPER_CACHE.get(_zying_developer_cache_key(token))
+        if entry and entry["expires_at"] > time.monotonic():
+            return [dict(row) for row in entry["rows"]]
+    return []
 
 
 def list_zying_product_developers(auth_token=None, *, force_refresh=False):
@@ -2907,6 +2907,7 @@ def collect_zying_products_api(
     product_developer_name="",
     start_product_id="",
     max_items=None,
+    management_category_id=None,
     product_writer=None,
     existing_product_id_reader=None,
     product_mirror_writer=None,
@@ -2915,6 +2916,9 @@ def collect_zying_products_api(
     stop_event=None,
 ):
     """通过智赢 API 采集；无头 Edge 仅加载官方签名模块，不读取页面 DOM。"""
+    from erp.mercadolibre_collection_store import normalize_collection_management_category_id
+
+    management_category_id = normalize_collection_management_category_id(management_category_id)
     page_count = max(1, int(DEFAULT_ZYING_PAGE_COUNT if number is None else number))
     start_page = max(1, int(start_page))
     if start_page > page_count:
@@ -3094,6 +3098,8 @@ def collect_zying_products_api(
                 _attach_zying_category(record, category_selection, category_lookup)
                 _attach_product_developer(record, developer_names)
                 _finalize_zying_listing_snapshot(record)
+                if management_category_id is not None:
+                    record["management_category_id"] = management_category_id
             _raise_if_zying_collection_stopped(stop_event)
             inserted_count += _persist_zying_page(
                 page_records,
@@ -3164,8 +3170,12 @@ def collect_zying_products(
     auth_token=None,
     api_mode=True,
     stop_event=None,
+    management_category_id=None,
 ):
     """采集智赢产品；默认使用后台 API 与无头官方签名模式。"""
+    from erp.mercadolibre_collection_store import normalize_collection_management_category_id
+
+    management_category_id = normalize_collection_management_category_id(management_category_id)
     if api_mode:
         _raise_if_zying_collection_stopped(stop_event)
         resolved_auth_token = _clean_text(auth_token)
@@ -3191,6 +3201,7 @@ def collect_zying_products(
             product_developer_name=product_developer_name,
             start_product_id=start_product_id,
             max_items=max_items,
+            management_category_id=management_category_id,
             product_writer=product_writer,
             existing_product_id_reader=existing_product_id_reader,
             product_mirror_writer=product_mirror_writer,
@@ -3329,6 +3340,8 @@ def collect_zying_products(
             for record in extracted_records:
                 _attach_zying_category(record, category_selection)
                 _finalize_zying_listing_snapshot(record)
+                if management_category_id is not None:
+                    record["management_category_id"] = management_category_id
 
             page_records = []
             for record in extracted_records:
