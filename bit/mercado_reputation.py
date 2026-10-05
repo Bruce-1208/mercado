@@ -13,7 +13,7 @@ API_BASE_URL = "https://api.mercadolibre.com"
 REPUTATION_PATH = "/global/users/seller_reputation"
 ORDERS_SEARCH_PATH = "/marketplace/orders/search"
 RIGHTS_HOLDER_CASES_PATH = "/moderations/pppi/cases"
-LISTING_SAMPLE_SIZE = 100
+LISTING_SAMPLE_SIZE = 50
 OFFICIAL_INFRACTION_DAYS = 100
 SEVEN_DAY_RATE_DISCLAIMER = (
     "七天变化率按单站点由官方订单 API 自算；数值可能因取消单、退款、时区和"
@@ -448,13 +448,15 @@ def _sample_site_listing_status(
     if search_error:
         sample["listing_sample_error"] = search_error
     if not sampled_ids:
+        if not search_error:
+            sample["listing_sample_status"] = "inactive"
         return sample
 
     detail_rows = []
     for offset in range(0, len(sampled_ids), 20):
         try:
             details = _fetch_json(
-                access_token, "/items/bulk",
+                access_token, "/items",
                 params={"ids": ",".join(sampled_ids[offset:offset + 20])},
                 http=http, timeout=timeout, label="站点刊登状态接口",
             )
@@ -505,7 +507,7 @@ def _sample_site_listing_status(
 def _apply_listing_sample_status(
     row: dict[str, Any], sample: Mapping[str, Any]
 ) -> None:
-    """Apply a conclusive listing sample while retaining official status for traceability."""
+    """Apply the configured binary listing rule; retain sample diagnostics separately."""
 
     row.update(dict(sample))
     sample_status = sample.get("listing_sample_status")
@@ -513,21 +515,16 @@ def _apply_listing_sample_status(
     row.setdefault("site_status_official_account_status", row.get("account_status"))
     row.update({"suspension_until": "", "suspension_days": None,
                 "suspension_remaining_days": None, "suspension_total_days": None})
-    if sample_status not in ("active", "inactive"):
-        row.update({"account_status": "unknown", "site_status_display": "状态未确认（刊登状态不完整或无链接）",
-                    "site_status_source": "official_listing_api"})
-        return
-
     if sample_status == "active":
         row.update({
             "account_status": "normal",
-            "site_status_display": "正常",
+            "site_status_display": "活跃中",
             "site_status_source": "official_listing_api",
         })
-    elif sample_status == "inactive":
+    else:
         row.update({
             "account_status": "restricted",
-            "site_status_display": "封禁（最新刊登均不活跃，封禁天数未确认）",
+            "site_status_display": "暂停状态",
             "site_status_source": "official_listing_api",
         })
 

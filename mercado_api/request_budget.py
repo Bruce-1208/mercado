@@ -3,6 +3,11 @@ from contextlib import contextmanager
 import hashlib
 import os
 import threading
+import time
+
+
+class AdmissionTimeout(TimeoutError):
+    """An interactive request could not acquire an API slot in time."""
 
 
 def _limit(name, default):
@@ -21,12 +26,16 @@ class RequestBudget:
         self.accounts = {}
 
     @contextmanager
-    def slot(self, token):
+    def slot(self, token, timeout=None):
         # Never retain OAuth credentials in budget keys or diagnostics.
         key = hashlib.sha256(str(token).encode()).digest()
+        deadline = None if timeout is None else time.monotonic() + max(0, float(timeout))
         with self.condition:
             while self.active >= self.total or self.accounts.get(key, 0) >= self.per_account:
-                self.condition.wait()
+                remaining = None if deadline is None else deadline - time.monotonic()
+                if remaining is not None and remaining <= 0:
+                    raise AdmissionTimeout("API 请求队列繁忙，请稍后重试")
+                self.condition.wait(remaining)
             self.active += 1
             self.accounts[key] = self.accounts.get(key, 0) + 1
         try:

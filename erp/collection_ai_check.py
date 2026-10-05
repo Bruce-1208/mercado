@@ -31,26 +31,30 @@ def measurements(detail, selected):
     return result
 
 
-def products(ids):
-    ids = db._normalize_row_ids(ids, empty_message="请勾选需要AI核查的采集商品")
+def products(ids, *, list_mode="collection"):
+    if list_mode not in {"collection", "products"}:
+        raise ValueError("商品列表类型无效")
+    table = db.PRODUCT_TABLE if list_mode == "products" else db.COLLECTION_TABLE
+    ids = db._normalize_row_ids(ids, empty_message="请勾选需要AI核查的商品")
     if len(ids) > 100:
         raise ValueError("每批最多核查100件商品")
     connection = db._connect()
     try:
         with connection.cursor() as cursor:
             db.ensure_collection_tables(cursor)
-            cursor.execute(f"SELECT * FROM `{db.COLLECTION_TABLE}` WHERE `id` IN ({','.join(['%s'] * len(ids))})", tuple(ids))
+            cursor.execute(f"SELECT * FROM `{table}` WHERE `id` IN ({','.join(['%s'] * len(ids))})", tuple(ids))
             rows = {int(row['id']): row for row in cursor.fetchall()}
         connection.commit()
         if len(rows) != len(ids):
-            raise ValueError("部分采集商品已删除，请刷新列表")
+            raise ValueError("部分商品已删除，请刷新列表")
         result = []
         for key in ids:
             row = rows[key]
             if not row.get('title') or not row.get('main_image_url'):
                 raise ValueError(f"商品 {key} 缺少标题或主图")
-            result.append({**db._json_safe_row(row), 'collection_item_id': key,
-                           'erp_goods_id': f'collection:{key}', 'source_type': 'mercado_collection',
+            result.append({**db._json_safe_row(row), 'collection_item_id': row.get('collection_item_id') if list_mode == 'products' else key,
+                           'erp_goods_id': f'{list_mode}:{key}', 'source_type': 'mercado_collection',
+                           'product_item_id': key if list_mode == 'products' else None,
                            'collection_before': {field: db._json_safe_row(row).get(field) for field in FIELDS}})
         return result
     finally:
@@ -59,7 +63,9 @@ def products(ids):
 
 def save_result(task, status, reason, changes=None, evidence=None):
     """Commit measurements, audit and product mirror together, with stale-input check."""
-    item_id = int(task['collection_item_id'])
+    product_id = task.get('product_item_id')
+    item_id = int(product_id or task['collection_item_id'])
+    table = db.PRODUCT_TABLE if product_id else db.COLLECTION_TABLE
     changes = changes or {}
     if set(changes) - set(FIELDS) or any(positive(v) is None for v in changes.values()):
         raise ValueError('重量尺寸必须是有效正数')
@@ -67,10 +73,10 @@ def save_result(task, status, reason, changes=None, evidence=None):
     try:
         with connection.cursor() as cursor:
             db.ensure_collection_tables(cursor)
-            cursor.execute(f"SELECT * FROM `{db.COLLECTION_TABLE}` WHERE `id`=%s FOR UPDATE", (item_id,))
+            cursor.execute(f"SELECT * FROM `{table}` WHERE `id`=%s FOR UPDATE", (item_id,))
             before = cursor.fetchone()
             if not before:
-                raise ValueError('采集商品已删除，不能回写')
+                raise ValueError('商品已删除，不能回写')
             audit = db._loads(before.get('ai_weight_price_json'), {})
             delta = {k: v for k, v in changes.items() if positive(before.get(k)) != positive(v)}
             if delta and any(positive(before.get(k)) != positive((task.get("collection_before") or task).get(k)) for k in changes):
@@ -89,13 +95,14 @@ def save_result(task, status, reason, changes=None, evidence=None):
                 audit['evidence'] = evidence
             assignments, values = [], []
             if delta:
-                assignments, values, _ = db._product_content_update_plan(delta)
+                assignments, values, _ = db._product_content_update_plan(delta, preserve_zying_net_proceeds=bool(product_id))
                 assignments = [s.replace("'manual_edit'", "'ai_1688_verified'") for s in assignments]
             assignments.append('`ai_weight_price_json`=%s')
             values.append(db._dumps(audit))
-            cursor.execute(f"UPDATE `{db.COLLECTION_TABLE}` SET {', '.join(assignments)} WHERE `id`=%s", tuple(values + [item_id]))
+            cursor.execute(f"UPDATE `{table}` SET {', '.join(assignments)} WHERE `id`=%s", tuple(values + [item_id]))
             # Existing linked products keep the same audit and measurement values.
-            cursor.execute(f"UPDATE `{db.PRODUCT_TABLE}` SET {', '.join(assignments)} WHERE `collection_item_id`=%s", tuple(values + [item_id]))
+            if not product_id:
+                cursor.execute(f"UPDATE `{db.PRODUCT_TABLE}` SET {', '.join(assignments)} WHERE `collection_item_id`=%s", tuple(values + [item_id]))
         connection.commit()
         return audit
     except BaseException:

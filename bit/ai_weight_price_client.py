@@ -8,6 +8,7 @@ browser action at a time to the extension.
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 import uuid
 
@@ -66,8 +67,9 @@ def _snapshot(service):
 
 
 def login_open(service):
-    service.store.set_state("login", {"confirmed": False, "opened_at": time.time()})
-    return {"url": "https://meli.zying.net/#/login", "data": _snapshot(service)}
+    login = service.store.state("login", {}) or {}
+    service.store.set_state("login", {**login, "opened_at": time.time()})
+    return {"url": "https://meli.zying.net/#/login"}
 
 
 def login_confirm(service, context):
@@ -230,7 +232,7 @@ def start(service, payload, *, collection_products=None):
                 "product_developer_name": item.get("product_developer_name") or selection.get("product_developer_name", ""),
             }
             if collection_products is not None:
-                key = f"collection:{item['collection_item_id']}:{run_id}"
+                key = f"product:{item['product_item_id']}:{run_id}" if item.get("product_item_id") else f"collection:{item['collection_item_id']}:{run_id}"
                 record["erp_goods_id"] = key
             if not service.store.add(record):
                 service.store.update(key, **record)
@@ -342,6 +344,8 @@ def _advance(service, status, reason):
         service.store.record_run_item(run.get("run_id"), task["erp_goods_id"], execution_result=status, execution_reason=reason)
     if status == "success":
         run["success_items"] = int(run.get("success_items") or 0) + 1
+    elif status == "skipped":
+        run["skipped_items"] = int(run.get("skipped_items") or 0) + 1
     elif status == "blocked":
         run["blocked_items"] = int(run.get("blocked_items") or 0) + 1
     else:
@@ -509,8 +513,15 @@ def fail(service, payload):
     task_id = str(payload.get("task_id") or "").strip()
     now = time.time()
     run = _run(service)
+    human = service._needs_human_attention(message)
+    if not human and task_id and task_id == str(run.get("current_task_id") or "") and _task(service, task_id):
+        service.store.exception(task_id, "插件浏览器步骤执行失败", f"{action}：{message}")
+        service._auto_skip_exception(task_id, message)
+        return _advance(service, "skipped", "自动跳过异常：" + message + "；继续下一件")
+    if human:
+        service.store.set_state("circuit", {"kind": "browser_attention", "reason": message, "at": now})
     run.update({
-        "outcome": "failed",
+        "outcome": "blocked" if human else "failed",
         "finished_at": now,
         "message": message,
         "failed_action": action,
@@ -553,6 +564,8 @@ def stop(service):
 def continue_run(service, payload):
     if payload.get("acknowledged") is not True:
         raise ValueError("请先完成登录或人机验证，并勾选继续原任务")
+    pause = service.store.state("circuit", {}) or {}
+    pause_reason = pause.get("reason", "") if isinstance(pause, dict) else str(pause)
     service.store.set_state("stop_requested", False)
     service.store.set_state("circuit", None)
     run = _run(service)
@@ -561,10 +574,39 @@ def continue_run(service, payload):
         run["message"] = "插件继续执行浏览器操作"
         service.store.set_state("run", run)
         service.store.save_run(run)
+    task = _task(service, run.get("current_task_id"))
+    if task and task.get("status") == "exception":
+        if service._needs_human_attention(pause_reason):
+            service._requeue(task["erp_goods_id"], force_pending=True)
+        else:
+            reason = task.get("exception_detail") or task.get("exception_reason") or pause_reason
+            service._auto_skip_exception(task["erp_goods_id"], reason)
+            return _advance(service, "skipped", "自动跳过异常：" + reason + "；继续下一件")
     return _next_action(service)
 
 
 def dispatch(service, action, payload):
+    # One mutation at a time across HTTP worker processes, including slow model calls.
+    with service.idle():
+        checkpoint = service.store.state("client_step", {}) or {}
+        if payload.get("step_token") and payload["step_token"] != checkpoint.get("token"):
+            raise ValueError("重复或过期的步骤结果已忽略")
+        result = _dispatch(service, action, payload)
+        if result.get("action"):
+            token = uuid.uuid4().hex
+            service.store.set_state("client_step", {"token": token, "action": result["action"]})
+            result["step_token"] = token
+        return result
+
+
+def _dispatch(service, action, payload):
+    run = _run(service)
+    if payload.get("run_id") and payload["run_id"] != run.get("run_id"):
+        raise ValueError("旧批次返回已忽略，请刷新当前任务")
+    if action in {"collect", "fail"} and (run.get("outcome") != "running" or service.store.state("stop_requested", False)):
+        raise ValueError("当前任务已停止，忽略迟到的结果")
+    if action in {"login/open", "login/confirm", "categories/refresh"} and run.get("outcome") == "running":
+        raise ValueError("任务运行中，请先停止再操作登录")
     if action in {"search", "detail", "writeback"}:
         run = _run(service)
         if run.get("outcome") != "running" or service.store.state("stop_requested", False):

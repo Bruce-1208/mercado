@@ -88,3 +88,20 @@ def test_execution_snapshot_is_one_rpc_with_fresh_controls(tmp_path, monkeypatch
     remote.set_actor({"id": 8})
     with pytest.raises(KeyError):
         remote.execution_snapshot("g1")
+
+
+def test_status_reuses_single_database_connection(tmp_path, monkeypatch):
+    from erp.ai_weight_price.service import Service
+    service = Service(tmp_path)
+    service.bind_actor({'id': 7})
+    connect = service.store.connect
+    opened = []
+    @contextmanager
+    def counted():
+        if getattr(service.store._transaction_local, 'db', None) is None:
+            opened.append(True)
+        with connect() as db:
+            yield db
+    monkeypatch.setattr(service.store, 'connect', counted)
+    assert service.status()['login'] == {'confirmed': False}
+    assert len(opened) == 1

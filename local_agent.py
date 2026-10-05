@@ -34,7 +34,7 @@ from urllib.parse import urlsplit
 import requests
 
 
-AGENT_VERSION = "1.2.6"
+AGENT_VERSION = "1.2.7"
 DEFAULT_SERVER_URL = "https://wuhanzeshun.com"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
@@ -378,6 +378,23 @@ class AgentStatusWindow:
             background="#eaf1f8",
         ).grid(row=1, column=1, columnspan=2, sticky="w", pady=(6, 0))
         connection.grid_columnconfigure(1, weight=1)
+        tk.Label(connection, text="Agent 名称", background="#eaf1f8").grid(
+            row=2, column=0, sticky="w", pady=(10, 0)
+        )
+        self.agent_name_text = tk.StringVar(value=agent.config.name)
+        tk.Entry(connection, textvariable=self.agent_name_text).grid(
+            row=2, column=1, sticky="ew", ipady=5, pady=(10, 0)
+        )
+        tk.Button(connection, text="保存名称", command=self._save_agent_name).grid(
+            row=2, column=2, padx=(10, 0), pady=(10, 0)
+        )
+        tk.Label(
+            connection, text="1–120 个字符，保存后立即生效，并通过心跳自动同步后台。",
+            background="#eaf1f8", foreground="#64778b",
+        ).grid(row=3, column=1, columnspan=2, sticky="w", pady=(6, 0))
+        self.agent_details_text = tk.StringVar(
+            value=f"Agent：{agent.config.name}    版本：{AGENT_VERSION}"
+        )
 
         details = tk.Frame(self.root, background="#f4f6f8", padx=18, pady=10)
         details.pack(fill="x")
@@ -390,7 +407,7 @@ class AgentStatusWindow:
         ).pack(side="left")
         tk.Label(
             details,
-            text=f"Agent：{agent.config.name}    版本：{AGENT_VERSION}",
+            textvariable=self.agent_details_text,
             font=("Microsoft YaHei UI", 9),
             foreground="#52606d",
             background="#f4f6f8",
@@ -462,6 +479,20 @@ class AgentStatusWindow:
             self.log_view.delete("1.0", "1001.0")
         self.log_view.see("end")
         self.log_view.configure(state="disabled")
+
+    def _save_agent_name(self):
+        try:
+            self.agent.config.save_name(self.agent_name_text.get())
+        except (OSError, ValueError, RuntimeError) as exc:
+            self.messagebox.showerror("名称保存失败", str(exc), parent=self.root)
+            return
+        name = self.agent.config.name
+        self.agent_name_text.set(name)
+        self.agent_details_text.set(f"Agent：{name}    版本：{AGENT_VERSION}")
+        self.agent.log(f"Agent 名称已保存：{name}；下次成功心跳时同步后台")
+        self.messagebox.showinfo(
+            "Agent 名称", "名称已保存，下次成功心跳时同步后台，无需重启。", parent=self.root
+        )
 
     def _save_server_url(self):
         try:
@@ -765,6 +796,7 @@ class AgentConfig:
                 "或配置 BIT_LOCAL_AGENT_TOKEN"
             )
         self.name = _first_nonempty(
+            user_settings.get("name"),
             args.name,
             os.environ.get("BIT_LOCAL_AGENT_NAME"),
             payload.get("name"),
@@ -784,10 +816,20 @@ class AgentConfig:
         )
         self.once = bool(args.once)
 
+    def save_name(self, name):
+        name = str(name or "").strip()
+        if not name or len(name) > 120 or any(ord(char) < 32 for char in name):
+            raise ValueError("Agent 名称需为 1–120 个字符，且不能包含换行或控制字符")
+        self._save_setting("name", name)
+        self.name = name
+
     def save_server_url(self, server_url):
         server_url = _validate_server_url(server_url, allow_http=self.allow_http)
+        self._save_setting("server_url", server_url)
+
+    def _save_setting(self, key, value):
         current = _load_json(self.settings_path)
-        current["server_url"] = server_url
+        current[key] = value
         self.data_dir.mkdir(parents=True, exist_ok=True)
         temporary = self.settings_path.with_suffix(".tmp")
         temporary.write_text(

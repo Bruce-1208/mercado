@@ -48,6 +48,62 @@ function aiOriginalPlatformStatus(row, platform = aiOriginalTargetPlatform()) {
   return platform === "mercadolibre" ? row?.ai_status || "pending" : aiOriginalPlatformDraft(row, platform)?.status || "pending";
 }
 
+function aiOriginalListingChecks(row) {
+  if (aiOriginalTargetPlatform() !== "mercadolibre") {
+    const draft = aiOriginalPlatformDraft(row);
+    const profile = aiOriginalPlatformProfile();
+    return [
+      {label: "本平台草稿", ok: Boolean(draft) && draft.status === "completed"},
+      {label: `${profile.language_label || profile.language}标题`, ok: Boolean(draft?.title?.trim()) && [...draft.title].length <= Number(profile.title_limit)},
+      {label: "商品描述", ok: Boolean(draft?.description?.trim()) && (!profile.description_limit || [...draft.description].length <= Number(profile.description_limit))},
+      {label: "商品主图", ok: Boolean(draft?.main_image_url)},
+      {label: "平台基础规则", ok: Boolean(draft?.validation) && !aiOriginalValidationMessages(draft, "errors").length}
+    ];
+  }
+  const prepared = row.ai_original || {};
+  return [
+    {label: "美客多类目", ok: /^CBT\d+$/.test(row.category_id || "")},
+    {label: "商品属性", ok: aiOriginalAttributes(prepared.attributes).some(a => !["BRAND", "ITEM_CONDITION"].includes(String(a.id || "").toUpperCase()))},
+    {label: "双语标题", ok: [row.title_es, row.title_pt].every(s => s?.trim() && [...s].length <= 60)},
+    {label: "双语描述", ok: [row.description_es, row.description_pt].every(s => s?.trim())},
+    {label: "AI 白底主图", ok: ["ai_image_edit", "local_background_removal"].includes(prepared.image_generation_method) && String(row.main_image_url || "").includes("-ai-white.jpg")}
+  ];
+}
+
+// Product page status is separate from the AI task's execution state.
+const aiOriginalProductStatusLabels = {approved: "通过", unreviewed: "待审核", failed: "失败", incomplete: "待补充", suspected: "疑似侵权"};
+
+function aiOriginalManualListingChecks(row) {
+  return [
+    {label: "包装尺寸", ok: [row.package_length_cm, row.package_width_cm, row.package_height_cm].every(value => Number.isFinite(Number(value)) && Number(value) > 0)},
+    {label: "实重", ok: Number.isFinite(Number(row.weight_g)) && Number(row.weight_g) > 0 && !["calculated_volumetric", "legacy_unknown", "plugin_volumetric_fallback"].includes(row.weight_basis)},
+    {label: "净收益", ok: Number.isFinite(Number(row.net_proceeds_usd)) && Number(row.net_proceeds_usd) > 0}
+  ];
+}
+
+function aiOriginalMissingGeneratedAttributes(row) {
+  const draft = row.ai_original || {};
+  return (draft.missing_required_attributes || []).filter(item =>
+    !/^(SELLER_)?PACKAGE_(LENGTH|WIDTH|HEIGHT|WEIGHT)$/.test(String(item.id || "").toUpperCase()) &&
+    !(draft.attributes || []).some(attribute => attribute.id === item.id && (attribute.value_name || attribute.value_id)));
+}
+
+function aiOriginalProductStatus(row, platform = aiOriginalTargetPlatform()) {
+  const draft = aiOriginalPlatformDraft(row, platform);
+  const review = platform === "mercadolibre" ? row.review_status : draft?.review_status;
+  if (["suspected", "infringing", "risk"].includes(review)) return "suspected";
+  const status = aiOriginalPlatformStatus(row, platform);
+  if (status === "failed") return "failed";
+  if (status !== "completed") return "unreviewed";
+  if (platform === "mercadolibre") {
+    if (!aiOriginalManualListingChecks(row).every(check => check.ok) ||
+        !aiOriginalListingChecks(row).every(check => check.ok) || aiOriginalMissingGeneratedAttributes(row).length) return "incomplete";
+    return review === "approved" ? "approved" : "unreviewed";
+  }
+  if (!aiOriginalListingChecks(row).every(check => check.ok)) return "incomplete";
+  return "approved";
+}
+
 function aiOriginalValidationMessages(draft, kind) {
   return (Array.isArray(draft?.validation?.[kind]) ? draft.validation[kind] : [])
     .map(item => typeof item === "string" ? item : item?.message || item?.field || "")
@@ -106,7 +162,7 @@ function renderAiOriginalPlatformSettings() {
     }).join(" · ");
     rules.innerHTML = `<strong>${aiOriginalEscape(profile.label)} · ${aiOriginalEscape(profile.language_label || profile.language || "")}</strong><p>标题 ≤ ${Number(profile.title_limit) || 60} 字符${profile.description_limit ? ` · 描述 ≤ ${Number(profile.description_limit)} 字符` : ""}。${isMercado ? "完善类目和属性，审核后可提交美客多上架。" : "生成并完善刊登资料，在下方选择授权店铺，填写真实销售资料，预检确认后自动提交平台；也可导出 JSON 草稿。"}</p>${notes.length ? `<ul>${notes.map(note => `<li>${aiOriginalEscape(note)}</li>`).join("")}</ul>` : ""}${!aiOriginalProfilesLoaded ? '<p class="ai-original-muted">平台规则目录尚未加载成功，实际校验以服务端和目标类目要求为准。</p>' : ""}${sources ? `<div class="ai-original-rule-sources">${sources}</div>` : ""}`;
   }
-  const labels = {"ai-original-pending-label": isMercado ? "待完善 / 审核" : "待完善草稿", "ai-original-ready-label": isMercado ? "已完善并审核" : "基础检查通过", "ai-original-ready-note": isMercado ? "上架时继续校验平台规则" : "完善销售资料并预检后可提交", "ai-original-pending-note": isMercado ? "补齐资料后再提交审核" : "当前平台尚未完成基础检查", "ai-original-step-final": isMercado ? "审核并上架" : "预检并确认上架"};
+  const labels = {"ai-original-step-final": isMercado ? "审核并上架" : "预检并确认上架"};
   Object.entries(labels).forEach(([id, label]) => { const node = document.getElementById(id); if (node) node.textContent = label; });
   globalThis.AiOriginalPublisher?.syncPlatform();
 }
@@ -698,7 +754,7 @@ function renderAiOriginalProducts() {
   const grid = document.getElementById("ai-original-grid");
   if (!grid) return;
   const filter = document.getElementById("ai-original-status-filter")?.value || "";
-  const rows = filter ? aiOriginalRows.filter(row => aiOriginalPlatformStatus(row) === filter) : aiOriginalRows;
+  const rows = filter ? aiOriginalRows.filter(row => aiOriginalProductStatus(row) === filter) : aiOriginalRows;
   const visibleIds = new Set(rows.map(row => Number(row.id)));
   aiOriginalSelected = new Set([...aiOriginalSelected].filter(id => visibleIds.has(id)));
   const totalCost = aiOriginalTargetPlatform() === "mercadolibre" && aiOriginalTotalCost
@@ -715,7 +771,7 @@ function renderAiOriginalProducts() {
     const titleEs = row.title_es || "等待 AI 生成西班牙语标题";
     const titlePt = row.title_pt || "等待 AI 生成葡萄牙语标题";
     const aiAttributes = aiOriginalAttributes(row.ai_original?.attributes);
-    const missingRequired = (row.ai_original?.missing_required_attributes || []).filter(item => !aiAttributes.some(attribute => attribute.id === item.id && (attribute.value_name || attribute.value_id)));
+    const missingRequired = aiOriginalMissingGeneratedAttributes(row);
     const ready = status === "completed" && !missingRequired.length && aiAttributes.some(attribute => !["BRAND", "ITEM_CONDITION"].includes(String(attribute.id || "").toUpperCase()));
     const aiImageReady = ["ai_image_edit", "local_background_removal"].includes(row.ai_original?.image_generation_method) && aiImage.includes("-ai-white.jpg");
     const suggestedNet = Number(row.suggested_net_proceeds_usd || 0);
@@ -956,7 +1012,7 @@ function toggleAiOriginalProduct(id, checked) {
 
 function toggleAllAiOriginalProducts(checked) {
   const filter = document.getElementById("ai-original-status-filter")?.value || "";
-  aiOriginalRows.filter(row => !filter || aiOriginalPlatformStatus(row) === filter).forEach(row => {
+  aiOriginalRows.filter(row => !filter || aiOriginalProductStatus(row) === filter).forEach(row => {
     if (checked) aiOriginalSelected.add(Number(row.id)); else aiOriginalSelected.delete(Number(row.id));
   });
   renderAiOriginalProducts();
@@ -973,7 +1029,7 @@ function updateAiOriginalSelection() {
   const reviewButton = document.getElementById("ai-original-review-submit");
   if (reviewButton) reviewButton.disabled = aiOriginalTargetPlatform() !== "mercadolibre" || !count || aiOriginalReviewRunning || !document.getElementById("ai-original-review-status")?.value;
   const filter = document.getElementById("ai-original-status-filter")?.value || "";
-  const visible = aiOriginalRows.filter(row => !filter || aiOriginalPlatformStatus(row) === filter);
+  const visible = aiOriginalRows.filter(row => !filter || aiOriginalProductStatus(row) === filter);
   const selectedCount = visible.filter(row => aiOriginalSelected.has(Number(row.id))).length;
   const selectAll = document.getElementById("ai-original-select-all");
   if (selectAll) {
@@ -1287,7 +1343,7 @@ function renderAiOriginalPublishFormula() {
 
 function aiOriginalPublishableSelection() {
   if (aiOriginalTargetPlatform() !== "mercadolibre") return [];
-  return aiOriginalRows.filter(row => aiOriginalSelected.has(Number(row.id)) && row.review_status === "approved");
+  return aiOriginalRows.filter(row => aiOriginalSelected.has(Number(row.id)) && aiOriginalProductStatus(row) === "approved");
 }
 
 async function publishSelectedAiOriginalProducts() {
@@ -1298,11 +1354,11 @@ async function publishSelectedAiOriginalProducts() {
   const tokenIds = [...(document.getElementById("ai-original-stores")?.selectedOptions || [])].map(option => Number(option.value)).filter(Boolean);
   const siteIds = aiOriginalSelectedSiteIds();
   const status = document.getElementById("ai-original-publish-status");
-  if (!ids.length) { status.textContent = "所选产品均未审核通过，已全部忽略，本次上架 0 件"; status.className = "ai-original-status info"; globalThis.WorkbenchUI?.feedback(status, "info"); return; }
+  if (!ids.length) { status.textContent = "所选产品均非“通过”状态，已全部忽略，本次上架 0 件"; status.className = "ai-original-status info"; globalThis.WorkbenchUI?.feedback(status, "info"); return; }
   if (!tokenIds.length || !siteIds.length) { status.textContent = "请选择对应店铺和至少一个目标站点"; status.className = "ai-original-status error"; return; }
   const netProceedsRatio = Number(document.getElementById("ai-original-net-ratio")?.value || 200);
   if (!(netProceedsRatio > 0) || netProceedsRatio > 10000) { status.textContent = "AI 原创比例必须大于 0 且不超过 10000%"; status.className = "ai-original-status error"; return; }
-  if (!window.confirm(`已自动忽略 ${skippedCount} 件未审核通过的产品。确定把 ${ids.length} 件产品上架到 ${tokenIds.length} 个店铺、${siteIds.length} 个站点吗？售价按产品净收益 × 分类比例 × 店铺站点比例 × AI 原创上架比例 ${netProceedsRatio}% 计算。`)) return;
+  if (!window.confirm(`已自动忽略 ${skippedCount} 件非“通过”状态的产品。确定把 ${ids.length} 件产品上架到 ${tokenIds.length} 个店铺、${siteIds.length} 个站点吗？售价按产品净收益 × 分类比例 × 店铺站点比例 × AI 原创上架比例 ${netProceedsRatio}% 计算。`)) return;
   aiOriginalSubmitting = true;
   updateAiOriginalSelection();
   try {

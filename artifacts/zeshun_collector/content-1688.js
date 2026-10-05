@@ -5,9 +5,13 @@
   // extension is reloaded.  Expose a version marker so the background worker
   // can reload that tab before starting a new search instead of silently
   // running stale search logic alongside this copy.
-  const CONTENT_VERSION = "1.8.13";
-  if (globalThis.__zeshun1688ContentVersion === CONTENT_VERSION) return;
-  globalThis.__zeshun1688ContentVersion = CONTENT_VERSION;
+  const CONTENT_VERSION = "1.8.39";
+  const previousListener = globalThis.__zeshun1688ContentListener;
+  if (globalThis.__zeshun1688ContentVersion === CONTENT_VERSION && previousListener &&
+      chrome.runtime.onMessage.hasListener?.(previousListener)) return;
+  if (previousListener) {
+    try { chrome.runtime.onMessage.removeListener(previousListener); } catch (_) {}
+  }
   let mutationTimer = null;
 
   function text(selector) {
@@ -91,14 +95,56 @@
     return rows.slice(0, 100);
   }
 
-  function numericPrice(skus) {
+  function supplierPrice(value) {
+    // Price objects contain quantities/discounts too. Only read amount fields.
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      for (const key of ["price", "amount", "value", "priceAmount", "priceValue"]) {
+        const amount = supplierPrice(value[key]);
+        if (amount !== null) return amount;
+      }
+      return null;
+    }
+    if (!["string", "number"].includes(typeof value)) return null;
+    const raw = String(value).replace(/,/g, "").replace(/\s*\.\s*/g, ".").trim();
+    const match = raw.match(/^(?:¥|￥|CNY)?\s*(\d+(?:\.\d+)?)(?:\s*(?:元|起|\/[^\d]+))?$/i);
+    const amount = match ? Number(match[1]) : null;
+    return Number.isFinite(amount) && amount > 0 ? amount : null;
+  }
+
+  function numericPrice(skus, pageData = {}) {
     const prices = skus.map(row => row.price).filter(value => Number.isFinite(value) && value > 0);
     if (prices.length) return Math.min(...prices);
-    const raw = text("#productPrice [class*='price']") || text("#productPrice")
-      || text("meta[property='og:price:amount']");
-    const match = raw.replace(/,/g, "").match(/(?:¥|￥)\s*(\d+(?:\.\d+)?)/)
-      || raw.trim().match(/^(\d+(?:\.\d+)?)$/);
-    return match ? Number(match[1]) : null;
+    for (const list of pageData.price_sets || []) {
+      const amounts = list.map(row => [row.price, row.priceAmount, row.priceValue]
+        .map(supplierPrice).find(value => value !== null) ?? null)
+        .filter(value => value !== null);
+      if (amounts.length) return Math.min(...amounts);
+    }
+    // Inspect all nodes: the first price-class element can be a label or a
+    // currency symbol. Never search the whole page (stock/MOQ/recommendations).
+    const excluded = "del, s, [class*='original-price'], [class*='originalPrice'], [class*='line-price'], [class*='linePrice']";
+    const selectors = [
+      "#productPrice [class*='price'], [data-module='od_product_price'] [class*='price']",
+      "#productPrice, [data-module='od_product_price']",
+      "meta[property='og:price:amount'], meta[property='product:price:amount']"
+    ];
+    for (const node of selectors.flatMap(selector => [...document.querySelectorAll(selector)])) {
+      if (node.closest(excluded)) continue;
+      const display = node.cloneNode(true);
+      display.querySelectorAll(excluded).forEach(child => child.remove());
+      const walker = document.createTreeWalker(display, NodeFilter.SHOW_TEXT);
+      const pieces = [];
+      while (walker.nextNode()) pieces.push(walker.currentNode.textContent.trim());
+      const raw = String(node.getAttribute("content") || pieces.join(" "))
+        .replace(/,/g, "").replace(/\s*\.\s*/g, ".").trim();
+      const direct = supplierPrice(raw);
+      if (direct !== null) return direct;
+      const match = raw.match(/(?:¥|￥)\s*(\d+(?:\.\d+)?)(?:\s*[-~～至]\s*(?:¥|￥)?\s*\d+(?:\.\d+)?)?/)
+        || raw.match(/^(\d+(?:\.\d+)?)\s*[-~～至]\s*\d+(?:\.\d+)?(?:\s*元)?$/);
+      const amount = match ? supplierPrice(match[1]) : null;
+      if (amount !== null) return amount;
+    }
+    return null;
   }
 
   // Keep supplier detail extraction in one place.  The AI weight/price flow
@@ -248,8 +294,9 @@
     const sets = pageData.sku_sets || [];
     const normalized = sets.map(list => list.map(item => {
       const label = aiWeightPriceDecode(item.specAttrs);
-      const price = [item.discountPrice, item.currentPrice, item.priceNum, item.price]
-        .find(value => /^\d+(?:\.\d+)?$/.test(String(value ?? "").trim()) && Number(value) > 0);
+      const price = [item.discountPrice, item.currentPrice, item.priceNum, item.price, item.salePrice, item.priceAmount, item.priceValue]
+        .map(value => ({raw: value, amount: supplierPrice(value)}))
+        .find(entry => entry.amount !== null && entry.amount > 0);
       const stock = item.canBookCount ?? item.availableQuantity ?? item.stock ?? item.quantity;
       const image = item.imageUrl ?? item.imgUrl ?? item.image ?? item.pictureUrl;
       return {
@@ -257,8 +304,10 @@
         seller_sku: String(item.skuCode ?? item.sku ?? item.sellerSku ?? ""),
         label,
         attribute_combinations: aiWeightPriceVariationAttributes(label),
-        price: aiWeightPriceNumber(price),
-        price_text: price === undefined ? "" : `¥${price}`,
+        price: price?.amount ?? null,
+        price_text: price
+          ? (typeof price.raw === "string" ? price.raw : `¥${price.amount}`)
+          : "",
         available_quantity: stock !== undefined && stock !== null && stock !== "" && Number.isFinite(Number(stock)) ? Number(stock) : null,
         image_url: typeof image === "string" ? absoluteImage(image) : "",
         label_weight: String(label).match(/(?:重量|毛重|净重)?[^\d]{0,8}(\d+(?:\.\d+)?)\s*(kg|公斤|千克|g|克|斤)\b/i)?.[0] || ""
@@ -314,12 +363,31 @@
 
   function aiWeightPriceDetailFacts(pageData) {
     const rows = aiWeightPriceReactSkus(pageData);
-    const sourceRows = rows.length ? rows : aiWeightPriceDomRows();
+    const domRows = aiWeightPriceDomRows();
+    const sourceRows = rows.length ? rows.map(row => {
+      if (row.price > 0) return row;
+      const matches = domRows.filter(candidate => candidate.sku_id === row.sku_id && candidate.price > 0);
+      if (!matches.length || new Set(matches.map(candidate => candidate.price)).size !== 1) return row;
+      return {...row, price: matches[0].price, price_text: matches[0].price_text};
+    }) : domRows;
     const pack = aiWeightPricePackMetrics(pageData);
     const merged = sourceRows.map(row => aiWeightPriceMergeMetrics(row, pack.byId.get(String(row.id)) || pack.common));
     const commonMetric = key => {
       if (!merged.length) return pack.common?.[key] ?? null;
       const values = merged.map(row => row[key]);
+      // A 1688 offer can have a different package weight for each SKU.  The
+      // product-level field is a single value, so use the arithmetic mean of
+      // all valid SKU weights instead of treating the conflicting values as
+      // missing.  Dimensions remain conservative and still require an exact
+      // common value because averaging a box size would be misleading.
+      if (key === "weight_g") {
+        const valid = values.map(value => Number(value))
+          .filter(value => Number.isFinite(value) && value > 0);
+        if (valid.length) {
+          return Number((valid.reduce((total, value) => total + value, 0) / valid.length).toFixed(4));
+        }
+        return pack.common?.[key] ?? null;
+      }
       return values.every(value => Number.isFinite(value) && value > 0 && value === values[0]) ? values[0] : null;
     };
     const metrics = Object.fromEntries(["weight_g", "package_length_cm", "package_width_cm", "package_height_cm"]
@@ -419,6 +487,9 @@
     const allDimensionsComplete = dimensionsComplete || (variations.length > 0 && variations.every(row =>
       [row.package_length_cm, row.package_width_cm, row.package_height_cm].every(value => value > 0)));
     const errors = [];
+    const price = numericPrice(variations, pageData);
+    if (price === null) throw new Error("1688采购价尚未加载或当前账号不可见，请确认详情页显示价格后重试");
+    if (variations.some(row => !(row.price > 0))) errors.push("未读取到完整的1688规格采购价，部分规格价格缺失");
     if (!weightComplete) errors.push("未读取到完整的1688规格重量");
     if (!allDimensionsComplete) errors.push("未读取到完整的1688规格包装尺寸");
     return {
@@ -427,7 +498,7 @@
       source_url: location.href,
       final_url: location.href,
       title,
-      price: numericPrice(variations),
+      price,
       currency_id: "CNY",
       main_image_url: images[0] || text("meta[property='og:image']"),
       images,
@@ -441,7 +512,7 @@
       volumetric_weight_kg: detailFacts.volumetric_weight_kg,
       dimensions_display: detailFacts.dimensions_display,
       weight_basis: detailFacts.weight_g ? "1688_source" : "",
-      scrape_status: weightComplete && allDimensionsComplete ? "ok" : "partial",
+      scrape_status: errors.length ? "partial" : "ok",
       error_message: errors.join("；"),
       collected_at: new Date().toISOString()
     };
@@ -450,15 +521,24 @@
   async function extractProduct() {
     const deadline = Date.now() + 10000;
     let lastError;
+    let partialProduct;
     while (Date.now() < deadline) {
-      try { return await extractProductSnapshot(); }
+      try {
+        const product = await extractProductSnapshot();
+        if (!product.variations.some(row => !(row.price > 0))) return product;
+        // Offer prices can arrive before SKU prices. Keep polling the page
+        // bridge even when a usable but incomplete snapshot already exists.
+        partialProduct = product;
+        await new Promise(resolve => setTimeout(resolve, 400));
+      }
       catch (error) {
         lastError = error;
         if (!/尚未加载|未识别到/.test(error.message || "")) throw error;
         await new Promise(resolve => setTimeout(resolve, 400));
       }
     }
-    throw lastError;
+    if (partialProduct && partialProduct.source_item_id === itemId()) return partialProduct;
+    throw lastError || new Error("1688采购价尚未加载，请重试");
   }
 
   async function aiWeightPriceDetail() {
@@ -519,12 +599,17 @@
     return style.display !== "none" && style.visibility !== "hidden" && box.width > 0 && box.height > 0;
   }
 
-  function aiWeightPriceClickImageSearchOpen() {
-    const nodes = [...document.querySelectorAll("button, a, input[type='button'], input[type='submit'], [role='button']")];
+  function aiWeightPriceClickImageSearchOpen(hasUpload = false) {
+    // With an input already mounted, "搜索图片" may be the submit action.
+    // Only explicit opening labels are safe before a file has been selected.
+    const labels = hasUpload
+      ? /^(以图搜货|以图搜款|上传图片|拍照搜同款|找同款|相似货源)$/i
+      : /^(以图搜货|以图搜款|图片搜索|搜索图片|上传图片|拍照搜同款|找同款|相似货源)$/i;
+    const nodes = [...document.querySelectorAll("button, a, input[type='button'], input[type='submit'], [role='button'], div, span")];
     const node = nodes.find(item => aiWeightPriceVisible(item) &&
-      /以图搜货|图片搜索|搜索图片|上传图片|拍照搜同款|找同款|相似货源/i.test(
-        String(item.textContent || item.value || item.getAttribute("aria-label") || item.title || "")
-      ));
+      labels.test(
+        String(item.textContent || item.value || item.getAttribute("aria-label") || item.title || "").replace(/\s+/g, "")
+      ) && ![...item.children].some(child => child.textContent.trim() && child.textContent.trim() === item.textContent.trim()));
     if (node) { node.click(); return true; }
     return false;
   }
@@ -539,6 +624,15 @@
     try { nodes = [...document.querySelectorAll(selector || "input[type='file']")]; } catch (_) {}
     return nodes.filter(input => input.type === "file" &&
       (!input.accept || /image|jpg|jpeg|png|bmp|webp/i.test(input.accept)));
+  }
+
+  function aiWeightPriceUploadPanelOpen(input) {
+    // The file input itself is normally hidden; only inspect its ancestors.
+    for (let parent = input.parentElement; parent; parent = parent.parentElement) {
+      const style = getComputedStyle(parent);
+      if (style.display === "none" || style.visibility === "hidden") return false;
+    }
+    return input.isConnected;
   }
 
   function aiWeightPriceActiveUpload(inputs) {
@@ -563,12 +657,94 @@
   function aiWeightPriceImageSubmitButton() {
     const matches = [];
     const clean = value => String(value || "").replace(/\s+/g, "").trim();
-    // 1688 has used real buttons, anchors, and clickable divs for the same
-    // image-search action. Keep the image-upload ownership checks so an
-    // ordinary keyword-search control is never selected by proximity alone.
-    for (const button of document.querySelectorAll(
-      "button, a, input[type='button'], input[type='submit'], [role='button'], [data-spm-click]"
-    )) {
+    const generic = /^(提交|确定|确认|搜索)$/;
+    const strong = /^(搜索图片|图片搜索|开始搜索|立即搜索|以图搜货|开始搜图|立即搜图|确认上传)$/;
+    const selectedImage = aiWeightPriceImageUploads("input[type='file']")
+      .some(input => Boolean(input.files?.length));
+    const popupCandidates = new Set();
+    const uploadedPanelCandidates = new Set();
+    const actionSelector = "button,a,input[type='button'],input[type='submit'],[role='button'],div,span";
+    const actionNode = node => {
+      const control = node.closest("button,a,[role='button'],[data-spm-click]");
+      return control && (generic.test(clean(control.innerText || control.value || "")) ||
+        strong.test(clean(control.innerText || control.value || ""))) ? control : node;
+    };
+    // The visible upload receipt is stronger evidence than input.files:
+    // widgets can clear/replace the input and use an HTTPS preview after
+    // upload. Scope the action to the smallest receipt/preview panel.
+    const receipts = [...document.querySelectorAll("div,span,p,header")].filter(node =>
+      aiWeightPriceVisible(node) && /已上传[1-9]\d*张(?:图|图片)?/.test(clean(node.innerText)) &&
+      ![...node.children].some(child => /已上传[1-9]\d*张(?:图|图片)?/.test(clean(child.innerText)))
+    );
+    for (const receipt of receipts) {
+      for (let root = receipt.parentElement, depth = 0;
+           root && root !== document.body && root !== document.documentElement && depth < 8;
+           root = root.parentElement, depth += 1) {
+        // Do not climb into the homepage's keyword-search section.
+        if (root.querySelector("input[type='search'],input[type='text'],input:not([type]),textarea")) break;
+        if (!/以图搜款|以图搜货|图片搜索/.test(clean(root.innerText))) continue;
+        if (![...root.querySelectorAll("img,canvas,[style*='background-image']")].some(aiWeightPriceVisible)) continue;
+        const actions = [...root.querySelectorAll(actionSelector)].filter(node => {
+          const label = clean(node.innerText || node.value || node.getAttribute("aria-label") || node.title);
+          return aiWeightPriceVisible(node) && (generic.test(label) || strong.test(label));
+        });
+        if (!actions.length) continue;
+        const leaves = actions.filter(node => ![...node.querySelectorAll(actionSelector)].some(child => {
+          const label = clean(child.innerText || child.value || child.getAttribute("aria-label") || child.title);
+          return generic.test(label) || strong.test(label);
+        }));
+        for (const action of leaves) uploadedPanelCandidates.add(actionNode(action));
+        break;
+      }
+    }
+    if (selectedImage) {
+      // Some 1688 builds render the search action as an unlabelled div with
+      // no button role or stable class. Find generic actions inside the local
+      // selected-image preview panel, where they cannot be confused with the
+      // keyword-search button elsewhere on the page.
+      const controls = "button, a, input[type='button'], input[type='submit'], [role='button'], " +
+        "[data-spm-click], [class*='btn'], [class*='button'], div, span";
+      const previews = [...document.querySelectorAll(
+        'img[src^="blob:"],img[src^="data:image"],canvas'
+      )].filter(aiWeightPriceVisible);
+      for (const preview of previews) {
+        for (let root = preview.parentElement, depth = 0;
+             root && root !== document.body && root !== document.documentElement && depth < 12;
+             root = root.parentElement, depth += 1) {
+          const actions = [...root.querySelectorAll(controls)].filter(node =>
+            aiWeightPriceVisible(node) && generic.test(clean(node.innerText || node.value || ""))
+          );
+          if (!actions.length) continue;
+          // Prefer the innermost text node so its click bubbles to any React or
+          // delegated handler on the actual styled control.
+          const leaves = actions.filter(node => ![...node.querySelectorAll("div,span")].some(child =>
+            generic.test(clean(child.innerText || ""))
+          ));
+          for (const action of leaves.length ? leaves : actions) popupCandidates.add(actionNode(action));
+          break;
+        }
+      }
+    }
+    const previewOwner = button => {
+      // 1688 renders the homepage upload input and the selected-image dialog
+      // through separate React portals. Walk only the button's own ancestors
+      // so a homepage search button cannot borrow a preview from another UI.
+      for (let node = button.parentElement, depth = 0;
+           node && node !== document.body && node !== document.documentElement && depth < 12;
+           node = node.parentElement, depth += 1) {
+        const previews = [...node.querySelectorAll('img[src^="blob:"],img[src^="data:image"],canvas')];
+        if (previews.some(aiWeightPriceVisible)) return node;
+      }
+      return null;
+    };
+    // 1688 has used buttons, anchors, and styled divs for this action. The
+    // selected file and a preview in the control's own popup distinguish its
+    // generic “搜索” label from the homepage keyword-search button.
+    const controls = document.querySelectorAll(
+      "button, a, input[type='button'], input[type='submit'], [role='button'], [data-spm-click], " +
+      "[class*='searchBtn'], [class*='submitBtn'], [class*='actionPrimary']"
+    );
+    for (const button of new Set([...controls, ...popupCandidates, ...uploadedPanelCandidates].map(actionNode))) {
       if (!aiWeightPriceVisible(button) || button.disabled || button.getAttribute("aria-disabled") === "true") continue;
       if (button.classList.contains("disabled") || button.classList.contains("is-disabled")) continue;
       const label = clean(
@@ -576,9 +752,8 @@
         button.title || button.getAttribute("data-title") || button.getAttribute("data-spm-click")
       );
       const className = String(button.className || "");
-      const strong = /^(搜索图片|图片搜索|开始搜索|立即搜索|以图搜货|开始搜图|立即搜图|确认上传)$/;
-      const generic = /^(提交|确定|确认|搜索)$/;
       const dialog = button.closest('[role="dialog"],.ant-modal,.next-dialog,.dialog,.modal');
+      const preview = previewOwner(button);
       let owner = button.parentElement, upload = null, distance = 0;
       while (owner && owner !== document.body && owner !== document.documentElement && distance < 16) {
         upload = owner.querySelector(':scope input[type="file"]');
@@ -588,18 +763,29 @@
       }
       const ownsImageUpload = Boolean(upload &&
         (!upload.accept || /image|jpg|jpeg|png|bmp|webp/i.test(upload.accept)));
-      const hasSelectedFile = Boolean(ownsImageUpload && upload.files?.length);
-      const hasImagePreview = Boolean(owner?.querySelector('img[src^="blob:"],img[src^="data:image"],canvas'));
+      const hasSelectedFile = Boolean((ownsImageUpload && upload.files?.length) || selectedImage);
+      const hasImagePreview = Boolean(preview ||
+        owner?.querySelector('img[src^="blob:"],img[src^="data:image"],canvas'));
       const imagePreviewPrimary = /(^|\s)action--[^\s]+/.test(className) &&
         /(^|\s)actionPrimary--[^\s]+/.test(className);
       let priority = 0;
-      if (strong.test(label)) priority = imagePreviewPrimary ? 6 : dialog ? 5 : ownsImageUpload ? 2 : 1;
-      else if (generic.test(label) && ownsImageUpload &&
-        (hasImagePreview || dialog || imagePreviewPrimary)) {
+      if (strong.test(label) && (hasSelectedFile || uploadedPanelCandidates.has(button) ||
+          (hasImagePreview && (dialog || ownsImageUpload)))) {
+        // An explicitly named image-search action is sufficient evidence on
+        // older 1688 builds, where the upload widget may not render a preview.
+        // A scoped upload receipt plus preview is also reliable after the site
+        // clears/replaces input.files once the image has reached its server.
+        priority = uploadedPanelCandidates.has(button) ? 10 :
+          imagePreviewPrimary ? 8 : dialog ? 7 : ownsImageUpload ? 6 : hasImagePreview ? 5 : 4;
+      } else if (generic.test(label) && uploadedPanelCandidates.has(button)) {
+        priority = 10;
+      } else if (generic.test(label) && hasSelectedFile &&
+        (popupCandidates.has(button) || dialog || imagePreviewPrimary)) {
         // A plain homepage “搜索” button often shares the same ancestor as
         // the file input. A selected file alone is not enough evidence that
-        // this is the image-search action; require the preview/dialog signal.
-        priority = imagePreviewPrimary ? 6 : dialog ? 5 : 3;
+        // this is the image-search action; require a preview in this button's
+        // own popup, or an explicitly marked image-search dialog.
+        priority = imagePreviewPrimary ? 8 : dialog ? 7 : 6;
       }
       if (priority) matches.push({button, label, priority});
     }
@@ -612,13 +798,25 @@
 
   function aiWeightPriceInvokeClick(node) {
     if (!node) return;
-    // Playwright's click produces the full mouse sequence. Some 1688 builds
-    // bind the image-search action to pointer/mouse handlers rather than the
-    // element's default activation, so reproduce that sequence before the
-    // final click without submitting twice.
-    for (const type of ["mousedown", "mouseup"]) {
-      node.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window}));
+    try { node.scrollIntoView({block: "center", inline: "center"}); } catch (_) {}
+    try { node.focus({preventScroll: true}); } catch (_) {}
+    const rect = node.getBoundingClientRect();
+    const coordinates = {
+      bubbles: true, cancelable: true, view: window,
+      clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2
+    };
+    if (typeof PointerEvent === "function") {
+      node.dispatchEvent(new PointerEvent("pointerdown", {
+        ...coordinates, pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0, buttons: 1
+      }));
     }
+    node.dispatchEvent(new MouseEvent("mousedown", {...coordinates, button: 0, buttons: 1}));
+    if (typeof PointerEvent === "function") {
+      node.dispatchEvent(new PointerEvent("pointerup", {
+        ...coordinates, pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0, buttons: 0
+      }));
+    }
+    node.dispatchEvent(new MouseEvent("mouseup", {...coordinates, button: 0, buttons: 0}));
     node.click();
   }
 
@@ -698,16 +896,40 @@
     const selectors = data.selectors || {};
     const searchStartUrl = location.href;
     let inputs = aiWeightPriceImageUploads(selectors.image_search_upload);
-    if (!inputs.length) {
-      const open = aiWeightPriceSelectorNode(selectors.image_search_open);
-      if (open) open.click(); else aiWeightPriceClickImageSearchOpen();
-      const deadline = Date.now() + 3000;
-      while (Date.now() < deadline && !inputs.length) {
+    const configuredOpen = selectors.image_search_open;
+    let opened = false;
+    // Match the Playwright order: activate the image-search widget first,
+    // even if its hidden placeholder input is already present in the DOM.
+    const openWidget = () => {
+      const open = aiWeightPriceSelectorNode(configuredOpen);
+      if (configuredOpen) {
+        if (!open || !aiWeightPriceVisible(open)) return false;
+        open.click();
+        return true;
+      }
+      return aiWeightPriceClickImageSearchOpen(inputs.length > 0);
+    };
+    opened = openWidget();
+    if (opened) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      inputs = aiWeightPriceImageUploads(selectors.image_search_upload);
+    }
+    const uploadReady = () => inputs.some(aiWeightPriceUploadPanelOpen) && (!configuredOpen || opened);
+    if (!uploadReady()) {
+      const deadline = Date.now() + 15000;
+      while (Date.now() < deadline && !uploadReady()) {
+        // Homepage widgets mount after document.complete. Wait for the actual
+        // opener, and activate it once when it becomes available.
+        if (!opened) {
+          opened = openWidget();
+        }
         await new Promise(resolve => setTimeout(resolve, 100));
         inputs = aiWeightPriceImageUploads(selectors.image_search_upload);
       }
     }
+    if (configuredOpen && !opened) throw new Error("配置的1688图片搜索入口未就绪，尚未上传主图");
     if (!inputs.length) throw new Error("1688首页没有找到图片上传控件");
+    if (!uploadReady()) throw new Error("1688图片上传面板尚未打开，尚未上传主图");
     const input = aiWeightPriceActiveUpload(inputs);
     const [meta, encoded] = String(data.data_url || "").split(",", 2);
     if (!encoded) throw new Error("当前智赢商品主图数据无效");
@@ -726,7 +948,7 @@
       if (!aiWeightPriceVisible(configured)) throw new Error("配置的1688图片搜索按钮不可见");
       aiWeightPriceInvokeClick(configured); submitted = true; submitLabel = "配置的图片搜索按钮";
     }
-    const submitDeadline = Date.now() + 5000;
+    const submitDeadline = Date.now() + 15000;
     while (!submitted && Date.now() < submitDeadline) {
       const action = aiWeightPriceImageSubmitButton();
       if (action) {
@@ -744,7 +966,7 @@
       }
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-    if (!submitted) throw new Error("1688主图已上传，但未找到可执行的图片搜索按钮");
+    if (!submitted) throw new Error("已向1688文件控件传入主图，但页面未确认图片搜索；请检查上传入口、图片预览或上传失败提示");
     const deadline = Date.now() + Math.max(3000, Number(data.timeout_ms || 15000));
     while (Date.now() < deadline) {
       const snapshot = aiWeightPriceSearchSnapshot();
@@ -777,6 +999,60 @@
     requestAnimationFrame(() => toast.classList.add("is-visible"));
     window.clearTimeout(Number(toast.dataset.timer || 0));
     toast.dataset.timer = String(window.setTimeout(() => toast.classList.remove("is-visible"), 3200));
+  }
+
+  async function mountCollectionPreferences() {
+    if (document.querySelector('.zeshun-1688-preferences')) return;
+    const panel = document.createElement('div');
+    panel.className = 'zeshun-1688-preferences';
+    const status = document.createElement('div');
+    status.setAttribute('role', 'status');
+    status.textContent = '泽顺插件：正在检查登录…';
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', '1688 产品分类');
+    select.add(new Option('不指定分类', ''));
+    select.disabled = true;
+    const refresh = document.createElement('button');
+    refresh.textContent = '刷新登录 / 分类';
+    refresh.type = 'button';
+    panel.append(status, select, refresh);
+    document.documentElement.appendChild(panel);
+    async function update() {
+      select.disabled = true;
+      try {
+        const state = await chrome.runtime.sendMessage({type: 'GET_STATE'});
+        if (!state?.authenticated) {
+          status.textContent = '⚠ 泽顺插件未登录，请打开插件设置登录后采集';
+          return;
+        }
+        const response = await chrome.runtime.sendMessage({type: 'GET_ZESHUN_CATEGORIES'});
+        if (!response?.ok) throw new Error(response?.error || '分类读取失败');
+        const saved = (await chrome.storage.local.get('zeshunCollectionCategoryOptions')).zeshunCollectionCategoryOptions || {};
+        const previous = saved['1688'];
+        select.replaceChildren(new Option('不指定分类', ''));
+        for (const category of response.categories || []) select.add(new Option(category.name, String(category.id)));
+        if (previous && ![...select.options].some(option => option.value === String(previous))) {
+          const unavailable = new Option('已保存分类不可用，请重新选择', String(previous));
+          unavailable.disabled = true;
+          select.add(unavailable);
+        }
+        select.value = previous ? String(previous) : '';
+        select.disabled = false;
+        status.textContent = '泽顺 1688 采集分类（自动记忆，可不选）';
+      } catch (error) {
+        status.textContent = `泽顺插件：${error.message || error}`;
+      }
+    }
+    select.addEventListener('change', async () => {
+      try {
+        const saved = (await chrome.storage.local.get('zeshunCollectionCategoryOptions')).zeshunCollectionCategoryOptions || {};
+        await chrome.storage.local.set({zeshunCollectionCategoryOptions: {...saved, '1688': select.value ? Number(select.value) : null}});
+        status.textContent = '已记住分类，后续采集自动使用';
+      } catch (error) { status.textContent = `分类保存失败：${error.message || error}`; }
+    });
+    refresh.addEventListener('click', update);
+    window.addEventListener('focus', update);
+    await update();
   }
 
   async function collectFromPage(button) {
@@ -861,7 +1137,7 @@
     mountListButtons();
   }
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  const contentListener = (message, _sender, sendResponse) => {
     if (message?.type === "PING_PAGE") {
       sendResponse({ok: true, detail: Boolean(itemId()), platform: "1688"});
       return;
@@ -892,7 +1168,12 @@
       catch (error) { sendResponse({ok: false, error: error.message || String(error)}); }
       return;
     }
-  });
+  };
+  chrome.runtime.onMessage.addListener(contentListener);
+
+  // Publish readiness only after registration succeeds.
+  globalThis.__zeshun1688ContentListener = contentListener;
+  globalThis.__zeshun1688ContentVersion = CONTENT_VERSION;
 
   // Search/detail message handlers must also exist in child frames.  Only the
   // top frame mounts the floating collector UI and its mutation observer.
@@ -903,5 +1184,6 @@
     });
     observer.observe(document.documentElement, {childList: true, subtree: true});
     refreshUi();
+    mountCollectionPreferences();
   }
 })();

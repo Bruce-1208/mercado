@@ -2018,3 +2018,42 @@ def test_manual_ai_appeal_can_continue_after_successful_rate_limit_recovery():
     )
 
     assert result is backend_result
+
+
+@pytest.mark.parametrize('selection', [['投诉'], ['禁限售'], ['侵权', '延误率'], ['混合模式']])
+def test_algorithm_plan_only_loads_selected_content(monkeypatch, selection):
+    calls = []
+    def plan(kind):
+        calls.append(kind)
+        return [{'name': 'shop', 'sites': [{'site_code': 'MLM', 'count': 10}]}]
+    monkeypatch.setattr(bit_daily_task, 'build_latest_infraction_appeal_plan',
+                        lambda **kwargs: plan(bit_daily_task.APPEAL_TYPE_INFRACTION))
+    monkeypatch.setattr(bit_daily_task, 'build_latest_prohibited_appeal_plan',
+                        lambda **kwargs: plan(bit_daily_task.APPEAL_TYPE_PROHIBITED))
+    monkeypatch.setattr(bit_daily_task, 'get_latest_reputation_info', lambda: {})
+    monkeypatch.setattr(bit_daily_task, 'build_latest_reputation_appeal_plan',
+                        lambda kind, **kwargs: plan(kind))
+    result = bit_daily_task.build_algorithm_appeal_plan(appeal_types=selection)
+    expected = set(bit_daily_task.MIXED_APPEAL_SEQUENCE if selection == ['混合模式']
+                   else bit_daily_task.normalize_appeal_types(selection))
+    assert set(calls) == expected
+    assert {site['appeal_type'] for shop in result for site in shop['sites']} == expected
+
+
+def test_algorithm_strategy_builds_one_combined_selected_plan(monkeypatch):
+    calls = []
+    monkeypatch.setattr(bit_daily_task, 'build_appeal_plan',
+                        lambda kind, **kwargs: calls.append((kind, kwargs)) or [])
+    bit_daily_task._run_ai_appeal_once_locked(['禁限售', '投诉'], task_strategy='algorithm')
+    assert len(calls) == 1
+    assert calls[0][0] == bit_daily_task.APPEAL_TYPE_ALGORITHM
+    assert calls[0][1]['algorithm_appeal_types'] == bit_daily_task.normalize_appeal_types(['禁限售', '投诉'])
+
+
+def test_algorithm_strategy_survives_loop_round(monkeypatch):
+    calls = []
+    monkeypatch.setattr(bit_daily_task, 'run_ai_appeal_once',
+                        lambda kinds, **kwargs: calls.append((kinds, kwargs)) or [])
+    bit_daily_task._loop_ai_appeal_locked(['投诉'], task_strategy='algorithm', max_rounds=1)
+    assert calls[0][0] == (bit_daily_task.APPEAL_TYPE_COMPLAINT,)
+    assert calls[0][1]['task_strategy'] == 'algorithm'

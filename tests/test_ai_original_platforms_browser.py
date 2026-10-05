@@ -69,10 +69,10 @@ def test_platform_drafts_generate_edit_export_without_mercado_mutations(console_
         await loadAiOriginalProfiles();
     }""")
     page.locator("#ai-original-platform").select_option("amazon")
-    page.wait_for_function("aiOriginalRows.length === 2 && document.getElementById('ai-original-count-generated').textContent === '1'")
+    page.wait_for_function("aiOriginalRows.length === 2 && document.getElementById('ai-original-count-approved').textContent === '1'")
     assert not page.locator(".ai-original-publish-panel").is_visible()
     assert not page.locator("#ai-original-review-submit").is_visible()
-    assert page.locator("#ai-original-count-ready").inner_text() == "1"
+    assert page.locator("#ai-original-count-approved").inner_text() == "1"
     assert "SOLO_MERCADO" not in page.locator("#ai-original-grid").inner_text()
     assert "/mercado-only.jpg" not in page.locator("#ai-original-grid").inner_html()
     assert "俄语" not in page.locator("#ai-original-platform-rules").inner_text()
@@ -116,3 +116,36 @@ def test_platform_drafts_generate_edit_export_without_mercado_mutations(console_
     page.locator("#ai-original-platform").select_option("mercadolibre")
     assert page.locator(".ai-original-publish-panel").is_visible()
     assert page.locator("#ai-original-review-submit").is_visible()
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_mercado_unified_status_and_manual_fields(console_page, width):
+    page = console_page
+    page.set_viewport_size({'width': width, 'height': 1000})
+    page.evaluate('''() => {
+        document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
+        document.getElementById('tab-ai-original-products').classList.add('active');
+        document.getElementById('ai-original-platform').value = 'mercadolibre';
+        const ready = {id:1, ai_status:'completed', review_status:'approved', category_id:'CBT123',
+          title_es:'Mascara', title_pt:'Mascara', description_es:'Descripcion', description_pt:'Descricao',
+          weight_g:100, net_proceeds_usd:10, package_length_cm:10, package_width_cm:10, package_height_cm:10,
+          main_image_url:'/test-ai-white.jpg', ai_original:{status:'completed', image_generation_method:'ai_image_edit',
+          attributes:[{id:'MATERIAL',value_name:'Plastic'}]}, original_1688:{title:'测试产品'}};
+        aiOriginalRows = [ready, {...ready,id:2,review_status:'unreviewed'},
+          {...ready,id:3,ai_status:'failed'}, {...ready,id:4,weight_g:null},
+          {...ready,id:5,review_status:'suspected'}];
+        renderAiOriginalProducts(); decorateAiOriginalWorkbench();
+    }''')
+    assert page.locator('.ai-original-badge').all_text_contents() == ['通过', '待审核', '失败', '待补充', '疑似侵权']
+    assert page.locator('#ai-original-status-filter option').all_text_contents() == ['全部', '通过', '待审核', '失败', '待补充', '疑似侵权']
+    for status in ['approved', 'unreviewed', 'failed', 'incomplete', 'suspected']:
+        assert page.locator(f'#ai-original-count-{status}').inner_text() == '1'
+    page.locator('#ai-original-status-filter').select_option('incomplete')
+    assert page.locator('.ai-original-card').count() == 1
+    assert page.locator('.ai-original-badge').inner_text() == '待补充'
+    assert page.locator('.ai-original-check-panel').inner_text().find('人工填写的上架资料') >= 0
+    assert page.evaluate("aiOriginalRows.find(row => row.id === 4).ai_status") == 'completed'
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    output = ROOT / 'artifacts' / 'ai-original-unified-status'
+    output.mkdir(parents=True, exist_ok=True)
+    page.screenshot(path=str(output / f'manual-fields-{width}.png'), full_page=True)

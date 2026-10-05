@@ -23,8 +23,8 @@
     @media(max-width:900px){.metrics{grid-template-columns:repeat(2,1fr)}.task-controls{grid-template-columns:1fr 1fr}.task-controls textarea{grid-column:1/-1}.event{grid-template-columns:1fr 1fr}.event-error{grid-column:1/-1}}
     @media(max-width:560px){.shell{padding:18px 12px 40px}.top{align-items:flex-start;flex-direction:column}h1{font-size:24px}.metrics{gap:8px}.metric{padding:13px}.metric strong{font-size:21px}.panel{padding:13px}.task-head{display:block}.task-controls{grid-template-columns:1fr}.task-controls textarea{grid-column:auto}.event{grid-template-columns:1fr}.event-error{grid-column:auto}}
   </style>
-<link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261002-ui">
-    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261002-ui"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261004-responsive">
+    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261004-responsive"></script>
 </head>
 <body class="zs-standalone">
   <main class="shell">
@@ -49,7 +49,8 @@
       <div class="metric warning"><span>高优先级 / 紧急</span><strong id="count-urgent">—</strong></div>
     </section>
     <section class="panel">
-      <div class="heading"><h2>待回复权利人（<span id="rights-count">—</span>）</h2><span class="hint">按回复截止时间排序；平台案件状态和页面每小时自动刷新。</span></div>
+      <div class="heading"><h2>待回复权利人（<span id="rights-count">—</span>）</h2><span class="hint">时间均为北京时间（UTC+8）；按回复截止时间排序，每小时自动刷新。</span></div>
+      {% if can_execute %}<p class="hint">优先直接回复；需要浏览器处理时，在回复弹窗内选择电脑并打开对应店铺。</p>{% endif %}
       <div class="task-list" id="rights-cases"><div class="empty">正在读取待回复案件…</div></div>
     </section>
     <section class="panel">
@@ -62,6 +63,22 @@
     </section>
   </main>
   <div class="toast" id="toast"></div>
+  {% if can_execute %}
+  <dialog id="rights-dialog" style="width:min(680px,92vw);border:1px solid #d0d5dd;border-radius:14px;padding:24px">
+    <h2 style="margin-top:0">回复权利人</h2>
+    <div id="rights-context" class="task-details"></div>
+    <div class="toolbar" style="margin-bottom:12px"><label>回复电脑 <select id="rights-agent" aria-label="权利人回复 Agent"><option value="">选择在线 Agent</option></select></label><button class="button" id="rights-agent-refresh" type="button">刷新电脑</button></div>
+    <p id="rights-message" role="status" style="white-space:pre-wrap"></p>
+    <form id="rights-form">
+      <label for="rights-text">回复内容（按原文发送，请使用权利人可理解的语言）</label>
+      <textarea id="rights-text" required maxlength="10000" rows="7" style="width:100%;margin:8px 0 14px;font:inherit"></textarea>
+      <label for="rights-document">证明附件（PDF、JPG、PNG，最多 5 MB）</label>
+      <input id="rights-document" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:block;margin:8px 0 18px">
+      <div class="toolbar"><button class="button primary" id="rights-submit" type="submit">提交回复</button><button class="button" id="rights-browser" type="button">在对应店铺中处理</button><button class="button" id="rights-close" type="button">关闭</button></div>
+    </form>
+  </dialog>
+  <script src="{{ url_for('static', filename='rights-holder-reply.js') }}?v=20261003-agent-picker" defer></script>
+  {% endif %}
   <script src="{{ url_for('static', filename='employee-tasks.js') }}" defer></script>
   <script>
     const canExecute = {{ can_execute | tojson }};
@@ -73,8 +90,14 @@
     function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
     function safeHref(value) { const path = String(value || '/'); return path.startsWith('/') && !path.startsWith('//') ? path : '/'; }
     function showToast(message) { const box=$('toast'); box.textContent=message; box.style.display='block'; setTimeout(()=>box.style.display='none',2600); }
-    function localInput(value) { if (!value) return ''; const date=new Date(String(value).replace(' ', 'T')); if (Number.isNaN(date.getTime())) return ''; const offset=date.getTimezoneOffset()*60000; return new Date(date.getTime()-offset).toISOString().slice(0,16); }
-    function dateLabel(value) { if(!value) return '未设置'; const date=new Date(String(value).replace(' ','T')); return Number.isNaN(date.getTime())?String(value):date.toLocaleString('zh-CN',{hour12:false}); }
+    function beijingDate(value) {
+      let text=String(value||'').trim().replace(' ','T');
+      if (/^\d{4}-\d{2}-\d{2}$/.test(text)) text+='T00:00:00';
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(text)) text+='+08:00';
+      return new Date(text);
+    }
+    function localInput(value) { if (!value) return ''; const date=beijingDate(value); return Number.isNaN(date.getTime())?'':new Date(date.getTime()+8*3600000).toISOString().slice(0,16); }
+    function dateLabel(value) { if(!value) return '未设置'; const date=beijingDate(value); return Number.isNaN(date.getTime())?String(value):date.toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})+'（北京时间）'; }
     function statusLabel(status) { return ({open:'待处理',in_progress:'处理中',resolved:'已完成',pending:'排队中',retry:'等待重试',dead:'死信',processing:'处理中',done:'已处理'})[status] || status || '—'; }
     function taskCard(task) {
       const overdue=Boolean(task.overdue), resolved=task.status==='resolved', priority=task.priority||'normal';
@@ -91,9 +114,9 @@
     function renderTasks() {
       const rights=actionData.rights_holder_replies||[];
       $('rights-count').textContent=rights.length;
-      $('rights-cases').innerHTML=rights.length?rights.map(row=>`<article class="task urgent">
+      $('rights-cases').innerHTML=rights.length?rights.map((row,index)=>`<article class="task urgent">
         <div class="task-head"><div><div class="task-title">${escapeHtml(row.rights_holder||'权利人待回复')}</div>
-        <div class="task-meta"><span class="tag">${escapeHtml(row.store_name||'')} · ${escapeHtml(row.site_id||'')}</span><span class="tag amber">回复截止：${escapeHtml(dateLabel(row.due_at))}</span></div></div><a class="button" href="https://global-selling.mercadolibre.com/noindex/pppi/infractions?tab=denounces&amp;offset=0" target="_blank" rel="noopener noreferrer">去回复权利人 ↗</a></div>
+        <div class="task-meta"><span class="tag">${escapeHtml(row.store_name||'')} · ${escapeHtml(row.site_id||'')}</span><span class="tag amber">回复截止：${escapeHtml(dateLabel(row.due_at))}</span></div></div>${canExecute?`<button class="button" type="button" data-rights-index="${index}">去回复权利人</button>`:''}</div>
         <div class="task-details">${escapeHtml(row.title||row.item_id||'')}\n商品：${escapeHtml(row.item_id||'—')} · 案件：${escapeHtml(row.infraction_id||'—')}\n${escapeHtml(row.infraction_reason||'')}\n最近同步：${escapeHtml(dateLabel(row.last_checked_at))}</div>
       </article>`).join(''):'<div class="empty">当前店铺范围内没有待回复的权利人案件。</div>';
       const filter=$('filter').value; let rows=actionData.rows||[];

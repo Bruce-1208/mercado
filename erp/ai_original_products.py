@@ -691,7 +691,7 @@ def build_copy_prompt(product: Mapping[str, Any], template_id: str = "standard",
         "不侵权的刊登文案。不要照抄原详情，不要编造规格。标题不得出现任何品牌、商标、"
         "店铺名、厂家名或 OEM 字样；西班牙语和巴西葡萄牙语标题各不超过 60 个字符。"
         "详情分别用自然的拉美西班牙语和巴西葡萄牙语重写，包含卖点、规格、包装内容和"
-        "使用提示，但不要使用 HTML。包装长宽高由人工核查，不检查、不生成包装尺寸属性。还要生成可以用于 Mercado Libre 刊登的商品属性，"
+        "使用提示，但不要使用 HTML。包装长宽高和实重由人工核查，不检查、不生成包装尺寸及包装重量属性。还要生成可以用于 Mercado Libre 刊登的商品属性，"
         "尽可能填全：先把源商品属性、详情中明确写出的规格、重量尺寸和变体中明确出现的"
         "规格逐项映射到 attributes，不能因为属性名称是中文就遗漏。只填写源商品事实明确"
         "支持的属性；不确定的属性不要猜，也不要把同一个属性重复输出。属性使用数组，每项包含"
@@ -1129,11 +1129,11 @@ def _listing_json_chat(*, model="", base_url="", chat=None):
     return chat_deepseek
 
 
-# Packaging measurements are supplied and checked by the manual workflow.
+# Packaging dimensions and actual weight are supplied by the manual workflow.
 _MANUAL_PACKAGE_DIMENSIONS = {
     f"{prefix}{axis}"
     for prefix in ("PACKAGE_", "SELLER_PACKAGE_")
-    for axis in ("LENGTH", "WIDTH", "HEIGHT")
+    for axis in ("LENGTH", "WIDTH", "HEIGHT", "WEIGHT")
 }
 
 

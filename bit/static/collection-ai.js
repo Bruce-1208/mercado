@@ -69,14 +69,14 @@ async function startMercadoCollectionAiCheck() {
     try {
         const response = await fetch('/api/mercado-collection/ai-weight-price', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({collection_item_ids: ids,
+            body: JSON.stringify({[typeof mercadoListMode !== 'undefined' && mercadoListMode === 'products' ? 'product_item_ids' : 'collection_item_ids']: ids,
                 execution_target: collectionAiElement('target').value,
                 agent_id: collectionAiElement('agent').value}),
         });
         const body = await response.json();
         if (!response.ok || body.status !== 'success') throw Error(body.message || '启动失败');
         collectionAiBusy = true;
-        setMercadoListFeedback(body.data.message + '；完成后自动刷新重量尺寸和核价记录。', 'success');
+        setMercadoListFeedback(body.data.message + '；已加入 AI 核重核价任务列表，完成后刷新结果标签。', 'success');
         await refreshCollectionAiStatus();
     } catch (error) {
         collectionAiElement('status').textContent = error.message;

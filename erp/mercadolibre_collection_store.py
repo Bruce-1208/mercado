@@ -1830,6 +1830,15 @@ def get_collection_items_by_ids(
         connection.close()
 
 
+def product_ai_copy_row(row):
+    """Adapt a product snapshot to the shared bilingual-copy facts contract."""
+    snapshot = _loads(row.get("source_snapshot_json"), {})
+    return {**row, "_ai_copy_product": True,
+            "source_json": _dumps(snapshot.get("source") or {}),
+            "description_json": _dumps(snapshot.get("description") or {}),
+            "ai_copy_json": _dumps(snapshot.get("ai_copy") or {})}
+
+
 def save_collection_item_ai_copy(
     collection_item_id: int,
     expected: Mapping[str, Any],
@@ -1865,17 +1874,21 @@ def save_collection_item_ai_copy(
     copy["brand_terms"] = [str(value).strip()[:120] for value in terms if str(value).strip()][:50]
     copy["generated_at"] = _now()
 
+    product_mode = bool(expected.get("_ai_copy_product"))
+    table = PRODUCT_TABLE if product_mode else COLLECTION_TABLE
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             cursor.execute(
-                f"SELECT * FROM `{COLLECTION_TABLE}` WHERE `id` = %s FOR UPDATE",
+                f"SELECT * FROM `{table}` WHERE `id` = %s FOR UPDATE",
                 (item_id,),
             )
             current = cursor.fetchone()
             if not current:
                 raise ValueError("采集商品已删除，不能保存文案")
+            if product_mode:
+                current = product_ai_copy_row(current)
             source_json = current.get("source_json") or ""
             if isinstance(source_json, bytes):
                 source_json = source_json.decode("utf-8", errors="replace")
@@ -1903,7 +1916,8 @@ def save_collection_item_ai_copy(
                 for field in text_facts
             )
             is_stale = (
-                str(current.get("title") or "") != str(expected.get("title") or "")
+                (product_mode and current.get("source_snapshot_json") != expected.get("source_snapshot_json"))
+                or str(current.get("title") or "") != str(expected.get("title") or "")
                 or str(current.get("description_text") or "")
                 != str(expected.get("description_text") or "")
                 or numeric_facts_changed
@@ -1937,6 +1951,16 @@ def save_collection_item_ai_copy(
                 source = {}
             source["title"] = copy["title_es"]
             description = {"plain_text": copy["description_es"]}
+            if product_mode:
+                snapshot = _loads(current.get("source_snapshot_json"), {})
+                snapshot.update(source=source, description=description, ai_copy=copy)
+                cursor.execute(
+                    f"UPDATE `{PRODUCT_TABLE}` SET `title`=%s, `description_text`=%s, "
+                    "`source_snapshot_json`=%s WHERE `id`=%s",
+                    (copy["title_es"], copy["description_es"], _dumps(snapshot), item_id),
+                )
+                connection.commit()
+                return {"saved": True, "status": "completed", "product_item_id": item_id}
             cursor.execute(
                 f"UPDATE `{COLLECTION_TABLE}` SET `title` = %s, `description_text` = %s, "
                 "`description_json` = %s, `source_json` = %s, `ai_copy_json` = %s "

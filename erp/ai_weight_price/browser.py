@@ -511,7 +511,7 @@ class Browser:
             page = pages[-1]
         else:
             page = self.context.new_page()
-            page.goto(LOGIN_URL, wait_until="domcontentloaded")
+            page.goto(LOGIN_URL, wait_until="commit", timeout=10000)
         # This is a user login tab, intentionally not owned/closed by the worker.
         self.show_for_manual_action(page)
 
@@ -521,7 +521,7 @@ class Browser:
             page = pages[-1]
         else:
             page = self.context.new_page()
-            page.goto(self.config["supplier_home_url"], wait_until="domcontentloaded")
+            page.goto(self.config["supplier_home_url"], wait_until="commit", timeout=10000)
         # Retain this user login tab when the temporary driver disconnects.
         self.show_for_manual_action(page)
 

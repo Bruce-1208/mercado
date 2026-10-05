@@ -290,5 +290,33 @@ def test_extension_client_rejects_same_dom_false_positive_and_records_failure(tm
 
     result = fail(service, {"task_id": "1001", "action": "writeback", "error": "刷新后状态未保存"})
     assert result["action"] == "done"
-    assert service.store.state("run")["outcome"] == "failed"
-    assert service.store.state("run_error") == "刷新后状态未保存"
+    assert service.store.state("run")["outcome"] == "completed"
+    assert service.store.get("1001")["status"] == "skipped"
+    assert "刷新后状态未保存" in service.store.get("1001")["exception_detail"]
+
+
+@pytest.mark.parametrize('captcha', [False, True])
+def test_extension_item_failure_advances_or_resumes_captcha(tmp_path, captcha):
+    from bit.ai_weight_price_client import continue_run
+    service = _service(tmp_path)
+    start(service, {
+        'selection': {'category': '', 'start_page': 1, 'end_page': 1, 'start_item': 1},
+        'max_items': 2,
+        'products': [{'erp_goods_id': str(key), 'title': '测试商品',
+                      'main_image_url': 'https://img.example/product.jpg'} for key in (1001, 1002)],
+    })
+    reason = '需要完成人机验证' if captcha else '回写匹配到0个商品；请核对筛选条件'
+    result = fail(service, {'task_id': '1001', 'action': 'writeback', 'error': reason})
+    if captcha:
+        assert result['action'] == 'done'
+        assert service.store.state('run')['processed_items'] == 0
+        result = continue_run(service, {'acknowledged': True})
+        assert result['task']['erp_goods_id'] == '1001'
+        assert service.store.get('1001')['status'] == 'pending'
+    else:
+        assert result['task']['erp_goods_id'] == '1002'
+        assert service.store.get('1001')['status'] == 'skipped'
+        assert service.store.state('run')['processed_items'] == 1
+        assert service.store.state('run')['skipped_items'] == 1
+    assert result['action'] == 'search'
+    assert service.store.state('circuit') is None

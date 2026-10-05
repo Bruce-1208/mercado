@@ -1,9 +1,12 @@
 "use strict";
 
 const DEFAULTS = {
-  consoleUrl: "http://127.0.0.1:5000",
+  consoleUrl: "https://wuhanzeshun.com",
   openConsoleAfterCollect: false
 };
+const LEGACY_DEFAULT_CONSOLE_URL = "http://127.0.0.1:5000";
+const CONSOLE_URL_DEFAULT_MIGRATION_KEY = "consoleUrlDefaultMigration";
+const CONSOLE_URL_DEFAULT_MIGRATION_VERSION = 1;
 const urlInput = document.getElementById("console-url");
 const usernameInput = document.getElementById("username");
 const passwordInput = document.getElementById("password");
@@ -61,7 +64,7 @@ async function saveSettings() {
   if (previous.consoleUrl && previous.consoleUrl !== values.consoleUrl) {
     await runtimeMessage({type: "LOGOUT"});
   }
-  await syncSet(values);
+  await syncSet({...values, [CONSOLE_URL_DEFAULT_MIGRATION_KEY]: CONSOLE_URL_DEFAULT_MIGRATION_VERSION});
   return values;
 }
 
@@ -139,7 +142,18 @@ document.getElementById("open-integrations").addEventListener("click", async () 
   await chrome.tabs.create({url: `${values.consoleUrl}/settings/integrations`, active: true});
 });
 
-syncGet(["consoleUrl", "openConsoleAfterCollect"]).then(values => {
+syncGet(["consoleUrl", "openConsoleAfterCollect", CONSOLE_URL_DEFAULT_MIGRATION_KEY]).then(async values => {
+  if (Number(values[CONSOLE_URL_DEFAULT_MIGRATION_KEY] || 0) < CONSOLE_URL_DEFAULT_MIGRATION_VERSION) {
+    const updates = {[CONSOLE_URL_DEFAULT_MIGRATION_KEY]: CONSOLE_URL_DEFAULT_MIGRATION_VERSION};
+    if (!values.consoleUrl || values.consoleUrl === LEGACY_DEFAULT_CONSOLE_URL) {
+      updates.consoleUrl = DEFAULTS.consoleUrl;
+      if (values.consoleUrl === LEGACY_DEFAULT_CONSOLE_URL) {
+        await runtimeMessage({type: "LOGOUT"}).catch(() => {});
+      }
+      values.consoleUrl = DEFAULTS.consoleUrl;
+    }
+    await syncSet(updates);
+  }
   const config = {...DEFAULTS, ...values};
   urlInput.value = config.consoleUrl;
   openAfterInput.checked = Boolean(config.openConsoleAfterCollect);

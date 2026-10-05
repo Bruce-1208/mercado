@@ -1,0 +1,24 @@
+{
+  "viewport_widths": [
+    320,
+    390,
+    768,
+    1440
+  ],
+  "console_all_tabs_document_overflow": false,
+  "offline_browser_tests": {
+    "passed": 40,
+    "files": [
+      "tests/test_console_navigation.py",
+      "tests/test_console_ui_browser.py",
+      "tests/test_console_workflow_browser.py",
+      "tests/test_unified_workbench_ui.py"
+    ]
+  },
+  "standalone_checks": {
+    "passed": 56,
+    "pages": 9,
+    "report": "standalone/after.json"
+  },
+  "preview": "tab-orders-390-after.png"
+}

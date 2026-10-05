@@ -54,6 +54,21 @@ function aiWeightPriceProductId(row, idSelector) {
   return values.map(aiWeightPriceId).find(Boolean) || String(values.find(Boolean) || "").trim();
 }
 
+function aiWeightPriceDeveloperFilterActive(selection = {}) {
+  const wantedId = String(selection.product_developer_id || "").trim();
+  const wantedName = String(selection.product_developer_name || "").trim();
+  if (!wantedId && !wantedName) return false;
+  for (const node of document.querySelectorAll("select, .ant-select, [role='combobox']")) {
+    const parent = node.closest(".ant-form-item, .ant-row, form") || node.parentElement;
+    const context = `${node.getAttribute("aria-label") || ""} ${node.getAttribute("placeholder") || ""} ${parent?.textContent || ""}`;
+    if (!/产品开发/.test(context)) continue;
+    if (node.tagName === "SELECT" && String(node.value || "") === wantedId) return true;
+    const text = aiWeightPriceText(node).replace(/\s+/g, " ");
+    if (wantedName && text.includes(wantedName)) return true;
+  }
+  return false;
+}
+
 async function aiWeightPriceExtractProducts(data = {}) {
   await aiWeightPriceWaitFor(() => aiWeightPriceVisibleRows(data.selectors || {}).length, "智赢商品列表尚未加载，请确认已登录并打开商品列表");
   const selectors = data.selectors || {};
@@ -74,13 +89,19 @@ async function aiWeightPriceExtractProducts(data = {}) {
         row.querySelector("[data-login-id]")?.getAttribute("data-login-id")
       ].some(value => String(value || "").trim() === developerId));
   }) : visibleRows;
-  if ((developerId || developerName) && !rows.length) {
+  // Once the live page's developer control has been switched, its list rows
+  // may no longer repeat the developer name. In that case trust the server
+  // side filter and keep the visible cards; otherwise retain the strict
+  // card-level check to prevent accidental cross-developer reads.
+  const filteredRows = (developerId || developerName) && !rows.length && aiWeightPriceDeveloperFilterActive(selection)
+    ? visibleRows : rows;
+  if ((developerId || developerName) && !filteredRows.length) {
     throw new Error(`当前智赢列表未找到产品开发“${developerName || developerId}”的商品`);
   }
   const maxItems = Math.max(1, Number(data.max_items || 100));
   const startIndex = Math.max(0, Number(data.start_index || 0));
   const products = [];
-  for (const row of rows.slice(startIndex, startIndex + maxItems)) {
+  for (const row of filteredRows.slice(startIndex, startIndex + maxItems)) {
     const titleNode = aiWeightPriceQuery(row, selectors.erp_title)
       || row.querySelector("[data-title], .product-title, .goods-title, .title, [class*='title']");
     const imageNode = aiWeightPriceQuery(row, selectors.erp_image)

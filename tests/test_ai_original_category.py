@@ -254,7 +254,7 @@ def test_partial_sku_required_field_is_completed_per_sku_not_globally():
     assert variations[1]['attributes'][0]['value_name'] == 'USB'
 
 
-@pytest.mark.parametrize('field', ['MODEL', 'COLOR', 'SIZE', 'SEASON', 'GTIN', 'PACKAGE_WEIGHT'])
+@pytest.mark.parametrize('field', ['MODEL', 'COLOR', 'SIZE', 'SEASON', 'GTIN'])
 def test_generation_never_completes_with_required_omissions(monkeypatch, field):
     import erp.ai_original_products as module
     monkeypatch.setattr(module, '_download_source_image', lambda *a, **k: b'image')
@@ -315,7 +315,7 @@ def test_required_completion_leaves_package_dimensions_for_manual_review():
     attrs, missing = complete_required_attributes({}, existing, [
         {'id': prefix + axis, 'tags': {'required': True}}
         for prefix in ('PACKAGE_', 'SELLER_PACKAGE_')
-        for axis in ('LENGTH', 'WIDTH', 'HEIGHT')
+        for axis in ('LENGTH', 'WIDTH', 'HEIGHT', 'WEIGHT')
     ], chat=lambda *a, **k: pytest.fail('Packaging dimensions must not invoke AI'))
     assert attrs == existing
     assert missing == []

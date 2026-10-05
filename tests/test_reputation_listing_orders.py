@@ -13,7 +13,7 @@ def test_second_listing_page_failure_retains_positive_evidence(monkeypatch, acti
             if params["offset"]:
                 raise api.MercadoReputationError("第二页不可用", status_code=403)
             return {"results": [f"MLM{i}" for i in range(50)], "paging": {"total": 500}}
-        assert path == "/items/bulk"
+        assert path == "/items"
         return [
             {"status_code": 200, "id": value,
              "body": {"status": "active" if active and value == "MLM0" else "paused"}}
@@ -21,7 +21,7 @@ def test_second_listing_page_failure_retains_positive_evidence(monkeypatch, acti
         ]
 
     monkeypatch.setattr(api, "_fetch_json", fetch)
-    sample = api._sample_site_listing_status("token", "site-seller", http=None, timeout=5)
+    sample = api._sample_site_listing_status("token", "site-seller", http=None, timeout=5, sample_size=100)
 
     assert sample["listing_sample_status"] == expected
     assert sample["listing_sample_count"] == 50
@@ -35,7 +35,8 @@ def test_incomplete_listing_data_clears_ban_days_and_retains_original_status():
 
     api._apply_listing_sample_status(row, {"listing_sample_status": None})
 
-    assert row["account_status"] == "unknown"
+    assert row["account_status"] == "restricted"
+    assert row["site_status_display"] == "暂停状态"
     assert row["site_status_official_display"] == "永久封禁"
     assert row["site_status_official_account_status"] == "restricted"
     assert row["suspension_days"] is None
@@ -52,7 +53,7 @@ def test_malformed_second_listing_page_retains_positive_evidence(monkeypatch, ac
         return [{"id": item, "status": "active" if active and item == "MLM0" else "paused"}
                 for item in params["ids"].split(",")]
     monkeypatch.setattr(api, "_fetch_json", fetch)
-    sample = api._sample_site_listing_status("token", "site-seller", http=None, timeout=5)
+    sample = api._sample_site_listing_status("token", "site-seller", http=None, timeout=5, sample_size=100)
     assert sample["listing_sample_status"] == expected
     assert sample["listing_sample_count"] == 50
     assert sample["listing_sample_error"] == "站点最新刊登接口返回格式错误"
@@ -142,3 +143,37 @@ def test_reputation_snapshot_persists_site_order_count_and_keeps_other_sites(mon
     assert rows["巴西"][16] == 8
     assert rows["墨西哥"][9] == "上次告警"
     assert all(len(row) == 17 and row[15] == "new-snapshot" for row in inserted)
+
+
+@pytest.mark.parametrize("sample,display", [
+    ({"listing_sample_status": "active", "listing_sample_error": "部分读取失败"}, "活跃中"),
+    ({"listing_sample_status": "inactive"}, "暂停状态"),
+    ({"listing_sample_status": None, "listing_sample_error": "部分读取失败"}, "暂停状态"),
+    ({}, "暂停状态"),
+])
+def test_account_status_uses_binary_rule_and_preserves_diagnostics(sample, display):
+    row = {}
+    api._apply_listing_sample_status(row, sample)
+    assert row["site_status_display"] == display
+    assert row.get("listing_sample_error") == sample.get("listing_sample_error")
+
+
+def test_latest_fifty_uses_multiget_endpoint_and_detects_last_active_item(monkeypatch):
+    detail_batches = []
+
+    def fetch(_token, path, *, params, **_kwargs):
+        if path.endswith("/search"):
+            assert params == {"limit": 50, "offset": 0, "orders": "start_time_desc"}
+            return {"results": [f"MLM{i}" for i in range(50)], "paging": {"total": 200}}
+        assert path == "/items"
+        ids = params["ids"].split(",")
+        detail_batches.append(len(ids))
+        return [{"code": 200, "body": {"id": item, "status": "active" if item == "MLM49" else "paused"}}
+                for item in ids]
+
+    monkeypatch.setattr(api, "_fetch_json", fetch)
+    sample = api._sample_site_listing_status("token", "seller", http=None, timeout=5)
+    row = {}
+    api._apply_listing_sample_status(row, sample)
+    assert detail_batches == [20, 20, 10]
+    assert row["site_status_display"] == "活跃中"

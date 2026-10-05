@@ -221,6 +221,11 @@ def product_publish_issues(product_row: Mapping[str, Any]) -> list[str]:
             issues.append("首图尚未完成 AI 白底生成")
     if row.get("review_status") != "approved":
         issues.append("审核状态未通过")
+    if row.get("source_type") == "ai_original" and any(
+        (_decimal_value(row.get(field)) or Decimal("0")) <= 0
+        for field in ("package_length_cm", "package_width_cm", "package_height_cm")
+    ):
+        issues.append("包装长宽高必须填写且大于 0，补齐后才能上架")
     actual_weight = _actual_weight_value(row)
     if (actual_weight or Decimal("0")) <= 0:
         issues.append("未填写有效重量")

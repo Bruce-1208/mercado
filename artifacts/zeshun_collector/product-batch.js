@@ -2,6 +2,9 @@
 
 // Runs in the extension service worker, independently of the popup's lifetime.
 const PRODUCT_BATCH_KEY = "productBatch";
+const PRODUCT_READ_TIMEOUT_MS = 30000;
+const PRODUCT_DETAIL_TIMEOUT_MS = 90000;
+const PRODUCT_BLOCK_RETRY_MS = 600000;
 const PRODUCT_SEARCH_HOSTS = {
   MLM: "listado.mercadolibre.com.mx", MLB: "lista.mercadolivre.com.br",
   MLA: "listado.mercadolibre.com.ar", MLC: "listado.mercadolibre.cl",
@@ -50,6 +53,24 @@ function productSearchUrl(country, keyword) {
   return `https://${host}/${encodeURIComponent(text.replace(/\s+/g, "-"))}${INTERNATIONAL_FILTER}`;
 }
 
+function normalizeManagementCategoryId(value) {
+  if (value === null || value === undefined || value === "" ||
+      (typeof value === "string" && !value.trim())) return null;
+  const validType = typeof value === "number" ||
+    (typeof value === "string" && /^\d+$/.test(value.trim()));
+  const id = Number(value);
+  if (!validType || !Number.isSafeInteger(id) || id <= 0) {
+    throw Object.assign(new Error("请选择有效的泽顺产品分类"), {nonRetryable: true});
+  }
+  return id;
+}
+
+function assertManagementCategorySession(auth, categoryId = true) {
+  if (categoryId && auth?.mode === "legacy") {
+    throw Object.assign(new Error("请更新泽顺服务端并在插件设置中重新登录后使用分类采集"), {nonRetryable: true});
+  }
+}
+
 function productBatchParams(params = {}) {
   const read = (key, label, max) => {
     const value = Number(params[key]);
@@ -67,11 +88,22 @@ function productBatchParams(params = {}) {
   if (minSales !== null && maxSales !== null && maxSales < minSales) {
     throw new Error("最高销量不能低于最低销量");
   }
+  const concurrencyMode = String(params.concurrency_mode || "normal");
+  if (!["gentle", "normal"].includes(concurrencyMode)) {
+    throw new Error("请选择缓和模式或普通模式");
+  }
+  const restSeconds = Number(params.success_rest_seconds ?? 3);
+  if (!Number.isFinite(restSeconds) || restSeconds < 0 || restSeconds > 3600) {
+    throw new Error("成功后休息时间须为 0–3600 秒");
+  }
   return {
+    success_rest_seconds: restSeconds,
     max_items: read("max_items", "采集数量", 500),
-    concurrency: read("concurrency", "并发数", 10),
+    concurrency_mode: concurrencyMode,
+    concurrency: concurrencyMode === "gentle" ? 1 : 5,
     min_sales: minSales,
-    max_sales: maxSales
+    max_sales: maxSales,
+    management_category_id: normalizeManagementCategoryId(params.management_category_id)
   };
 }
 
@@ -79,20 +111,20 @@ function productBatchEligibility(product, params) {
   const snapshot = product && product.plugin_snapshot || {};
   const fulfillment = String(snapshot.fulfillment_type || "unknown");
   if (!snapshot.fulfillment_eligible || !["self_ship", "semi_managed"].includes(fulfillment)) {
-    return {eligible: false, reason: `智赢发货方式：${snapshot.fulfillment_label || "未识别"}`};
+    return {eligible: false, reason: `泽顺商品数据发货方式：${snapshot.fulfillment_label || "未识别"}`};
   }
   const rawSales = snapshot.sales;
   const sales = Number(rawSales);
   const hasSales = rawSales !== null && rawSales !== undefined && rawSales !== "" &&
     Number.isFinite(sales) && sales >= 0;
   if ((params.min_sales !== null || params.max_sales !== null) && !hasSales) {
-    return {eligible: false, reason: "智赢销量未读取到"};
+    return {eligible: false, reason: "泽顺商品数据销量未读取到"};
   }
   if (params.min_sales !== null && sales < params.min_sales) {
-    return {eligible: false, reason: `智赢销量 ${sales} 低于 ${params.min_sales}`};
+    return {eligible: false, reason: `泽顺商品数据销量 ${sales} 低于 ${params.min_sales}`};
   }
   if (params.max_sales !== null && sales > params.max_sales) {
-    return {eligible: false, reason: `智赢销量 ${sales} 高于 ${params.max_sales}`};
+    return {eligible: false, reason: `泽顺商品数据销量 ${sales} 高于 ${params.max_sales}`};
   }
   return {eligible: true, sales: hasSales ? sales : null};
 }
@@ -120,30 +152,29 @@ async function saveProductBatch(run) {
 
 async function closeProductBatchTab(run, id) {
   if (!run.tabs.delete(id)) return;
-  try { await chrome.tabs.remove(id); } catch (_) {}
+  try { await productBatchReadWithin(() => chrome.tabs.remove(id), Date.now() + 3000); } catch (_) {}
 }
 
 function withProductBatchForegroundTab(run, tabId, action) {
-  // 每个页面在完整读取周期开始时激活一次。锁覆盖整个读取周期，避免
-  // 重试时多个页面每 500ms 轮流抢占前台。
+  // 只串行激活标签页，读取在锁外独立执行，慢页面不会阻塞其他通道。
   let release;
   const previous = productBatchForegroundLock;
   productBatchForegroundLock = new Promise(resolve => { release = resolve; });
   return previous.then(async () => {
     try {
+      if (run.stop) return null;
       if (run && run.windowId && chrome.windows && chrome.windows.update) {
-        try { await chrome.windows.update(run.windowId, {focused: true}); } catch (_) {}
+        try { await productBatchReadWithin(() => chrome.windows.update(run.windowId, {focused: true}), Date.now() + 3000, run); } catch (_) {}
       }
       if (chrome.tabs.update) {
-        try { await chrome.tabs.update(tabId, {active: true}); } catch (_) {}
+        try { await productBatchReadWithin(() => chrome.tabs.update(tabId, {active: true}), Date.now() + 3000, run); } catch (_) {}
       }
       // 给页面的 active-tab 监听器一个短暂的初始化窗口。
       await new Promise(resolve => setTimeout(resolve, 180));
-      return await action();
     } finally {
       release();
     }
-  });
+  }).then(() => run.stop ? null : action());
 }
 
 async function createProductBatchWindow() {
@@ -164,7 +195,7 @@ async function closeProductBatchWindow(run) {
   if (!windowId) return;
   run.windowId = null;
   try {
-    if (chrome.windows && chrome.windows.remove) await chrome.windows.remove(windowId);
+    if (chrome.windows && chrome.windows.remove) await productBatchReadWithin(() => chrome.windows.remove(windowId), Date.now() + 3000);
   } catch (_) {}
 }
 
@@ -193,22 +224,90 @@ function productBatchTabUrl(tab) {
   return "";
 }
 
+function productBatchBlockReason(response) {
+  const text = String(response?.error || response?.message || "");
+  if (Number(response?.status) === 429 || /限频|访问(?:过于)?频繁|请求(?:过于)?频繁|操作频繁|too many requests|rate.?limit|HTTP\s*429/i.test(text)) return "美客多访问限频";
+  if (response?.blocked || (!/泽顺商品数据/.test(text) && /买家.*登录|登录或.*验证|account.?verification/i.test(text))) return "需要美客多买家账号登录或完成验证";
+  return "";
+}
+
+async function pauseProductBatchForBlock(run, reason) {
+  if (reason === "美客多访问限频") {
+    run.stop = true;
+    run.stopReason = "美客多访问限频，任务已自动停止；已采集成功的商品保留，请稍后手动启动。";
+    run.state.phase = "stopped";
+    run.state.retry_at = null;
+    run.state.message = run.stopReason;
+    reportProductBatchAttention(run.stopReason, {source: "美客多商品采集"});
+    await saveProductBatch(run);
+    return;
+  }
+  run.state.phase = "paused";
+  run.state.retry_at = Date.now() + PRODUCT_BLOCK_RETRY_MS;
+  run.state.message = `${reason}，任务已暂停，10 分钟后自动重试；请按需在美客多页面完成买家登录。`;
+  reportProductBatchAttention(run.state.message, {source: "美客多商品采集"});
+  await saveProductBatch(run);
+  while (!run.stop && Date.now() < run.state.retry_at) {
+    await new Promise(resolve => setTimeout(resolve, Math.min(500, run.state.retry_at - Date.now())));
+  }
+  run.state.retry_at = null;
+  if (!run.stop) {
+    run.state.phase = "running";
+    run.state.message = "暂停结束，正在重试被拦截的页面";
+    await saveProductBatch(run);
+  }
+}
+
+function productBatchReadWithin(action, deadline, run) {
+  let timer, stopTimer;
+  return Promise.race([
+    Promise.resolve().then(action),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error("页面或泽顺商品数据响应超时")), Math.max(0, deadline - Date.now()));
+      if (run) stopTimer = setInterval(() => {
+        if (run.stop) reject(new Error(run.stopReason || "已停止采集"));
+      }, 100);
+    })
+  ]).finally(() => { clearTimeout(timer); clearInterval(stopTimer); });
+}
+
 async function readProductBatchPage(run, url, type, consume) {
   if (run.stop) return null;
-  // Mercado 列表和智赢详情浮层都可能只在激活标签页完成渲染。
-  // 用前台锁只包住读取，不包住后续上传，所以仍可并发上传。
+  // 页面激活后独立读取；每个通道有自己的读取和上传超时。
   const needsForeground = type === "READ_PRODUCT_LIST" || type === "EXTRACT_BATCH_PRODUCT";
   const tabOptions = {url: productBatchUrl(url), active: false};
   if (run.windowId) tabOptions.windowId = run.windowId;
-  const tab = await chrome.tabs.create(tabOptions);
+  let abandoned = false;
+  let tab;
+  try {
+    tab = await productBatchReadWithin(async () => {
+      const created = await chrome.tabs.create(tabOptions);
+      if (abandoned || run.stop) {
+        run.tabs.add(created.id);
+        void closeProductBatchTab(run, created.id);
+      }
+      return created;
+    }, Date.now() + PRODUCT_READ_TIMEOUT_MS, run);
+  } catch (error) { abandoned = true; throw error; }
   run.tabs.add(tab.id);
   try {
     const poll = async () => {
-      const deadline = Date.now() + 45000;
+      const timeoutMs = type === "EXTRACT_BATCH_PRODUCT" ? PRODUCT_DETAIL_TIMEOUT_MS : PRODUCT_READ_TIMEOUT_MS;
+      let deadline = Date.now() + timeoutMs;
       let lastError = "页面未加载完成";
       while (!run.stop && Date.now() < deadline) {
-        const current = await chrome.tabs.get(tab.id);
-        const currentUrl = productBatchTabUrl(current);
+        const current = await productBatchReadWithin(() => chrome.tabs.get(tab.id), deadline, run);
+        let currentUrl;
+        try {
+          if (/\/(?:login|registration|account-verification|challenge|captcha)(?:[/?]|$)/i.test(current.pendingUrl || current.url || "")) throw new Error("买家登录验证");
+          currentUrl = productBatchTabUrl(current);
+        } catch (error) {
+          await pauseProductBatchForBlock(run, "需要美客多买家账号登录或完成验证");
+          if (run.stop) return null;
+          await productBatchReadWithin(() => chrome.tabs.update(tab.id, {url}), Date.now() + PRODUCT_READ_TIMEOUT_MS, run);
+          deadline = Date.now() + timeoutMs;
+          continue;
+        }
         if (!currentUrl) {
           lastError = "页面正在打开，等待商品页加载";
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -219,22 +318,33 @@ async function readProductBatchPage(run, url, type, consume) {
         // 直接尝试发消息，内容脚本尚未注入时只会进入下一轮重试。
         let response = null;
         try {
-          response = await sendTabMessage(tab.id, {
-            type
-          });
-        } catch (error) { lastError = error.message || String(error); }
-        if (response?.blocked) throw new Error(response.error || "请先完成登录或人机验证");
+          response = await productBatchReadWithin(() => sendTabMessage(tab.id, {type}), deadline, run);
+        } catch (error) { lastError = error.message || String(error); response = {status: error.status, error: lastError}; }
+        const reason = productBatchBlockReason(response);
+        if (reason) {
+          await pauseProductBatchForBlock(run, reason);
+          if (run.stop) return null;
+          await productBatchReadWithin(() => chrome.tabs.update(tab.id, {url}), Date.now() + PRODUCT_READ_TIMEOUT_MS, run);
+          deadline = Date.now() + timeoutMs;
+          continue;
+        }
         if (response?.ok) return response;
+        if (response?.retryable === false) throw new Error(response.error || "泽顺商品数据读取失败");
         if (response?.error) lastError = response.error;
         await new Promise(resolve => setTimeout(resolve, 500));
       }
-      if (!run.stop) throw new Error(`页面读取超时：${lastError}`);
+      if (!run.stop) throw new Error(`读取超时（${timeoutMs / 1000}秒）：${lastError}`);
       return null;
     };
     const response = needsForeground
       ? await withProductBatchForegroundTab(run, tab.id, poll)
       : await poll();
-    return response ? await consume(response) : null;
+    return response && !run.stop ? await consume(response) : null;
+  } catch (error) {
+    if (!run.stop && productBatchBlockReason(error) === "美客多访问限频") {
+      await pauseProductBatchForBlock(run, "美客多访问限频");
+    }
+    throw error;
   } finally {
     await closeProductBatchTab(run, tab.id);
   }
@@ -260,9 +370,10 @@ async function runProductBatch(run) {
       const page = Number(listing.page);
       if (!Number.isInteger(page) || page < 1) throw new Error("无法识别当前列表页码");
       run.state.current_page = page;
+      const modeLabel = params.concurrency_mode === "gentle" ? "缓和模式" : "普通模式";
       run.state.message = listing.international_selected
-        ? `正在采集第 ${page} 页（Internacional · 智赢终审 · 并发 ${params.concurrency}）`
-        : `第 ${page} 页 Internacional 未生效，正逐件读取智赢发货方式和销量`;
+        ? `正在采集第 ${page} 页（Internacional · 泽顺商品数据终审 · ${modeLabel} · ${params.concurrency} 个采集进程）`
+        : `第 ${page} 页 Internacional 未生效，正逐件读取泽顺商品数据发货方式和销量`;
       await saveProductBatch(run);
 
       const candidates = [];
@@ -277,12 +388,15 @@ async function runProductBatch(run) {
       let index = 0;
       await Promise.all(Array.from({length: Math.min(params.concurrency, candidates.length)}, async () => {
         while (!run.stop && index < candidates.length && run.state.completed_count + run.reserved < params.max_items) {
+          while (!run.stop && run.state.phase === "paused") await new Promise(resolve => setTimeout(resolve, 500));
+          if (run.stop) break;
           const itemUrl = candidates[index++];
           run.state.candidate_count += 1;
+          let succeeded = false;
           try {
             await readProductBatchPage(run, itemUrl, "EXTRACT_BATCH_PRODUCT", async response => {
               if (run.stop) return;
-              const product = response.product;
+              const product = {...response.product, management_category_id: params.management_category_id};
               run.state.current_item_id = product.source_item_id || "";
               if (uploaded.has(product.source_item_id)) { run.state.skipped += 1; return; }
               const decision = productBatchEligibility(product, params);
@@ -295,8 +409,12 @@ async function runProductBatch(run) {
               run.reserved += 1;
               uploaded.add(product.source_item_id);
               try {
-                await uploadProduct(product, {openConsole: false});
+                await productBatchReadWithin(
+                  () => uploadProduct(product, {openConsole: false}),
+                  Date.now() + PRODUCT_DETAIL_TIMEOUT_MS
+                );
                 run.state.completed_count += 1;
+                succeeded = true;
               } finally {
                 run.reserved -= 1;
               }
@@ -304,16 +422,25 @@ async function runProductBatch(run) {
           } catch (error) {
             if (!run.stop) {
               run.state.failed_count += 1;
-              run.state.last_error = error.message || String(error);
+              run.state.last_error = `${itemUrl}：${error.message || String(error)}`;
               reportProductBatchAttention(run.state.last_error, {
                 source: "美客多商品采集",
                 itemId: run.state.current_item_id || ""
               });
+              if (productBatchBlockReason(error) === "美客多访问限频") {
+                await pauseProductBatchForBlock(run, "美客多访问限频");
+              }
               if (error.authRequired) { run.error = error; run.stop = true; }
             }
           }
           run.state.processed_count = run.state.completed_count + run.state.failed_count + run.state.skipped;
           await saveProductBatch(run);
+          if (succeeded && !run.stop) {
+            const restUntil = Date.now() + (params.success_rest_seconds ?? 3) * 1000;
+            while (!run.stop && Date.now() < restUntil) {
+              await new Promise(resolve => setTimeout(resolve, Math.min(100, restUntil - Date.now())));
+            }
+          }
         }
       }));
       if (run.state.completed_count >= params.max_items) break;
@@ -321,10 +448,10 @@ async function runProductBatch(run) {
     }
     if (run.error) throw run.error;
     run.state.phase = run.stop ? "stopped" : (run.state.failed_count ? "partial" : "completed");
-    run.state.message = run.stop ? "已停止采集" : "采集结束（已达到采集数量或搜索末页）";
+    run.state.message = run.stop ? (run.stopReason || "已停止采集") : "采集结束（已达到采集数量或搜索末页）";
   } catch (error) {
     run.state.phase = run.stop && !run.error ? "stopped" : "error";
-    run.state.message = run.state.phase === "stopped" ? "已停止采集" : error.message || String(error);
+    run.state.message = run.state.phase === "stopped" ? (run.stopReason || "已停止采集") : error.message || String(error);
     if (run.state.phase === "error") {
       reportProductBatchAttention(run.state.message, {source: "美客多商品采集"});
     }
@@ -344,21 +471,23 @@ async function startProductBatch(message) {
   productBatchStarting = true;
   let createdWindowId = null;
   try {
-    if (!await authSession()) throw new Error("请先在插件设置中登录泽顺控制台账号");
+    const auth = await authSession();
+    if (!auth) throw new Error("请先在插件设置中登录泽顺控制台账号");
     const params = productBatchParams(message.params);
+    assertManagementCategorySession(auth, params.management_category_id);
     const tab = await chrome.tabs.get(Number(message.tab_id));
     const originalUrl = productBatchUrl(tab.url);
     const pageContext = await sendTabMessage(tab.id, {type: "READ_PRODUCT_LIST"});
     if (!pageContext.ok) throw new Error(pageContext.error || "请选择已加载完成的 Mercado Libre 搜索列表页");
-    const zying = await sendTabMessage(tab.id, {type: "CHECK_ZYING_PLUGIN"});
-    if (!zying?.logged_in) throw new Error(zying?.message || "无法确认智赢插件登录状态");
+    const dataService = await apiRequest("/api/browser-extension/mercado-data/status");
+    if (!dataService.ready) throw new Error(dataService.message || "泽顺商品数据服务未就绪");
     const run = {tabs: new Set(), windowId: null, stop: false, reserved: 0, state: {
       running: true, phase: "running", params,
       source_url: forceInternationalUrl(originalUrl),
       execution_window: "new_edge_window",
-      zying_logged_in: true, candidate_count: 0, processed_count: 0,
+      data_service_ready: true, candidate_count: 0, processed_count: 0,
       completed_count: 0, failed_count: 0, skipped: 0, current_page: 0,
-      current_item_id: "", started_at: Date.now(), message: "正在打开搜索页，后续将逐件以智赢数据终审"
+      current_item_id: "", started_at: Date.now(), message: "正在打开搜索页，后续将逐件以泽顺商品数据数据终审"
     }};
     const batchWindow = await createProductBatchWindow();
     run.windowId = batchWindow.id;

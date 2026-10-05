@@ -467,3 +467,44 @@ def test_agent_stops_worker_when_control_lease_cannot_be_renewed(tmp_path, monke
 
     assert any(event.get("status") == "stopped" for event in events)
     assert (tmp_path / "jobs" / "lease-loss-job" / "cancel.requested").exists()
+
+
+def test_rename_persists_and_syncs_same_agent_on_heartbeat(tmp_path):
+    from bit.local_agent_hub import LocalAgentStore
+
+    args = local_agent.build_argument_parser().parse_args([
+        '--data-dir', str(tmp_path / 'agent'), '--token', 'test-token',
+        '--name', '旧名称',
+    ])
+    config = local_agent.AgentConfig(args)
+    config.save_server_url(config.server_url)
+    agent = LocalAgent(config)
+    store = LocalAgentStore(tmp_path / 'hub.sqlite3')
+
+    def request(method, path, json, **kwargs):
+        assert path == '/api/local-agents/heartbeat'
+        store.heartbeat(json['agent_id'], name=json['name'], now=100)
+        return {}
+
+    agent._request = request
+    agent.heartbeat()
+    config.save_name('  泽顺新名称  ')
+    agent.heartbeat()
+    agents = store.list_agents(now=100)
+    assert len(agents) == 1
+    assert agents[0]['name'] == '泽顺新名称'
+    restored = local_agent.AgentConfig(args)
+    assert restored.name == '泽顺新名称'
+    assert restored.agent_id == config.agent_id
+    assert restored.server_url == config.server_url
+
+
+@pytest.mark.parametrize('name', ['', '   ', '名' * 121, '名字\n换行'])
+def test_rename_rejects_invalid_name_without_changing_settings(tmp_path, name):
+    config = local_agent.AgentConfig(local_agent.build_argument_parser().parse_args([
+        '--data-dir', str(tmp_path), '--token', 'test-token', '--name', '原名称',
+    ]))
+    with pytest.raises(ValueError):
+        config.save_name(name)
+    assert config.name == '原名称'
+    assert not config.settings_path.exists()

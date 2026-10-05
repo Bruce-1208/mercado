@@ -55,6 +55,10 @@
     const refresh = () => {
         const query = search.value.trim().toLocaleLowerCase();
         if (query && !searching) beforeSearch = sections.map(({section}) => section.open);
+        buttons.forEach(button => {
+            if (button.classList.contains('active')) button.setAttribute('aria-current', 'page');
+            else button.removeAttribute('aria-current');
+        });
         let total = 0;
         sections.forEach(({section, items, summary}, index) => {
             let count = 0;
@@ -87,4 +91,109 @@
         refresh();
     }).observe(b, {attributes: true, attributeFilter: ['hidden', 'class'], attributeOldValue: true}));
     refresh();
+
+    const sidebar = nav.closest('.sidebar');
+    const toggle = document.getElementById('sidebar-toggle');
+    if (!sidebar || !toggle) return;
+    const mobile = window.matchMedia('(max-width: 760px)');
+    const drawerClass = 'zs-mobile-nav-open';
+    sidebar.id = 'console-navigation';
+    sidebar.setAttribute('aria-label', '功能导航');
+    toggle.setAttribute('aria-controls', sidebar.id);
+    const backdrop = document.createElement('button');
+    backdrop.type = 'button';
+    backdrop.className = 'zs-nav-backdrop';
+    backdrop.setAttribute('aria-label', '关闭功能导航');
+    backdrop.tabIndex = -1;
+    backdrop.hidden = true;
+    document.body.append(backdrop);
+
+    const drawerIsOpen = () => mobile.matches && document.body.classList.contains(drawerClass);
+    const syncDrawer = () => {
+        const open = drawerIsOpen();
+        const expanded = mobile.matches ? open : !document.body.classList.contains('sidebar-collapsed');
+        const label = `${expanded ? '收起' : '展开'}功能导航`;
+        toggle.setAttribute('aria-expanded', String(expanded));
+        toggle.setAttribute('aria-label', label);
+        toggle.title = label;
+        backdrop.hidden = !open;
+        sidebar.inert = mobile.matches && !open;
+        if (mobile.matches) sidebar.setAttribute('aria-hidden', String(!open));
+        else sidebar.removeAttribute('aria-hidden');
+    };
+    const setDrawerOpen = (open, returnFocus = false) => {
+        document.body.classList.toggle(drawerClass, mobile.matches && open);
+        syncDrawer();
+        if (open && mobile.matches) {
+            window.requestAnimationFrame(() => {
+                if (drawerIsOpen()) search.focus({preventScroll: true});
+            });
+        } else if (returnFocus) toggle.focus({preventScroll: true});
+    };
+
+    // Capture the mobile action before the existing desktop collapse listener runs.
+    toggle.addEventListener('click', event => {
+        if (!mobile.matches) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const open = !drawerIsOpen();
+        setDrawerOpen(open, !open);
+    }, true);
+    backdrop.addEventListener('click', () => setDrawerOpen(false, true));
+    nav.addEventListener('click', event => {
+        const selected = event.target.closest('.tab-button, a[href]');
+        if (!drawerIsOpen() || !selected || !nav.contains(selected)) return;
+        setDrawerOpen(false);
+        // Move focus out of the hidden drawer after a workspace selection.
+        if (selected.dataset.tab) {
+            const active = document.querySelector('.workspace-tab.active:not([hidden])');
+            (active || toggle).focus({preventScroll: true});
+        }
+    });
+    const focusableNavigation = () => [toggle, ...sidebar.querySelectorAll(
+        'button, a[href], input, select, textarea, summary, [tabindex]'
+    )].filter(element => !element.disabled && element.tabIndex >= 0 && element.getClientRects().length);
+    document.addEventListener('keydown', event => {
+        if (!drawerIsOpen()) return;
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            setDrawerOpen(false, true);
+        } else if (event.key === 'Tab') {
+            const focusable = focusableNavigation();
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            const current = document.activeElement;
+            if (event.shiftKey && (current === first || !focusable.includes(current))) {
+                event.preventDefault();
+                last?.focus({preventScroll: true});
+            } else if (!event.shiftKey && (current === last || !focusable.includes(current))) {
+                event.preventDefault();
+                first?.focus({preventScroll: true});
+            }
+        }
+    }, true);
+    document.addEventListener('focusin', event => {
+        if (drawerIsOpen() && event.target !== toggle && !sidebar.contains(event.target)) {
+            search.focus({preventScroll: true});
+        }
+    });
+    mobile.addEventListener('change', () => {
+        const returnFocus = mobile.matches && sidebar.contains(document.activeElement);
+        setDrawerOpen(false, returnFocus);
+    });
+    new MutationObserver(syncDrawer).observe(document.body, {attributes: true, attributeFilter: ['class']});
+
+    const workspaceTabs = document.querySelector('.workspace-tabs');
+    if (workspaceTabs) {
+        const syncCurrentWorkspace = () => workspaceTabs.querySelectorAll('.workspace-tab').forEach(button => {
+            if (button.classList.contains('active')) button.setAttribute('aria-current', 'page');
+            else button.removeAttribute('aria-current');
+        });
+        new MutationObserver(syncCurrentWorkspace).observe(workspaceTabs, {
+            attributes: true, attributeFilter: ['class'], childList: true, subtree: true,
+        });
+        syncCurrentWorkspace();
+    }
+    syncDrawer();
 })();

@@ -218,31 +218,58 @@
   }
 
   function extractItemId(doc, pageUrl, product) {
-    const candidates = [];
-    try {
-      const url = new URL(pageUrl);
-      for (const key of ["item_id", "itemId", "wid"]) candidates.push(url.searchParams.get(key));
-    } catch (_) {}
-    if (doc && doc.querySelectorAll) {
-      for (const node of doc.querySelectorAll("[data-item-id], [data-itemid], [data-id]")) {
-        candidates.push(node.getAttribute("data-item-id"));
-        candidates.push(node.getAttribute("data-itemid"));
-        const dataId = node.getAttribute("data-id");
-        if (ITEM_PATTERN.test(dataId || "")) candidates.push(dataId);
+    const url = new URL(pageUrl);
+    const catalogId = normalizeItemId(url.pathname.match(/\/(?:p|up)\/((?:ML[A-Z]|CBT)-?\d+)/i)?.[1]);
+    const valid = value => {
+      const id = normalizeItemId(value);
+      return id && id !== catalogId ? id : "";
+    };
+    for (const key of ["item_id", "itemId", "wid"]) {
+      const id = valid(url.searchParams.get(key));
+      if (id) return id;
+    }
+    // The path of a catalog page identifies a product, not a seller listing.
+    // Only use selected-offer facts here, never recommendation-card data IDs.
+    if (catalogId) {
+      const candidates = [product?.sku, product?.productID,
+        meta(doc, 'meta[property="product:retailer_item_id"]'),
+        meta(doc, 'meta[itemprop="sku"]')];
+      for (const node of doc.querySelectorAll(
+        '.ui-pdp-buybox [data-item-id], .ui-pdp-buybox [data-itemid], ' +
+        '[data-testid="buy-box"] [data-item-id], ' +
+        '.ui-pdp-buybox input[name="item_id"], .ui-pdp-buybox input[name="itemId"], ' +
+        '.ui-pdp-buybox a[href*="wid="], .ui-pdp-buybox a[href*="item_id="]')) {
+        candidates.push(node.getAttribute("data-item-id"), node.getAttribute("data-itemid"), node.value);
+        if (node.href) {
+          const selected = new URL(node.href, pageUrl);
+          for (const key of ["item_id", "itemId", "wid"]) candidates.push(selected.searchParams.get(key));
+        }
       }
+      // Some catalog layouts put the selected offer only in hydration JSON.
+      // Read explicit page/buy-box fields; do not search arbitrary nested IDs.
+      for (const script of doc.querySelectorAll('script[type="application/json"], script#__PRELOADED_STATE__, script')) {
+        let raw = script.textContent || "";
+        const assignment = raw.match(/^(?:\s*window\.)?\s*__PRELOADED_STATE__\s*=\s*([\s\S]*)/);
+        if (assignment) raw = assignment[1].replace(/;\s*$/, "");
+        else if (script.type !== "application/json" && script.id !== "__PRELOADED_STATE__") continue;
+        let state;
+        try { state = JSON.parse(raw); } catch (_) { continue; }
+        for (const page of [state, state?.initialState, state?.pageState?.initialState]) {
+          if (!page || typeof page !== "object") continue;
+          candidates.push(page.item_id, page.item?.id,
+            page.components?.buy_box?.item_id, page.components?.buy_box?.item?.id,
+            page.track?.melidata?.event_data?.item_id);
+        }
+      }
+      for (const value of candidates) { const id = valid(value); if (id) return id; }
+      throw new Error("目录页尚未识别到卖家刊登编号，请选择具体卖家的商品后重试");
     }
-    candidates.push(product && product.sku, product && product.productID);
-    candidates.push(meta(doc, 'meta[property="og:url"]'));
-    const canonical = doc && doc.querySelector ? doc.querySelector('link[rel="canonical"]') : null;
-    candidates.push(canonical && canonical.href, pageUrl);
-    for (const value of candidates) {
-      const itemId = normalizeItemId(value);
-      if (itemId) return itemId;
-    }
-    if (doc && doc.documentElement) {
-      const html = String(doc.documentElement.innerHTML || "");
-      const explicit = /(?:item_id|itemId|wid)["'\s:=\\/]+((?:ML[A-Z]|CBT)-?\d{5,})/i.exec(html);
-      if (explicit) return normalizeItemId(explicit[1]);
+    const pathId = valid(url.pathname);
+    if (pathId) return pathId;
+    for (const value of [product?.sku, product?.productID,
+      meta(doc, 'meta[property="og:url"]'), doc.querySelector('link[rel="canonical"]')?.href]) {
+      const id = valid(value);
+      if (id) return id;
     }
     return "";
   }
@@ -669,7 +696,10 @@
     const pictures = extractImages(doc, product);
     const specs = extractSpecs(doc);
     const variations = extractProductVariations(doc, product);
-    const plugin = pluginOverride || readPluginMetrics(doc);
+    // Mercado collection gets measurements from ZeshunMercadoData.apply.
+    // Never discover another extension's DOM implicitly, including async callers.
+    const plugin = pluginOverride || {metrics: {}, lines: [], text: "", sales: null,
+      read_method: "native_product_page"};
     const metrics = plugin.metrics;
     const actualWeightComplete = Number.isFinite(Number(metrics.weight_g)) && Number(metrics.weight_g) > 0;
     const dimensionsComplete = [
@@ -687,9 +717,8 @@
     const finalUrl = clean((canonical && canonical.href) || meta(doc, 'meta[property="og:url"]') || pageUrl);
     const errors = [];
     if (!pictures.length) errors.push("未识别到商品主图");
-    if (!plugin.lines.length) errors.push("未读取到智赢重量尺寸，可在泽顺控制台后续补充");
-    else if (!actualWeightComplete) errors.push("已检测到智赢浮层，但没有读取到实际重量");
-    if (plugin.lines.length && !dimensionsComplete) errors.push("已检测到智赢浮层，但没有读取到包装尺寸");
+    if (!actualWeightComplete) errors.push("泽顺商品数据尚未提供实际重量");
+    if (!dimensionsComplete) errors.push("泽顺商品数据尚未提供完整包装尺寸");
     const complete = Boolean(title && pictures.length && actualWeightComplete && dimensionsComplete);
     const source = {
       id: itemId,
@@ -734,7 +763,7 @@
         browser: "zeshun_browser_extension"
       },
       plugin_snapshot: {
-        source: "浏览器商品详情页与智赢插件浮层",
+        source: "浏览器商品详情页",
         read_method: plugin.read_method || "browser_extension_shadow_dom",
         dom_lines: plugin.lines,
         dom_text: plugin.text,
@@ -758,8 +787,7 @@
   }
 
   async function extractProductAsync(doc, pageUrl) {
-    const plugin = await readPluginMetricsAsync(doc);
-    return extractProduct(doc, pageUrl, plugin);
+    return extractProduct(doc, pageUrl);
   }
 
   function cardCandidates(doc) {

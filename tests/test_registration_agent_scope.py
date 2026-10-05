@@ -162,7 +162,7 @@ def test_enterprise_admin_agent_scope_uses_owner_company(member_console, monkeyp
     assert {a["agent_id"] for a in response.json["data"]["agents"]} == {"own", "company"}
     assert client.post("/api/run_shensu", json={"execution_target": "agent", "agent_id": "foreign"}).status_code == 403
     user.update(role_key="super_admin")
-    assert len(client.get("/api/execution-agents").json["data"]["agents"]) == 4
+    assert {a["agent_id"] for a in client.get("/api/execution-agents").json["data"]["agents"]} == {"own", "company"}
 
 
 @pytest.mark.parametrize("role", ["member", "enterprise_admin", "operator"])
@@ -185,3 +185,136 @@ def test_daily_jobs_follow_agent_visibility(member_console):
     assert client.get("/api/tasks/daily/status?execution_target=agent&task_id=other-job").status_code == 403
     assert client.post("/api/tasks/daily/stop", json={"execution_target": "agent", "task_id": "other-job"}).status_code == 403
     assert store.get_job("other-job")["status"] == "queued"
+
+
+@pytest.mark.parametrize("role", ["member", "enterprise_admin", "super_admin"])
+def test_foreign_agent_job_ids_cannot_bypass_scope(member_console, monkeypatch, role):
+    user, store, client = member_console
+    user.update(role_key=role, is_platform_admin=role == "super_admin")
+    monkeypatch.setattr(web, "_workbench_backend", lambda *args: [
+        {"id": 72, "organization_key": "other-company"},
+    ])
+    store.heartbeat("foreign", name="foreign", owner_user_id=72, capabilities=["appeal"])
+    store.enqueue_job("foreign-job", "foreign", "appeal", {}, created_by_id=72)
+    assert client.post("/api/run_shensu/stop", json={"task_id": "foreign-job"}).status_code == 403
+    assert client.get("/api/run_shensu/foreign-job/events").status_code == 403
+    assert not store.get_job("foreign-job")["cancel_requested"]
+
+
+def test_super_admin_default_and_explicit_company_scope(member_console, monkeypatch):
+    user, store, client = member_console
+    user.update(role_key="super_admin", is_platform_admin=True)
+    monkeypatch.setattr(web, "_workbench_backend", lambda *args: [
+        {"id": 72, "organization_key": "other-company"},
+    ])
+    monkeypatch.setattr(web, "_filter_store_rows_for_user", lambda data, **kw: data)
+    store.heartbeat("own", name="own", owner_user_id=71, capabilities=["appeal"])
+    store.heartbeat("foreign", name="foreign", owner_user_id=72, capabilities=["appeal"])
+    assert {a["agent_id"] for a in client.get("/api/execution-agents?organization_key=other-company").json["data"]["agents"]} == {"foreign"}
+    assert client.post("/api/run_shensu", json={"agent_id": "foreign", "execution_target": "agent"}).status_code == 403
+    tokens = {"rows": [{"id": 1, "organization_key": "wuhan-zeshun"}, {"id": 2, "organization_key": "other-company"}]}
+    with web.app.test_request_context():
+        assert [r["id"] for r in web._filter_mercado_tokens_for_user(tokens)["rows"]] == [1]
+    with web.app.test_request_context("/?organization_key=other-company"):
+        assert [r["id"] for r in web._filter_mercado_tokens_for_user(tokens)["rows"]] == [2]
+
+
+def test_invalid_agent_token_cannot_fall_back_to_loopback(member_console, monkeypatch):
+    _, _, client = member_console
+    monkeypatch.setattr(web, "USE_DB_API", False)
+    assert client.get("/api/db/reputation/latest", headers={"X-Internal-Token": "agent:invalid"}).status_code == 403
+
+
+@pytest.fixture
+def scoped_worker(member_console, monkeypatch):
+    user, store, client = member_console
+    user.update(is_active=True, role_key="enterprise_admin")
+    monkeypatch.setattr(web, "USE_DB_API", False)
+    monkeypatch.setattr(web, "get_workbench_user", lambda **kw: user)
+    monkeypatch.setattr(web.bit_db_api, "list_mercado_store_tokens", lambda: {"rows": [
+        {"id": 1, "organization_key": "wuhan-zeshun", "display_name": "own shop"},
+        {"id": 2, "organization_key": "other-company", "display_name": "foreign shop"},
+    ]})
+    store.heartbeat("worker", name="worker", owner_user_id=71, capabilities=["daily_task", "ai_weight_price"])
+    store.enqueue_job("worker-job", "worker", "daily_task", {}, created_by_id=71)
+    store.claim_job("worker")
+    headers = {"X-Internal-Token": web.create_local_agent_credential("worker", 71)}
+    return user, store, client, headers
+
+
+def test_worker_tokens_and_rows_are_company_scoped(scoped_worker, monkeypatch):
+    _, _, client, headers = scoped_worker
+    response = client.get("/api/db/mercado-tokens?organization_key=other-company", headers=headers)
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json["data"]["rows"]] == [1]
+    monkeypatch.setattr(web, "db_get_latest_reputation_info", lambda: {"rows": [
+        {"店铺名": "own shop"}, {"店铺名": "foreign shop"}], "total": 2})
+    response = client.get("/api/db/reputation/latest", headers=headers)
+    assert response.status_code == 200
+    assert response.json["data"]["rows"] == [{"店铺名": "own shop"}]
+
+
+@pytest.mark.parametrize("path,payload", [
+    ("/api/db/official-infractions/live", {"targets": [{"token_id": 2}]}),
+    ("/api/db/ai-appeal-product-contexts", {"shop_name": "foreign shop", "product_ids": []}),
+    ("/api/db/ai-appeal-records", {"record": {"shop_name": "foreign shop"}}),
+])
+def test_worker_cannot_write_foreign_company(scoped_worker, path, payload):
+    _, _, client, headers = scoped_worker
+    assert client.post(path, json=payload, headers=headers).status_code == 403
+
+
+def test_worker_actor_is_bound_to_active_job(scoped_worker, monkeypatch):
+    _, store, client, headers = scoped_worker
+    store.append_event("worker-job", "worker", status="success")
+    store.enqueue_job("awp-job", "worker", "ai_weight_price", {}, created_by_id=71)
+    store.claim_job("worker")
+    for actor in ({"id": 72}, None):
+        assert client.post("/api/db/ai-weight-price/store", headers=headers,
+            json={"method": "state", "args": ["probe"], "actor": actor}).status_code == 403
+    seen = []
+    monkeypatch.setattr(web.ai_weight_price_service.store, "state", lambda *args: seen.append(web.ai_weight_price_service.store.actor()) or {})
+    response = client.post("/api/db/ai-weight-price/store", headers=headers,
+        json={"method": "state", "args": ["probe"], "actor": {"id": 71, "view_all": True}})
+    assert response.status_code == 200
+    assert seen[0]["id"] == 71 and seen[0]["view_all"] is False
+
+
+def test_store_rows_do_not_join_companies_by_salesperson(member_console, monkeypatch):
+    user, _, _ = member_console
+    user.update(role_key="enterprise_admin")
+    monkeypatch.setattr(web.bit_db_api, "list_mercado_store_tokens", lambda: {"rows": [
+        {"id": 1, "organization_key": "wuhan-zeshun", "display_name": "own", "site_settings": [{"salesperson": "same"}]},
+        {"id": 2, "organization_key": "other-company", "display_name": "foreign", "site_settings": [{"salesperson": "same"}]},
+    ]})
+    rows = [{"store_name": "own"}, {"store_name": "foreign", "salesperson": "same"},
+            {"salesperson": "same"}, {"store_name": "own", "token_id": 2},
+            {"store_name": "own", "organization_key": "other-company"}]
+    with web.app.test_request_context():
+        assert web._filter_store_rows_for_user({"rows": rows})["rows"] == [{"store_name": "own"}]
+
+
+def test_worker_cannot_read_another_accounts_live_job(scoped_worker, monkeypatch):
+    _, _, client, headers = scoped_worker
+    monkeypatch.setattr(web, "_live_infraction_jobs", {
+        "other-live": {"job_id": "other-live", "status": "running", "_agent_scope": 72},
+        "own-live": {"job_id": "own-live", "status": "running", "_agent_scope": 71},
+    })
+    assert client.get("/api/db/official-infractions/live/jobs/other-live", headers=headers).status_code == 403
+    assert client.get("/api/db/official-infractions/live/jobs/own-live", headers=headers).status_code == 200
+
+
+def test_worker_can_write_own_company_record(scoped_worker, monkeypatch):
+    _, _, client, headers = scoped_worker
+    records = []
+    monkeypatch.setattr(web, "db_insert_ai_appeal_record", lambda record: records.append(record) or 1)
+    response = client.post("/api/db/ai-appeal-records", headers=headers,
+                           json={"record": {"shop_name": "own shop"}})
+    assert response.status_code == 200
+    assert records == [{"shop_name": "own shop"}]
+
+
+def test_invalid_worker_company_cannot_use_data(scoped_worker):
+    user, _, client, headers = scoped_worker
+    user["is_active"] = False
+    assert client.get("/api/db/mercado-tokens", headers=headers).status_code == 403

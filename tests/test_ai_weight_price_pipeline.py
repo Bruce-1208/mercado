@@ -210,7 +210,7 @@ def test_waiting_current_item_never_processes_next_item(tmp_path, monkeypatch):
 def test_failed_single_retry_keeps_original_scope_barrier(tmp_path, monkeypatch):
     service, browser, config = setup(tmp_path, monkeypatch)
     add_task(service)
-    service.store.exception("1", "需人工核对")
+    service.store.exception("1", "需要完成人机验证")
     service.store.set_state("pipeline_current", {"scope": config["run_scope"], "task_id": "1"})
     with pytest.raises(ItemBlocked):
         service.complete_one("1", browser, PageModel(), validate({}))

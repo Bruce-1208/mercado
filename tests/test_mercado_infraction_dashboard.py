@@ -1054,3 +1054,24 @@ def test_dashboard_template_supports_store_detail_drilldown():
 
 # These route tests mock business data; they must not authenticate against production MySQL.
 pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user")
+
+
+def test_official_deadlines_always_normalize_to_beijing(monkeypatch):
+    import os
+    import time
+    previous = os.environ.get('TZ')
+    try:
+        for host_timezone in ('UTC', 'America/Mexico_City', 'Asia/Shanghai'):
+            monkeypatch.setenv('TZ', host_timezone)
+            if hasattr(time, 'tzset'):
+                time.tzset()
+            assert sync._mysql_datetime('2026-10-03T18:00:00-0400') == '2026-10-04 06:00:00'
+            assert sync._mysql_datetime('2026-10-03T22:00:00Z') == '2026-10-04 06:00:00'
+            assert sync._mysql_datetime('2026-10-04 06:00:00') == '2026-10-04 06:00:00'
+    finally:
+        if previous is None:
+            os.environ.pop('TZ', None)
+        else:
+            os.environ['TZ'] = previous
+        if hasattr(time, 'tzset'):
+            time.tzset()

@@ -197,8 +197,7 @@ def process(service, task, browser, models, config):
         store.log(str(exc), key, "ERROR")
         raise CircuitOpen(str(exc) + "；已暂停，保留当前商品，不修改ERP价格、重量或审核状态") from exc
     except SearchTimeout as exc:
-        save_result(service, store.get(key), browser, config, "risk",
-                    str(exc) + "；未获得可回填结果，标记价格异常", {})
+        store.exception(key, "1688搜索超时", str(exc))
     except NoExactMatch as exc:
         save_result(service, store.get(key), browser, config, "blocked",
                     "匹配失败：" + str(exc) + "；未获得可回填结果，标记价格异常", {})
@@ -206,8 +205,7 @@ def process(service, task, browser, models, config):
         raise
     except Exception as exc:
         store.log("主图核重核价执行异常：" + str(exc), key, "ERROR")
-        save_result(service, store.get(key), browser, config, "risk",
-                    "核重核价未获得可回填结果，标记价格异常：" + str(exc), {})
+        store.exception(key, "主图核重核价执行异常", str(exc))
     finally:
         if hasattr(browser, "release_search"):
             browser.release_search(task)

@@ -649,8 +649,8 @@ function renderPurchaseTrackingStatus(state = {}) {
     ? `任务 ${state.request_id.slice(0, 8)}… · ${purchasePlatformLabels[state.platform] || state.platform} · ${total} 单`
     : "";
   purchaseTaskStatus.textContent = state.message || (running ? "同步进行中…" : "等待同步任务");
-  purchaseSummary.textContent = `成功 ${synced} · 待发货 ${pending} · 跳过 ${skipped} · 失败 ${failed}`;
-  const statusLabels = {synced: "已同步", pending: "待发货", not_found: "未找到", failed: "失败"};
+  purchaseSummary.textContent = `成功 ${synced} · 未发货 ${pending} · 跳过 ${skipped} · 失败 ${failed}`;
+  const statusLabels = {synced: "已同步", pending: "未发货", not_found: "未找到", failed: "失败"};
   purchaseResults.innerHTML = (state.results || []).map(item => `
     <div class="purchase-result">
       <strong>${escapeHtml(item.purchase_order || item.order_id || "-")}</strong>
@@ -984,7 +984,10 @@ function renderWeightPriceStatus(state = {}) {
     : confirmed
       ? `已连接 ${state.computer || "本机"}，智赢登录已确认；1688登录将在执行时检查。`
       : "请先打开智赢登录页面，完成登录后点击确认。";
-  weightPriceTaskStatus.textContent = `${statusLabel} · ${run.message || state.run_error || "可设置范围后启动"}`;
+  const elapsed = Math.max(1, Number(run.finished_at || Date.now() / 1000) - Number(run.started_at || Date.now() / 1000));
+  const rate = run.started_at ? ` · 已完成 ${run.processed_items || 0} 件，成功 ${run.success_items || 0} 件，处理 ${Math.round(Number(run.processed_items || 0) * 3600 / elapsed)} 件/小时，成功 ${Math.round(Number(run.success_items || 0) * 3600 / elapsed)} 件/小时（目标50–100）` : "";
+  const mail = state.circuit ? (state.pause_email?.sent ? " · 提醒邮件已发送" : state.pause_email?.error ? ` · ${state.pause_email.error}，自动重试中` : " · 暂停超过5分钟将发送邮件") : "";
+  weightPriceTaskStatus.textContent = `${statusLabel} · ${run.message || state.run_error || "可设置范围后启动"}${rate}${mail}`;
   weightPriceCurrentMeta.textContent = `当前产品 ${currentProductId} · 智赢分类 ${categoryName} · 执行终端 ${executionTerminal}`;
   weightPriceCurrentMeta.title = currentProduct.title || "";
   weightPriceSummary.textContent = `屏蔽 ${Number(counts.blocked || 0)} · 风险 ${Number(counts.risk || 0)} · 成功 ${Number(counts.success || 0)} · 异常 ${Number(counts.exception || 0)}`;

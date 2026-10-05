@@ -116,3 +116,24 @@ def test_browser_extension_notification_routes(monkeypatch):
         json={"event_type": "rate_limit", "message": "HTTP 429"},
     ).status_code == 200
     assert calls == ["save", "test", "alert"]
+
+
+def test_incident_receipt_survives_process_cache_reset(tmp_path):
+    path = tmp_path / 'mail.json'
+    mail.save_settings(7, {
+        'enabled': True, 'sender_email': 'notice@qq.com', 'receiver_email': 'ops@example.com',
+        'smtp_host': 'smtp.qq.com', 'smtp_port': 465, 'smtp_security': 'ssl', 'smtp_password': 'code',
+    }, 'secret', path)
+    event = {'event_type': 'task_blocked', 'source': 'AI核重核价', 'message': '验证码', 'incident_id': 'run-unique-pause-1'}
+    FakeSMTP.messages.clear()
+    assert mail.send_alert(7, event, 'secret', path, smtp_ssl=FakeSMTP)['sent']
+    mail._recent.clear()
+    assert mail.send_alert(7, event, 'secret', path, smtp_ssl=FakeSMTP)['deduplicated']
+    assert len(FakeSMTP.messages) == 1
+    assert mail.send_alert(7, {**event, 'incident_id': 'run-unique-pause-2'}, 'secret', path, smtp_ssl=FakeSMTP)['sent']
+    assert len(FakeSMTP.messages) == 2
+
+
+def test_awp_requires_enabled_email(tmp_path):
+    with pytest.raises(ValueError, match='必须启用邮件'):
+        mail.require_alert_email(7, 'secret', tmp_path / 'missing.json')

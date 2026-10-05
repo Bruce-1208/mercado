@@ -54,7 +54,7 @@ class Service:
         return result
 
     def _migrate_browser_attention_pause(self):
-        """Expose old login-redirect exceptions through the resumable pause UI."""
+        """Expose legacy human-verification exceptions through the pause UI."""
         pause = self.store.state("circuit")
         if pause:
             reason = str(pause.get("reason") or "") if isinstance(pause, dict) else str(pause)
@@ -72,27 +72,6 @@ class Service:
                                current, "WARNING")
             return
         run = self.store.state("run", {}) or {}
-        legacy_pagination_failure = "翻页后商品未变化" in str(
-            run.get("message") or self.store.state("run_error") or ""
-        )
-        if run.get("outcome") == "failed" and legacy_pagination_failure:
-            reason = (
-                "智赢翻页后商品列表未及时刷新；旧版已中断的任务"
-                "已转为可恢复暂停，请点击继续原任务"
-            )
-            self.store.set_state("circuit", {
-                "kind": "collection_page_stale", "reason": reason, "at": time.time(),
-            })
-            self.store.set_state("run_error", None)
-            self.store.set_state("run", {
-                **run, "outcome": "blocked", "message": reason,
-            })
-            current = (self.store.state("pipeline_current", {}) or {}).get("task_id")
-            self.store.log(
-                "已将旧版智赢翻页误中断迁移为可恢复暂停，原批次进度已保留",
-                current, "WARNING",
-            )
-            return
         current = self.store.state("pipeline_current", {}) or {}
         key = current.get("task_id")
         if not key:
@@ -102,10 +81,10 @@ class Service:
         except KeyError:
             return
         detail = "：".join(str(task.get(k) or "") for k in ("exception_reason", "exception_detail"))
-        if task["status"] == "exception" and re.search(r"login\.taobao|人机|验证码|需要登录|登录页|登录状态", detail, re.I):
-            reason = "1688需要登录或人机审核；请在可见Edge中处理后返回控制台继续执行"
+        if task["status"] == "exception" and self._needs_human_attention(detail):
+            reason = detail
             self.store.set_state("circuit", {"kind": "browser_attention", "reason": reason, "at": time.time()})
-            self.store.log("已将旧版1688登录跳转异常迁移为可恢复暂停；当前商品和原始异常记录已保留", key, "WARNING")
+            self.store.log("已将旧版人机验证异常迁移为可恢复暂停；当前商品和原始异常记录已保留", key, "WARNING")
 
     def lock(self):
         return InterProcessLock(self.lock_key, owner="AI核重核价")
@@ -174,6 +153,7 @@ class Service:
                 "circuit": self.store.state("circuit"), "run": self.store.state("run", {}),
                 "current_product": self._current_product_status(run),
                 "run_error": self.store.state("run_error"), "action_error": self.store.state("action_error"),
+                "pause_email": self.store.state("pause_email", {}),
                 "storage": self.store.storage_description, "collection": self.store.state("collection"),
                 "login": self.store.state("login", {"confirmed": False}),
                 "selection": self.store.state("run_selection"),
@@ -522,7 +502,9 @@ class Service:
                                    and not task.get("write_intent") and not task.get("conversation_url"))
         timed_out_search = (task.get("status") == "skipped"
                             and re.search(r"搜索超时|未返回搜索结果", task.get("skip_reason", "")))
-        safe_exception = task.get("status") == "exception" and no_external_side_effect
+        current = self.store.state("pipeline_current", {}) or {}
+        safe_exception = (task.get("status") == "exception" and no_external_side_effect
+                          and current.get("task_id") != key)
         if not (timed_out_search or safe_exception):
             return False
         self._requeue(key)
@@ -542,15 +524,18 @@ class Service:
             maximum = int(previous.get("max_items") or 1)
             remaining = max(1, maximum - int(previous.get("processed_items") or 0))
             current = self.store.state("pipeline_current", {}) or {}
-            current_id = current.get("task_id")
+            current_id = current.get("task_id") or previous.get("current_task_id") or task_id
             if current_id:
                 task = self.store.get(current_id)
-                old_error = "：".join(str(task.get(k) or "") for k in ("exception_reason", "exception_detail"))
-                # Compatibility for runs made before browser redirects were
-                # represented as a resumable pause.
-                if task["status"] == "exception" and re.search(r"login\.taobao|人机|验证码|需要登录|登录页|登录状态", old_error, re.I):
-                    self._requeue(current_id)
-                    self.store.log("旧版登录跳转异常已恢复为待处理，继续时重试当前商品", current_id, "WARNING")
+                pause_reason = pause.get("reason", "") if isinstance(pause, dict) else str(pause)
+                if self._needs_human_attention(pause_reason):
+                    if task["status"] == "exception":
+                        self._requeue(current_id, force_pending=True)
+                        self.store.log("人机验证已处理，当前异常商品已恢复为待处理", current_id)
+                elif task["status"] not in (*COMPLETED, "exception"):
+                    # Old builds paused ordinary errors without recording an
+                    # item exception. Let complete_one skip and count it once.
+                    self.store.exception(current_id, "旧版商品异常暂停", pause_reason)
             self.store.set_state("circuit", None)
             self.store.set_state("stop_requested", False)
             self.store.log("人工确认已处理暂停原因；从当前商品继续执行", current_id, "WARNING")
@@ -641,7 +626,8 @@ class Service:
                 if mode == "pipeline":
                     if config["workflow_mode"] == "image_first":
                         def process_visible_item(key):
-                            self._requeue_transient_collection_failure(key)
+                            if not self.store.has_run_item(config.get("run_id"), key):
+                                self._requeue_transient_collection_failure(key)
                             self.complete_one(key, browser, models, config)
 
                         current = self.store.state("pipeline_current", {}) or {}
@@ -687,8 +673,14 @@ class Service:
         except RunLimitReached:
             message = self.completion_message("达到本次数量上限，已停止；可导出本次Excel")
         except CircuitOpen as exc:
-            self.circuit(exc)
-            outcome, message = "blocked", "运行等待人工处理，当前商品未跳过：" + str(exc)
+            if self._needs_human_attention(str(exc)):
+                self.circuit(exc)
+                outcome, message = "blocked", "运行等待完成人机验证，当前商品未跳过：" + str(exc)
+            else:
+                # A collection/browser failure without an identified product
+                # cannot safely advance a card cursor. End without a human gate.
+                outcome, message = "failed", "列表或浏览器无法继续运行：" + str(exc)
+                self.store.set_state("run_error", str(exc))
         except ItemBlocked as exc:
             outcome, message = "blocked", str(exc)
         except Stopped:
@@ -756,15 +748,9 @@ class Service:
 
     @staticmethod
     def _needs_human_attention(reason):
-        """Return whether an item error needs the operator's browser attention.
-
-        Browser challenge/login errors and an uncertain ERP write must retain
-        the current item and pause the serial pipeline. A save followed by a
-        mismatched read-back means the external side effect is unknown; it is
-        unsafe to mark that item skipped and continue writing later products.
-        """
+        """Only explicit human-verification challenges pause a serial batch."""
         return bool(re.search(
-            r"登录|未登录|登录页|登录状态|人机|验证码|安全验证|风控|人工|待复核|请核对|不确定|外部写入结果不确定|passport|login(?:\.taobao)?",
+            r"人机|验证码|滑块|滑动验证|安全验证|captcha|\bchallenge\b",
             str(reason or ""), re.I))
 
     def _auto_skip_exception(self, key, reason):
@@ -819,6 +805,13 @@ class Service:
         self.store.record_run_item(run_id, key, execution_result="执行中")
         try:
             self._complete_one(key, browser, models, config)
+        except (Stopped, RunLimitReached, ItemBlocked):
+            raise
+        except Exception as exc:
+            if self._needs_human_attention(str(exc)):
+                raise CircuitOpen(str(exc)) from exc
+            self.store.exception(key, "商品处理异常", str(exc))
+            self._auto_skip_exception(key, str(exc))
         finally:
             execution_finished_at = time.time()
             self.store.update(key, execution_started_at=execution_started_at,

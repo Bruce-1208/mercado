@@ -42,15 +42,15 @@ test('a completed Mercado listing is pending on Amazon, without Mercado copy or 
   const markup = nodes.get('ai-original-grid').innerHTML;
   assert.match(markup, /本平台尚无草稿/);
   assert.doesNotMatch(markup, /Mercado only|mercado-only.jpg|净收益|CBT 类目/);
-  assert.equal(nodes.get('ai-original-count-generated').textContent, 0);
-  assert.equal(nodes.get('ai-original-count-pending').textContent, 1);
+  assert.equal(nodes.get('ai-original-count-approved').textContent, 0);
+  assert.equal(nodes.get('ai-original-count-unreviewed').textContent, 1);
 });
 
 test('platform status filtering and select all use independent draft statuses', () => {
   const {run} = setup('yandex');
   run(`aiOriginalRows.push({id: 2, ai_status: 'pending', marketplace_listings: {yandex: {status:'completed',title:'Товар'}}});
     aiOriginalSelected.clear();
-    document.getElementById('ai-original-status-filter').value = 'completed';
+    document.getElementById('ai-original-status-filter').value = 'incomplete';
     toggleAllAiOriginalProducts(true);`);
   assert.deepEqual(Array.from(run('[...aiOriginalSelected]')), [2]);
   assert.equal(run('aiOriginalPlatformStatus(aiOriginalRows[0], "mercadolibre")'), 'completed');

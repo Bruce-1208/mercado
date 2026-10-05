@@ -3445,7 +3445,7 @@ def list_orders(
     country="", status="", salesperson="", group_name="", search="", start_date="", end_date="",
     origin="", freight_variance="", page=1, page_size=200, store_ids=None, salespeople=None,
     freight_checked_from="", freight_checked_to="", remark_search="",
-    sort_by="ordered_at", sort_dir="desc",
+    sort_by="ordered_at", sort_dir="desc", allowed_store_ids=None,
 ):
     """分页查询当前已授权店铺的 Token 同步订单。"""
     page = max(1, int(page or 1))
@@ -3469,7 +3469,7 @@ def list_orders(
         freight_checked_from, freight_checked_to,
     )
     origin = str(origin or "").strip().lower()
-    if origin not in ("", "token", "zying"):
+    if origin not in ("", "token", "zying", "yandex"):
         origin = ""
     freight_variance = str(freight_variance or "").strip().lower()
     if freight_variance not in (
@@ -3484,7 +3484,7 @@ def list_orders(
             store_id = int(value)
         except (TypeError, ValueError):
             continue
-        if store_id > 0 and store_id not in normalized_store_ids:
+        if store_id != 0 and store_id not in normalized_store_ids:
             normalized_store_ids.append(store_id)
     if len(normalized_store_ids) > 200:
         raise ValueError("单次最多筛选 200 个店铺")
@@ -3635,6 +3635,8 @@ def list_orders(
 
             _ensure_mercado_synced_orders_table(cursor)
             _ensure_mercado_store_tokens_table(cursor)
+            from bit.yandex_order_sync import store_source_sql
+            unified_stores = store_source_sql(cursor)
             _ensure_mercado_store_site_settings_table(cursor)
             ensure_profitability_cache_tables(cursor)
             ensure_store_link_table(cursor)
@@ -3675,7 +3677,7 @@ def list_orders(
             )
             cny_rate_sql = "COALESCE(cny_daily_rate.`rate`, cny_current_rate.`rate`)"
             usd_amount_sql = f"synced.`total_amount` * ({rate_sql})"
-            fee_usd_sql = "COALESCE(synced.`sale_fee`, 0)"
+            fee_usd_sql = "CASE WHEN synced.`site_id` = 'YANDEX' THEN NULL ELSE COALESCE(synced.`sale_fee`, 0) END"
             freight_local_sql = (
                 "CASE WHEN COALESCE(synced.`freight_source`, '') <> '' "
                 "OR COALESCE(synced.`freight`, 0) > 0 THEN synced.`freight` "
@@ -3711,7 +3713,8 @@ def list_orders(
                            DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR) AS `ordered_at`,
                            site_settings.`salesperson`,
                            site_settings.`discount_rate`, site_settings.`group_name`,
-                           synced.`shop_name`, '美客多 Token' AS `source`, 'token' AS `data_origin`,
+                           synced.`shop_name`, CASE WHEN synced.`site_id` = 'YANDEX' THEN 'Yandex Market' ELSE '美客多 Token' END AS `source`,
+                           CASE WHEN synced.`site_id` = 'YANDEX' THEN 'yandex' ELSE 'token' END AS `data_origin`,
                            COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, '$.pack_id')), 'null'), '')
                                AS `pack_id`,
                            {display_status_sql} AS `status`,
@@ -3727,7 +3730,7 @@ def list_orders(
                            DATE_ADD(synced.`shipping_deadline`, INTERVAL 8 HOUR)
                                AS `shipping_deadline`,
                            synced.`purchase_remark`, synced.`shipping_id` AS `platform_shipping_id`,
-                           ROUND({cny_income_sql} - COALESCE(synced.`purchase_cost`, 0), 2)
+                           CASE WHEN synced.`site_id` = 'YANDEX' THEN NULL ELSE ROUND({cny_income_sql} - COALESCE(synced.`purchase_cost`, 0), 2) END
                                AS `profit`,
                            synced.`product_id`, '' AS `category`, synced.`title`,
                            synced.`image_url`, synced.`quantity`,
@@ -3801,7 +3804,7 @@ def list_orders(
                            DATE_ADD(synced.`last_updated`, INTERVAL 8 HOUR) AS `last_updated`
                     FROM `tmp_mercado_order_page` AS selected_page
                     STRAIGHT_JOIN `mercado_synced_orders` AS synced ON synced.`order_id` = selected_page.`id`
-                    INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id`
+                    INNER JOIN {unified_stores} AS stores ON stores.`id` = synced.`token_id`
                     LEFT JOIN `mercado_store_site_settings` AS site_settings
                       ON site_settings.`token_id` = synced.`token_id`
                      AND site_settings.`site_id` = synced.`site_id`
@@ -3839,6 +3842,13 @@ def list_orders(
             if end_exclusive:
                 source_date_clauses.append("synced.`date_created` < %s")
                 source_date_params.append((end_exclusive - timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S"))
+            if allowed_store_ids is not None:
+                authorized_ids = sorted({int(value) for value in allowed_store_ids})
+                if authorized_ids:
+                    source_date_clauses.append("synced.`token_id` IN (" + ",".join(["%s"] * len(authorized_ids)) + ")")
+                    source_date_params.extend(authorized_ids)
+                else:
+                    source_date_clauses.append("1 = 0")
             source_date_where = " WHERE " + " AND ".join(source_date_clauses) if source_date_clauses else ""
             filter_source_sql = f"""
                 (
@@ -3847,7 +3857,7 @@ def list_orders(
                            synced.`token_id` AS `store_id`,
                            DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR) AS `ordered_at`,
                            site_settings.`salesperson`, site_settings.`group_name`,
-                           synced.`shop_name`, 'token' AS `data_origin`,
+                           synced.`shop_name`, CASE WHEN synced.`site_id` = 'YANDEX' THEN 'yandex' ELSE 'token' END AS `data_origin`,
                            {display_status_sql}
                                AS `status`,
                            {remark_column}
@@ -3858,7 +3868,7 @@ def list_orders(
                            synced.`currency_id` AS `platform_currency_id`,
                            COALESCE(synced.`total_amount`, 0) AS `total_amount`,
                            COALESCE(synced.`paid_amount`, 0) AS `paid_amount`,
-                           COALESCE(synced.`sale_fee`, 0) AS `sale_fee`,
+                           CASE WHEN synced.`site_id` = 'YANDEX' THEN NULL ELSE COALESCE(synced.`sale_fee`, 0) END AS `sale_fee`,
                            CASE WHEN COALESCE(synced.`freight_source`, '') <> ''
                                       OR COALESCE(synced.`freight`, 0) > 0
                                 THEN synced.`freight` ELSE NULL END AS `freight_local`,
@@ -3876,7 +3886,7 @@ def list_orders(
                            END AS `actual_freight_usd`,
                            COALESCE(synced.`purchase_cost`, 0) AS `purchase_cost`
                     FROM `mercado_synced_orders` AS synced
-                    INNER JOIN `mercado_store_tokens` AS stores
+                    INNER JOIN {unified_stores} AS stores
                       ON stores.`id` = synced.`token_id`
                     LEFT JOIN `mercado_store_site_settings` AS site_settings
                       ON site_settings.`token_id` = synced.`token_id`
@@ -3983,8 +3993,9 @@ def list_orders(
                 f"- ({summary_freight_sql}), 2)),0) AS `balance`, "
                 f"COALESCE(SUM(ROUND({summary_income_sql}, 2)),0) AS `income`, "
                 f"COALESCE(SUM(scoped.`purchase_cost`),0) AS `cost`, "
-                f"COALESCE(SUM(ROUND(({summary_income_sql}) - scoped.`purchase_cost`, 2)),0) "
+                f"COALESCE(SUM(CASE WHEN scoped.`data_origin` = 'yandex' THEN NULL ELSE ROUND(({summary_income_sql}) - scoped.`purchase_cost`, 2) END),0) "
                 f"AS `profit`, "
+                f"SUM(CASE WHEN scoped.`data_origin` = 'yandex' THEN 1 ELSE 0 END) AS `settlement_missing_count`, "
                 f"COALESCE(SUM(CASE WHEN scoped.`currency_id` = 'USD' "
                 f"OR ({summary_order_rate_sql}) IS NOT NULL OR daily_rate.`rate` IS NOT NULL "
                 f"OR current_rate.`rate` IS NOT NULL THEN 0 ELSE 1 END),0) "
@@ -4085,9 +4096,9 @@ def list_orders(
                 "amount": f"ROUND({summary_amount_sql}, 2)",
                 "balance": f"ROUND({summary_amount_sql} - scoped.`sale_fee` - ({summary_freight_sql}), 2)",
                 "cost": "scoped.`purchase_cost`",
-                "profit": f"ROUND({summary_income_sql} - scoped.`purchase_cost`, 2)",
+                "profit": f"CASE WHEN scoped.`data_origin` = 'yandex' THEN NULL ELSE ROUND({summary_income_sql} - scoped.`purchase_cost`, 2) END",
                 "profit_rate": (
-                    f"CASE WHEN ({summary_income_sql}) <> 0 "
+                    f"CASE WHEN scoped.`data_origin` = 'yandex' THEN NULL WHEN ({summary_income_sql}) <> 0 "
                     f"THEN (({summary_income_sql} - scoped.`purchase_cost`) / ({summary_income_sql})) "
                     "ELSE 0 END"
                 ),
@@ -4208,6 +4219,12 @@ def list_orders(
                     or (sku_items[0].get("product_url") if sku_items else "")
                     or _mercado_public_item_url(row.get("product_id"), row.get("site_id"))
                 )
+                if row.get("data_origin") == "yandex":
+                    row["product_url"] = ""
+                    row["paid_amount_usd"] = None
+                    row["fee"] = row["balance"] = row["profit"] = None
+                    for item in row["sku_items"]:
+                        item["product_url"] = ""
                 row["merged_order_ids"] = [order_id] if order_id else []
             return {
                 "rows": rows, "total": total, "page": page, "page_size": page_size,
@@ -4901,11 +4918,13 @@ def bulk_update_mercado_orders(
         with connection.cursor() as cursor:
             _ensure_mercado_synced_orders_table(cursor)
             _ensure_mercado_store_tokens_table(cursor)
+            from bit.yandex_order_sync import store_source_sql
+            unified_stores = store_source_sql(cursor)
             cursor.execute(
                 f"SELECT synced.`order_id`, synced.`token_id`, synced.`status`, synced.`workflow_status`, synced.`purchase_order`, "
                 f"synced.`purchase_tracking`, synced.`logistics_company`, synced.`purchase_cost`, "
                 f"synced.`order_remark`, synced.`purchase_remark` FROM `mercado_synced_orders` AS synced "
-                f"INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id` "
+                f"INNER JOIN {unified_stores} AS stores ON stores.`id` = synced.`token_id` "
                 f"WHERE synced.`order_id` IN ({placeholders}) FOR UPDATE",
                 normalized_ids,
             )
@@ -4924,7 +4943,7 @@ def bulk_update_mercado_orders(
             matched = len(before_rows)
             cursor.execute(
                 f"UPDATE `mercado_synced_orders` AS synced "
-                f"INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id` "
+                f"INNER JOIN {unified_stores} AS stores ON stores.`id` = synced.`token_id` "
                 f"SET {', '.join(assignments)} "
                 f"WHERE synced.`order_id` IN ({placeholders})",
                 [*values, *normalized_ids],
@@ -5757,14 +5776,16 @@ def list_mercado_order_operation_logs(order_id, limit=100):
         with connection.cursor() as cursor:
             _ensure_mercado_synced_orders_table(cursor)
             _ensure_mercado_store_tokens_table(cursor)
+            from bit.yandex_order_sync import store_source_sql
+            unified_stores = store_source_sql(cursor)
             cursor.execute(
-                """
+                f"""
                 SELECT logs.`id`, logs.`order_id`, logs.`action_type`, logs.`action_label`,
                        logs.`operator_id`, logs.`operator_name`, logs.`changes_json`,
                        logs.`before_json`, logs.`after_json`, logs.`created_at`
                 FROM `mercado_order_operation_logs` AS logs
                 INNER JOIN `mercado_synced_orders` AS synced ON synced.`order_id` = logs.`order_id`
-                INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id`
+                INNER JOIN {unified_stores} AS stores ON stores.`id` = synced.`token_id`
                 WHERE logs.`order_id` = %s
                 ORDER BY logs.`created_at` DESC, logs.`id` DESC
                 LIMIT %s
@@ -5863,15 +5884,17 @@ def get_mercado_order_procurement(order_id):
         with connection.cursor() as cursor:
             _ensure_mercado_synced_orders_table(cursor)
             _ensure_mercado_store_tokens_table(cursor)
+            from bit.yandex_order_sync import store_source_sql
+            unified_stores = store_source_sql(cursor)
             cursor.execute(
-                """
+                f"""
                 SELECT synced.`order_id`, synced.`token_id`, synced.`shop_name`, synced.`product_id`,
                        synced.`title`, synced.`image_url`, synced.`purchase_order`,
                        synced.`purchase_tracking`, synced.`logistics_company`, synced.`purchase_cost`,
                        synced.`purchase_remark`, synced.`tracking_cache_json`,
                        synced.`tracking_checked_at`
                 FROM `mercado_synced_orders` AS synced
-                INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id`
+                INNER JOIN {unified_stores} AS stores ON stores.`id` = synced.`token_id`
                 WHERE synced.`order_id` = %s LIMIT 1
                 """,
                 (str(order_id),),

@@ -44,14 +44,14 @@ def claim(service, payload):
         return result
 
 
-def prepare(service, ids, target):
+def prepare(service, ids, target, *, list_mode="collection"):
     """Called under queue_lock before dispatch, so two clicks cannot start twice."""
     from bit.ai_weight_price_client import start
     if not isinstance(ids, list):
         raise ValueError('collection_item_ids 必须是数组')
     if service.store.state('collection_pending', None):
         raise ValueError('已有等待插件领取的任务，请先停止旧任务')
-    rows = repository.products(ids)
+    rows = repository.products(ids, list_mode=list_mode) if list_mode == "products" else repository.products(ids)
     start(service, {'max_items': len(rows)}, collection_products=rows)
     run = service.store.state('run', {})
     run.update(source_type='mercado_collection', execution_target=target,

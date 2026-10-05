@@ -411,8 +411,14 @@ def test_official_infraction_counts_rebuild_tuple_keys_from_http(monkeypatch):
 
 def test_live_infraction_collection_client_uses_server_route(monkeypatch):
     calls = []
+    timeout_calls = []
     monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
     monkeypatch.setattr(bit_db_api.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        bit_db_api,
+        "_live_infraction_job_timeout_seconds",
+        lambda: timeout_calls.append(True) or 1800,
+    )
 
     def request(method, path, **kwargs):
         calls.append((method, path, kwargs))
@@ -438,6 +444,7 @@ def test_live_infraction_collection_client_uses_server_route(monkeypatch):
     )
 
     assert result["data"] == []
+    assert timeout_calls == [True]
     assert calls == [
         (
             "POST",
@@ -457,6 +464,23 @@ def test_live_infraction_collection_client_uses_server_route(monkeypatch):
             {"timeout": 30},
         ),
     ]
+
+
+def test_live_infraction_job_timeout_is_configurable_and_bounded(monkeypatch):
+    monkeypatch.delenv("MERCADO_DAILY_INFRACTION_JOB_TIMEOUT_SECONDS", raising=False)
+    assert bit_db_api._live_infraction_job_timeout_seconds() == 1800
+
+    monkeypatch.setenv("MERCADO_DAILY_INFRACTION_JOB_TIMEOUT_SECONDS", "2400")
+    assert bit_db_api._live_infraction_job_timeout_seconds() == 2400
+
+    monkeypatch.setenv("MERCADO_DAILY_INFRACTION_JOB_TIMEOUT_SECONDS", "invalid")
+    assert bit_db_api._live_infraction_job_timeout_seconds() == 1800
+
+    monkeypatch.setenv("MERCADO_DAILY_INFRACTION_JOB_TIMEOUT_SECONDS", "60")
+    assert bit_db_api._live_infraction_job_timeout_seconds() == 960
+
+    monkeypatch.setenv("MERCADO_DAILY_INFRACTION_JOB_TIMEOUT_SECONDS", "9000")
+    assert bit_db_api._live_infraction_job_timeout_seconds() == 7200
 
 
 def test_live_infraction_collection_falls_back_during_rolling_deployment(monkeypatch):

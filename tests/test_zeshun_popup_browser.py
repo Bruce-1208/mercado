@@ -2053,6 +2053,11 @@ def test_purchase_tracking_direct_start_and_waiting_login_controls(browser):
     popup.evaluate("renderPurchaseTrackingStatus({request_id:'run-1', platform:'taobao', phase:'syncing', running:true, total:2})")
     assert popup.locator('#purchase-confirm-login').is_disabled()
     assert popup.locator('#purchase-open-login').is_disabled()
+    popup.evaluate("""renderPurchaseTrackingStatus({request_id:'run-1', platform:'1688', phase:'completed',
+        total:1, processed:1, pending:1, skipped:0,
+        results:[{purchase_order:'5127480146121008319', status:'pending', message:'未发货'}]})""")
+    assert popup.locator('#purchase-summary').inner_text() == '成功 0 · 未发货 1 · 跳过 0 · 失败 0'
+    assert popup.locator('#purchase-results').inner_text() == '5127480146121008319\n未发货'
     popup.close()
 
 
@@ -2072,4 +2077,38 @@ def test_purchase_tracking_does_not_read_another_orders_number(browser):
     result = page.evaluate("""async () => await new Promise(resolve => purchaseListener(
         {type:'FETCH_PURCHASE_TRACKING', purchaseOrder:'PO'}, null, resolve))""")
     assert result['status'] == 'not_found'
+    page.close()
+
+
+@pytest.mark.parametrize('order_html', [
+    '<p>订单号：5127480146121008319</p><p>等待卖家发货</p>',
+    '<header><span>订单编号：</span><span>5127480146121008319</span></header><p>待发货</p>',
+    '<p>订单号码：5127480146121008319</p>',
+])
+def test_purchase_tracking_recognizes_unshipped_1688_order_without_logistics_controls(browser, order_html):
+    page = browser.new_page()
+    page.route('https://trade.1688.com/**', lambda route: route.fulfill(content_type='text/html', body=f'''
+        <meta charset="utf-8"><input placeholder="订单号搜索">
+        <section>{order_html}</section>
+        <section><p>订单号：5127480146121008320</p><p>运单号：SF99999999</p><button>查看物流</button></section>
+    '''))
+    page.goto('https://trade.1688.com/order/buyer_order_list.htm')
+    page.evaluate("window.chrome={runtime:{onMessage:{addListener:fn=>window.purchaseListener=fn}}}")
+    page.add_script_tag(path=str(EXTENSION / 'purchase-tracking-content.js'))
+    result = page.evaluate("""async () => await new Promise(resolve => purchaseListener(
+        {type:'FETCH_PURCHASE_TRACKING', purchaseOrder:'5127480146121008319'}, null, resolve))""")
+    assert result == {'ok': True, 'status': 'pending', 'message': '未发货'}
+    page.close()
+
+
+def test_purchase_tracking_search_input_alone_does_not_prove_order_exists(browser):
+    page = browser.new_page()
+    page.set_content('''<input placeholder="订单号搜索" value="5127480146121008319">
+        <p>没有符合条件的订单</p>
+        <section><p>订单号：5127480146121008320</p><p>运单号：SF99999999</p><button>查看物流</button></section>''')
+    page.evaluate("window.chrome={runtime:{onMessage:{addListener:fn=>window.purchaseListener=fn}}}")
+    page.add_script_tag(path=str(EXTENSION / 'purchase-tracking-content.js'))
+    result = page.evaluate("""async () => await new Promise(resolve => purchaseListener(
+        {type:'FETCH_PURCHASE_TRACKING', purchaseOrder:'5127480146121008319'}, null, resolve))""")
+    assert result == {'ok': True, 'status': 'not_found', 'message': '平台未找到该采购订单'}
     page.close()

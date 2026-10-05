@@ -49,7 +49,7 @@
             const enhance = () => {
                 const cell = body.rows.length === 1 && body.rows[0].cells.length === 1 ? body.rows[0].cells[0] : null;
                 if (!cell || cell.colSpan < 2 || cell.querySelector('.zs-table-state')) return;
-                if (!cell.matches('.empty-state, .p1688-empty') && !cell.parentElement.matches('.order-loading-row')) return;
+                if (!cell.matches('.empty-state, .empty, .p1688-empty') && !cell.parentElement.matches('.order-loading-row')) return;
                 const content = document.createElement('div');
                 content.className = 'zs-table-state';
                 content.setAttribute('role', ['error', 'denied'].includes(body.dataset.uiState) ? 'alert' : 'status');

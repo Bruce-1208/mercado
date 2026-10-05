@@ -72,3 +72,34 @@ test('running batch prevents resubmission and completion refreshes collection li
   assert.equal(h.reloads(), 1);
   assert.match(h.element('collection-ai-status').textContent, /已完成/);
 });
+
+test('product list sends product ids, never collection ids', async () => {
+  let submitted;
+  const h = harness(async (url, init = {}) => {
+    if (url.includes('execution-agents')) return response({agents: [{agent_id: 'office', online: true, name: 'Office'}]});
+    if (init.method === 'POST') submitted = JSON.parse(init.body);
+    return response({running: false, message: 'queued'});
+  });
+  h.context.mercadoListMode = 'products';
+  await h.context.openMercadoCollectionAiCheck();
+  await h.context.startMercadoCollectionAiCheck();
+  assert.deepEqual(submitted.product_item_ids, [1, 2]);
+  assert.equal(submitted.collection_item_ids, undefined);
+});
+
+test('both list renderers display escaped successful and unsuccessful audit labels', () => {
+  const html = fs.readFileSync('bit/templates/index.html', 'utf8');
+  const start = html.indexOf('function mercadoWeightPriceTags(row)');
+  const end = html.indexOf('function renderMercadoCollectionRow(row)', start);
+  const context = vm.createContext({escapeHtml: value => String(value).replaceAll('<', '&lt;').replaceAll('>', '&gt;')});
+  vm.runInContext(html.slice(start, end), context);
+  assert.equal(context.mercadoWeightPriceTags({}), '');
+  assert.match(context.mercadoWeightPriceTags({ai_weight_price: {status: 'checked'}}), /核重核价成功/);
+  for (const status of ['failed', 'unmatched', 'missing_evidence', 'conflict', 'stopped']) {
+    const tag = context.mercadoWeightPriceTags({ai_weight_price: {status, reason: '<script>'}});
+    assert.match(tag, /核重核价未成功/);
+    assert.doesNotMatch(tag, /<script>/);
+  }
+  assert.ok(html.includes('<td>${mercadoWeightPriceTags(row)}'));
+  assert.ok(html.includes('const weightCheckTag = mercadoWeightPriceTags(row)'));
+});

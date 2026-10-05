@@ -1,0 +1,587 @@
+[
+  {
+    "page": "ai_weight_price",
+    "width": 1440,
+    "scroll": 1440,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "run-grid",
+        "cols": "639.812px 319.906px 319.906px"
+      },
+      {
+        "cls": "filters",
+        "cols": "none"
+      }
+    ]
+  },
+  {
+    "page": "ai_weight_price-dialog",
+    "width": 1440,
+    "rect": {
+      "x": 295,
+      "y": 45,
+      "width": 850,
+      "height": 810
+    },
+    "scroll": 1440
+  },
+  {
+    "page": "mercado_action_center",
+    "width": 1440,
+    "scroll": 1440,
+    "overflow": [],
+    "grid": []
+  },
+  {
+    "page": "mercado_action_center-dialog",
+    "width": 1440,
+    "rect": {
+      "x": 380,
+      "y": 223.53125,
+      "width": 680,
+      "height": 452.9375
+    },
+    "scroll": 1440
+  },
+  {
+    "page": "mercado_promotions",
+    "width": 1440,
+    "scroll": 1440,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "panel filters",
+        "cols": "159.25px 159.25px 159.25px 159.25px 159.25px 159.25px 159.25px 159.25px"
+      }
+    ]
+  },
+  {
+    "page": "mercado_promotions-menu",
+    "width": 1440,
+    "right": 361
+  },
+  {
+    "page": "mercado_promotions-dialog",
+    "width": 1440,
+    "rect": {
+      "x": 290,
+      "y": 353,
+      "width": 860,
+      "height": 194
+    },
+    "scroll": 1440
+  },
+  {
+    "page": "infraction_dashboard",
+    "width": 1440,
+    "scroll": 1440,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "filter-panel",
+        "cols": "278.141px 169.312px 169.312px 169.297px 169.312px 169.312px 169.312px"
+      }
+    ]
+  },
+  {
+    "page": "integration_settings",
+    "width": 1440,
+    "scroll": 1440,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "grid",
+        "cols": "558px 558px"
+      }
+    ]
+  },
+  {
+    "page": "employee_tasks",
+    "width": 1440,
+    "scroll": 1440,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "employee-form",
+        "cols": "547px 547px"
+      }
+    ]
+  },
+  {
+    "page": "login",
+    "width": 1440,
+    "scroll": 1440,
+    "overflow": [],
+    "grid": []
+  },
+  {
+    "page": "register",
+    "width": 1440,
+    "scroll": 1440,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "grid",
+        "cols": "248px 248px"
+      }
+    ]
+  },
+  {
+    "page": "ai_video_details",
+    "width": 1440,
+    "scroll": 1440,
+    "overflow": [],
+    "grid": []
+  },
+  {
+    "page": "ai_weight_price",
+    "width": 768,
+    "scroll": 768,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "run-grid",
+        "cols": "323.969px 161.984px 161.984px"
+      },
+      {
+        "cls": "filters",
+        "cols": "none"
+      }
+    ]
+  },
+  {
+    "page": "ai_weight_price-dialog",
+    "width": 768,
+    "rect": {
+      "x": 19.203125,
+      "y": 45,
+      "width": 729.59375,
+      "height": 810
+    },
+    "scroll": 768
+  },
+  {
+    "page": "mercado_action_center",
+    "width": 768,
+    "scroll": 768,
+    "overflow": [],
+    "grid": []
+  },
+  {
+    "page": "mercado_action_center-dialog",
+    "width": 768,
+    "rect": {
+      "x": 44,
+      "y": 223.53125,
+      "width": 680,
+      "height": 452.9375
+    },
+    "scroll": 768
+  },
+  {
+    "page": "mercado_promotions",
+    "width": 768,
+    "scroll": 768,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "panel filters",
+        "cols": "349px 349px"
+      }
+    ]
+  },
+  {
+    "page": "mercado_promotions-menu",
+    "width": 768,
+    "right": 349
+  },
+  {
+    "page": "mercado_promotions-dialog",
+    "width": 768,
+    "rect": {
+      "x": 16,
+      "y": 353,
+      "width": 736,
+      "height": 194
+    },
+    "scroll": 768
+  },
+  {
+    "page": "infraction_dashboard",
+    "width": 768,
+    "scroll": 768,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "filter-panel",
+        "cols": "223.328px 223.328px 223.328px"
+      }
+    ]
+  },
+  {
+    "page": "integration_settings",
+    "width": 768,
+    "scroll": 768,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "grid",
+        "cols": "336px 336px"
+      }
+    ]
+  },
+  {
+    "page": "employee_tasks",
+    "width": 768,
+    "scroll": 768,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "employee-form",
+        "cols": "331px 331px"
+      }
+    ]
+  },
+  {
+    "page": "login",
+    "width": 768,
+    "scroll": 768,
+    "overflow": [],
+    "grid": []
+  },
+  {
+    "page": "register",
+    "width": 768,
+    "scroll": 768,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "grid",
+        "cols": "248px 248px"
+      }
+    ]
+  },
+  {
+    "page": "ai_video_details",
+    "width": 768,
+    "scroll": 768,
+    "overflow": [],
+    "grid": []
+  },
+  {
+    "page": "ai_weight_price",
+    "width": 390,
+    "scroll": 390,
+    "overflow": [
+      {
+        "tag": "BUTTON",
+        "cls": "",
+        "id": "",
+        "right": 447
+      }
+    ],
+    "grid": [
+      {
+        "cls": "run-grid",
+        "cols": "160px 160px"
+      },
+      {
+        "cls": "filters",
+        "cols": "none"
+      }
+    ]
+  },
+  {
+    "page": "ai_weight_price-dialog",
+    "width": 390,
+    "rect": {
+      "x": 12,
+      "y": 12,
+      "width": 366,
+      "height": 876
+    },
+    "scroll": 390
+  },
+  {
+    "page": "mercado_action_center",
+    "width": 390,
+    "scroll": 390,
+    "overflow": [],
+    "grid": []
+  },
+  {
+    "page": "mercado_action_center-dialog",
+    "width": 390,
+    "rect": {
+      "x": 15.59375,
+      "y": 213.78125,
+      "width": 358.796875,
+      "height": 472.4375
+    },
+    "scroll": 390
+  },
+  {
+    "page": "mercado_promotions",
+    "width": 390,
+    "scroll": 390,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "panel filters",
+        "cols": "332px"
+      }
+    ]
+  },
+  {
+    "page": "mercado_promotions-menu",
+    "width": 390,
+    "right": 349
+  },
+  {
+    "page": "mercado_promotions-dialog",
+    "width": 390,
+    "rect": {
+      "x": 16,
+      "y": 353,
+      "width": 358,
+      "height": 194
+    },
+    "scroll": 390
+  },
+  {
+    "page": "infraction_dashboard",
+    "width": 390,
+    "scroll": 390,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "filter-panel",
+        "cols": "332px"
+      }
+    ]
+  },
+  {
+    "page": "integration_settings",
+    "width": 390,
+    "scroll": 390,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "grid",
+        "cols": "320px"
+      }
+    ]
+  },
+  {
+    "page": "employee_tasks",
+    "width": 390,
+    "scroll": 390,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "employee-form",
+        "cols": "336px"
+      }
+    ]
+  },
+  {
+    "page": "login",
+    "width": 390,
+    "scroll": 390,
+    "overflow": [],
+    "grid": []
+  },
+  {
+    "page": "register",
+    "width": 390,
+    "scroll": 390,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "grid",
+        "cols": "324px"
+      }
+    ]
+  },
+  {
+    "page": "ai_video_details",
+    "width": 390,
+    "scroll": 390,
+    "overflow": [],
+    "grid": []
+  },
+  {
+    "page": "ai_weight_price",
+    "width": 320,
+    "scroll": 320,
+    "overflow": [
+      {
+        "tag": "BUTTON",
+        "cls": "",
+        "id": "logs-tab",
+        "right": 338
+      },
+      {
+        "tag": "BUTTON",
+        "cls": "",
+        "id": "",
+        "right": 447
+      },
+      {
+        "tag": "svg",
+        "cls": {},
+        "id": "",
+        "right": 374
+      },
+      {
+        "tag": "circle",
+        "cls": {},
+        "id": "",
+        "right": 372
+      },
+      {
+        "tag": "path",
+        "cls": {},
+        "id": "",
+        "right": 368
+      }
+    ],
+    "grid": [
+      {
+        "cls": "run-grid",
+        "cols": "125px 125px"
+      },
+      {
+        "cls": "filters",
+        "cols": "none"
+      }
+    ]
+  },
+  {
+    "page": "ai_weight_price-dialog",
+    "width": 320,
+    "rect": {
+      "x": 12,
+      "y": 12,
+      "width": 296,
+      "height": 876
+    },
+    "scroll": 320
+  },
+  {
+    "page": "mercado_action_center",
+    "width": 320,
+    "scroll": 320,
+    "overflow": [],
+    "grid": []
+  },
+  {
+    "page": "mercado_action_center-dialog",
+    "width": 320,
+    "rect": {
+      "x": 12.796875,
+      "y": 157.03125,
+      "width": 294.390625,
+      "height": 585.9375
+    },
+    "scroll": 320
+  },
+  {
+    "page": "mercado_promotions",
+    "width": 320,
+    "scroll": 320,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "panel filters",
+        "cols": "262px"
+      }
+    ]
+  },
+  {
+    "page": "mercado_promotions-menu",
+    "width": 320,
+    "right": 349
+  },
+  {
+    "page": "mercado_promotions-dialog",
+    "width": 320,
+    "rect": {
+      "x": 16,
+      "y": 353,
+      "width": 288,
+      "height": 194
+    },
+    "scroll": 349
+  },
+  {
+    "page": "infraction_dashboard",
+    "width": 320,
+    "scroll": 320,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "filter-panel",
+        "cols": "262px"
+      }
+    ]
+  },
+  {
+    "page": "integration_settings",
+    "width": 320,
+    "scroll": 320,
+    "overflow": [
+      {
+        "tag": "A",
+        "cls": "",
+        "id": "",
+        "right": 388
+      }
+    ],
+    "grid": [
+      {
+        "cls": "grid",
+        "cols": "250px"
+      }
+    ]
+  },
+  {
+    "page": "employee_tasks",
+    "width": 320,
+    "scroll": 320,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "employee-form",
+        "cols": "266px"
+      }
+    ]
+  },
+  {
+    "page": "login",
+    "width": 320,
+    "scroll": 320,
+    "overflow": [],
+    "grid": []
+  },
+  {
+    "page": "register",
+    "width": 320,
+    "scroll": 320,
+    "overflow": [],
+    "grid": [
+      {
+        "cls": "grid",
+        "cols": "254px"
+      }
+    ]
+  },
+  {
+    "page": "ai_video_details",
+    "width": 320,
+    "scroll": 320,
+    "overflow": [],
+    "grid": []
+  }
+]

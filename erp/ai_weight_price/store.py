@@ -340,6 +340,20 @@ class Store:
                 except Exception:
                     logger.warning("AI核重核价数据库连接清理失败", exc_info=True)
 
+    @contextmanager
+    def read_snapshot(self):
+        """Reuse one connection for a status response instead of dozens of round trips."""
+        active = getattr(self._transaction_local, "db", None)
+        if active is not None:
+            yield
+            return
+        with self.connect() as db:
+            self._transaction_local.db = db
+            try:
+                yield
+            finally:
+                self._transaction_local.db = None
+
     @property
     def storage_description(self):
         if self.backend == "mysql":
@@ -762,6 +776,7 @@ class Store:
         return data
 
     def exception(self, key, reason, detail=""):
+        reason = str(reason)
         self.update(key, status="exception", exception_reason=reason, exception_detail=str(detail))
         self.log(reason + ("：" + str(detail) if detail else ""), key, "ERROR")
 
@@ -1049,6 +1064,10 @@ class RemoteStore:
             return base64.b64decode(value["__bytes__"])
         return value
 
+    def exception(self, key, reason, detail=""):
+        # Normalize before transport: exception objects are not JSON values.
+        return self._call("exception", key, str(reason), str(detail))
+
     def __getattr__(self, name):
         if name not in REMOTE_METHODS:
             raise AttributeError(name)
@@ -1316,6 +1335,10 @@ class AgentStore:
                          merchant.get("sent_at"), merchant.get("conversation_url"), merchant.get("message", "")))
             self.local.dirty = True
         return result
+
+    def exception(self, key, reason, detail=""):
+        # The outbox stores call arguments, not the normalized local result.
+        return self.__getattr__("exception")(key, str(reason), str(detail))
 
     def __getattr__(self, name):
         if name == "pending_sync_count":

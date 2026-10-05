@@ -31,6 +31,7 @@ function setup() {
       category_id: 'CBT123', title_es: 'Producto', title_pt: 'Produto',
       description_es: 'Descripcion', description_pt: 'Descricao',
       main_image_url: '/product-ai-white.jpg', weight_g: 100, net_proceeds_usd: 2,
+      package_length_cm: 10, package_width_cm: 10, package_height_cm: 10,
       weight_basis: 'ai_original_manual', ai_original: {
         attributes: [{id: 'MATERIAL', value_name: 'Plastic'}], image_generation_method: 'ai_image_edit'
       }};
@@ -44,15 +45,15 @@ function setup() {
   return {run, nodes, requests, confirmations};
 }
 
-test('mixed selection enables publishing and sends all approved products regardless of completeness', async () => {
+test('mixed selection enables publishing and sends only products with unified passed status', async () => {
   const {run, nodes, requests, confirmations} = setup();
   run('updateAiOriginalSelection(); syncAiOriginalWorkbenchSelection()');
   assert.equal(nodes.get('ai-original-publish').disabled, false);
-  assert.match(nodes.get('ai-original-selection-hint').textContent, /审核通过 2 件 · 将忽略 1 件/);
+  assert.match(nodes.get('ai-original-selection-hint').textContent, /通过 1 件 · 将忽略 2 件/);
   await run('publishSelectedAiOriginalProducts()');
   assert.equal(requests.length, 1);
-  assert.deepEqual(requests[0].body.product_item_ids, [1, 3]);
-  assert.match(confirmations[0], /自动忽略 1 件/);
+  assert.deepEqual(requests[0].body.product_item_ids, [1]);
+  assert.match(confirmations[0], /自动忽略 2 件/);
   assert.equal(run('aiOriginalSelected.size'), 3);
 });
 
@@ -92,12 +93,12 @@ test('a pending publish cannot be submitted twice or unlocked by presentation up
 test('status filtering removes hidden selections, including after switching back', () => {
   const {run, nodes} = setup();
   run(`aiOriginalRows[1].ai_status = 'pending';
-    document.getElementById('ai-original-status-filter').value = 'completed';
+    document.getElementById('ai-original-status-filter').value = 'approved';
     renderAiOriginalProducts();`);
-  assert.deepEqual(Array.from(run('[...aiOriginalSelected]')), [1, 3]);
-  assert.equal(nodes.get('ai-original-selection').textContent, '当前列表已选择 2 件');
+  assert.deepEqual(Array.from(run('[...aiOriginalSelected]')), [1]);
+  assert.equal(nodes.get('ai-original-selection').textContent, '当前列表已选择 1 件');
   run(`document.getElementById('ai-original-status-filter').value = ''; renderAiOriginalProducts()`);
-  assert.deepEqual(Array.from(run('[...aiOriginalSelected]')), [1, 3]);
+  assert.deepEqual(Array.from(run('[...aiOriginalSelected]')), [1]);
 });
 
 test('bulk approval saves current inputs before sending review status', async () => {
@@ -138,4 +139,36 @@ test('parameter save failure prevents bulk approval', async () => {
   assert.equal(requests.length, 0);
   assert.match(nodes.get('ai-original-task-status').textContent, /产品 1 参数保存失败/);
   assert.equal(run('aiOriginalReviewRunning'), false);
+});
+
+test('five page states do not alter the AI generation result', () => {
+  const {run} = setup();
+  assert.equal(run('aiOriginalProductStatus(aiOriginalRows[0])'), 'approved');
+  assert.equal(run('aiOriginalProductStatus(aiOriginalRows[1])'), 'unreviewed');
+  assert.equal(run('aiOriginalProductStatus(aiOriginalRows[2])'), 'incomplete');
+  for (const field of ['package_length_cm', 'package_width_cm', 'package_height_cm', 'weight_g', 'net_proceeds_usd']) {
+    run(`var original = aiOriginalRows[0]; var changed = {...original, ${field}: null};`);
+    assert.equal(run('aiOriginalProductStatus(changed)'), 'incomplete', field);
+    assert.equal(run('aiOriginalPlatformStatus(changed)'), 'completed', field);
+    assert.equal(run('aiOriginalListingChecks(changed).every(check => check.ok)'), true, field);
+  }
+  assert.equal(run(`aiOriginalProductStatus({...original, ai_status:'failed', weight_g:null})`), 'failed');
+  assert.equal(run(`aiOriginalProductStatus({...original, ai_status:'processing'})`), 'unreviewed');
+  for (const review of ['suspected', 'infringing', 'risk']) {
+    assert.equal(run(`aiOriginalProductStatus({...original, ai_status:'failed', review_status:'${review}'})`), 'suspected');
+  }
+});
+
+test('counts, filter and selection agree on the same five statuses', () => {
+  const {run, nodes} = setup();
+  run(`aiOriginalRows.push({...aiOriginalRows[0], id:4, ai_status:'failed'},
+      {...aiOriginalRows[0], id:5, review_status:'suspected'});
+    decorateAiOriginalWorkbench();`);
+  for (const status of ['approved', 'unreviewed', 'failed', 'incomplete', 'suspected']) {
+    assert.equal(nodes.get('ai-original-count-' + status).textContent, 1);
+    run(`document.getElementById('ai-original-status-filter').value = '${status}';
+      aiOriginalSelected.clear(); toggleAllAiOriginalProducts(true);`);
+    assert.equal(run('aiOriginalSelected.size'), 1);
+    assert.equal(run('aiOriginalProductStatus(aiOriginalRows.find(row => aiOriginalSelected.has(row.id)))'), status);
+  }
 });

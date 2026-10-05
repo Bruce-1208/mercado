@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-ui-version="2026-09-15-console-ui-v3">
+<html lang="zh-CN" data-ui-version="2026-10-04-responsive-ui">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1223,21 +1223,11 @@
             border-bottom: 1px solid #dbe8f8;
         }
 
-        .order-detail-weight-heading {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 10px;
-        }
-
-        .order-detail-weight-heading strong { color: #172033; font-size: 14px; }
-        .order-detail-weight-heading span { color: #667085; font-size: 11px; }
-
         .order-detail-weight-metrics {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 8px;
+            margin-top: 12px;
         }
 
         .order-detail-weight-metric {
@@ -1251,10 +1241,6 @@
         .order-detail-weight-metric strong { display: block; overflow-wrap: anywhere; }
         .order-detail-weight-metric span { color: #667085; font-size: 11px; }
         .order-detail-weight-metric strong { margin-top: 4px; color: #175cd3; font-size: 15px; }
-        .order-detail-weight-note { margin: 10px 0 0; color: #667085; font-size: 11px; line-height: 1.6; }
-        .order-detail-weight-breakdown { display: grid; gap: 5px; margin-top: 10px; }
-        .order-detail-weight-breakdown div { color: #475467; font-size: 11px; line-height: 1.5; }
-
         @media (max-width: 680px) {
             .order-detail-weight-metrics { grid-template-columns: 1fr; }
         }
@@ -1264,6 +1250,17 @@
             border-top: 1px solid #e7edf5;
             background: #f8fafc;
         }
+
+        .order-detail-weight-quote > summary,
+        .order-detail-log-section > summary {
+            cursor: pointer;
+            color: #344054;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .order-detail-log-heading { margin-top: 12px; }
+        #order-detail-action-message:empty { display: none; }
 
         .order-detail-log-heading,
         .order-detail-footer,
@@ -1348,6 +1345,8 @@
 
         .order-detail-footer > div {
             display: flex;
+            flex-wrap: wrap;
+            min-width: 0;
             gap: 8px;
         }
 
@@ -10042,15 +10041,15 @@
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='console-ui.css') }}?v=20260930-mobile1">
     <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-products.css') }}?v=20260923-batch-delete1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-workbench.css') }}?v=20260927-bulk-review">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-workbench.css') }}?v=20261005-unified-status">
     <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20261002-product-management">
     <link rel="stylesheet" href="{{ url_for('static', filename='weight-dimensions-records.css') }}?v=20260930-server-execution-1">
     <link rel="stylesheet" href="{{ url_for('static', filename='inventory-sku.css') }}?v=20260925-1">
     <script src="{{ url_for('static', filename='console-ui.js') }}?v=20260915"></script>
     <script src="{{ url_for('static', filename='copy-anywhere.js') }}?v=20260922"></script>
     <script src="{{ url_for('static', filename='appeal-polling.js') }}?v=20260922"></script>
-    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20261003-publish"></script>
-    <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20261003-publish"></script>
+    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20261005-unified-status"></script>
+    <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20261005-unified-status"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-publish.css') }}?v=20261003-publish">
     <script defer src="{{ url_for('static', filename='ai-original-publish.js') }}?v=20261003-publish"></script>
     <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20261002-ui"></script>
@@ -10197,11 +10196,12 @@
             .store-link-audit-more-wrap button { width: 100%; justify-content: center; }
         }
     </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261002-ui">
+    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261004-responsive">
     <link rel="stylesheet" href="{{ url_for('static', filename='console-navigation.css') }}?v=20261003">
     <link rel="stylesheet" href="{{ url_for('static', filename='console-workflow.css') }}?v=20261002-ui">
-    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261002-ui"></script>
+    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261004-responsive"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='infringement-knowledge.css') }}?v=20261003">
+    <link rel="stylesheet" href="{{ url_for('static', filename='console-layout.css') }}?v=20261004">
 </head>
 <body class="zs-console">
     <header class="topbar">
@@ -10402,10 +10402,11 @@
                 <div class="tab-heading">
                     <div>
                         <h2>订单管理</h2>
-                        <p>统一查看美客多多站点订单、采购进度、履约状态与利润表现</p>
+                        <p>统一查看美客多与 Yandex 订单、采购进度和履约状态</p>
                     </div>
                     <div class="order-heading-tools">
                         <span class="order-auto-state" id="order-auto-state">最近72小时 · 每15分钟；状态与实际运费每天更新</span>
+                        <button class="secondary" id="yandex-orders-full-sync" type="button" onclick="syncAllYandexOrders()">拉取 Yandex 全部订单</button><span id="yandex-orders-sync-status" role="status"></span>
                         <button class="primary" id="order-sync-open-button" type="button" onclick="openOrderSyncDialog()">拉取订单</button>
                         <button class="secondary" id="order-zying-sync-open" type="button" onclick="openZyingOrderSync()">智赢订单同步</button>
                         <button class="secondary order-export-button" id="order-export-button" type="button" onclick="exportOrders()">导出筛选结果</button>
@@ -10444,9 +10445,12 @@
                         <button class="order-market-button" type="button" data-country="哥伦比亚" data-code="CO" onclick="setOrderCountry('哥伦比亚')">哥伦比亚</button>
                         <button class="order-market-button" type="button" data-country="阿根廷" data-code="AR" onclick="setOrderCountry('阿根廷')">阿根廷</button>
                         <button class="order-market-button" type="button" data-country="乌拉圭" data-code="UY" onclick="setOrderCountry('乌拉圭')">乌拉圭</button>
+                        <button class="order-market-button" type="button" data-country="俄罗斯" data-code="RU" onclick="setOrderCountry('俄罗斯')">俄罗斯</button>
                         <div class="order-market-source" aria-label="订单数据来源">
                             <span class="order-origin-label">来源</span>
-                            <button class="order-origin-button active" type="button" data-origin="token">Token 自动拉取<strong id="order-origin-token-count">0</strong></button>
+                            <button class="order-origin-button active" type="button" data-origin="" onclick="setOrderOrigin('')">全部平台</button>
+                            <button class="order-origin-button" type="button" data-origin="token" onclick="setOrderOrigin('token')">美客多 Token 自动拉取<strong id="order-origin-token-count">0</strong></button>
+                            <button class="order-origin-button" type="button" data-origin="yandex" onclick="setOrderOrigin('yandex')">Yandex<strong id="order-origin-yandex-count">0</strong></button>
                         </div>
                     </div>
 
@@ -10615,17 +10619,17 @@
                         <button class="order-detail-close" type="button" aria-label="关闭" onclick="document.getElementById('order-detail-dialog').close()">×</button>
                     </div>
                     <div class="order-detail-content" id="order-detail-content"></div>
-                    <section class="order-detail-log-section">
+                    <details class="order-detail-log-section" id="order-detail-logs" ontoggle="if(this.open && !this.dataset.loaded) { this.dataset.loaded = '1'; loadOrderOperationLogs(orderDetailOrderId); }">
+                        <summary>操作日志</summary>
                         <div class="order-detail-log-heading">
-                            <div><strong>操作日志</strong><span>采购单的新增与修改均会保留修改前后内容</span></div>
                             <button class="secondary" type="button" onclick="loadOrderOperationLogs(orderDetailOrderId)">刷新日志</button>
                         </div>
                         <div class="order-detail-log-list" id="order-detail-log-list">
                             <div class="empty-state">正在加载操作日志…</div>
                         </div>
-                    </section>
+                    </details>
                     <div class="order-detail-footer">
-                        <span id="order-detail-action-message">可打印当前订单或维护采购信息</span>
+                        <span id="order-detail-action-message" role="status"></span>
                         <div>
                             <button class="secondary" type="button" onclick="openOrderRemarkEditor('detail')">备注</button><button class="secondary" type="button" onclick="openOrderStatusEditor('detail')">修改状态</button>
                             <button class="secondary" id="order-detail-outbound-button" type="button" onclick="advanceOrderOutbound('detail', false)" hidden>申请出库</button>
@@ -11139,9 +11143,11 @@
 
                 <div class="ai-original-metrics" aria-label="当前已加载商品概况">
                     <div class="ai-original-metric"><span>来源商品</span><strong id="ai-original-count-total">0</strong><small>当前加载的 1688 货源</small></div>
-                    <div class="ai-original-metric"><span id="ai-original-pending-label">待完善 / 审核</span><strong id="ai-original-count-pending">0</strong><small id="ai-original-pending-note">补齐资料后再提交审核</small></div>
-                    <div class="ai-original-metric"><span>AI 已生成</span><strong id="ai-original-count-generated">0</strong><small>文案与图片任务已完成</small></div>
-                    <div class="ai-original-metric"><span id="ai-original-ready-label">已完善并审核</span><strong id="ai-original-count-ready">0</strong><small id="ai-original-ready-note">上架时继续校验平台规则</small></div>
+                    <div class="ai-original-metric"><span>通过</span><strong id="ai-original-count-approved">0</strong><small>资料齐全且审核通过</small></div>
+                    <div class="ai-original-metric"><span>待审核</span><strong id="ai-original-count-unreviewed">0</strong><small>待执行生成或等待审核</small></div>
+                    <div class="ai-original-metric"><span>失败</span><strong id="ai-original-count-failed">0</strong><small>生成或处理出错</small></div>
+                    <div class="ai-original-metric"><span>待补充</span><strong id="ai-original-count-incomplete">0</strong><small>需补齐刊登或人工上架资料</small></div>
+                    <div class="ai-original-metric"><span>疑似侵权</span><strong id="ai-original-count-suspected">0</strong><small>需人工核实侵权风险</small></div>
                 </div>
                 <section class="panel ai-original-toolbar">
                     <div class="ai-original-steps">
@@ -11156,7 +11162,7 @@
                     <div class="ai-original-controls">
                         <label><span>搜索</span><input id="ai-original-search" type="search" placeholder="1688 编号或标题"></label>
                         <label><span>生成业务员</span><input id="ai-original-generator-filter" type="search" placeholder="输入业务员姓名"></label>
-                        <label><span>状态</span><select id="ai-original-status-filter"><option value="">全部</option><option value="pending">待处理</option><option value="processing">处理中</option><option value="completed">已完成</option><option value="failed">失败</option></select></label>
+                        <label><span>状态</span><select id="ai-original-status-filter"><option value="">全部</option><option value="approved">通过</option><option value="unreviewed">待审核</option><option value="failed">失败</option><option value="incomplete">待补充</option><option value="suspected">疑似侵权</option></select></label>
                         <button class="secondary" type="button" onclick="loadAiOriginalProducts()">刷新</button>
                     </div>
                     <div class="ai-original-ai-settings">
@@ -11178,7 +11184,7 @@
                         <label><input id="ai-original-select-all" type="checkbox" onchange="toggleAllAiOriginalProducts(this.checked)"> 全选当前结果</label>
                         <strong id="ai-original-selection">已选择 0 件</strong>
                         <button class="danger" id="ai-original-delete" type="button" onclick="deleteSelectedAiOriginalProducts()" disabled>删除所选</button>
-                        <label class="ai-original-bulk-review" data-ai-mercado-only><span>批量审核状态</span><select id="ai-original-review-status"><option value="">选择状态</option><option value="unreviewed">未审核</option><option value="approved">通过</option><option value="suspected">疑似风险</option><option value="infringing">侵权</option><option value="risk">待复核</option></select></label>
+                        <label class="ai-original-bulk-review" data-ai-mercado-only><span>批量审核状态</span><select id="ai-original-review-status"><option value="">选择审核结果</option><option value="unreviewed">待审核</option><option value="approved">通过</option><option value="suspected">疑似侵权</option></select></label>
                         <button class="secondary" id="ai-original-review-submit" data-ai-mercado-only type="button" onclick="updateSelectedAiOriginalReviewStatus()" disabled>更新审核状态</button>
                         <span id="ai-original-total">共 0 件</span>
                     </div>
@@ -11522,7 +11528,7 @@
                     </div>
                     <dialog id="collection-ai-dialog" class="order-sync-dialog">
                         <div class="order-sync-body">
-                            <h3>跟卖采集 · AI 核重核价</h3>
+                            <h3>美客多商品 · AI 核重核价</h3>
                             <p>在所选电脑的 Edge 中搜索1688同款，核对采购价和重量尺寸。请先在该 Edge 会话登录1688；遇到登录或验证提示时，处理后重新启动核查。</p>
                             <label>执行位置 <select id="collection-ai-target" onchange="syncCollectionAiTarget()">
                                 <option value="agent">本机 Agent（默认）</option>
@@ -11532,6 +11538,7 @@
                                 <select id="collection-ai-agent" aria-label="核查执行电脑"><option value="">正在读取在线 Agent</option></select>
                                 <button class="secondary" type="button" onclick="loadCollectionAiAgents()">刷新电脑</button>
                             </div>
+                            <button class="secondary" type="button" onclick="document.getElementById('collection-ai-dialog').close(); switchTab('ai-weight-price')">查看 AI 核重核价任务列表</button>
                             <p id="collection-ai-status" role="status">等待启动</p>
                             <div class="order-sync-footer-actions">
                                 <button class="primary" id="collection-ai-start" type="button" onclick="startMercadoCollectionAiCheck(this)">核查所选商品</button>
@@ -11553,9 +11560,9 @@
                                 </select>
                                 <button class="secondary" id="mercado-management-category-assign" type="button" onclick="assignSelectedMercadoCategory()" disabled>设置分类</button>
                             </div>
+                            <button class="secondary" type="button" onclick="openMercadoCollectionAiCheck()">AI 核重核价</button>
+                            <button class="primary" id="mercado-ai-copy-selected" type="button" onclick="startMercadoCollectionCopy()" disabled>批量修改标题和描述</button>
                             <div class="market-mode-actions" id="mercado-collection-only-actions">
-                                <button class="secondary" type="button" onclick="openMercadoCollectionAiCheck()">AI 核重核价</button>
-                                <button class="primary" id="mercado-ai-copy-selected" type="button" onclick="startMercadoCollectionCopy()" disabled>批量修改标题</button>
                                 <button class="primary" id="mercado-add-selected" type="button" onclick="addSelectedMercadoProducts()" disabled>加入产品列表</button>
                             </div>
                             <div class="market-mode-actions market-review-tools" id="mercado-product-review-actions" style="display:none">
@@ -12407,7 +12414,7 @@
                         </div>
 
                         <div class="field" id="daily-task-normal-options">
-                            <label>普通模式任务开关（可同时开启多个）</label>
+                            <label>申诉内容（两种任务模式均可选择）</label>
                             <div class="site-picker" id="daily-task-switches">
                                 <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="侵权" checked onchange="updateDailyTaskAppealSwitch(this)"><span>侵权</span></label>
                                 <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="禁限售" onchange="updateDailyTaskAppealSwitch(this)"><span>禁限售</span></label>
@@ -12419,7 +12426,7 @@
                             <small class="shop-search-hint">混合模式一轮：侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率；混合模式与自定义任务互斥。侵权任务不限制 Top N；每轮先实时遍历店铺授权中勾选的全部站点，再只执行本站点普通侵权数超过标准的站点。侵权和禁限售会拆成小批次，并按待申诉数量设置 1–5 级权重平滑轮转；数量越多，执行频率越高，低量站点也不会跳过。禁限售是独立任务，需单独开启后读取当前禁限售列表。</small>
                         </div>
                         <div class="field" id="daily-task-algorithm-hint" hidden>
-                            <small class="shop-search-hint">算法模式：每轮读取实时侵权及最新声誉数据，综合侵权数量、投诉率、延误率和取消率，优先执行高风险店铺和站点。按本轮综合分分配 1–5 级权重：侵权商品分批且不重复，声誉申诉每轮安排 1–5 次，低风险站点也会轮转。仍遵守下方执行标准及间隔。</small>
+                            <small class="shop-search-hint">算法模式：仅处理勾选的申诉内容，混合模式包含侵权、延误率、投诉和取消率。每轮读取对应实时数量及最新声誉数据，综合所选指标，优先执行高风险店铺和站点。按本轮综合分分配 1–5 级权重：侵权商品分批且不重复，声誉申诉每轮安排 1–5 次，低风险站点也会轮转。仍遵守下方执行标准及间隔。</small>
                         </div>
 
                         <div class="field">
@@ -14655,21 +14662,13 @@
             <div class="tab-page" id="tab-reputation">
                 <div class="tab-heading">
                     <h2>声誉数据</h2>
-                    <p>每天北京时间 14:00 自动更新 API 数据。“更新所选店铺”仅更新 API 数据；流量趋势和系统告警请勾选店铺后点击“浏览器同步”。系统告警显示该店铺 account-risk 页的最新一条，鼠标悬停查看全文。默认按各站点七天单量从高到低排序。账号状态按该站点最新 100 条链接判断：任一活跃则正常，全部不活跃则封禁；无链接或读取不完整时显示未确认，封禁天数未确认。七天单量和七天变化率由官方订单 API 自算；数值可能因取消单、退款、时区和平台内部统计口径而与后台略有差异。</p>
+                    <p>每天北京时间 14:00 自动更新 API 数据。“更新所选店铺”仅更新 API 数据；流量趋势和系统告警请勾选店铺后点击“浏览器同步”。系统告警包含该店铺 account-risk 页最新告警和店铺提醒，悬停或点击查看全文。默认按各站点七天单量从高到低排序。账号状态按该站点最新 50 条链接判断：任一链接活跃则显示活跃中，否则显示暂停状态；读取异常单独记录在同步错误中。七天单量和七天变化率由官方订单 API 自算；数值可能因取消单、退款、时区和平台内部统计口径而与后台略有差异。</p>
                 </div>
 
-                <section class="panel overview-notices">
-                    <div class="overview-section-heading">
-                        <div><span class="section-kicker">MERCADO LIBRE</span><h3>店铺提醒</h3></div>
-                        <div class="overview-notices-actions">
-                            <span class="heading-note" id="reputation-mercado-notices-status">按当前授权店铺汇总有效店铺提醒</span>
-                            <button class="text-button" id="reputation-mercado-notices-refresh" type="button" onclick="refreshReputationMercadoNotices(true)">刷新</button>
-                        </div>
-                    </div>
-                    <div class="notice-list" id="reputation-mercado-notices" aria-live="polite" aria-busy="true">
-                        <div class="notice-row notice-state"><span class="notice-tag">读取中</span><strong>正在获取店铺提醒…</strong></div>
-                    </div>
-                </section>
+                <div class="overview-notices-actions">
+                    <span class="heading-note" id="reputation-mercado-notices-status">店铺提醒显示在系统告警列</span>
+                    <button class="text-button" id="reputation-mercado-notices-refresh" type="button" onclick="refreshReputationMercadoNotices(true)">刷新店铺提醒</button>
+                </div>
 
                 <section class="panel infractions-panel">
                     <div class="infractions-header">
@@ -14774,7 +14773,7 @@
                                     <th>流量趋势</th>
                                     <th>系统告警</th>
                                     <th>更新时间</th>
-                                    <th>账号状态 / 封禁天数</th>
+                                    <th>账号状态</th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
@@ -16075,7 +16074,7 @@
         let orderCountry = "";
         let orderStatus = "";
         let orderGroupName = "";
-        let orderOrigin = "token";
+        let orderOrigin = "";
         let orderPage = 1;
         let orderPages = 1;
         let orderPageSize = 200;
@@ -16414,6 +16413,7 @@
             }).format(new Date());
         }
 
+        let reputationStoreNotices = {};
         const mercadoNoticesLoading = new Set();
         function refreshOverviewMercadoNotices(forceRefresh = false) {
             return refreshMercadoNotices("overview", forceRefresh);
@@ -16427,14 +16427,15 @@
             const list = document.getElementById(`${scope}-mercado-notices`);
             const status = document.getElementById(`${scope}-mercado-notices-status`);
             const refreshButton = document.getElementById(`${scope}-mercado-notices-refresh`);
-            if (!list || mercadoNoticesLoading.has(scope)) return;
+            if ((!list && !isStore) || mercadoNoticesLoading.has(scope)) return;
 
             mercadoNoticesLoading.add(scope);
-            list.setAttribute("aria-busy", "true");
+            list?.setAttribute("aria-busy", "true");
             if (refreshButton) refreshButton.disabled = true;
             if (status) status.textContent = `正在读取${label}…`;
 
             const renderState = (message) => {
+                if (!list) return;
                 list.replaceChildren();
                 const row = document.createElement("div");
                 row.className = "notice-row notice-state";
@@ -16476,6 +16477,11 @@
                             : "";
                         status.textContent = `${data.total_stores} 家授权店铺 · 有效店铺提醒${updateLabel}`;
                     }
+                }
+                if (isStore) {
+                    reputationStoreNotices = data.store_notices || {};
+                    renderLatestReputationRows();
+                    return;
                 }
                 if (!notices.length) {
                     renderState(data.failed_stores
@@ -16546,7 +16552,7 @@
                 renderState(error.message || `读取${label}失败，请稍后重试。`);
             } finally {
                 mercadoNoticesLoading.delete(scope);
-                list.setAttribute("aria-busy", "false");
+                list?.setAttribute("aria-busy", "false");
                 if (refreshButton) refreshButton.disabled = false;
             }
         }
@@ -17427,57 +17433,10 @@
             return orderMoney(value);
         }
 
-        function orderOriginalAmount(row, field = "amount_local", currencyField = "currency_id") {
-            const currency = String(row?.[currencyField] || row?.currency_id || "USD").toUpperCase();
-            const value = row?.[field];
-            if (value === null || value === undefined || String(value).trim() === "") return `${currency} —`;
-            return `${currency} ${orderNumberValue(value).toLocaleString("zh-CN", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            })}`;
-        }
-
         function orderFreight(row) {
             return row?.freight_missing || row?.freight === null || row?.freight === undefined
                 ? "运费待同步"
                 : orderAmount(row.freight);
-        }
-
-        function orderExchangeDescription(row) {
-            const currency = String(row?.currency_id || "USD").toUpperCase();
-            if (row?.exchange_rate_missing || row?.exchange_rate_match === "missing") {
-                return `${orderOriginalAmount(row)} · 美元汇率待同步`;
-            }
-            const rate = Number(row?.exchange_rate_to_usd);
-            const rateText = Number.isFinite(rate)
-                ? rate.toLocaleString("zh-CN", {minimumFractionDigits: 2, maximumFractionDigits: 8})
-                : "—";
-            if (currency === "USD") return `${orderOriginalAmount(row)} · 无需换算`;
-            const matchLabels = {
-                order_implied: "订单成交汇率",
-                order_date: "当日汇率",
-                nearest_previous: "最近有效日汇率",
-                current_fallback: "当前汇率回退",
-            };
-            const label = matchLabels[row?.exchange_rate_match] || "美元汇率";
-            return `${orderOriginalAmount(row)} × ${rateText} · ${row?.exchange_rate_date || "日期未知"} ${label}`;
-        }
-
-        function orderCnyExchangeDescription(row) {
-            if (row?.cny_exchange_rate_missing || row?.cny_exchange_rate_match === "missing") {
-                return "USD/CNY 汇率待同步";
-            }
-            const rate = Number(row?.exchange_rate_usd_to_cny);
-            const rateText = Number.isFinite(rate)
-                ? rate.toLocaleString("zh-CN", {minimumFractionDigits: 4, maximumFractionDigits: 6})
-                : "—";
-            const matchLabels = {
-                order_date: "当日参考汇率",
-                nearest_previous: "最近工作日参考汇率",
-                current_fallback: "当前汇率回退",
-            };
-            const label = matchLabels[row?.cny_exchange_rate_match] || "参考汇率";
-            return `1 USD = ${rateText} CNY · ${row?.cny_exchange_rate_date || "日期未知"} ${label}`;
         }
 
         function orderStateClass(value) {
@@ -17519,12 +17478,21 @@
                 : orderMoney(income);
             document.getElementById("order-metric-cost").textContent = orderMoney(summary.cost);
             const profitElement = document.getElementById("order-metric-profit");
-            profitElement.textContent = `${orderMoney(profit)} / ${margin.toFixed(1)}%`;
+            profitElement.textContent = summary.settlement_missing_count
+                ? `${orderMoney(profit)} / 利润率待核实 · ${summary.settlement_missing_count} 单待结算`
+                : `${orderMoney(profit)} / ${margin.toFixed(1)}%`;
             profitElement.parentElement.classList.toggle("profit", profit >= 0);
             profitElement.style.color = profit < 0 ? "#b42318" : "";
         }
 
+        function setOrderOrigin(value) {
+            orderOrigin = value;
+            document.querySelectorAll('.order-origin-button').forEach(button => button.classList.toggle('active', button.dataset.origin === value));
+            loadOrders(1);
+        }
+
         function renderOrderOriginCounts(counts = {}) {
+            document.getElementById("order-origin-yandex-count").textContent = Number(counts.yandex || 0).toLocaleString("zh-CN");
             const tokenCount = Number(counts.token || 0);
             document.getElementById("order-origin-token-count").textContent = tokenCount.toLocaleString("zh-CN");
         }
@@ -17965,12 +17933,12 @@
                         <td><div class="order-cell-stack">
                             <div class="order-row-number"><span class="order-copy-link" data-copy-text="${escapeHtml(displayNumber)}" title="双击复制订单号">${escapeHtml(displayLabel)}</span><span class="order-country-tag">${escapeHtml(row.country || "未分类")}</span></div>
                             ${row.is_merged ? `<span>${mergedOrderIds.length} 个子订单</span>` : ""}
-                            <div class="order-row-actions"><button class="order-copy-link" type="button" onclick="showOrderDetail(${index})">详情</button><button class="order-copy-link" type="button" title="调用美客多接口打印发货面单" onclick="event.stopPropagation(); printOrders(JSON.parse(decodeURIComponent('${encodedOrderIds}')))">打印</button>
+                            <div class="order-row-actions"><button class="order-copy-link" type="button" onclick="showOrderDetail(${index})">详情</button><button class="order-copy-link" type="button" title="调用美客多接口打印发货面单" ${row.data_origin === "yandex" ? "disabled" : ""} onclick="event.stopPropagation(); printOrders(JSON.parse(decodeURIComponent('${encodedOrderIds}')))">打印</button>
                             ${row.platform_shipping_id ? `<button class="order-copy-link" type="button" title="拆成两个美客多包裹" onclick="event.stopPropagation(); openOrderSplitDialog(JSON.parse(decodeURIComponent('${encodedOrderIds}')))">拆分</button>` : ""}</div>
                         </div></td>
                         <td>${orderProductMarkup(row)}</td>
-                        <td><div class="order-cell-stack"><strong>${escapeHtml(row.shop_name || row.source || "美客多")}</strong></div></td>
-                        <td><strong class="order-money">${escapeHtml(orderAmount(row.amount))}</strong></td>
+                        <td><div class="order-cell-stack"><strong>${escapeHtml(row.shop_name || row.source || "美客多")}</strong><small>${escapeHtml(row.source || "美客多 Token")}</small></div></td>
+                        <td><div class="order-cell-stack"><strong class="order-money">${escapeHtml(orderAmount(row.amount))}</strong>${row.data_origin === "yandex" ? `<small>${escapeHtml(row.currency_id || "")} ${escapeHtml(row.amount_local ?? "待同步")}</small>` : ""}</div></td>
                         <td><div class="order-cell-stack" title="${escapeHtml(`标价更新时间 ${row.quoted_freight_checked_at || '待计算'} · 实际运费更新时间 ${row.freight_checked_at || '待同步'}`)}">
                             <strong class="order-money">标价 ${escapeHtml(quotedFreightMissing ? "待计算" : orderAmount(row.quoted_freight_usd))}</strong>
                             <span>实际 ${escapeHtml(orderFreight(row))}</span>
@@ -17978,8 +17946,8 @@
                         </div></td>
                         <td><span class="order-money ${balance < 0 ? "negative" : "positive"}">${escapeHtml(row.freight_missing ? "费用待同步" : orderAmount(row.balance))}</span></td>
                         <td><span class="order-money">${escapeHtml(orderMoney(row.cost))}</span></td>
-                        <td><span class="order-money ${profit < 0 ? "negative" : "positive"}">${escapeHtml(orderMoney(profit))}</span></td>
-                        <td><span class="order-money ${margin < 0 ? "negative" : "positive"}">${margin.toFixed(1)}%</span></td>
+                        <td><span class="order-money ${profit < 0 ? "negative" : "positive"}">${escapeHtml(row.data_origin === "yandex" ? "待结算核实" : orderMoney(profit))}</span></td>
+                        <td><span class="order-money ${margin < 0 ? "negative" : "positive"}">${row.data_origin === "yandex" ? "待结算核实" : `${margin.toFixed(1)}%`}</span></td>
                         <td><div class="order-cell-stack"><button class="order-copy-link" type="button" onclick="openOrderStatusEditor(${index})"><span class="order-state-tag ${stateClass}">${escapeHtml(row.status || "找货-没汇总")}</span></button>
                             {% if can_confirm_order_outbound %}
                             ${row.status === '转运-待出库' ? `<button class="order-copy-link" type="button" onclick="advanceOrderOutbound(${index}, true)">确认出库</button>` : ''}
@@ -18547,9 +18515,9 @@
                 const response = await fetch("/api/orders/purchase-tracking/logs", {cache: "no-store"});
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") throw new Error(payload.message || "日志读取失败");
-                const labels = {synced: "已回填", pending: "待发货", not_found: "未找到，已跳过", failed: "失败"};
+                const labels = {synced: "已回填", pending: "未发货", not_found: "未找到，已跳过", failed: "失败"};
                 const platforms = {"1688": "1688", taobao: "淘宝 / 天猫", pdd: "拼多多", xianyu: "闲鱼"};
-                container.innerHTML = (payload.data.rows || []).map(run => `<details open><summary>${escapeHtml(run.started_at)} · ${escapeHtml(platforms[run.platform] || run.platform)} · ${escapeHtml(run.message)}</summary><p>共 ${Number(run.total || 0)} 单，已处理 ${Number(run.processed || 0)} 单 · 成功 ${Number(run.synced || 0)} · 跳过 ${Number(run.skipped || 0)} · 待发货 ${Number(run.pending || 0)} · 失败 ${Number(run.failed || 0)}</p>${(run.results || []).map(row => `<div class="purchase-tracking-result"><strong>泽顺订单 ${escapeHtml(row.order_id)} · 采购单 ${escapeHtml(row.purchase_order)}</strong><span>${escapeHtml(row.recorded_at || "")} · ${escapeHtml(labels[row.status] || row.status)} · ${escapeHtml(row.tracking_number || "")} ${escapeHtml(row.logistics_company || "")} ${escapeHtml(row.message || "")}</span></div>`).join("")}</details>`).join("") || "暂无物流同步日志";
+                container.innerHTML = (payload.data.rows || []).map(run => `<details open><summary>${escapeHtml(run.started_at)} · ${escapeHtml(platforms[run.platform] || run.platform)} · ${escapeHtml(run.message)}</summary><p>共 ${Number(run.total || 0)} 单，已处理 ${Number(run.processed || 0)} 单 · 成功 ${Number(run.synced || 0)} · 跳过 ${Number(run.skipped || 0)} · 未发货 ${Number(run.pending || 0)} · 失败 ${Number(run.failed || 0)}</p>${(run.results || []).map(row => `<div class="purchase-tracking-result"><strong>泽顺订单 ${escapeHtml(row.order_id)} · 采购单 ${escapeHtml(row.purchase_order)}</strong><span>${escapeHtml(row.recorded_at || "")} · ${escapeHtml(labels[row.status] || row.status)} · ${escapeHtml(row.tracking_number || "")} ${escapeHtml(row.logistics_company || "")} ${escapeHtml(row.message || "")}</span></div>`).join("")}</details>`).join("") || "暂无物流同步日志";
             } catch (error) {
                 container.textContent = error.message || String(error);
             }
@@ -18609,9 +18577,9 @@
                         ? "请在采购平台页面完成手动登录，然后在插件中点击确定登录"
                         : "请保持泽顺插件和采购平台页面开启"))
                 : (state.phase === "completed"
-                    ? `成功 ${Number(state.synced || 0)} 单 · 待发货 ${Number(state.pending || 0)} 单 · 未同步 ${Number(state.failed || 0)} 单`
+                    ? `成功 ${Number(state.synced || 0)} 单 · 未发货 ${Number(state.pending || 0)} 单 · 未同步 ${Number(state.failed || 0)} 单`
                     : (state.message || "请选择采购平台并登录"));
-            const statusLabels = {synced: "已同步", pending: "待发货", not_found: "未找到", failed: "失败"};
+            const statusLabels = {synced: "已同步", pending: "未发货", not_found: "未找到", failed: "失败"};
             purchaseTrackingResults.innerHTML = (state.results || []).map(item => `
                 <div class="purchase-tracking-result">
                     <strong>${escapeHtml(item.purchase_order || item.order_id || "-")}</strong>
@@ -18738,6 +18706,11 @@
                 : Array.from(selectedOrderIds);
             if (!targetIds.length) {
                 orderBulkMessage.textContent = "请先选择需要打印的订单";
+                return;
+            }
+            if (targetIds.some(id => id.startsWith('yandex:'))) {
+                orderBulkMessage.textContent = 'Yandex 面单请在 Yandex 控制台操作，请选择美客多订单打印';
+                if (orderDetailActionMessage) orderDetailActionMessage.textContent = orderBulkMessage.textContent;
                 return;
             }
             const previewWindow = window.open("", "_blank");
@@ -19008,46 +18981,18 @@
             const target = document.getElementById("order-detail-weight-quote");
             if (!target) return;
             const complete = Boolean(quote?.weight_complete);
-            const missingSkus = Array.isArray(quote?.missing_skus) ? quote.missing_skus : [];
             const actualText = complete
                 ? orderWeightText(quote.actual_weight_g)
-                : `已知 ${orderWeightText(quote?.actual_weight_g || 0)}`;
-            const billableText = complete
-                ? orderWeightText(quote.billable_weight_g)
-                : "重量不完整，无法计算";
+                : "重量待补全";
             const freightText = quote?.shipping_amount_usd === null
                 || quote?.shipping_amount_usd === undefined
                 ? "暂无可用重量档"
                 : orderAmount(quote.shipping_amount_usd);
-            const sourceUrl = quote?.rate_source_url ? mercadoSafeUrl(quote.rate_source_url) : "";
-            const rateDetail = [quote?.rate_weight_label, quote?.rate_price_label]
-                .filter(Boolean).join(" · ");
-            const breakdown = (Array.isArray(quote?.sku_items) ? quote.sku_items : []).map(item => {
-                const sku = item.seller_sku || item.product_id || "未知 SKU";
-                const unitWeight = item.weight_missing
-                    ? "缺少重量"
-                    : `单件实际 ${orderWeightText(item.unit_actual_weight_g)}，计费 ${orderWeightText(item.unit_billable_weight_g)}`;
-                return `<div><strong>${escapeHtml(sku)}</strong> × ${escapeHtml(item.quantity || 1)}：${escapeHtml(unitWeight)}</div>`;
-            }).join("");
-            const missingNote = missingSkus.length
-                ? `缺少重量：${missingSkus.join("、")}`
-                : "计费重量只按每个 SKU 的实际重量乘数量汇总，不使用体积重。";
             target.innerHTML = `
-                <div class="order-detail-weight-heading">
-                    <strong>订单重量与重量表运费</strong>
-                    <span>${escapeHtml(complete ? `共 ${quote.total_units || 0} 件商品` : "重量资料不完整")}</span>
-                </div>
                 <div class="order-detail-weight-metrics">
                     <div class="order-detail-weight-metric"><span>订单实际重量</span><strong>${escapeHtml(actualText)}</strong></div>
-                    <div class="order-detail-weight-metric"><span>订单计费重量</span><strong>${escapeHtml(billableText)}</strong></div>
                     <div class="order-detail-weight-metric"><span>官方重量表运费（美元）</span><strong>${escapeHtml(freightText)}</strong></div>
                 </div>
-                <p class="order-detail-weight-note">
-                    ${escapeHtml(missingNote)}
-                    ${rateDetail ? ` 命中档位：${escapeHtml(rateDetail)}。` : ""}
-                    ${sourceUrl ? `<a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">查看运费表来源</a>` : ""}
-                </p>
-                ${breakdown ? `<div class="order-detail-weight-breakdown">${breakdown}</div>` : ""}
             `;
         }
 
@@ -19074,7 +19019,8 @@
                 renderOrderWeightQuote(payload.data || {});
             } catch (error) {
                 if (requestKey === orderDetailWeightRequestKey && target) {
-                    target.innerHTML = `<div class="empty-state">重量和重量表运费读取失败：${escapeHtml(error.message || error)}</div>`;
+                    target.innerHTML = `<div class="empty-state">重量和运费读取失败：${escapeHtml(error.message || error)} <button class="secondary" type="button">重试</button></div>`;
+                    target.querySelector("button").onclick = () => loadOrderWeightQuote(normalizedIds);
                 }
             }
         }
@@ -19146,30 +19092,21 @@
             const margin = income ? profit * 100 / income : 0;
             orderDetailTitle.textContent = `打包单 ${displayNumber || "详情"}`;
             const items = [
-                ["打包单号", displayNumber || "-"], ["国家地区", row.country || "-"],
-                ["处理状态", row.status || "未分类"], ["平台状态", row.platform_status || row.status || "未分类"],
-                ["数据来源", "Token 自动拉取"], ["店铺", row.shop_name || "-"],
-                ["业务员", row.salesperson || "未分配"], ["自定义组别", row.group_name || "未分组"],
-                ["Shipment ID", row.platform_shipping_id || "未生成"],
-                ["订单金额（美元）", orderAmount(row.amount)], ["原币金额", orderOriginalAmount(row)],
-                ["手续费（美元）", orderAmount(row.fee ?? 0)], ["手续费来源", "美客多订单明细（单件手续费 × 数量）"],
-                ["标价运费（重量表/美元）", row.quoted_freight_usd === null || row.quoted_freight_usd === undefined ? "待计算" : orderAmount(row.quoted_freight_usd)],
+                ["国家地区", row.country || "-"], ["处理状态", row.status || "未分类"],
+                ["店铺", row.shop_name || "-"], ["业务员", row.salesperson || "未分配"],
+                ["订单金额（美元）", orderAmount(row.amount)], ...(row.data_origin === "yandex" ? [["订单原币金额", `${row.currency_id || ""} ${row.amount_local ?? "待同步"}`]] : []), ["手续费（美元）", row.data_origin === "yandex" ? "待结算核实" : orderAmount(row.fee ?? 0)],
                 ["实际运费（美元）", orderFreight(row)],
-                ["标价与实际差额", orderFreightDifference(row) === null ? "待计算" : `${orderFreightDifference(row) >= 0 ? "+" : ""}${orderAmount(orderFreightDifference(row))}`],
-                ["实际运费（接口币种）", row.freight_missing ? "等待美客多运单成本接口" : orderOriginalAmount(row, "freight_local", "freight_currency_id")],
-                ["实际运费来源", row.freight_source === "shipment_costs" ? "美客多官方 Shipment Costs（每日同步）" : (row.freight_missing ? "待同步" : "订单接口")],
-                ["运费更新时间", `标价 ${row.quoted_freight_checked_at || "待计算"} · 实际 ${row.freight_checked_at || "待同步"}`, true],
-                ["结余（美元）", row.freight_missing ? "等待运费后计算" : orderAmount(row.balance)],
-                ["美元换算汇率", orderExchangeDescription(row), true], ["人民币收入", orderCnyIncome(row.income)],
-                ["美元兑人民币汇率", orderCnyExchangeDescription(row), true],
-                ["采购成本", orderMoney(row.cost)], ["利润 / 利润率", `${orderMoney(profit)} / ${margin.toFixed(1)}%`],
-                ["美客多国际运单号", row.platform_tracking_number || "未登记"],
-                ["备货截止时间（北京时间）", row.shipping_deadline || "等待同步官方截止时间"],
-                ["采购订单号", row.purchase_order || "未登记"], ["采购成本", orderMoney(row.cost || 0)],
+                ["结余（美元）", row.freight_missing ? "待同步" : orderAmount(row.balance)],
+                ["人民币收入", orderCnyIncome(row.income)],
+                ["采购成本", orderMoney(row.cost)], ["利润 / 利润率", row.data_origin === "yandex" ? "待结算核实" : `${orderMoney(profit)} / ${margin.toFixed(1)}%`],
+                ["采购订单号", row.purchase_order || "未登记"],
+                ["平台国际运单号", row.platform_tracking_number || "未登记", true],
+                ["备货截止时间（北京时间）", row.shipping_deadline || "待同步"],
+                ["下单时间（北京时间）", row.ordered_at || "-"],
                 ["采购物流", [row.logistics_company, row.purchase_tracking].filter(Boolean).join(" · ") || "未登记", true],
-                ["采购备注", row.purchase_remark || "无备注", true],
-                ["买家", row.buyer || "-"], ["下单时间（北京时间）", row.ordered_at || "-"],
-                ["商品", row.title || "未记录商品标题", true], ["订单备注", row.order_remark || "无备注", true], ["平台备注", row.remark || "无备注", true],
+                ...(row.purchase_remark ? [["采购备注", row.purchase_remark, true]] : []),
+                ...(row.order_remark ? [["订单备注", row.order_remark, true]] : []),
+                ...(row.remark ? [["平台备注", row.remark, true]] : []),
             ];
             const skuGallery = `<section class="order-detail-skus">
                 <strong>${row.is_merged ? "合并单全部 SKU" : "SKU 图片"}</strong>
@@ -19179,16 +19116,20 @@
                         <div>${orderProductNameMarkup(item)}
                             <span data-copy-text="${escapeHtml(item.seller_sku || item.product_id || "-")}">SKU ${escapeHtml(item.seller_sku || item.product_id || "-")} · 数量 ${escapeHtml(item.quantity || 1)}</span>
                             ${item.variation ? `<span>${escapeHtml(item.variation)}</span>` : ""}
-                            <button class="secondary" type="button" data-product-id="${escapeHtml(item.product_id || '')}" onclick="openOrderProductDetail(this.dataset.productId)" ${item.product_id ? "" : "disabled"}>产品详情</button>
+                            <button class="secondary" type="button" data-product-id="${escapeHtml(item.product_id || '')}" onclick="openOrderProductDetail(this.dataset.productId)" ${item.product_id && row.data_origin !== "yandex" ? "" : "disabled"}>产品详情</button>
                         </div>
                     </article>
                 `).join("")}</div>
             </section>`;
-            const weightQuote = '<section class="order-detail-weight-quote" id="order-detail-weight-quote"><div class="empty-state"><span class="order-loading-dot"></span>正在按 SKU 重量匹配官方运费表…</div></section>';
-            orderDetailContent.innerHTML = skuGallery + weightQuote + items.map(([label, value, wide]) => `
+            const weightQuote = row.data_origin === "yandex" ? "" : `<details class="order-detail-weight-quote" ontoggle="if(this.open && !this.dataset.loaded) { this.dataset.loaded = '1'; loadOrderWeightQuote(orderDetailOrderIds); }"><summary>订单重量与重量表运费</summary><div id="order-detail-weight-quote"></div></details>`;
+            orderDetailContent.innerHTML = skuGallery + items.map(([label, value, wide]) => `
                 <div class="order-detail-item${wide ? " wide" : ""}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>
-            `).join("");
-            orderDetailActionMessage.textContent = "可打印当前订单或维护采购信息";
+            `).join("") + weightQuote;
+            orderDetailWeightRequestKey = "";
+            const logs = document.getElementById("order-detail-logs");
+            if (logs) { logs.open = false; delete logs.dataset.loaded; }
+            orderDetailLogList.innerHTML = "";
+            orderDetailActionMessage.textContent = "";
             if (orderDetailOutboundButton) {
                 orderDetailOutboundButton.hidden = !['转运-待收货', '审核-已审核'].includes(row.status);
                 orderDetailOutboundButton.disabled = false;
@@ -19209,8 +19150,6 @@
                     : "订单尚未生成 Shipment ID";
             }
             if (typeof orderDetailDialog.showModal === "function" && !orderDetailDialog.open) orderDetailDialog.showModal();
-            loadOrderOperationLogs(orderDetailOrderId);
-            loadOrderWeightQuote(orderDetailOrderIds);
         }
 
         async function openOrderSyncDialog() {
@@ -19247,6 +19186,31 @@
 
         function closeOrderSyncDialog() {
             if (orderSyncDialog?.open) orderSyncDialog.close();
+        }
+
+        async function syncAllYandexOrders() {
+            const button = document.getElementById('yandex-orders-full-sync');
+            const label = document.getElementById('yandex-orders-sync-status');
+            button.disabled = true;
+            try {
+                const response = await fetch('/api/order-sync/yandex', {method: 'POST'});
+                const payload = await response.json();
+                if (!response.ok && response.status !== 409) throw new Error(payload.message || '启动失败');
+                const poll = async () => {
+                    try {
+                        const res = await fetch('/api/order-sync/yandex', {cache: 'no-store'});
+                        const body = await res.json();
+                        if (!res.ok) throw new Error(body.message || '读取进度失败');
+                        const data = body.data || {};
+                        label.textContent = `Yandex：已读取 ${data.fetched || 0} 单 · ${data.current_store || ''} ${data.window || ''}`;
+                        if (data.running) { setTimeout(poll, 3000); return; }
+                        label.textContent = (data.status === 'completed' ? (data.mode === 'full' ? 'Yandex 全量拉取完成' : 'Yandex 本轮同步完成') : 'Yandex 拉取未全部完成') + ` · ${data.fetched || 0} 单` + (data.errors || []).map(item => ` · ${item.error}`).join('');
+                        button.disabled = false;
+                        loadOrders(1);
+                    } catch (error) { label.textContent = error.message; button.disabled = false; }
+                };
+                poll();
+            } catch (error) { label.textContent = error.message; button.disabled = false; }
         }
 
         function renderOrderSyncStores(rows) {
@@ -20018,6 +19982,17 @@
             return {salePriceUsd, shippingUsd, commissionUsd, netUsd};
         }
 
+        function mercadoWeightPriceTags(row) {
+            const audit = row.ai_weight_price || {};
+            if (!audit.status) return "";
+            const labels = {queued: "核重核价待处理", checking: "核重核价进行中", checked: "核重核价成功",
+                unmatched: "核重核价未成功·未匹配", missing_evidence: "核重核价未成功·数据不足",
+                failed: "核重核价未成功", conflict: "核重核价未成功·资料冲突", stopped: "核重核价未成功·已停止"};
+            const tone = audit.status === "checked" ? "ok" : ["queued", "checking"].includes(audit.status) ? "partial" : "failed";
+            const note = [audit.reason, audit.checked_at].filter(Boolean).join(" · ");
+            return `<span class="market-status-tag ${tone}" title="${escapeHtml(note)}">${escapeHtml(labels[audit.status] || "核重核价未成功")}</span>`;
+        }
+
         function renderMercadoCollectionRow(row) {
             const rowId = Number(row.id || 0);
             const selected = selectedMercadoCollectionIds.has(rowId);
@@ -20075,7 +20050,7 @@
                 <td><span class="market-metric-main">${mercadoMetric(commissionUsd, " USD")}</span><span class="market-metric-note">固定 15%</span></td>
                 <td><span class="market-metric-main">${mercadoMetric(shippingUsd, " USD")}</span><span class="market-metric-note">按当前重量</span></td>
                 <td title="${escapeHtml(netNote)}"><span class="market-metric-main ${netClass}">${mercadoMetric(netUsd, " USD")}</span><span class="market-metric-note">${escapeHtml(netNote)}</span></td>
-                <td><span class="market-workflow-tags"><span class="market-status-tag">${escapeHtml(reviewLabel)}</span><span class="market-status-tag ${publishStatus === "published" ? "ok" : ""}">${escapeHtml(publishLabel)}</span></span><span class="market-status-tag ${statusClass}">${escapeHtml(status)}</span></td>
+                <td>${mercadoWeightPriceTags(row)}<span class="market-workflow-tags"><span class="market-status-tag">${escapeHtml(reviewLabel)}</span><span class="market-status-tag ${publishStatus === "published" ? "ok" : ""}">${escapeHtml(publishLabel)}</span></span><span class="market-status-tag ${statusClass}">${escapeHtml(status)}</span></td>
                 <td>${escapeHtml(timeText)}</td>
             </tr>`;
         }
@@ -20092,14 +20067,15 @@
         }
 
         async function startMercadoCollectionCopy() {
-            if (mercadoAiCopyRunning || mercadoListMode !== "collection") return;
+            if (mercadoAiCopyRunning) return;
+            const copyListMode = mercadoListMode;
             const itemIds = Array.from(selectedMercadoCollectionIds);
             if (!itemIds.length) return;
             if (itemIds.length > 500) {
                 setMercadoListFeedback("每次最多生成 500 件采集商品文案，请减少选择数量后重试", "error");
                 return;
             }
-            if (!window.confirm(`将为所选 ${itemIds.length} 件商品生成西班牙语和巴西葡萄牙语标题、描述，并把采集列表的标题和描述更新为西班牙语。两个标题均要求 50–60 个字符且不含品牌名。继续吗？`)) return;
+            if (!window.confirm(`将为所选 ${itemIds.length} 件商品生成西班牙语和巴西葡萄牙语标题、描述，并把所选商品的标题和描述更新为西班牙语。两个标题均要求 50–60 个字符且不含品牌名。继续吗？`)) return;
             mercadoAiCopyRunning = true;
             updateMercadoSelection();
             const batchSize = 100;
@@ -20112,7 +20088,7 @@
                     const response = await fetch("/api/mercado-collection/ai-copy", {
                         method: "POST",
                         headers: {"Content-Type": "application/json"},
-                        body: JSON.stringify({collection_item_ids: itemIds.slice(offset, offset + batchSize)}),
+                        body: JSON.stringify({[copyListMode === "products" ? "product_item_ids" : "collection_item_ids"]: itemIds.slice(offset, offset + batchSize)}),
                     });
                     const started = await response.json();
                     if (!response.ok || started.status !== "success") throw new Error(started.message || `启动失败：HTTP ${response.status}`);
@@ -20975,10 +20951,9 @@
                     ? `<span class="market-metric-note" title="${escapeHtml(aiRiskTitle)}">关键词：${escapeHtml(row.infringement_keywords)}</span>`
                     : "";
                 const weightCheck = row.ai_weight_price || {};
-                const weightCheckLabels = {queued: "AI 待核查", checking: "AI 核查中", checked: "AI 已核查", unmatched: "AI 未匹配", missing_evidence: "AI 已核查·数据不足", failed: "AI 核查失败", conflict: "AI 回写冲突", stopped: "AI 已停止"};
                 const weightPriceNote = weightCheck.evidence?.cost_price_cny != null
                     ? `<span class="market-metric-note">1688 成本 ¥${escapeHtml(String(weightCheck.evidence.cost_price_cny))}</span>` : "";
-                const weightCheckTag = `<span class="market-status-tag" title="${escapeHtml([weightCheck.reason, weightCheck.checked_at].filter(Boolean).join(' · '))}">${escapeHtml(weightCheckLabels[weightCheck.status] || "AI 未核查")}</span><span class="market-status-tag ${weightCheck.modified ? 'ok' : ''}" title="${escapeHtml(weightCheck.modified_at || '')}">${weightCheck.modified ? "AI 曾修改" : "AI 未修改"}</span>`;
+                const weightCheckTag = mercadoWeightPriceTags(row);
                 const reviewControl = mercadoListMode === "products"
                     ? `<select class="market-review-select" aria-label="修改 ${escapeHtml(row.source_item_id || "产品")} 的审核状态" onchange="updateMercadoProductReviewStatus([${rowId}], this.value)">${reviewOptions.map(([value, label]) => `<option value="${value}" ${reviewStatus === value ? "selected" : ""}>${label}</option>`).join("")}</select>`
                     : "";
@@ -20996,7 +20971,7 @@
                     <td><strong>${escapeHtml(row.product_developer_name || "-")}</strong>${row.product_developer_id ? `<span class="market-metric-note">ID ${escapeHtml(row.product_developer_id)}</span>` : ""}</td>
                     <td><span class="market-status-tag">${escapeHtml(zyingStatus)}</span></td>
                     <td><strong>${escapeHtml(row.source_item_id || "-")}</strong>${itemLink}</td>
-                    <td><span class="market-product-title" title="${title}">${title}</span>${editControl}</td>
+                    <td><span class="market-product-title" title="${title}">${title}</span>${row.ai_copy?.title_pt ? `<small class="market-metric-note">PT: ${escapeHtml(row.ai_copy.title_pt)}</small><button class="market-copy-preview-trigger" type="button" onclick="openMercadoCollectionCopy(${rowId})">查看双语描述</button>` : ""}${editControl}</td>
                     <td>${managementCategoryControl}</td>
                     <td><span class="market-metric-main">${mercadoMetric(row.price)}</span><span class="market-metric-note">${escapeHtml(row.currency_id || "MXN")}</span></td>
                     <td title="${profitTitle}"><span class="market-metric-main">${mercadoMetric(row.sale_price_usd, " USD")}</span><span class="market-metric-note">每日数据库汇率</span></td>
@@ -21542,9 +21517,9 @@
             mercadoSelectionSummary.textContent = `本页已选择 ${selectedMercadoCollectionIds.size} 件${readinessNotes.length ? ` · ${readinessNotes.join(" · ")}` : ""}`;
             const exceedsBulkEditLimit = selectedMercadoCollectionIds.size > 500;
             mercadoAddSelected.disabled = !hasSelection || mercadoListMode !== "collection" || mercadoAiCopyRunning;
-            mercadoAiCopySelected.disabled = !hasSelection || mercadoListMode !== "collection" || (mercadoPublishRunning || mercadoPublishSubmitting) || mercadoAiCopyRunning || exceedsBulkEditLimit;
-            mercadoAiCopySelected.textContent = mercadoAiCopyRunning ? "标题生成中..." : "批量修改标题";
-            mercadoAiCopySelected.title = exceedsBulkEditLimit ? "每次最多选择 500 件商品" : "根据采集商品资料生成西班牙语和葡萄牙语标题、描述";
+            mercadoAiCopySelected.disabled = !hasSelection || (mercadoPublishRunning || mercadoPublishSubmitting) || mercadoAiCopyRunning || exceedsBulkEditLimit;
+            mercadoAiCopySelected.textContent = mercadoAiCopyRunning ? "标题和描述生成中..." : "批量修改标题和描述";
+            mercadoAiCopySelected.title = exceedsBulkEditLimit ? "每次最多选择 500 件商品" : "根据所选商品资料生成西班牙语和葡萄牙语标题、描述";
             mercadoDeleteSelected.disabled = !hasSelection || (mercadoPublishRunning || mercadoPublishSubmitting);
             mercadoReviewSelected.disabled = !hasSelection || mercadoListMode !== "products" || (mercadoPublishRunning || mercadoPublishSubmitting);
             mercadoManagementCategoryAssign.disabled = !hasSelection || !mercadoManagementCategoryBulk.value;
@@ -28635,7 +28610,7 @@
                     ? '<span class="status-tag" style="background:#ffedd5;color:#9a3412">待回复权利人</span>'
                     : '<span class="status-tag" style="background:#fee2e2;color:#991b1b">当前禁售</span>';
                 const holderAndDue = needsReply
-                    ? `<strong>${escapeHtml(row.rights_holder || "未提供权利人名称")}</strong><br><span style="color:#b45309;font-weight:700">截止：${escapeHtml(row.due_at || "未提供")}</span>`
+                    ? `<strong>${escapeHtml(row.rights_holder || "未提供权利人名称")}</strong><br><span style="color:#b45309;font-weight:700">截止（北京时间）：${escapeHtml(row.due_at || "未提供")}</span>`
                     : "-";
                 return `
                     <tr${needsReply ? ' style="background:#fffaf0"' : ""}>
@@ -28705,7 +28680,7 @@
                 renderProhibitedGroups(groups);
                 renderProhibitedRows(rows);
                 prohibitedMessage.textContent = summary.next_due_at
-                    ? `待回复权利人案件置顶；最近回复截止：${summary.next_due_at}；其余按发生时间从近到远排序`
+                    ? `待回复权利人案件置顶；最近回复截止（北京时间）：${summary.next_due_at}；其余按发生时间从近到远排序`
                     : "待回复权利人案件置顶，其余按发生时间从近到远排序";
                 prohibitedPaginationSummary.textContent = `共 ${Number(data.total || 0).toLocaleString()} 条；当前页显示 ${rows.length} 条；待回复案件优先`;
                 prohibitedPageIndicator.textContent = `${prohibitedPage} / ${prohibitedPages}`;
@@ -30292,6 +30267,14 @@
             return `<td class="reputation-change-cell ${className}" title="${escapeHtml(text)}">${escapeHtml(text)}</td>`;
         }
 
+        function reputationWarningText(row) {
+            const warning = String(row["系统告警"] || "").trim();
+            const notices = reputationStoreNotices[String(row.token_id)] || [];
+            const parts = notices.map(notice => [notice.title, notice.description].filter(Boolean).join("\n"));
+            if (warning && warning !== "正常" && warning !== "-") parts.unshift(warning);
+            return parts.length ? parts.join("\n\n") : (warning || "-");
+        }
+
         function renderReputationWarningCell(value) {
             const text = String(value ?? "").trim() || "-";
             const hasDetail = text !== "-" && text !== "正常";
@@ -31706,7 +31689,7 @@
             const algorithmMode = document.getElementById("daily-task-algorithm-mode")?.checked;
             const normalOptions = document.getElementById("daily-task-normal-options");
             const algorithmHint = document.getElementById("daily-task-algorithm-hint");
-            if (normalOptions) normalOptions.hidden = Boolean(algorithmMode);
+            if (normalOptions) normalOptions.hidden = false;
             if (algorithmHint) algorithmHint.hidden = !algorithmMode;
         }
 
@@ -31743,9 +31726,7 @@
                 document.getElementById("daily-task-deepseek-api-key")?.value || ""
             ).trim();
             const algorithmMode = Boolean(document.getElementById("daily-task-algorithm-mode")?.checked);
-            const appealTypes = algorithmMode
-                ? ["算法模式"]
-                : Array.from(
+            const appealTypes = Array.from(
                     document.querySelectorAll('input[name="daily-task-appeal-type"]:checked'),
                     input => input.value,
                 );
@@ -31758,6 +31739,7 @@
                 mode: document.getElementById("daily-task-mode").value,
                 appeal_copy_mode: appealCopyMode,
                 deepseek_api_key: deepseekApiKey,
+                task_strategy: algorithmMode ? "algorithm" : "normal",
                 appeal_types: appealTypes,
                 recent_days: Number(document.getElementById("daily-task-recent-days").value || 100),
                 round_interval: Number(document.getElementById("daily-task-round-interval").value || 180),
@@ -32891,7 +32873,7 @@
         function renderLatestReputationRows() {
             const rows = filteredReputationRows();
             updateReputationSortIndicators();
-            const normalStatuses = new Set(["正常", "active", "enabled", "ok"]);
+            const normalStatuses = new Set(["正常", "活跃中", "active", "enabled", "ok"]);
             const greenCount = rows.filter(row => (
                 String(row["声誉颜色"] || "").includes("绿")
                 && normalStatuses.has(String(row["站点状态"] || "").trim().toLocaleLowerCase("zh-CN"))
@@ -32931,7 +32913,7 @@
                                 <canvas class="traffic-chart" data-values="${escapeHtml(JSON.stringify(trafficValues))}"></canvas>
                             </span>
                         </td>
-                        ${renderReputationWarningCell(row["系统告警"])}
+                        ${renderReputationWarningCell(reputationWarningText(row))}
                         <td title="${escapeHtml(row["更新时间"])}">${escapeHtml(row["更新时间"])}</td>
                         <td>${renderReputationSiteStatus(row["站点状态"])}</td>
                         <td><button class="secondary reputation-open-browser-button" type="button" data-token-id="${escapeHtml(row.token_id || "")}" data-shop-name="${escapeHtml(shopName)}" onclick="openReputationBrowser(this)" ${Number(row.token_id || 0) > 0 ? "" : "disabled"}>打开店铺</button></td>
@@ -32954,7 +32936,7 @@
         function renderReputationSiteStatus(value) {
             const text = String(value || "待全量更新").trim() || "待全量更新";
             const normalized = text.toLocaleLowerCase("zh-CN");
-            const state = ["正常", "active", "enabled", "ok"].includes(normalized)
+            const state = ["正常", "活跃中", "active", "enabled", "ok"].includes(normalized)
                 ? "normal"
                 : (normalized.startsWith("状态未确认") || ["未知", "unknown", "待全量更新"].includes(normalized)
                     ? "unconfirmed"
@@ -34186,9 +34168,9 @@
     </script>
     <script src="{{ url_for('static', filename='salesperson-stats.js') }}?v=20261003"></script>
     <script src="{{ url_for('static', filename='store-analysis.js') }}?v=20260929-order-trend"></script>
-    <script src="{{ url_for('static', filename='collection-ai.js') }}?v=20260927-agent"></script>
-<script src="{{ url_for('static', filename='order-management-details.js') }}?v=20260929-outbound-detail"></script>
-    <script src="{{ url_for('static', filename='console-navigation.js') }}?v=20261003"></script>
+    <script src="{{ url_for('static', filename='collection-ai.js') }}?v=20261003-lists"></script>
+<script src="{{ url_for('static', filename='order-management-details.js') }}?v=20261004-progressive-detail-fix1"></script>
+    <script src="{{ url_for('static', filename='console-navigation.js') }}?v=20261004-responsive"></script>
     <script src="{{ url_for('static', filename='console-workflow.js') }}?v=20261002-ui"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='mercado-attribute-preflight.css') }}?v=20261003">
     <script src="{{ url_for('static', filename='mercado-attribute-preflight.js') }}?v=20261003"></script>

@@ -71,6 +71,7 @@ def test_all_extension_javascript_has_valid_syntax():
         "content-zying.js",
         "zying-page.js",
         "1688-page.js",
+        "purchase-tracking-content.js",
     ):
         subprocess.run(
             [shutil.which("node"), "--check", str(EXTENSION / filename)],

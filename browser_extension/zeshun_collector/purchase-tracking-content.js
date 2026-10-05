@@ -85,6 +85,7 @@
 
   function findOrderScope(order) {
     const matchesOrder = value => String(value || "").split(/[^A-Za-z0-9_-]+/).includes(order);
+    let matchedOrder = null;
     // Start at the exact order-number text, never the page-wide result text.
     const nodes = [...document.querySelectorAll("body *")].filter(element =>
       visible(element) && !["INPUT", "TEXTAREA", "SCRIPT", "STYLE"].includes(element.tagName) &&
@@ -96,11 +97,14 @@
         const value = String(scope.innerText || "");
         const orderLabels = value.match(/(?:订单号|订单编号|订单号码)\s*[：:]?\s*([A-Za-z0-9_-]+)/g) || [];
         if (orderLabels.some(label => !matchesOrder(label))) break;
+        // An order number proves the order exists even before shipping controls
+        // appear. Keep the smallest labelled scope as a safe no-tracking fallback.
+        if (!matchedOrder && orderLabels.some(matchesOrder)) matchedOrder = scope;
         if (/物流单号|快递单号|运单号|物流编号|快递编号/.test(value) ||
             ["查看物流", "物流详情", "查看快递", "订单详情", "查看详情"].some(label => findAction(label, scope))) return scope;
       }
     }
-    return null;
+    return matchedOrder;
   }
 
   async function fetchTracking(purchaseOrder) {
@@ -140,7 +144,7 @@
       if (close) close.click();
     }
     if (!result.tracking_number) {
-      return {status: "pending", message: "订单尚未发货或平台未显示物流号"};
+      return {status: "pending", message: "未发货"};
     }
     return {status: "synced", ...result};
   }

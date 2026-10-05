@@ -2321,17 +2321,15 @@ def workbench_user_salesperson(user=None):
 
 
 def workbench_selected_organization(user=None):
-    """Return the platform administrator's current enterprise filter, if any."""
+    """Scope platform administrators to one enterprise, defaulting to Zeshun."""
     user = user if user is not None else get_current_workbench_user()
-    if not user or not user.get("is_platform_admin") or not has_request_context():
+    if not user or user.get("role_key") != "super_admin":
         return ""
-    value = request.args.get("organization_key", "").strip()
-    if not value:
-        return ""
+    value = request.args.get("organization_key", "").strip() if has_request_context() else ""
     try:
-        return _validate_organization_key(value)
+        return _validate_organization_key(value) if value else "wuhan-zeshun"
     except ValueError:
-        return ""
+        return "wuhan-zeshun"
 
 
 def _scoped_salesperson(requested="", user=None):
@@ -2417,9 +2415,12 @@ def _filter_store_rows_for_user(data, user=None, store_keys=("店铺名", "store
         return result
     if user.get("is_platform_admin") and not has_org_filter:
         return result
-    token_data = _filter_mercado_tokens_for_user(
-        bit_db_api.list_mercado_store_tokens() or {}, user
-    )
+    all_tokens = bit_db_api.list_mercado_store_tokens() or {}
+    token_data = _filter_mercado_tokens_for_user(all_tokens, user)
+    allowed_ids = {int(token.get("id") or 0) for token in token_data.get("rows", ())}
+    organization = workbench_selected_organization(user) or user.get("organization_key") or "wuhan-zeshun"
+    foreign_tokens = [token for token in all_tokens.get("rows", ())
+                      if int(token.get("id") or 0) not in allowed_ids]
     aliases = {
         str(value or "").strip().casefold()
         for token in token_data.get("rows") or ()
@@ -2435,13 +2436,30 @@ def _filter_store_rows_for_user(data, user=None, store_keys=("店铺名", "store
     if workbench_user_own_store_only(user):
         salesperson_aliases = {workbench_user_salesperson(user).casefold()}
 
+    # Names are a legacy fallback; ambiguous names must not join tenants.
+    aliases.difference_update(
+        str(token.get(key) or "").strip().casefold()
+        for token in foreign_tokens for key in ("display_name", "nickname")
+        if token.get(key)
+    )
+    salesperson_aliases.difference_update(
+        str(setting.get("salesperson") or "").strip().casefold()
+        for token in foreign_tokens for setting in token.get("site_settings") or ()
+    )
+
     def belongs(row):
-        return any(
-            str((row or {}).get(key) or "").strip().casefold() in aliases
-            for key in store_keys
-        ) or str(
-            (row or {}).get("业务员") or (row or {}).get("salesperson") or ""
-        ).strip().casefold() in salesperson_aliases
+        row = row or {}
+        if row.get("organization_key") and row["organization_key"] not in {organization, "default" if organization == "wuhan-zeshun" else organization}:
+            return False
+        if row.get("token_id") is not None:
+            try:
+                return int(row["token_id"]) in allowed_ids
+            except (TypeError, ValueError):
+                return False
+        names = [str(row.get(key) or "").strip().casefold() for key in store_keys if row.get(key)]
+        if names:
+            return all(name in aliases for name in names)
+        return str(row.get("业务员") or row.get("salesperson") or "").strip().casefold() in salesperson_aliases
 
     for key in ("rows", "summary"):
         if isinstance(result.get(key), list):
@@ -2960,7 +2978,15 @@ def internal_api_required(view_func):
             if request.path in INTERNAL_AGENT_ALLOWED_PATHS and request.method == "GET":
                 return view_func(*args, **kwargs)
             if _agent_internal_api_allowed(agent_claims):
+                g.internal_agent_claims = agent_claims
+                if request.path != "/api/db/ai-weight-price/store":
+                    blocked = _enforce_agent_data_scope(agent_claims)
+                    if blocked is not None:
+                        return blocked
                 return view_func(*args, **kwargs)
+            return jsonify({"status": "error", "message": "Agent 无权访问此数据接口"}), 403
+        if request_token.startswith("agent:"):
+            return jsonify({"status": "error", "message": "Agent 凭证无效"}), 403
         # Keep legacy loopback access for operational database routes used by
         # the single-machine server.  Sensitive account, token and role
         # routes are denied above; loopback is not accepted as an admin
@@ -3008,7 +3034,93 @@ def _agent_internal_api_allowed(claims):
         ]
     except (KeyError, ValueError):
         return False
-    return any(job.get("status") in {"running", "stopping"} for job in jobs)
+    active_jobs = [job for job in jobs if job.get("status") in {"running", "stopping"}]
+    if has_request_context():
+        g.internal_agent_jobs = active_jobs
+    return bool(active_jobs)
+
+
+def _enforce_agent_data_scope(claims):
+    """Resolve tenant identity from signed ownership, never worker input."""
+    owner = get_workbench_user(user_id=claims.get("user_id"))
+    if not owner or not owner.get("is_active") or not owner.get("organization_key"):
+        return jsonify(status="error", message="Agent 所属账号无效"), 403
+    user = build_workbench_session_user(owner)
+    # A platform admin's worker belongs to the account's company, regardless
+    # of organization_key query parameters sent by the worker.
+    if user.get("role_key") == "super_admin":
+        user = {**user, "role_key": "enterprise_admin", "is_platform_admin": False}
+    g.internal_agent_user = user
+    all_tokens = bit_db_api.list_mercado_store_tokens() or {}
+    tokens = _filter_mercado_tokens_for_user(all_tokens, user)
+    g.internal_agent_tokens = tokens
+    allowed = {int(row["id"]) for row in tokens.get("rows", ())}
+    g.internal_agent_token_ids = allowed
+    aliases = {str(row.get(key) or "").strip().casefold()
+               for row in tokens.get("rows", ()) for key in ("display_name", "nickname")
+               if row.get(key)}
+    aliases.difference_update(
+        str(row.get(key) or "").strip().casefold()
+        for row in all_tokens.get("rows", ()) if int(row.get("id") or 0) not in allowed
+        for key in ("display_name", "nickname") if row.get(key)
+    )
+    g.internal_agent_store_aliases = aliases
+    payload = request.get_json(silent=True) or {}
+    def authorized(row):
+        if not isinstance(row, dict):
+            return False
+        if row.get("token_id") is not None:
+            try:
+                if int(row["token_id"]) not in allowed:
+                    return False
+            except (TypeError, ValueError):
+                return False
+        names = [str(row.get(key) or "").strip().casefold()
+                 for key in ("shop_name", "store_name", "window_name", "店铺名") if row.get(key)]
+        return all(name in aliases for name in names)
+    if not authorized(dict(request.args)) or not authorized(payload):
+        return jsonify(status="error", message="Agent 无权访问其他企业或成员的店铺"), 403
+    if request.method == "POST":
+        path = request.path
+        if path in {"/api/db/official-infractions/live", "/api/db/official-infractions/live/jobs"}:
+            targets = payload.get("targets")
+            if not isinstance(targets, list) or not targets or any(
+                not isinstance(row, dict) or not row.get("token_id") or not authorized(row) for row in targets
+            ):
+                return jsonify(status="error", message="Agent 任务店铺范围无效"), 403
+        elif path in {"/api/db/ai-appeal-records", "/api/db/appeal-chat-records", "/api/db/ai-appeal-product-contexts"}:
+            row = payload.get("record") if "record" in payload else payload
+            if not authorized(row) or not any(row.get(key) for key in ("shop_name", "store_name", "店铺名")):
+                return jsonify(status="error", message="Agent 记录店铺范围无效"), 403
+        elif path.startswith("/api/db/window-anomalies"):
+            connection = pymysql.connect(**mysql_config)
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT window_name FROM window_anomalies WHERE window_id = %s", (payload.get("window_id"),))
+                    matches = cursor.fetchall()
+            finally:
+                connection.close()
+            if any(not authorized(row) for row in matches) or (
+                not matches and str(payload.get("window_name") or "").strip().casefold() not in aliases
+            ):
+                return jsonify(status="error", message="Agent 窗口范围无效"), 403
+    return None
+
+
+def _filter_internal_agent_rows(data):
+    if not getattr(g, "internal_agent_claims", None):
+        return data
+    aliases = getattr(g, "internal_agent_store_aliases", set())
+    result = dict(data or {})
+    for key in ("rows", "summary"):
+        if isinstance(result.get(key), list):
+            result[key] = [row for row in result[key] if any(
+                str(row.get(name) or "").strip().casefold() in aliases
+                for name in ("店铺名", "shop_name", "store_name", "window_name")
+            )]
+    if "rows" in result:
+        result["total"] = len(result["rows"])
+    return result
 
 
 # Kept as a compatibility alias for older imports and tests.
@@ -3023,6 +3135,8 @@ def _required_workbench_permissions(path, method):
         return ("order_analysis.view",) if method == "GET" else ("order_analysis.execute",)
     if path.startswith("/api/mercado/today/"):
         return ("tasks.execute",) if method in {"POST", "PATCH", "PUT", "DELETE"} else ("tasks.view",)
+    if path == "/api/order-sync/yandex":
+        return ("order_analysis.execute",) if method == "POST" else ("order_print.view",)
     if path == "/api/orders":
         return ("order_print.view",)
     if path == "/api/salesperson-stats":
@@ -3244,16 +3358,14 @@ def workbench_user_can_use_agent(agent, user=None):
     user = user if user is not None else get_current_workbench_user()
     if not user or not agent:
         return False
-    if user.get("role_key") == "super_admin":
-        return True
     owner_id = int(agent.get("owner_user_id") or 0)
-    if user.get("role_key") != "enterprise_admin":
+    if user.get("role_key") not in {"enterprise_admin", "super_admin"}:
         return bool(user.get("id")) and owner_id == int(user["id"])
-    organization = str(user.get("organization_key") or "").strip()
+    organization = workbench_selected_organization(user) or str(user.get("organization_key") or "").strip()
     if not organization or not owner_id:
         return False
     if owner_id == int(user.get("id") or 0):
-        return True
+        return str(user.get("organization_key") or "").strip() == organization
     owners = getattr(g, "agent_owner_organizations", None) if has_request_context() else None
     if owners is None:
         owners = {
@@ -3287,7 +3399,7 @@ def enforce_local_agent_owner():
     if not request.path.startswith("/api/") or request.path.startswith(("/api/db/", "/api/local-agents/")):
         return None
     user = get_current_workbench_user()
-    if not user or user.get("role_key") == "super_admin":
+    if not user:
         return None
     data = request.get_json(silent=True)
     agent_ids = request.args.getlist("agent_id")
@@ -3296,16 +3408,25 @@ def enforce_local_agent_owner():
     if request.path in {"/api/tasks/daily/status", "/api/tasks/daily/stop"}:
         payload = data if isinstance(data, dict) else {}
         target = payload.get("execution_target") or request.args.get("execution_target")
-        if target != "agent" and not RUNTIME_SETTINGS.is_client:
+        if target != "agent" and not RUNTIME_SETTINGS.is_client and user.get("role_key") != "super_admin":
             return jsonify({"status": "error", "message": "只有超级管理员可以查看或操作服务器任务"}), 403
-        task_id = payload.get("task_id") or request.args.get("task_id")
-        if task_id and target == "agent":
-            try:
-                job = get_local_agent_store().get_job(task_id)
-            except ValueError:
-                job = None
-            if job:
-                agent_ids.append(job.get("agent_id"))
+    # Validate job references even when no execution target or Agent ID is supplied.
+    payload = data if isinstance(data, dict) else {}
+    job_ids = [
+        (request.view_args or {}).get("task_id"),
+        (request.view_args or {}).get("job_id"),
+        *request.args.getlist("task_id"), *request.args.getlist("job_id"),
+        payload.get("task_id"), payload.get("job_id"),
+    ]
+    for job_id in job_ids:
+        if not job_id:
+            continue
+        try:
+            job = get_local_agent_store().get_job(job_id)
+        except ValueError:
+            job = None
+        if job:
+            agent_ids.append(job.get("agent_id"))
     for agent_id in agent_ids:
         try:
             agent = get_local_agent_store().get_agent(agent_id)
@@ -3470,6 +3591,20 @@ def api_db_ai_weight_price_store():
     args = data.get("args") or []
     kwargs = data.get("kwargs") or {}
     actor = data.get("actor")
+    if getattr(g, "internal_agent_claims", None):
+        # The worker may only address the account attached to its active job.
+        try:
+            actor_id = int((actor or {}).get("id") or 0) if isinstance(actor, dict) else 0
+        except (TypeError, ValueError):
+            return jsonify({"status": "error", "message": "Agent 账号编号无效"}), 400
+        allowed_actors = {
+            int(job.get("created_by_id") or 0)
+            for job in getattr(g, "internal_agent_jobs", ())
+            if job.get("job_type") == "ai_weight_price"
+        }
+        if not actor_id or actor_id not in allowed_actors:
+            return jsonify({"status": "error", "message": "Agent 无权访问此账号的数据"}), 403
+        actor = {"id": actor_id, "view_all": False}
     if method not in AI_WEIGHT_PRICE_STORE_METHODS or not isinstance(args, list) or not isinstance(kwargs, dict):
         return jsonify({"status": "error", "message": "AI核重核价数据库操作无效"}), 400
     try:
@@ -6175,6 +6310,9 @@ def build_daily_task_params(data):
         else data.get("appeal_type") or bit_daily_task.APPEAL_TYPE_INFRACTION
     )
     normalized_appeal_types = bit_daily_task.normalize_appeal_types(raw_appeal_types)
+    task_strategy = str(data.get("task_strategy") or "normal").strip().lower()
+    if task_strategy not in ("normal", "algorithm"):
+        raise ValueError("不支持的任务模式")
     appeal_types = [
         "延误率" if value == bit_daily_task.APPEAL_TYPE_DELAY else value
         for value in normalized_appeal_types
@@ -6242,6 +6380,7 @@ def build_daily_task_params(data):
         "mode": mode,
         "appeal_copy_mode": appeal_copy_mode,
         "deepseek_api_key": deepseek_api_key,
+        "task_strategy": task_strategy,
         "appeal_types": appeal_types,
         "appeal_type": appeal_types[0] if len(appeal_types) == 1 else "多任务",
         "top_n": 0,
@@ -6300,6 +6439,8 @@ def execute_daily_task(params, task_lock, stop_event, task_id, effective_log_pat
         "min_cancellation_rate": params.get("cancellation_min_rate", min_rate),
         "min_complaint_rate": params.get("complaint_min_rate", min_rate),
     }
+    if params.get("task_strategy") == "algorithm":
+        execution_standards["task_strategy"] = "algorithm"
     if params["mode"] == "loop":
         execution_result = bit_daily_task.loop_ai_appeal(
             appeal_task,
@@ -8865,6 +9006,47 @@ def api_high_profit_products():
         return jsonify({"status": "error", "message": str(exc)}), 500
 
 
+def _can_access_yandex_orders():
+    user = get_current_workbench_user() or {}
+    if workbench_user_own_store_only(user):
+        return False
+    organization = workbench_selected_organization(user) or user.get("organization_key")
+    if user.get("is_platform_admin") and not workbench_selected_organization(user):
+        return True
+    return organization == os.getenv("AI_ORIGINAL_YANDEX_ORGANIZATION", "wuhan-zeshun")
+
+
+def _authorized_order_store_ids():
+    allowed = _authorized_token_ids_for_user()
+    if allowed is None:
+        return None
+    if _can_access_yandex_orders():
+        return allowed | set(bit_db_api.yandex_order_sync("stores").get("ids") or [])
+    return allowed
+
+
+@app.route('/api/order-sync/yandex', methods=['GET', 'POST'])
+@login_required
+def api_unified_yandex_order_sync():
+    if not _can_access_yandex_orders():
+        return jsonify({"status": "error", "message": "当前账号没有 Yandex 店铺权限"}), 403
+    if request.method == 'POST':
+        result = bit_db_api.yandex_order_sync("start")
+        started = result["started"]
+        return jsonify({"status": "success" if started else "running", "data": result["state"]}), 202 if started else 409
+    return jsonify({"status": "success", "data": bit_db_api.yandex_order_sync()})
+
+
+@app.route('/api/db/order-sync/yandex', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_yandex_order_sync():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    action = "start" if request.method == "POST" else ("stores" if request.args.get("action") == "stores" else "status")
+    return jsonify({"status": "success", "data": bit_db_api.yandex_order_sync(action)})
+
+
 def _order_list_query_params(args):
     salespeople = []
     for value in args.getlist("salesperson"):
@@ -8882,7 +9064,7 @@ def _order_list_query_params(args):
             store_id = int(text)
         except ValueError as exc:
             raise ValueError("店铺筛选参数无效") from exc
-        if store_id <= 0:
+        if store_id == 0:
             raise ValueError("店铺筛选参数无效")
         if store_id not in store_ids:
             store_ids.append(store_id)
@@ -8914,8 +9096,9 @@ def _order_list_query_params(args):
 def api_orders():
     try:
         params = _order_list_query_params(request.args)
-        allowed_store_ids = _authorized_token_ids_for_user()
+        allowed_store_ids = _authorized_order_store_ids()
         if allowed_store_ids is not None:
+            params["allowed_store_ids"] = sorted(allowed_store_ids)
             requested_store_ids = params.get("store_ids") or []
             scoped_store_ids = (
                 [value for value in requested_store_ids if value in allowed_store_ids]
@@ -9095,6 +9278,8 @@ def api_order_weight_quote():
     order_ids = data.get("order_ids") or []
     if not isinstance(order_ids, list):
         return jsonify({"status": "error", "message": "order_ids 必须是数组"}), 422
+    if any(str(value).startswith("yandex:") for value in order_ids):
+        return jsonify({"status": "error", "message": "此操作仅适用于美客多订单，Yandex 发货请使用 Yandex 控制台"}), 400
     try:
         quote = bit_db_api.get_order_weight_quote(order_ids)
     except ValueError as exc:
@@ -9119,6 +9304,8 @@ def api_order_split_preview():
     order_ids = data.get("order_ids") or []
     if not isinstance(order_ids, list):
         return jsonify({"status": "error", "message": "order_ids 必须是数组"}), 422
+    if any(str(value).startswith("yandex:") for value in order_ids):
+        return jsonify({"status": "error", "message": "此操作仅适用于美客多订单，Yandex 发货请使用 Yandex 控制台"}), 400
     try:
         preview = bit_db_api.preview_order_split(order_ids)
     except (ValueError, RuntimeError) as exc:
@@ -9136,6 +9323,8 @@ def api_order_split_preview():
 def api_order_split():
     data = request.get_json(silent=True) or {}
     order_ids = data.get("order_ids") or []
+    if any(str(value).startswith("yandex:") for value in order_ids):
+        return jsonify({"status": "error", "message": "此操作仅适用于美客多订单，Yandex 发货请使用 Yandex 控制台"}), 400
     packs = data.get("packs") or []
     if not isinstance(order_ids, list):
         return jsonify({"status": "error", "message": "order_ids 必须是数组"}), 422
@@ -9183,6 +9372,8 @@ def api_order_product_detail():
         data = bit_db_api.get_order_product_detail(
             request.args.getlist("order_id"), request.args.get("product_id"),
             _authorized_token_ids_for_user(),
+            include_translation=request.args.get("translate") == "1",
+            force_refresh=request.args.get("refresh") == "1",
         )
         response = jsonify({"status": "success", "data": data})
         response.headers["Cache-Control"] = "no-store"
@@ -9203,10 +9394,17 @@ def api_db_order_product_detail():
     from bit.order_product_details import get_order_product_detail
     payload = request.get_json(silent=True) or {}
     try:
-        data = get_order_product_detail(payload.get("order_ids"), payload.get("product_id"), payload.get("allowed_token_ids"))
+        data = get_order_product_detail(
+            payload.get("order_ids"), payload.get("product_id"), payload.get("allowed_token_ids"),
+            include_translation=payload.get("include_translation") is True,
+            force_refresh=payload.get("force_refresh") is True,
+        )
         return jsonify({"status": "success", "data": data})
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        logging.exception("订单产品详情内部读取失败")
+        return jsonify({"status": "error", "message": "平台商品详情读取失败，请稍后重试"}), 502
 
 
 def _order_warehouse_operator(user):
@@ -9261,7 +9459,7 @@ def api_bulk_update_orders():
     try:
         result = bit_db_api.bulk_update_orders(
             order_ids,
-            allowed_token_ids=_authorized_token_ids_for_user(),
+            allowed_token_ids=_authorized_order_store_ids(),
             operator_id=user.get("id"),
             operator_name=user.get("display_name") or user.get("username") or "",
             **changes,
@@ -9390,6 +9588,8 @@ def api_print_orders_pdf():
     order_ids = data.get("order_ids") or []
     if not isinstance(order_ids, list):
         return jsonify({"status": "error", "message": "order_ids 必须是数组"}), 422
+    if any(str(value).startswith("yandex:") for value in order_ids):
+        return jsonify({"status": "error", "message": "此操作仅适用于美客多订单，Yandex 发货请使用 Yandex 控制台"}), 400
     try:
         result = bit_db_api.download_order_labels(order_ids)
     except ValueError as exc:
@@ -9463,6 +9663,8 @@ def api_print_orders_pdf():
 @app.route('/api/orders/<order_id>/logs', methods=['GET'])
 @login_required
 def api_order_operation_logs(order_id):
+    if str(order_id).startswith("yandex:") and not _can_access_yandex_orders():
+        return jsonify({"status": "error", "message": "当前账号没有 Yandex 店铺权限"}), 403
     try:
         rows = bit_db_api.list_order_operation_logs(
             order_id,
@@ -9479,6 +9681,8 @@ def api_order_operation_logs(order_id):
 @app.route('/api/orders/<order_id>/tracking', methods=['GET'])
 @login_required
 def api_order_tracking(order_id):
+    if str(order_id).startswith("yandex:") and not _can_access_yandex_orders():
+        return jsonify({"status": "error", "message": "当前账号没有 Yandex 店铺权限"}), 403
     try:
         data = bit_db_api.get_order_tracking(order_id)
     except (KeyError, ValueError) as exc:
@@ -12334,6 +12538,11 @@ def enqueue_local_agent_ai_weight_price(action, data):
 
     user = get_current_workbench_user() or {}
     user_id = user.get("id")
+    if action in {"start", "continue", "retry"}:
+        try:
+            browser_extension_mail.require_alert_email(user_id, app.secret_key)
+        except ValueError as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 400
     is_admin = bool(user.get("is_platform_admin") or user.get("role_key") == "super_admin")
     # Queue records can remain running after a worker disappears. Reconcile
     # leases before using them to reject a new operation, just as the Agent
@@ -13447,6 +13656,8 @@ def _start_mercado_profit_refresh_worker():
 def _start_order_sync_scheduler():
     if not interface_background_services_disabled() and not app.testing:
         bit_order_sync.ensure_order_sync_scheduler()
+        from bit.yandex_order_sync import ensure_scheduler as ensure_yandex_order_scheduler
+        ensure_yandex_order_scheduler()
         bit_order_sync.ensure_order_financial_backfill_worker()
         bit_order_sync.ensure_order_image_backfill_worker()
 
@@ -14244,7 +14455,9 @@ def api_mercado_collection_ai_weight_price():
             if not api_key:
                 raise ValueError("请先配置 DashScope API Key")
             with workflow.queue_lock(ai_weight_price_service):
-                run = workflow.prepare(ai_weight_price_service, data.get("collection_item_ids"), target)
+                list_mode = "products" if "product_item_ids" in data else "collection"
+                ids = data.get("product_item_ids" if list_mode == "products" else "collection_item_ids")
+                run = workflow.prepare(ai_weight_price_service, ids, target, list_mode=list_mode)
                 try:
                     if target == "agent":
                         dispatched = app.make_response(enqueue_local_agent_ai_weight_price("collection-check", {
@@ -14321,7 +14534,8 @@ def api_start_mercado_collection_ai_copy():
         if _mercado_publish_state.get("running"):
             return jsonify({"status": "error", "message": "批量上架正在运行，请完成后再生成采集商品文案"}), 409
     data = request.get_json(silent=True) or {}
-    item_ids = data.get("collection_item_ids") or []
+    product_mode = "product_item_ids" in data
+    item_ids = data.get("product_item_ids" if product_mode else "collection_item_ids") or []
     if not isinstance(item_ids, list):
         return jsonify({"status": "error", "message": "collection_item_ids 必须是数组"}), 422
     try:
@@ -14330,11 +14544,14 @@ def api_start_mercado_collection_ai_copy():
             raise ValueError("请先勾选需要生成文案的采集商品")
         if len(ids) > 100:
             raise ValueError("每批最多生成 100 件采集商品文案")
-        rows = db_get_mercado_collection_items_by_ids(ids)
+        rows = db_get_mercado_product_items_by_ids(ids) if product_mode else db_get_mercado_collection_items_by_ids(ids)
         if len(rows) != len(ids):
             raise ValueError("部分采集商品已删除，请刷新列表后重试")
-        if any(row.get("added_to_products") for row in rows):
+        if not product_mode and any(row.get("added_to_products") for row in rows):
             raise ValueError("所选商品已加入产品列表，请刷新采集列表后重试")
+        if product_mode:
+            from erp.mercadolibre_collection_store import product_ai_copy_row
+            rows = [product_ai_copy_row(row) for row in rows]
         from AI_Agent import deepseek as deepseek_client
 
         base_url = str(deepseek_client.DEEPSEEK_BASE_URL or "https://api.deepseek.com").strip()
@@ -17029,6 +17246,8 @@ def api_db_official_infraction_current_counts():
             **dict(values or {}),
         })
     data = {key: value for key, value in snapshot.items() if key != "counts"}
+    if getattr(g, "internal_agent_claims", None):
+        count_rows = [row for row in count_rows if row["token_id"] in g.internal_agent_token_ids]
     data["count_rows"] = count_rows
     return jsonify({"status": "success", "data": data})
 
@@ -17091,7 +17310,8 @@ def _prune_live_infraction_jobs():
 
 def _start_live_infraction_job(targets, recent_days=100, max_workers=8):
     _prune_live_infraction_jobs()
-    request_key = _live_infraction_request_key(targets, recent_days, max_workers)
+    agent_scope = int((getattr(g, "internal_agent_claims", {}) or {}).get("user_id") or 0) if has_request_context() else 0
+    request_key = _live_infraction_request_key(targets, recent_days, max_workers) + ":" + str(agent_scope)
     with _live_infraction_jobs_lock:
         for state in _live_infraction_jobs.values():
             if (
@@ -17109,6 +17329,7 @@ def _start_live_infraction_job(targets, recent_days=100, max_workers=8):
             "finished_at": "",
             "target_count": len(targets),
             "_request_key": request_key,
+            "_agent_scope": agent_scope,
         }
 
     def worker():
@@ -17172,6 +17393,8 @@ def api_db_live_official_infraction_job_status(job_id):
     _prune_live_infraction_jobs()
     with _live_infraction_jobs_lock:
         state = _live_infraction_jobs.get(str(job_id or ""))
+        if getattr(g, "internal_agent_claims", None) and state and state.get("_agent_scope") != int(g.internal_agent_claims.get("user_id") or 0):
+            return jsonify(status="error", message="Agent 无权读取此任务"), 403
         data = _live_infraction_job_public_state(state) if state else None
     if data is None:
         return jsonify({"status": "error", "message": "实时侵权读取任务不存在或已过期"}), 404
@@ -17403,7 +17626,8 @@ def api_db_list_mercado_tokens():
     blocked = reject_db_api_client_mode()
     if blocked:
         return blocked
-    return jsonify({"status": "success", "data": bit_db_api.list_mercado_store_tokens()})
+    return jsonify({"status": "success", "data": getattr(g, "internal_agent_tokens", None)
+                    if getattr(g, "internal_agent_claims", None) else bit_db_api.list_mercado_store_tokens()})
 
 
 @app.route('/api/db/mercado-account-groups', methods=['GET', 'POST'])
@@ -18300,7 +18524,10 @@ def api_db_list_orders():
     if blocked:
         return blocked
     try:
-        data = db_list_orders(**_order_list_query_params(request.args))
+        params = _order_list_query_params(request.args)
+        if request.args.get("scope_limited") == "1":
+            params["allowed_store_ids"] = [int(value) for value in request.args.getlist("allowed_store_id")]
+        data = db_list_orders(**params)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     return jsonify({"status": "success", "data": data})
@@ -18601,6 +18828,8 @@ def api_db_prohibited_listings():
             int(value) for value in request.args.getlist("token_ids")
             if str(value or "").isdigit() and int(value) > 0
         ] if "token_ids" in request.args else None
+        if getattr(g, "internal_agent_claims", None):
+            token_ids = sorted(g.internal_agent_token_ids.intersection(token_ids)) if token_ids is not None else sorted(g.internal_agent_token_ids)
         token_text = str(request.args.get("token_id") or "").strip()
         data = list_prohibited_listings(
             search=str(request.args.get("search") or "").strip(),
@@ -19087,7 +19316,7 @@ def api_db_latest_reputation():
     blocked = reject_db_api_client_mode()
     if blocked:
         return blocked
-    return jsonify({"status": "success", "data": db_get_latest_reputation_info()})
+    return jsonify({"status": "success", "data": _filter_internal_agent_rows(db_get_latest_reputation_info())})
 
 
 @app.route('/api/db/pago/latest', methods=['GET'])
@@ -19131,7 +19360,7 @@ def api_db_get_window_anomalies():
         return blocked
     active_only = str(request.args.get("active_only", "1")).strip().lower() not in ("0", "false", "no")
     limit = request.args.get("limit", 500)
-    return jsonify({"status": "success", "data": db_get_window_anomalies(active_only, limit)})
+    return jsonify({"status": "success", "data": _filter_internal_agent_rows(db_get_window_anomalies(active_only, limit))})
 
 
 @app.route('/api/db/window-anomalies/resolve', methods=['POST'])
@@ -20948,6 +21177,11 @@ def api_reputation_mercado_notices():
             store_results, stores_by_id, limit=6
         )
         data = {
+            "store_notices": {
+                str(token_id): _merge_mercado_seller_notices(
+                    [(token_id, page)], stores_by_id, limit=len(page.get("results") or [])
+                ) for token_id, page in store_results
+            },
             "notices": notices,
             "total_stores": len(stores),
             "success_stores": len(store_results),
@@ -21382,10 +21616,16 @@ def api_open_mercado_claim_browser(token_id):
     '/api/reputation/<int:token_id>/open-browser',
     methods=['POST'],
 )
+@app.route('/api/mercado/today/rights-holder/<int:token_id>/open-browser', methods=['POST'])
 @login_required
 def api_open_reputation_browser(token_id):
     data = request.get_json(silent=True) or {}
+    rights_reply = request.path.startswith('/api/mercado/today/rights-holder/')
+    from bit.mercado_rights_reply import RIGHTS_URL
+    target_url = RIGHTS_URL if rights_reply else bit_reputation_info.REPUTATION_URL
     execution_target = str(data.get("execution_target") or "agent").strip().lower()
+    if rights_reply and execution_target != "agent":
+        return jsonify({"status": "error", "message": "权利人回复请使用本机 Agent"}), 400
     if execution_target not in {"agent", "server"}:
         return jsonify({"status": "error", "message": "请选择 Agent 或服务器"}), 400
     user = get_current_workbench_user() or {}
@@ -21442,6 +21682,8 @@ def api_open_reputation_browser(token_id):
                 "shop_name_hint": shop_name_hint,
                 "agent_name": agent.get("name") or agent_id,
             }
+            if rights_reply:
+                payload["destination"] = "rights_holder"
             try:
                 store.enqueue_job(
                     task_id,
@@ -21474,7 +21716,7 @@ def api_open_reputation_browser(token_id):
         result = _open_mercado_claim_browser(
             token_id,
             shop_name_hint=shop_name_hint,
-            target_url=bit_reputation_info.REPUTATION_URL,
+            target_url=target_url,
         )
         response = jsonify({
             "status": "success",
@@ -21496,6 +21738,7 @@ def api_open_reputation_browser(token_id):
 
 
 @app.route('/api/reputation/open-store/<task_id>', methods=['GET'])
+@app.route('/api/mercado/today/rights-holder/open-store/<task_id>', methods=['GET'])
 @login_required
 def api_open_reputation_browser_status(task_id):
     user = get_current_workbench_user() or {}
@@ -22760,6 +23003,8 @@ def api_browser_extension_ai_weight_price_client_action(action):
                 **data,
                 "runtime_api_key": runtime_api_key,
             }
+        if action in {"start", "continue"}:
+            browser_extension_mail.require_alert_email(user_id, app.secret_key)
         result = dispatch(ai_weight_price_service, action, data)
         result = result if isinstance(result, dict) else {}
         return jsonify({"status": "success", "data": result})
@@ -23065,6 +23310,9 @@ def _run_mercado_collection_copy_task(rows, api_key, model, base_url, workers):
                 )
             },
         }
+        if row.get("_ai_copy_product"):
+            expected["_ai_copy_product"] = True
+            expected["source_snapshot_json"] = row.get("source_snapshot_json")
         saved = db_save_mercado_collection_item_ai_copy(item_id, expected, generated)
         if not saved.get("saved"):
             return {
@@ -23209,10 +23457,16 @@ def _run_ai_original_task(
                         target_platform=target_platform, template_id=template_id)
 
         def state_changes():
+            import re
             if is_mercado:
                 snapshot["ai_original"] = ai_state
-                return {"source_snapshot_json": snapshot, "review_status": "unreviewed",
-                        "expected_ai_original_revision": expected_edit_revision}
+                changes = {"source_snapshot_json": snapshot, "review_status": "unreviewed",
+                           "expected_ai_original_revision": expected_edit_revision}
+                # Keep the selected category even if later attribute/SKU work fails.
+                if re.fullmatch(r"CBT[A-Z0-9_-]{1,63}", str(ai_state.get("category_id") or "")):
+                    changes.update(category_id=ai_state["category_id"],
+                                   category_name=ai_state.get("category_name") or ai_state["category_id"])
+                return changes
             return {"marketplace_listing": dict(ai_state)}
 
         try:
@@ -24494,6 +24748,8 @@ def start_interface_background_services():
         return
 
     ensure_notification_worker(enabled=True)
+    from bit.ai_weight_price_alerts import start_scheduler as start_awp_alert_scheduler
+    start_awp_alert_scheduler(ai_weight_price_service.store, app.secret_key)
     from bit.mercado_product_data import service as mercado_product_data_service
     mercado_product_data_service.start_renewal_scheduler()
     start_wipo_scheduler_bootstrap()
@@ -24515,6 +24771,8 @@ def start_interface_background_services():
         start_yandex_console_bootstrap()
     ensure_mercado_profit_refresh_worker()
     bit_order_sync.ensure_order_sync_scheduler()
+    from bit.yandex_order_sync import ensure_scheduler as ensure_yandex_order_scheduler
+    ensure_yandex_order_scheduler()
     bit_order_sync.ensure_order_financial_backfill_worker()
     bit_order_sync.ensure_order_image_backfill_worker()
 

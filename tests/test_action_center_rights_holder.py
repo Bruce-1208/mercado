@@ -40,3 +40,18 @@ def test_today_rights_cases_use_authorized_organization_scope(monkeypatch):
     response = app.test_client().get('/api/mercado/today/tasks')
     assert response.status_code == 200
     assert response.json['data']['rights_holder_replies'] == [{'infraction_id': 'case-7'}]
+
+
+def test_recorded_reply_attempts_stay_out_of_inbox_after_reload(monkeypatch, tmp_path):
+    import json
+    from bit import bit_runtime_lock
+    monkeypatch.setattr(bit_runtime_lock, 'RUNTIME_LOCK_DIR', tmp_path)
+    for case_id, state in [('1', 'accepted'), ('2', 'unknown'), ('3', 'sending'), ('4', 'confirmed')]:
+        (tmp_path / f'rights-reply-7-{case_id}.json').write_text(json.dumps({'state': state}))
+    class Store:
+        def list_mercado_prohibited_listings(self, **kwargs):
+            return {'total': 5, 'rows': [
+                {'token_id': 7, 'infraction_id': str(i)} for i in range(1, 6)
+            ]}
+    assert [row['infraction_id'] for row in module._rights_holder_replies(Store(), [7])] == ['5']
+    assert len(module._rights_holder_replies(Store(), [7], include_replied=True)) == 5

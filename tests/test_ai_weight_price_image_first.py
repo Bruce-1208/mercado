@@ -306,7 +306,7 @@ def test_missing_weight_must_retain_original_after_save_and_skip_on_mismatch(tmp
     assert len(browser.records) == 10
 
 
-def test_search_timeout_marks_price_anomaly_before_reading_later_products(tmp_path, monkeypatch):
+def test_search_timeout_skips_without_write_before_reading_later_products(tmp_path, monkeypatch):
     from erp.ai_weight_price.browser import SearchTimeout
     service, browser, config = make_service(tmp_path, monkeypatch)
     def timeout(task):
@@ -314,16 +314,16 @@ def test_search_timeout_marks_price_anomaly_before_reading_later_products(tmp_pa
     monkeypatch.setattr(browser, 'search_images', timeout)
     lock = service.lock(); assert lock.acquire()
     service.run(config, 'pipeline', None, lock)
-    assert service.store.get('1')['status'] == 'risk'
-    assert browser.records['1']['review_status'] == '价格异常'
+    assert service.store.get('1')['status'] == 'skipped'
+    assert browser.records['1']['review_status'] == '待审核'
     assert service.store.state('run')['outcome'] == 'completed'
     assert service.store.state('run')['processed_items'] == 10
     assert service.store.state('pipeline_current') is None
     assert [key for step, key in browser.operations if step == 'collect'] == list(map(str, range(1, 11)))
-    assert len([step for step, _ in browser.operations if step == 'save']) == 10
+    assert len([step for step, _ in browser.operations if step == 'save']) == 0
 
 
-def test_1688_read_exception_marks_price_anomaly_before_reading_later_products(tmp_path, monkeypatch):
+def test_1688_read_exception_skips_without_write_before_reading_later_products(tmp_path, monkeypatch):
     service, browser, config = make_service(tmp_path, monkeypatch)
     original = browser.search_images
 
@@ -335,8 +335,8 @@ def test_1688_read_exception_marks_price_anomaly_before_reading_later_products(t
     monkeypatch.setattr(browser, 'search_images', fail_first_only)
     lock = service.lock(); assert lock.acquire()
     service.run(config, 'pipeline', None, lock)
-    assert service.store.get('1')['status'] == 'risk'
-    assert browser.records['1']['review_status'] == '价格异常'
+    assert service.store.get('1')['status'] == 'skipped'
+    assert browser.records['1']['review_status'] == '待审核'
     assert service.store.state('run')['processed_items'] == 10
     assert service.store.state('run')['outcome'] == 'completed'
     assert service.store.state('pipeline_current') is None
@@ -604,13 +604,13 @@ def test_visible_search_timeout_is_retried_before_later_rows(tmp_path, monkeypat
     assert any('自动重新处理' in event['message'] for event in service.store.logs(limit=2000))
 
 
-def test_1688_login_pause_keeps_current_item_and_resume_starts_it_before_collection(tmp_path, monkeypatch):
+def test_1688_captcha_pause_keeps_current_item_and_resume_starts_it_before_collection(tmp_path, monkeypatch):
     service, browser, config = make_service(tmp_path, monkeypatch)
     released = {'value': False}
     def search(task):
         browser.operations.append(('image', task['erp_goods_id']))
         if not released['value']:
-            raise CircuitOpen('1688需要登录')
+            raise CircuitOpen('1688需要完成人机验证')
         return [{'url': 'https://detail.1688.com/offer/1.html', 'title': '蓝色杯',
                  'main_image_url': 'https://img.example/cup.jpg'}]
     monkeypatch.setattr(browser, 'search_images', search)
@@ -647,11 +647,11 @@ def test_1688_login_pause_keeps_current_item_and_resume_starts_it_before_collect
     assert len(browser.records) == 10
 
 
-def test_old_login_redirect_exception_is_migrated_to_resume_switch(tmp_path, monkeypatch):
+def test_old_captcha_exception_is_migrated_to_resume_switch(tmp_path, monkeypatch):
     store = Store(tmp_path)
     store.add({'erp_goods_id': 'old-1', 'title': '旧版登录跳转任务'})
     store.exception('old-1', '主图核重核价执行异常',
-                    '1688搜图跳转至 login.taobao.com；请核对登录状态')
+                    '1688需要完成人机验证')
     selection = {'category': '', 'start_page': 1, 'end_page': 1}
     store.set_state('pipeline_current', {'scope': 'old-scope', 'task_id': 'old-1'})
     store.set_state('run_selection', selection)
@@ -754,7 +754,7 @@ def test_image_matching_rejects_invalid_scores(monkeypatch, score):
 
 
 @pytest.mark.parametrize('status', [400, 401, 403, 429, 500, 503])
-def test_model_service_http_failure_pauses_without_erp_write(tmp_path, monkeypatch, status):
+def test_model_service_http_failure_skips_without_erp_write(tmp_path, monkeypatch, status):
     from types import SimpleNamespace
     service, browser, config = make_service(tmp_path, monkeypatch)
     service.store.add({'erp_goods_id': '1', 'title': '测试商品',
@@ -763,11 +763,10 @@ def test_model_service_http_failure_pauses_without_erp_write(tmp_path, monkeypat
     original = dict(browser.records['1'])
     monkeypatch.setattr('erp.ai_weight_price.models.requests.post',
                         lambda *a, **kw: SimpleNamespace(ok=False, status_code=status))
-    with pytest.raises(CircuitOpen, match=f'HTTP {status}'):
-        service.complete_one('1', browser, Models(config, lambda *a: None), config)
+    service.complete_one('1', browser, Models(config, lambda *a: None), config)
     assert browser.records['1'] == original
     assert not any(op[0] == 'save' for op in browser.operations)
-    assert service.store.get('1')['status'] == 'pending'
+    assert service.store.get('1')['status'] == 'skipped'
 
 
 def test_model_network_error_does_not_expose_request_details(monkeypatch):
@@ -781,7 +780,7 @@ def test_model_network_error_does_not_expose_request_details(monkeypatch):
     assert 'private' not in str(caught.value)
 
 
-def test_model_auth_failure_retains_batch_current_item(tmp_path, monkeypatch):
+def test_model_auth_failure_skips_items_and_finishes_batch(tmp_path, monkeypatch):
     from types import SimpleNamespace
     service, browser, config = make_service(tmp_path, monkeypatch)
     service.models_factory = lambda *args: Models(config, lambda *a: None)
@@ -790,12 +789,14 @@ def test_model_auth_failure_retains_batch_current_item(tmp_path, monkeypatch):
     lock = service.lock()
     assert lock.acquire()
     service.run(config, 'pipeline', None, lock)
-    assert service.store.state('run')['outcome'] == 'blocked'
-    assert 'HTTP 401' in service.store.state('circuit')['reason']
-    assert service.store.state('pipeline_current')['task_id'] == '1'
-    assert browser.operations == [('collect', '1'), ('image', '1')]
+    assert service.store.state('run')['outcome'] == 'completed'
+    assert service.store.state('circuit') is None
+    assert service.store.state('run')['processed_items'] == 10
+    assert service.store.state('pipeline_current') is None
+    assert ('image', '10') in browser.operations
+    assert not any(op[0] == 'save' for op in browser.operations)
     assert browser.records['1']['review_status'] == '待审核'
-    assert service.store.get('1')['status'] == 'pending'
+    assert service.store.get('1')['status'] == 'skipped'
 
 
 @pytest.mark.parametrize('response_kind', [
@@ -823,3 +824,52 @@ def test_invalid_model_response_is_service_failure_not_product_evidence(monkeypa
     monkeypatch.setattr('erp.ai_weight_price.models.requests.post', lambda *a, **kw: Response())
     with pytest.raises(ModelServiceError, match='暂停'):
         Models(validate({}), lambda *a: None).call('qwen-test', 'test', json_output=True)
+
+
+@pytest.mark.parametrize('reason', [
+    '按产品编号 716192124 搜索后匹配到 0 个智赢商品（当前可见卡片 60 个；请核对智赢筛选条件及当前账号权限）',
+    '智赢弹窗遮挡操作，请人工处理',
+    '1688需要登录',
+    '外部写入结果不确定，请人工回读确认',
+])
+def test_ordinary_product_failure_skips_and_processes_next(tmp_path, monkeypatch, reason):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    original = browser.write_patch
+    def fail_first(task, changes, before_save):
+        if task['erp_goods_id'] == '1':
+            raise CircuitOpen(reason)
+        return original(task, changes, before_save)
+    monkeypatch.setattr(browser, 'write_patch', fail_first)
+    lock = service.lock(); assert lock.acquire()
+    service.run(config, 'pipeline', None, lock)
+    assert service.store.get('1')['status'] == 'skipped'
+    assert reason in service.store.get('1')['exception_detail']
+    assert service.store.get('2')['status'] == 'risk'
+    assert ('save', '2') in browser.operations
+    assert service.store.state('run')['processed_items'] == 10
+    assert service.store.state('circuit') is None
+
+
+@pytest.mark.parametrize('captcha', [False, True])
+def test_continue_old_exception_runs_next_or_retries_after_captcha(tmp_path, monkeypatch, captcha):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    service.store.add({'erp_goods_id': '1', 'title': '暂停商品', 'main_image_url': 'https://img.example/1.jpg'})
+    reason = '需要完成人机验证' if captcha else '按产品编号搜索匹配到0个；请核对筛选条件'
+    service.store.exception('1', 'ERP重量或净收益回写失败', reason)
+    service.store.set_state('pipeline_current', {'scope': config['run_scope'], 'task_id': '1'})
+    service.store.set_state('circuit', {'reason': reason})
+    browser.records['1'] = {'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '待审核'}
+    calls = []
+    def resume(mode, task_id, selection, remaining, resume, **kwargs):
+        calls.append((mode, remaining, resume))
+        lock = service.lock(); assert lock.acquire()
+        service.run(config, mode, task_id, lock)
+    monkeypatch.setattr(service, 'start', resume)
+    service.continue_after_human()
+    assert calls == [('pipeline', 10, True)]
+    assert service.store.state('circuit') is None
+    assert service.store.state('run')['run_id'] == config['run_id']
+    assert service.store.state('run')['processed_items'] == 10
+    assert service.store.get('1')['status'] == ('risk' if captcha else 'skipped')
+    assert ('image', '2') in browser.operations
+    assert (('image', '1') in browser.operations) is captcha

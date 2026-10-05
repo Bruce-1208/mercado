@@ -10,7 +10,7 @@ import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping
 
 from bit.sync_capacity import run_store as run_capacity_store, due_batch
@@ -216,6 +216,11 @@ def _plain_text(value: Any) -> str:
 
 
 def _mysql_datetime(value: Any) -> str | None:
+    """Store official offset-aware timestamps as Beijing wall time.
+
+    Legacy timestamps without an offset are already workbench wall time.
+    Never infer their timezone from the execution host or seller's country.
+    """
     text = str(value or "").strip()
     if not text:
         return None
@@ -238,7 +243,7 @@ def _mysql_datetime(value: Any) -> str | None:
     if parsed is None:
         return text[:19].replace("T", " ") if len(text) >= 10 else None
     if parsed.tzinfo is not None:
-        parsed = parsed.astimezone().replace(tzinfo=None)
+        parsed = parsed.astimezone(timezone(timedelta(hours=8))).replace(tzinfo=None)
     return parsed.replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
 
 

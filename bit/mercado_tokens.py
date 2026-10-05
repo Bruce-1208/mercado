@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import logging
 import threading
+import time
 from datetime import datetime, timedelta
 from typing import Any, Mapping
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -505,17 +506,26 @@ def refresh_and_save(
     record_error=None,
     http: requests.Session | None = None,
     timeout: int = 30,
+    lock_timeout: float | None = None,
 ) -> dict[str, Any]:
-    """Refresh one token safely even when manual and automatic jobs overlap."""
+    """Refresh safely, optionally bounding the combined thread/process lock wait."""
 
     token_id = int(token_id)
-    with _token_refresh_lock(token_id):
+    wait = None if lock_timeout is None else max(0.0, float(lock_timeout))
+    deadline = None if wait is None else time.monotonic() + wait
+    thread_lock = _token_refresh_lock(token_id)
+    acquired = thread_lock.acquire() if wait is None else thread_lock.acquire(timeout=wait)
+    if not acquired:
+        raise MercadoTokenError("该店铺 Token 正在其他任务中刷新，请稍后重试")
+    try:
         process_lock = InterProcessLock(
             f"mercado_store_token_refresh_{token_id}",
             owner="mercado_token_refresh",
             metadata={"token_id": token_id},
         )
-        if not process_lock.acquire(timeout=max(5, int(timeout) + 5)):
+        process_wait = (max(5, int(timeout) + 5) if deadline is None
+                        else max(0.0, deadline - time.monotonic()))
+        if not process_lock.acquire(timeout=process_wait):
             raise MercadoTokenError("该店铺 Token 正在其他任务中刷新，请稍后重试")
         try:
             return _refresh_and_save_unlocked(
@@ -529,6 +539,8 @@ def refresh_and_save(
             )
         finally:
             process_lock.release()
+    finally:
+        thread_lock.release()
 
 
 def _token_datetime(value: Any) -> datetime | None:

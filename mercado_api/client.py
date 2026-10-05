@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .request_budget import admission
+from .request_budget import AdmissionTimeout, admission
 
 import json
 import logging
@@ -62,10 +62,12 @@ class MercadoLibreClient:
     def __init__(self, access_token: str, *, refresh_token: str | None = None,
                  client_id: str | None = None, client_secret: str | None = None,
                  token_store: TokenStore | None = None, timeout: int = 30,
-                 session: requests.Session | None = None):
+                 session: requests.Session | None = None,
+                 admission_timeout: float | None = None):
         """初始化客户端。
 
         ``session`` 参数主要用于连接复用，也方便在测试中注入模拟会话。
+        ``admission_timeout`` 可限制交互请求的额度排队等待，默认无限等待。
         若 token 文件已有数据，以文件内最后一次刷新后的 token 为准。
         """
         self.access_token = access_token
@@ -74,6 +76,7 @@ class MercadoLibreClient:
         self.client_secret = client_secret
         self.token_store = token_store
         self.timeout = timeout
+        self.admission_timeout = admission_timeout
         if session is None:
             self.session = requests.Session()
             # Scheduled/local-agent jobs must not depend on a desktop proxy
@@ -134,7 +137,9 @@ class MercadoLibreClient:
             try:
                 request_headers = dict(headers or {})
                 request_headers["Authorization"] = f"Bearer {self.access_token}"
-                with admission(self.access_token):
+                slot = (admission(self.access_token) if self.admission_timeout is None
+                        else admission(self.access_token, timeout=self.admission_timeout))
+                with slot:
                     response = self.session.request(
                         method,
                         url,
@@ -143,6 +148,9 @@ class MercadoLibreClient:
                         json=json_body,
                         timeout=self.timeout,
                     )
+            except AdmissionTimeout as exc:
+                # Retrying a full queue would defeat the interactive wait limit.
+                raise MercadoAPIError("API 请求队列繁忙，请稍后重试") from exc
             except requests.RequestException as exc:
                 if attempt < attempts - 1:
                     delay = min(2**attempt, 8)
@@ -222,7 +230,9 @@ class MercadoLibreClient:
         attempts = max(1, min(4, int(max_attempts or 1)))
         for attempt in range(attempts):
             try:
-                with admission(self.access_token):
+                slot = (admission(self.access_token) if self.admission_timeout is None
+                        else admission(self.access_token, timeout=self.admission_timeout))
+                with slot:
                     response = self.session.request(
                         method,
                         url,
@@ -230,6 +240,8 @@ class MercadoLibreClient:
                         headers={"Authorization": f"Bearer {self.access_token}"},
                         timeout=self.timeout,
                     )
+            except AdmissionTimeout as exc:
+                raise MercadoAPIError("API 请求队列繁忙，请稍后重试") from exc
             except requests.RequestException as exc:
                 if attempt < attempts - 1:
                     delay = min(2**attempt, 8)

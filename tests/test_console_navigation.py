@@ -25,5 +25,44 @@ def test_navigation_search_collapse_and_permissions(console_page):
     page.reload()
     assert page.locator('.nav-section[data-group="products"]').get_attribute('open') is not None
     page.set_viewport_size({'width': 390, 'height': 844})
+    page.locator('#sidebar-toggle').click()
     assert page.locator('.sidebar .nav-label:visible').count() > 0
     assert page.evaluate('document.documentElement.scrollWidth') == 390
+
+
+def test_mobile_navigation_survives_saved_desktop_collapse(console_page):
+    page = console_page
+    toggle = page.locator('#sidebar-toggle')
+    toggle.click()
+    assert page.evaluate("localStorage.getItem('zeshun-sidebar-collapsed')") == '1'
+    page.set_viewport_size({'width': 390, 'height': 844})
+    page.wait_for_function("document.getElementById('console-navigation').inert")
+    toggle.click()
+    assert toggle.get_attribute('aria-expanded') == 'true'
+    search = page.get_by_role('searchbox', name='搜索功能')
+    search.fill('订单管理')
+    page.locator('.sidebar .tab-button:visible').click()
+    assert page.locator('#tab-orders').is_visible()
+    assert toggle.get_attribute('aria-expanded') == 'false'
+    assert page.evaluate("localStorage.getItem('zeshun-sidebar-collapsed')") == '1'
+    page.set_viewport_size({'width': 1440, 'height': 1000})
+    assert page.locator('body').evaluate("el => el.classList.contains('sidebar-collapsed')")
+
+
+def test_mobile_navigation_focus_escape_and_backdrop(console_page):
+    page = console_page
+    page.set_viewport_size({'width': 390, 'height': 844})
+    toggle = page.locator('#sidebar-toggle')
+    toggle.click()
+    page.wait_for_function("document.activeElement.matches('.nav-tools input')")
+    page.locator('.sidebar-footer').evaluate("el => el.querySelector('a, button')?.focus()")
+    for _ in range(12):
+        page.keyboard.press('Tab')
+        assert page.evaluate("document.activeElement.id === 'sidebar-toggle' || !!document.activeElement.closest('.sidebar')")
+    page.keyboard.press('Escape')
+    assert toggle.get_attribute('aria-expanded') == 'false'
+    assert toggle.evaluate('el => el === document.activeElement')
+    toggle.click()
+    page.locator('.zs-nav-backdrop').click(position={'x': 360, 'y': 420})
+    assert toggle.get_attribute('aria-expanded') == 'false'
+    assert page.evaluate("getComputedStyle(document.body).overflow !== 'hidden'")

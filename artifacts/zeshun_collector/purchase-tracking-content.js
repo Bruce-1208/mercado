@@ -47,7 +47,7 @@
   function findSearchInput(platform) {
     const selectors = platform === "1688"
       ? ["input[placeholder*='订单']", "input[placeholder*='搜索']", "input[name*='order']", "input[type='search']"]
-      : ["input[placeholder*='订单']", "input[placeholder*='商品']", "input[placeholder*='搜索']", "input[name*='order']", "input[type='search']"];
+      : ["input[placeholder*='订单']", "input[name*='order']", "input[type='search']"];
     for (const selector of selectors) {
       const candidate = [...document.querySelectorAll(selector)].find(visible);
       if (candidate) return candidate;
@@ -55,8 +55,8 @@
     return null;
   }
 
-  function findAction(label) {
-    return [...document.querySelectorAll("button,a,[role='button'],span")]
+  function findAction(label, scope) {
+    return [...scope.querySelectorAll("button,a,[role='button'],span")]
       .find(element => visible(element) && String(element.textContent || "").trim() === label);
   }
 
@@ -83,6 +83,30 @@
     return {tracking_number: trackingNumber, logistics_company: logisticsCompany};
   }
 
+  function findOrderScope(order) {
+    const matchesOrder = value => String(value || "").split(/[^A-Za-z0-9_-]+/).includes(order);
+    let matchedOrder = null;
+    // Start at the exact order-number text, never the page-wide result text.
+    const nodes = [...document.querySelectorAll("body *")].filter(element =>
+      visible(element) && !["INPUT", "TEXTAREA", "SCRIPT", "STYLE"].includes(element.tagName) &&
+      matchesOrder(element.innerText) &&
+      ![...element.children].some(child => matchesOrder(child.innerText))
+    );
+    for (const node of nodes) {
+      for (let scope = node; scope && scope !== document.body; scope = scope.parentElement) {
+        const value = String(scope.innerText || "");
+        const orderLabels = value.match(/(?:订单号|订单编号|订单号码)\s*[：:]?\s*([A-Za-z0-9_-]+)/g) || [];
+        if (orderLabels.some(label => !matchesOrder(label))) break;
+        // An order number proves the order exists even before shipping controls
+        // appear. Keep the smallest labelled scope as a safe no-tracking fallback.
+        if (!matchedOrder && orderLabels.some(matchesOrder)) matchedOrder = scope;
+        if (/物流单号|快递单号|运单号|物流编号|快递编号/.test(value) ||
+            ["查看物流", "物流详情", "查看快递", "订单详情", "查看详情"].some(label => findAction(label, scope))) return scope;
+      }
+    }
+    return matchedOrder;
+  }
+
   async function fetchTracking(purchaseOrder) {
     const order = String(purchaseOrder || "").trim();
     if (!order) return {status: "failed", message: "采购订单号为空"};
@@ -96,12 +120,14 @@
       try { if (search.form) search.form.requestSubmit(); } catch (_) {}
       await sleep(1800);
     }
-    const orderText = text();
-    if (!orderText.includes(order)) {
+    if (isLoginPage()) return {status: "not_logged_in", message: "采购平台登录已失效"};
+    const scope = findOrderScope(order);
+    if (!scope) {
       return {status: "not_found", message: "平台未找到该采购订单"};
     }
+    const existingDialogs = new Set([...document.querySelectorAll("[role='dialog'],dialog,.ant-modal,.el-dialog")].filter(visible));
     for (const label of ["查看物流", "物流详情", "查看快递", "订单详情", "查看详情"]) {
-      const action = findAction(label);
+      const action = findAction(label, scope);
       if (!action) continue;
       try {
         action.click();
@@ -109,9 +135,16 @@
         break;
       } catch (_) {}
     }
-    const result = extractTracking(text());
+    if (isLoginPage()) return {status: "not_logged_in", message: "采购平台登录已失效"};
+    const dialog = [...document.querySelectorAll("[role='dialog'],dialog,.ant-modal,.el-dialog")]
+      .find(element => visible(element) && !existingDialogs.has(element));
+    const result = extractTracking(dialog ? dialog.innerText : scope.innerText);
+    if (dialog) {
+      const close = dialog.querySelector("[aria-label='Close'],[aria-label='关闭'],.ant-modal-close,.el-dialog__headerbtn");
+      if (close) close.click();
+    }
     if (!result.tracking_number) {
-      return {status: "pending", message: "订单尚未发货或平台未显示物流号"};
+      return {status: "pending", message: "未发货"};
     }
     return {status: "synced", ...result};
   }

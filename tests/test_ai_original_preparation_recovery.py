@@ -227,7 +227,7 @@ def test_worker_persists_partial_copy_and_actionable_failure(monkeypatch):
     saved = []
     state = {}
     def prepare(row, **kwargs):
-        partial = {"title_es": "Saved copy", "generated_copy": {"title_es": "Saved copy"},
+        partial = {"category_id": "CBT123", "category_name": "Masks", "title_es": "Saved copy", "generated_copy": {"title_es": "Saved copy"},
                    "preparation": {"version": 1, "copy_ready": True}}
         kwargs["on_preparation_checkpoint"]("copy", partial)
         raise products.OriginalPreparationError("variations", "Check specifications", {
@@ -239,6 +239,7 @@ def test_worker_persists_partial_copy_and_actionable_failure(monkeypatch):
                      db_update_ai_original_product=lambda pid, changes: saved.append(deepcopy(changes)))
     exec(compile(ast.Module(body=[node], type_ignores=[]), "<worker>", "exec"), namespace)
     namespace["_run_ai_original_task"]([{"id": 1}], workers=1)
+    assert saved[-1]["category_id"] == "CBT123"
     failure = saved[-1]["source_snapshot_json"]["ai_original"]
     assert failure["title_es"] == "Saved copy"
     assert failure["preparation"]["copy_ready"] is True

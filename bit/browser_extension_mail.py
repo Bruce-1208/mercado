@@ -237,7 +237,35 @@ def send_test(user_id, secret_key, path=None, **smtp_factories) -> dict:
     return {"sent": True, "receiver_email": config["receiver_email"]}
 
 
+def require_alert_email(user_id, secret_key, path=None):
+    settings = get_public_settings(user_id, secret_key, path)
+    if not settings.get("configured") or not settings.get("enabled"):
+        raise ValueError("核重核价必须启用邮件提醒，请先在集成与凭证设置中配置并启用邮箱")
+
+
 def send_alert(user_id, event: dict, secret_key, path=None, dedupe_seconds=1800, **smtp_factories) -> dict:
+    incident = str(event.get("incident_id") or "") if isinstance(event, dict) else ""
+    if not incident:
+        return _send_alert(user_id, event, secret_key, path, dedupe_seconds, **smtp_factories)
+    from bit.bit_runtime_lock import InterProcessLock
+    digest = hashlib.sha256(f"{_path(path)}|{user_id}|{incident}".encode()).hexdigest()
+    lock = InterProcessLock("awp_mail_" + digest)
+    if not lock.acquire():
+        return {"sent": False, "pending": True}
+    try:
+        receipt = _path(path).parent / "mail-receipts" / (digest + ".json")
+        if receipt.is_file():
+            return {"sent": False, "deduplicated": True}
+        result = _send_alert(user_id, event, secret_key, path, dedupe_seconds, **smtp_factories)
+        if result.get("sent") or result.get("deduplicated"):
+            receipt.parent.mkdir(parents=True, exist_ok=True)
+            receipt.write_text(json.dumps({"sent_at": time.time()}), encoding="utf-8")
+        return result
+    finally:
+        lock.release()
+
+
+def _send_alert(user_id, event: dict, secret_key, path=None, dedupe_seconds=1800, **smtp_factories) -> dict:
     if not isinstance(event, dict):
         raise ValueError("通知事件格式无效")
     event_type = str(event.get("event_type") or "").strip()
@@ -252,7 +280,7 @@ def send_alert(user_id, event: dict, secret_key, path=None, dedupe_seconds=1800,
     message = " ".join(str(event.get("message") or "").split())[:1000]
     source = " ".join(str(event.get("source") or "泽顺插件").split())[:120]
     fingerprint = hashlib.sha256(
-        f"{int(user_id)}\0{event_type}\0{source}\0{message}".encode("utf-8")
+        f"{int(user_id)}\0{event_type}\0{source}\0{message}\0{str(event.get('incident_id') or '')[:1500]}".encode("utf-8")
     ).hexdigest()
     now = time.time()
     with _lock:

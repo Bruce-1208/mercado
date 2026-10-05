@@ -14,6 +14,15 @@ DB_API_SESSION = requests.Session()
 DB_API_SESSION.trust_env = False
 
 
+def _live_infraction_job_timeout_seconds():
+    """Allow the server scan to outlive the old fixed 16-minute client wait."""
+    try:
+        value = int(os.environ.get("MERCADO_DAILY_INFRACTION_JOB_TIMEOUT_SECONDS", "1800"))
+    except (TypeError, ValueError):
+        value = 1800
+    return max(960, min(value, 7200))
+
+
 def _resolve_db_mode():
     return "api" if RUNTIME_SETTINGS.is_client else "mysql"
 
@@ -488,7 +497,8 @@ def collect_live_detection_infractions(
     if not job_id:
         raise RuntimeError("官方侵权读取任务未返回任务编号")
     status_path = f"{job_path}/{job_id}"
-    deadline = time.monotonic() + 960
+    timeout_seconds = _live_infraction_job_timeout_seconds()
+    deadline = time.monotonic() + timeout_seconds
     transient_failures = 0
     while time.monotonic() < deadline:
         if stop_event is not None and stop_event.is_set():
@@ -520,7 +530,9 @@ def collect_live_detection_infractions(
                 + str(state.get("error") or "未知错误")
             )
         time.sleep(2)
-    raise RuntimeError("官方侵权读取服务端任务超时（超过 16 分钟）")
+    raise RuntimeError(
+        f"官方侵权读取服务端任务超时（超过 {timeout_seconds // 60} 分钟）"
+    )
 
 
 def start_official_infraction_sync(token_ids=None, *, pppi=False):
@@ -976,8 +988,9 @@ def list_orders(
     remark_search="",
     sort_by="ordered_at",
     sort_dir="desc",
+    allowed_store_ids=None,
 ):
-    normalized_store_ids = [int(value) for value in store_ids or [] if str(value or "").isdigit()]
+    normalized_store_ids = [int(value) for value in store_ids or [] if str(value or "").lstrip("-").isdigit() and int(value) != 0]
     normalized_salespeople = [
         str(value or "").strip() for value in salespeople or [] if str(value or "").strip()
     ]
@@ -1001,6 +1014,8 @@ def list_orders(
         local_params["store_ids"] = normalized_store_ids
     if normalized_salespeople:
         local_params["salespeople"] = normalized_salespeople
+    if allowed_store_ids is not None:
+        local_params["allowed_store_ids"] = [int(value) for value in allowed_store_ids]
     if DB_MODE == "mysql":
         return _local_call("list_orders", **local_params)
     params = dict(local_params)
@@ -1010,6 +1025,10 @@ def list_orders(
     if normalized_salespeople:
         params.pop("salespeople", None)
         params["salesperson"] = normalized_salespeople
+    if allowed_store_ids is not None:
+        params.pop("allowed_store_ids", None)
+        params["scope_limited"] = "1"
+        params["allowed_store_id"] = local_params["allowed_store_ids"]
     path = "/api/db/orders"
     try:
         return _request("GET", path, params=params)
@@ -3371,14 +3390,17 @@ def employee_tasks(payload):
     return _mercado_action_center_call("employee_tasks", payload)
 
 
-def get_order_product_detail(order_ids, product_id, allowed_token_ids=None):
+def get_order_product_detail(order_ids, product_id, allowed_token_ids=None, *,
+                             include_translation=False, force_refresh=False):
     if DB_MODE == "mysql":
         from bit.order_product_details import get_order_product_detail as read
-        return read(order_ids, product_id, allowed_token_ids)
+        return read(order_ids, product_id, allowed_token_ids,
+                    include_translation=include_translation, force_refresh=force_refresh)
     return _request("POST", "/api/db/orders/product-detail", json={
         "order_ids": order_ids, "product_id": product_id,
         "allowed_token_ids": None if allowed_token_ids is None else list(allowed_token_ids),
-    })
+        "include_translation": bool(include_translation), "force_refresh": bool(force_refresh),
+    }, timeout=(3, 45) if include_translation else (3, 35), max_attempts=1)
 
 
 def get_ai_appeal_product_contexts(shop_name, product_ids):
@@ -3397,3 +3419,14 @@ def list_salesperson_stats(start_date="", end_date="", *, allowed_token_ids=None
     if allowed_token_ids is not None:
         params.update(scope_limited="1", allowed_token_id=sorted(allowed_token_ids))
     return _request("GET", "/api/db/salesperson-stats", params=params)
+
+
+def yandex_order_sync(action="status"):
+    if DB_MODE != "mysql":
+        return _request("POST" if action == "start" else "GET", "/api/db/order-sync/yandex", params={"action": action})
+    from bit import yandex_order_sync as service
+    if action == "stores":
+        return {"ids": sorted(service.registered_store_ids())}
+    if action == "start":
+        return {"started": service.start(full=True), "state": service.status()}
+    return service.status()

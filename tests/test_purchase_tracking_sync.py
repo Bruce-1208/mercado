@@ -1,6 +1,7 @@
 import time
 
 from bit.purchase_tracking_sync import (
+    BrowserPurchasePlatform,
     PurchaseTrackingSyncManager,
     extract_tracking,
     supported_platforms,
@@ -19,6 +20,28 @@ def test_extract_tracking_number_and_company_from_platform_text():
     assert result == {
         "tracking_number": "SF123456789CN",
         "logistics_company": "shunfeng",
+    }
+
+
+def test_found_1688_order_without_tracking_is_pending(monkeypatch):
+    purchase_order = "5127480146121008319"
+    adapter = BrowserPurchasePlatform("1688", "buyer", "")
+    monkeypatch.setattr(
+        adapter, "_search_order",
+        lambda _order: f"订单号：{purchase_order} 等待卖家发货",
+    )
+
+    assert adapter.fetch_tracking(purchase_order) == {
+        "status": "pending", "message": "未发货",
+    }
+
+
+def test_missing_1688_order_remains_not_found(monkeypatch):
+    adapter = BrowserPurchasePlatform("1688", "buyer", "")
+    monkeypatch.setattr(adapter, "_search_order", lambda _order: "没有符合条件的订单")
+
+    assert adapter.fetch_tracking("5127480146121008319") == {
+        "status": "not_found", "message": "平台未找到该采购订单",
     }
 
 
@@ -115,7 +138,40 @@ def test_plugin_sync_skip_is_persistent_and_user_scoped(tmp_path):
     assert len(restored.history(7)) == 2
 
 
+def test_plugin_sync_pending_is_persistent_without_skip_or_failure(tmp_path):
+    from bit.purchase_tracking_sync import PluginPurchaseTrackingManager
+
+    path = tmp_path / "tracking.sqlite3"
+    manager = PluginPurchaseTrackingManager(path)
+    state = manager.create(7, platform="1688", orders=[
+        {"order_id": "1", "purchase_order": "5127480146121008319"},
+    ])
+    request_id = state["request_id"]
+    manager.claim(7, request_id)
+    manager.record_result(7, request_id, order_id="1", status="pending")
+
+    restored = PluginPurchaseTrackingManager(path)
+    final = restored.status(7)
+    assert final["phase"] == "completed"
+    assert (final["pending"], final["skipped"], final["failed"]) == (1, 0, 0)
+    assert final["results"][0]["status"] == "pending"
+    assert final["results"][0]["message"] == "未发货"
+    assert final["results"][0]["tracking_number"] == ""
+
+
 def test_plugin_direct_start_and_result_routes(monkeypatch, tmp_path):
+    from erp.ai_weight_price import service
+
+    # Import the workbench without initializing its production MySQL/API store.
+    monkeypatch.setenv("BIT_RUNTIME_ROLE", "client")
+    original_service = service.Service
+    monkeypatch.setattr(
+        service, "Service",
+        lambda *args, **kwargs: original_service(
+            tmp_path / "ai-weight-price", storage_backend="sqlite",
+            migrate_legacy_state=False,
+        ),
+    )
     import bit.bit_interface as workbench
     from bit.purchase_tracking_sync import PluginPurchaseTrackingManager
     manager = PluginPurchaseTrackingManager(tmp_path / 'tracking.sqlite3')

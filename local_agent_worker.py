@@ -90,7 +90,7 @@ def run_appeal(payload, stop_event):
 
 
 def run_open_store(payload, stop_event):
-    """Open one authorized Mercado reputation page in this Agent's BitBrowser."""
+    """Open an authorized store on a fixed, server-selected Mercado page."""
     if stop_event.is_set():
         raise RuntimeError("打开店铺任务已取消")
     payload = dict(payload or {})
@@ -99,17 +99,24 @@ def run_open_store(payload, stop_event):
     if token_id <= 0 or int(token_record.get("id") or 0) != token_id:
         raise ValueError("打开店铺任务缺少有效的店铺授权")
     from bit import bit_interface
+    from bit.mercado_rights_reply import RIGHTS_URL
 
-    _write_log(f"本机 Agent 正在打开店铺声誉页：{token_record.get('display_name') or token_record.get('nickname') or token_id}\n")
+    destination = payload.get("destination") or "reputation"
+    if destination not in {"reputation", "rights_holder"}:
+        raise ValueError("不支持的店铺页面")
+    page_name = "权利人回复" if destination == "rights_holder" else "声誉"
+    target_url = RIGHTS_URL if destination == "rights_holder" else bit_interface.bit_reputation_info.REPUTATION_URL
+
+    _write_log(f"本机 Agent 正在打开店铺{page_name}页：{token_record.get('display_name') or token_record.get('nickname') or token_id}\n")
     result = bit_interface._open_mercado_claim_browser(
         token_id,
         shop_name_hint=payload.get("shop_name_hint"),
-        target_url=bit_interface.bit_reputation_info.REPUTATION_URL,
+        target_url=target_url,
         token_record=token_record,
     )
     return {
         "status": "success",
-        "message": f"已打开 {result['shop_name']} 的声誉页面",
+        "message": f"已打开 {result['shop_name']} 的{page_name}页面",
         **result,
     }
 

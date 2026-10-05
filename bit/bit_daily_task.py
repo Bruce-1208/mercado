@@ -1238,8 +1238,9 @@ def build_algorithm_appeal_plan(
     max_workers=DEFAULT_DAILY_MAX_WORKERS,
     log_path=None,
     stop_event=None,
+    appeal_types=None,
 ):
-    """合并四类授权计划，以归一化指标总分安排店铺顺序和站点频率。
+    """合并所选申诉内容的授权计划，以归一化指标总分安排店铺顺序和站点频率。
 
     各指标除以本轮该指标最大值，避免侵权数量与比率直接相加。
     最低分权重为 1，最高分为 5，同分同权；全体同分时均为 1。
@@ -1248,13 +1249,23 @@ def build_algorithm_appeal_plan(
     if _stop_requested(stop_event):
         return []
     scope = dict(only_active=only_active, salespeople=salespeople, group_names=group_names)
-    plans = {APPEAL_TYPE_INFRACTION: build_latest_infraction_appeal_plan(
-        top_n=0, recent_days=recent_days, min_infraction_count=min_infraction_count,
-        max_workers=max_workers, log_path=log_path, stop_event=stop_event, **scope,
-    )}
+    selected = normalize_appeal_types(appeal_types) if appeal_types is not None else (APPEAL_TYPE_ALGORITHM,)
+    if selected in ((APPEAL_TYPE_ALGORITHM,), (APPEAL_TYPE_MIXED,)):
+        selected = tuple(dict.fromkeys(MIXED_APPEAL_SEQUENCE))
+    plans = {}
+    if APPEAL_TYPE_INFRACTION in selected:
+        plans[APPEAL_TYPE_INFRACTION] = build_latest_infraction_appeal_plan(
+            top_n=0, recent_days=recent_days, min_infraction_count=min_infraction_count,
+            max_workers=max_workers, log_path=log_path, stop_event=stop_event, **scope,
+        )
     if _stop_requested(stop_event):
         return []
-    reputation_data = get_latest_reputation_info()
+    if APPEAL_TYPE_PROHIBITED in selected:
+        plans[APPEAL_TYPE_PROHIBITED] = build_latest_prohibited_appeal_plan(
+            top_n=0, min_infraction_count=min_infraction_count, **scope,
+        )
+    reputation_types = {APPEAL_TYPE_DELAY, APPEAL_TYPE_COMPLAINT, APPEAL_TYPE_CANCELLATION}
+    reputation_data = get_latest_reputation_info() if reputation_types.intersection(selected) else None
     for appeal_type, threshold in (
         (APPEAL_TYPE_DELAY, min_delay_rate),
         (APPEAL_TYPE_COMPLAINT, min_complaint_rate),
@@ -1262,6 +1273,8 @@ def build_algorithm_appeal_plan(
     ):
         if _stop_requested(stop_event):
             return []
+        if appeal_type not in selected:
+            continue
         plans[appeal_type] = build_latest_reputation_appeal_plan(
             appeal_type, top_n=0, min_rate=min_rate if threshold is None else threshold,
             reputation_data=reputation_data, **scope,
@@ -1324,6 +1337,7 @@ def build_appeal_plan(
     max_workers=DEFAULT_DAILY_MAX_WORKERS,
     log_path=None,
     stop_event=None,
+    algorithm_appeal_types=None,
 ):
     """按申诉类型分发到侵权计划或声誉比率计划。"""
     normalized_type = normalize_appeal_type(appeal_type)
@@ -1337,6 +1351,7 @@ def build_appeal_plan(
             min_complaint_rate=min_complaint_rate, salespeople=salespeople,
             group_names=group_names, max_workers=max_workers, log_path=log_path,
             stop_event=stop_event,
+            appeal_types=algorithm_appeal_types,
         )
     if normalized_type == APPEAL_TYPE_INFRACTION:
         return build_latest_infraction_appeal_plan(
@@ -2136,6 +2151,7 @@ def _run_ai_appeal_once_locked(
     owned_window_ids=None,
     appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
     deepseek_api_key="",
+    task_strategy="normal",
 ):
     """用多进程并发处理已开启的任务；店铺内部按站点指标降序串行处理。"""
     selected_types = normalize_appeal_types(appeal_type)
@@ -2143,7 +2159,7 @@ def _run_ai_appeal_once_locked(
     deepseek_api_key = str(deepseek_api_key or "").strip()
     if appeal_copy_mode == APPEAL_COPY_MODE_AI and not deepseek_api_key:
         raise ValueError("AI话术模式必须手动填写 DeepSeek Token")
-    sequence = appeal_type_sequence(selected_types)
+    sequence = (APPEAL_TYPE_ALGORITHM,) if task_strategy == "algorithm" else appeal_type_sequence(selected_types)
     if stop_event is not None and stop_event.is_set():
         print(f"{get_now_time()} 已收到停止请求，本轮任务不再启动<br>")
         return []
@@ -2185,11 +2201,12 @@ def _run_ai_appeal_once_locked(
                     owned_window_ids=owned_window_ids,
                     appeal_copy_mode=appeal_copy_mode,
                     deepseek_api_key=deepseek_api_key,
+                    task_strategy=task_strategy,
                 ),
             })
         print(f"{get_now_time()} 多任务一轮执行完成<br>")
         return task_results
-    normalized_type = selected_types[0]
+    normalized_type = APPEAL_TYPE_ALGORITHM if task_strategy == "algorithm" else selected_types[0]
     appeal_label = _appeal_type_label(normalized_type)
     plan_limit = _normalize_appeal_plan_limit(top_n)
     plan_scope = (
@@ -2197,6 +2214,7 @@ def _run_ai_appeal_once_locked(
         if plan_limit > 0
         else f"全部符合执行标准的{appeal_label}店铺"
     )
+    plan_options = {"algorithm_appeal_types": selected_types} if task_strategy == "algorithm" else {}
     plan = build_appeal_plan(
         normalized_type,
         top_n=top_n,
@@ -2212,6 +2230,7 @@ def _run_ai_appeal_once_locked(
         max_workers=max_workers,
         log_path=log_path,
         stop_event=stop_event,
+        **plan_options,
     )
     if not plan:
         print(f"{get_now_time()} 没有找到可处理的{appeal_label}店铺<br>")
@@ -2399,6 +2418,7 @@ def run_ai_appeal_once(
     owned_window_ids=None,
     appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
     deepseek_api_key="",
+    task_strategy="normal",
 ):
     selected_types = normalize_appeal_types(appeal_type)
     appeal_label = "、".join(_appeal_type_label(item) for item in selected_types)
@@ -2435,6 +2455,7 @@ def run_ai_appeal_once(
             owned_window_ids=owned_window_ids,
             appeal_copy_mode=appeal_copy_mode,
             deepseek_api_key=deepseek_api_key,
+            task_strategy=task_strategy,
         )
     finally:
         if owned_lock is not None:
@@ -2544,6 +2565,7 @@ def _loop_ai_appeal_locked(
     owned_window_ids=None,
     appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
     deepseek_api_key="",
+    task_strategy="normal",
 ):
     """循环执行已开启的店铺 AI 客服申诉任务。"""
     selected_types = normalize_appeal_types(appeal_type)
@@ -2618,6 +2640,7 @@ def _loop_ai_appeal_locked(
                 owned_window_ids=owned_window_ids,
                 appeal_copy_mode=appeal_copy_mode,
                 deepseek_api_key=deepseek_api_key,
+                task_strategy=task_strategy,
             )
             for key, count in task_execution_counts(round_result).items():
                 execution_counts[key] = execution_counts.get(key, 0) + count
@@ -2736,6 +2759,7 @@ def loop_ai_appeal(
     owned_window_ids=None,
     appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
     deepseek_api_key="",
+    task_strategy="normal",
 ):
     selected_types = normalize_appeal_types(appeal_type)
     appeal_label = "、".join(_appeal_type_label(item) for item in selected_types)
@@ -2776,6 +2800,7 @@ def loop_ai_appeal(
             owned_window_ids=owned_window_ids,
             appeal_copy_mode=appeal_copy_mode,
             deepseek_api_key=deepseek_api_key,
+            task_strategy=task_strategy,
         )
     finally:
         if owned_lock is not None:

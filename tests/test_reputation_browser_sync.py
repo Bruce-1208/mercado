@@ -6,9 +6,9 @@ from bit import mercado_reputation as api
 from bit import bit_reputation_info, reputation_browser_sync as browser
 
 
-@pytest.mark.parametrize('active_index,missing,expected', [(99, False, 'active'), (None, False, 'inactive'),
+@pytest.mark.parametrize('active_index,missing,expected', [(49, False, 'active'), (None, False, 'inactive'),
                                                           (None, True, None), (0, True, 'active')])
-def test_latest_hundred_statuses(monkeypatch, active_index, missing, expected):
+def test_latest_fifty_statuses(monkeypatch, active_index, missing, expected):
     calls = []
     def fetch(_token, path, *, params, **kwargs):
         calls.append((path, dict(params)))
@@ -20,17 +20,17 @@ def test_latest_hundred_statuses(monkeypatch, active_index, missing, expected):
         ids = params['ids'].split(',')
         assert len(ids) <= 20
         return [{'code': 200, 'body': {'id': value, 'status': 'active' if value == f'MLM{active_index}' else 'paused'}}
-                for value in ids if not missing or value != 'MLM99']
+                for value in ids if not missing or value != 'MLM49']
     monkeypatch.setattr(api, '_fetch_json', fetch)
     result = api._sample_site_listing_status('token', 'site-seller', http=None, timeout=5)
     assert result['listing_sample_status'] == expected
-    assert result['listing_sample_requested_count'] == 100
-    assert [params['offset'] for path, params in calls if path.endswith('/search')] == [0, 50]
+    assert result['listing_sample_requested_count'] == 50
+    assert [params['offset'] for path, params in calls if path.endswith('/search')] == [0]
     assert all('site-seller' in path for path, _ in calls if path.endswith('/search'))
 
 
-@pytest.mark.parametrize('total,expected', [(0, None), (3, 'inactive')])
-def test_fewer_than_hundred_and_empty(monkeypatch, total, expected):
+@pytest.mark.parametrize('total,expected', [(0, 'inactive'), (3, 'inactive')])
+def test_fewer_than_fifty_and_empty(monkeypatch, total, expected):
     def fetch(_token, path, **kwargs):
         if path.endswith('/search'):
             return {'results': [f'MLM{i}' for i in range(total)], 'paging': {'total': total}}
@@ -45,12 +45,12 @@ def test_listing_status_clears_previous_ban_days():
            'suspension_days': 10, 'suspension_until': '2027-01-01'}
     api._apply_listing_sample_status(row, {'listing_sample_status': 'active'})
     assert row['account_status'] == 'normal'
-    assert row['site_status_display'] == '正常'
+    assert row['site_status_display'] == '活跃中'
     assert row['suspension_days'] is None
     assert row['suspension_until'] == ''
     api._apply_listing_sample_status(row, {'listing_sample_status': 'inactive'})
     assert row['account_status'] == 'restricted'
-    assert '封禁天数未确认' in row['site_status_display']
+    assert row['site_status_display'] == '暂停状态'
 
 
 def test_api_update_does_not_open_browser_by_default():

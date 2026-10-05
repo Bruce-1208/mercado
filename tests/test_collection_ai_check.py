@@ -127,3 +127,44 @@ def test_collection_cannot_write_before_image_approval(workflow):
     service.store.update(key, best_match_approved=False)
     with pytest.raises(ValueError, match='同款匹配'):
         detail(service, {'task_id': key, 'detail': {'skus': [{'price': 7}]}})
+
+
+def test_product_check_uses_product_ids_and_records_ai_task(tmp_path, monkeypatch):
+    from contextlib import nullcontext
+    from bit import collection_ai_workflow as queue
+    service = Service(tmp_path)
+    service.bind_actor({'id': 7, 'username': 'tester'})
+    connection = MagicMock()
+    cursor = connection.cursor.return_value.__enter__.return_value
+    cursor.fetchall.return_value = [{'id': 12, 'collection_item_id': None,
+        'title': 'Product', 'main_image_url': 'https://example.com/image.jpg', 'weight_g': 10}]
+    monkeypatch.setattr(repository.db, '_connect', lambda: connection)
+    monkeypatch.setattr(repository.db, 'ensure_collection_tables', lambda _: None)
+    monkeypatch.setattr(queue, 'queue_lock', lambda _: nullcontext())
+    monkeypatch.setattr(repository, 'save_result', lambda *a, **kw: {})
+    run = queue.prepare(service, [12], 'agent', list_mode='products')
+    assert repository.db.PRODUCT_TABLE in cursor.execute.call_args.args[0]
+    key = run['task_ids'][0]
+    assert key.startswith('product:12:')
+    task = service.store.get(key)
+    assert task['product_item_id'] == 12
+    assert task['collection_item_id'] is None
+    assert len(service.store.run_items(run['run_id'])['rows']) == 1
+
+
+@pytest.mark.parametrize('current,status', [(10, 'checked'), (99, 'conflict')])
+def test_product_result_writes_only_selected_product(monkeypatch, current, status):
+    connection = MagicMock()
+    cursor = connection.cursor.return_value.__enter__.return_value
+    cursor.fetchone.return_value = {'id': 12, 'collection_item_id': 2, 'weight_g': current}
+    monkeypatch.setattr(repository.db, '_connect', lambda: connection)
+    monkeypatch.setattr(repository.db, 'ensure_collection_tables', lambda _: None)
+    audit = repository.save_result({'product_item_id': 12, 'collection_item_id': 2,
+        'erp_goods_id': 'product:12:run', 'collection_before': {'weight_g': 10}},
+        'checked', 'ok', {'weight_g': 20})
+    assert audit['status'] == status
+    updates = [call.args for call in cursor.execute.call_args_list if call.args[0].startswith('UPDATE')]
+    assert len(updates) == 1
+    assert repository.db.PRODUCT_TABLE in updates[0][0]
+    assert updates[0][1][-1] == 12
+    assert connection.commit.called

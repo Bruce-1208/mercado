@@ -236,7 +236,7 @@ body.zs-auth :is(h1, .login-header h1) { color: var(--zs-heading); }
 .zs-feedback[data-ui-state="error"], .zs-feedback[data-ui-state="denied"] { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
 .zs-table-scroll { max-width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; }
 .zs-table-scroll:focus-visible { outline: 2px solid var(--zs-brand); outline-offset: -2px; }
-.zs-table-scroll :is(td.empty-state, td.p1688-empty, .order-loading-row > td) { padding: 0; text-align: left; }
+.zs-table-scroll :is(td.empty-state, td.empty, td.p1688-empty, .order-loading-row > td) { padding: 0; text-align: left; }
 .zs-table-state { box-sizing: border-box; position: sticky; left: 0; width: var(--zs-table-width, 100%); max-width: var(--zs-table-width, 100%); padding: 28px 16px; text-align: center; white-space: normal; overflow-wrap: anywhere; color: var(--zs-secondary); }
 .zs-table-state button { margin: 10px 6px 0; }
 .zs-state-hint { display: block; margin-top: 6px; font-size: 12px; font-weight: 400; color: inherit; }
@@ -260,3 +260,339 @@ tbody[data-ui-state="error"] .zs-table-state, tbody[data-ui-state="denied"] .zs-
 body.zs-console .p1688-batch-bar > label:not(.p1688-batch-review) { display:inline-flex; align-items:center; gap:6px; flex:0 0 auto; white-space:nowrap; }
 body.zs-console .p1688-batch-bar > :is(button, .p1688-batch-review, strong) { flex:0 0 auto; }
 body.zs-console .p1688-batch-review > span { white-space:nowrap; }
+
+/* Standalone workspaces share the same gutters, rhythm and responsive controls. */
+body.zs-standalone {
+    --zs-page-gutter: 24px;
+    --zs-section-gap: 20px;
+}
+body.zs-standalone :is(.shell, .page, main, .panel, .section, .provider, .field, .task, .employee-form) {
+    min-width: 0;
+}
+body.zs-standalone > main.shell {
+    padding: 24px var(--zs-page-gutter) 48px;
+}
+body.zs-standalone > main.page {
+    width: min(1500px, calc(100% - var(--zs-page-gutter) * 2));
+    margin: 24px auto 48px;
+}
+body.zs-standalone :is(.top, .page-heading, .hero) {
+    gap: var(--zs-section-gap);
+    margin-bottom: var(--zs-section-gap);
+}
+body.zs-standalone :is(.top, .page-heading, .hero, .heading, .table-head, .section-heading, .section-head, .person-heading) > div {
+    min-width: 0;
+    max-width: 100%;
+}
+body.zs-standalone > .page-heading {
+    padding: 24px;
+    border-color: var(--zs-stroke);
+    border-radius: var(--zs-corner);
+    background: var(--zs-card);
+    box-shadow: var(--zs-shadow);
+}
+body.zs-standalone > .page-heading .heading-brand {
+    position: relative;
+    z-index: 1;
+}
+body.zs-standalone > main > .hero {
+    padding: 24px;
+    border-radius: var(--zs-corner);
+}
+body.zs-standalone .hero p {
+    overflow-wrap: anywhere;
+}
+body.zs-standalone :is(.topbar, .bar, .topbar-inner) {
+    gap: 16px;
+}
+body.zs-standalone :is(.brand, .heading-brand) {
+    min-width: 0;
+}
+body.zs-standalone :is(.brand-mark, .mark) {
+    flex-shrink: 0;
+}
+body.zs-standalone :is(.back-link, .back, .bar > a, a.button, a.btn, .tabs > a) {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--zs-control-height);
+    white-space: nowrap;
+    line-height: 20px;
+}
+body.zs-standalone :is(.toolbar, .actions, .employee-toolbar, .top-actions, .topbar-actions, .sync-cluster, .items-toolbar) {
+    gap: 10px;
+}
+body.zs-standalone :is(.filters, .filter-panel, .run-grid, .grid, .employee-form, .form-grid) {
+    gap: 16px;
+}
+body.zs-standalone :is(.filters, .filter-panel) {
+    background: var(--zs-card-soft);
+    border-radius: var(--zs-corner);
+    box-shadow: none;
+}
+body.zs-standalone :is(.field label, .employee-form label) {
+    color: var(--zs-copy);
+    font-size: 13px;
+    font-weight: 600;
+}
+body.zs-standalone :is(.section, .login-box) {
+    border-color: var(--zs-stroke);
+    border-radius: var(--zs-corner);
+    box-shadow: var(--zs-shadow);
+}
+body.zs-standalone :is(.stat, .metric) {
+    padding: 16px;
+}
+body.zs-standalone :is(.stat strong, .stat .n, .metric strong, .metric-value) {
+    font-variant-numeric: tabular-nums;
+}
+body.zs-standalone :is(.primary-button, .ghost-button) {
+    border-radius: var(--zs-control-corner);
+    box-shadow: none;
+}
+body.zs-standalone .primary-button {
+    background: var(--zs-brand);
+}
+body.zs-standalone :is(.table-head, .section-heading) {
+    gap: 12px;
+    padding: 16px;
+}
+body.zs-standalone :is(.table, .table-wrap) {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+}
+body.zs-standalone .table > table {
+    min-width: 860px;
+}
+body.zs-standalone :is(.task-title, .task-details, .employee-content, .employee-note, .hint, .subtitle, .heading-note, .account, .message, .preview-row, .store-option span) {
+    overflow-wrap: anywhere;
+}
+body.zs-standalone :is(.task-controls, .event) > * {
+    min-width: 0;
+}
+body.zs-standalone input[type="file"] {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 8px;
+    font: inherit;
+}
+body.zs-standalone input[type="file"]::file-selector-button {
+    min-height: 36px;
+    margin-right: 8px;
+    padding: 6px 10px;
+    border: 1px solid var(--zs-stroke);
+    border-radius: var(--zs-control-corner);
+    background: var(--zs-card-soft);
+    color: var(--zs-copy);
+    font: inherit;
+    cursor: pointer;
+}
+body.zs-standalone .store-menu {
+    width: max(100%, 320px);
+    min-width: 0;
+    max-width: calc(100vw - var(--zs-page-gutter) * 2 - 34px);
+}
+body.zs-standalone .store-option {
+    align-items: flex-start;
+    min-height: 44px;
+}
+body.zs-standalone .store-option input {
+    flex-shrink: 0;
+    margin-top: 3px;
+}
+body.zs-standalone dialog {
+    box-sizing: border-box;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+body.zs-standalone :is(.dialog-head, .modal-head, .modal-foot) {
+    gap: 12px;
+}
+body.zs-standalone :is(.dialog-head, .modal-head) > div {
+    min-width: 0;
+}
+body.zs-standalone :is(.pagination, .modal-foot, .items-toolbar) {
+    flex-wrap: wrap;
+    align-items: center;
+}
+body.zs-standalone:has(> main > #preview) {
+    margin: 0;
+    padding: 24px var(--zs-page-gutter) 48px;
+}
+body.zs-auth {
+    box-sizing: border-box;
+    min-height: 100dvh;
+    padding: 24px 16px;
+}
+body.zs-auth :is(.panel, .login-panel) {
+    max-width: 100%;
+}
+body.zs-auth :is(.brand, .login-brand) {
+    align-items: center;
+}
+body.zs-auth h1 {
+    font-size: 22px;
+    line-height: 1.4;
+    letter-spacing: .02em;
+}
+
+@media (max-width: 900px) {
+    body.zs-standalone :is(.top, .table-head, .person-heading, .items-toolbar) {
+        flex-wrap: wrap;
+        align-items: flex-start;
+    }
+    body.zs-standalone .task-controls {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    body.zs-standalone .task-controls textarea {
+        grid-column: 1 / -1;
+    }
+}
+@media (max-width: 600px) {
+    body.zs-standalone {
+        --zs-page-gutter: 12px;
+        --zs-section-gap: 16px;
+        --zs-control-height: 44px;
+        font-size: 14px;
+    }
+    body.zs-standalone > main.shell {
+        padding-top: 16px;
+        padding-bottom: 32px;
+    }
+    body.zs-standalone > main.page {
+        margin-top: 16px;
+        margin-bottom: 32px;
+    }
+    body.zs-standalone.embedded :is(main.page, main) {
+        width: 100%;
+        margin: 0;
+        padding: 12px;
+    }
+    body.zs-standalone :is(.topbar, .bar, .topbar-inner) {
+        height: auto;
+        min-height: 64px;
+        flex-wrap: wrap;
+        align-items: center;
+        padding-block: 12px;
+    }
+    body.zs-standalone .bar {
+        padding-inline: var(--zs-page-gutter);
+    }
+    body.zs-standalone :is(.top-actions, .topbar-actions) {
+        flex-wrap: wrap;
+    }
+    body.zs-standalone > .page-heading {
+        padding: 16px;
+        gap: 16px;
+    }
+    body.zs-standalone :is(button, .button, .btn, .store-trigger, input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]):not([type="file"]), select) {
+        min-height: var(--zs-control-height);
+    }
+    body.zs-standalone :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]), select, textarea) {
+        font-size: 16px;
+    }
+    body.zs-standalone #rights-text {
+        /* This legacy textarea has an inline font shorthand. */
+        font-size: 16px !important;
+    }
+    body.zs-standalone :is(.grid, .run-grid, .form-grid, .employee-form, .login-row) {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+    }
+    body.zs-standalone :is(.wide, .full, .employee-wide, .category-field) {
+        grid-column: 1 / -1;
+    }
+    body.zs-standalone :is(.filters, .filter-panel) {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 12px;
+    }
+    body.zs-standalone.ip-rights .filter-panel {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    body.zs-standalone :is(.filters .store-field, .filter-panel .search) {
+        grid-column: 1 / -1;
+    }
+    body.zs-standalone :is(.filters, .toolbar) {
+        max-width: 100%;
+    }
+    body.zs-standalone > main > .hero {
+        padding: 16px;
+    }
+    body.zs-standalone .toolbar > label {
+        flex: 1 1 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    body.zs-standalone :is(.employee-toolbar select, .toolbar > select, .toolbar > label select) {
+        width: 100%;
+    }
+    body.zs-standalone :is(.header-actions, .heading > .toolbar, .section-heading-actions) {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    body.zs-standalone :is(.header-actions, .items-toolbar) > button {
+        flex: 1 1 auto;
+    }
+    body.zs-standalone :is(.task-controls, .event, .preview-row) {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+    }
+    body.zs-standalone .task-controls textarea {
+        grid-column: auto;
+        min-height: 80px;
+    }
+    body.zs-standalone .employee-feedback {
+        align-items: stretch;
+    }
+    body.zs-standalone .employee-feedback textarea {
+        min-width: 0;
+    }
+    body.zs-standalone :is(.login-box, .dialog-head, .modal-head) {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+    body.zs-standalone .login-box button {
+        width: 100%;
+    }
+    body.zs-standalone .category-step {
+        min-width: 0;
+        flex-basis: 100%;
+    }
+    body.zs-standalone .modal-foot > button {
+        flex: 1 1 140px;
+    }
+    body.zs-standalone .modal-body {
+        max-height: calc(100dvh - 200px);
+        padding: 16px;
+    }
+    body.zs-standalone .toast {
+        box-sizing: border-box;
+        max-width: calc(100vw - 24px);
+        overflow-wrap: anywhere;
+    }
+    body.zs-auth {
+        padding: 16px 12px;
+    }
+    body.zs-auth :is(.login-header, .header) {
+        padding: 18px;
+    }
+    body.zs-auth .login-logo {
+        width: 52px;
+        height: 52px;
+        flex-basis: 52px;
+    }
+    body.zs-auth h1 {
+        font-size: 20px;
+    }
+    body.zs-auth .code-row {
+        grid-template-columns: minmax(0, 1fr) 126px;
+    }
+}

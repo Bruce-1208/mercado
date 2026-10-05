@@ -235,7 +235,7 @@ def console_browser():
         browser.close()
 
 
-def test_algorithm_switch_is_exclusive_and_submits_selected_mode(console_page):
+def test_algorithm_strategy_preserves_selected_task_types(console_page):
     page = console_page
     page.evaluate("""() => {
         document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
@@ -245,16 +245,20 @@ def test_algorithm_switch_is_exclusive_and_submits_selected_mode(console_page):
     mixed = page.locator('#daily-task-mixed-mode')
     complaint = page.locator('input[name="daily-task-appeal-type"][value="投诉"]')
     algorithm.locator("..").click()
-    assert page.evaluate("getDailyTaskPayload().appeal_types") == ["算法模式"]
+    assert page.evaluate("getDailyTaskPayload().task_strategy") == "algorithm"
+    assert page.evaluate("getDailyTaskPayload().appeal_types") == ["侵权"]
     assert not mixed.is_checked()
     complaint.locator("..").click()
-    assert not algorithm.is_checked()
-    assert page.evaluate("getDailyTaskPayload().appeal_types") == ["投诉"]
+    assert algorithm.is_checked()
+    assert page.evaluate("getDailyTaskPayload().appeal_types") == ["侵权", "投诉"]
     mixed.locator("..").click()
     assert not complaint.is_checked()
-    algorithm.locator("..").click()
-    assert not mixed.is_checked()
-    assert page.evaluate("getDailyTaskPayload().appeal_types") == ["算法模式"]
+    assert page.evaluate("getDailyTaskPayload().appeal_types") == ["混合模式"]
+    assert algorithm.is_checked()
+    page.locator('#daily-task-normal-mode').locator('..').click()
+    assert not algorithm.is_checked()
+    assert page.evaluate("getDailyTaskPayload().task_strategy") == "normal"
+    assert page.evaluate("getDailyTaskPayload().appeal_types") == ["混合模式"]
 
 
 @pytest.fixture
@@ -352,7 +356,7 @@ def test_filter_layout_and_popup_fit_viewport(console_page, width):
         [...el.querySelectorAll('input:not([type=checkbox]), select:not([multiple]), .market-multi-trigger')]
         .map(e => e.getBoundingClientRect().height).filter(Boolean)
     """)
-    assert set(heights) == {38}
+    assert set(heights) == {44 if width <= 760 else 38}
     page.locator("#order-store-filter-trigger").click()
     box = page.locator("#order-store-filter-picker .market-multi-panel").bounding_box()
     assert box and box["x"] >= 0 and box["x"] + box["width"] <= width
@@ -439,6 +443,7 @@ def test_clearance_alerts_opens_as_lazy_workspace_tab(console_page):
     page.route("**/main-image.svg", lambda route: route.fulfill(content_type="image/svg+xml", body='<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect x="14" y="10" width="36" height="44" rx="8" fill="#2563eb"/></svg>'))
     frame = page.locator("#clearance-alerts-frame")
     assert frame.get_attribute("src") is None
+    page.get_by_role('searchbox', name='搜索功能').fill('半托管清退告警')
     page.locator('.tab-button[data-tab="clearance-alerts"]').click()
     assert page.locator("#tab-clearance-alerts").is_visible()
     assert page.locator('.workspace-tab[data-tab="clearance-alerts"]').is_visible()
@@ -483,6 +488,7 @@ def test_size_charts_opens_as_lazy_workspace_tab_and_keeps_editor_state(console_
     frame = page.locator("#size-charts-frame")
     assert frame.get_attribute("src") is None
     page.evaluate("document.getElementById('size-charts-frame').dataset.src = '/size-charts?embedded=1&organization_key=company-a'")
+    page.get_by_role('searchbox', name='搜索功能').fill('尺码表')
     page.locator('.tab-button[data-tab="size-charts"]').click()
     assert page.locator("#tab-size-charts").is_visible()
     assert page.locator('.workspace-tab[data-tab="size-charts"]').is_visible()
@@ -532,6 +538,7 @@ def open_standard_size_chart_browser(page, schema):
 
     page.route("**/size-charts?embedded=1*", lambda route: route.fulfill(body=embedded, content_type="text/html"))
     page.route("**/api/size-charts/**", api)
+    page.get_by_role('searchbox', name='搜索功能').fill('尺码表')
     page.locator('.tab-button[data-tab="size-charts"]').click()
     content = page.frame_locator("#size-charts-frame")
     content.locator('#sc-source-store option[value="1"]').wait_for(state="attached")
@@ -702,3 +709,29 @@ def test_filled_builtin_download_save_and_upload_to_other_store(console_page):
     content.get_by_text("ID offline-chart", exact=True).wait_for()
     assert uploaded == [{"preview_id": "filled-preview"}]
     assert not any(path.endswith("/requirements") for path, _ in calls)
+
+
+def test_reputation_store_notices_appear_in_matching_warning_cell(console_page):
+    page = console_page
+    page.route('**/api/reputation/mercado-notices*', lambda route: route.fulfill(
+        content_type='application/json', body=json.dumps({'status': 'success', 'data': {
+            'total_stores': 2, 'success_stores': 2, 'store_notices': {
+                '1': [{'title': '店铺提醒', 'description': '完整内容 <script>文本</script>'}],
+                '2': [{'title': '另一店铺提醒', 'description': '不能串店'}],
+            },
+        }})))
+    page.evaluate('''async () => {
+        document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
+        document.getElementById('tab-reputation').classList.add('active');
+        reputationRows = [{token_id: 1, '店铺名': '店铺甲', '系统告警': '原有告警', '站点状态': '活跃中'}];
+        await refreshReputationMercadoNotices(true);
+    }''')
+    cell = page.locator('#reputation-body .reputation-warning-cell')
+    expected = '原有告警\n\n店铺提醒\n完整内容 <script>文本</script>'
+    assert cell.get_attribute('data-warning-detail') == expected
+    assert cell.locator('script').count() == 0
+    cell.hover()
+    assert page.locator('#traffic-tooltip').inner_text() == expected
+    cell.click()
+    assert page.locator('#reputation-warning-popover-body').inner_text() == expected
+    assert page.locator('#reputation-body .reputation-site-status').inner_text() == '活跃中'

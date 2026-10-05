@@ -514,7 +514,7 @@ def _is_recent_order_task(task, recent_order_keys):
     return (token_id, order_id) in recent_order_keys
 
 
-def _rights_holder_replies(store, token_ids):
+def _rights_holder_replies(store, token_ids, *, include_replied=False):
     """Read current waiting cases only within the caller's store scope."""
     if not token_ids:
         return []
@@ -529,6 +529,9 @@ def _rights_holder_replies(store, token_ids):
         if not batch or len(rows) >= int(data.get("total") or 0):
             break
         page += 1
+    if not include_replied:
+        from bit.mercado_rights_reply import reply_recorded
+        rows = [row for row in rows if not reply_recorded(row.get("token_id"), row.get("infraction_id"))]
     return sorted(rows, key=lambda row: str(row.get("due_at") or "9999"))
 
 
@@ -619,6 +622,43 @@ def create_action_center_blueprint(*, login_required, current_user, authorized_t
         except Exception as exc:
             logging.exception("加载美客多运营待办失败")
             return jsonify(status="error", message=str(exc)), 500
+
+    @blueprint.route("/api/mercado/today/rights-holder/<int:token_id>/<case_id>", methods=["GET", "POST"])
+    @login_required
+    def rights_holder_reply(token_id, case_id):
+        if not permission("tasks.execute"):
+            return jsonify(status="error", message="无待办处理权限"), 403
+        from bit import mercado_rights_reply
+        try:
+            case_id = mercado_rights_reply.case_identifier(case_id)
+            user, allowed, organization = scope()
+            tokens = store.list_mercado_store_tokens().get("rows", [])
+            authorized = any(
+                int(row.get("id") or 0) == token_id
+                and (allowed is None or token_id in allowed)
+                and (not organization or str(row.get("organization_key") or "") == organization)
+                for row in tokens
+            )
+            if not authorized:
+                return jsonify(status="error", message="店铺授权不存在或无权访问"), 404
+            row = next((row for row in _rights_holder_replies(store, [token_id], include_replied=True)
+                        if str(row.get("infraction_id")) == case_id), None)
+            if not row:
+                return jsonify(status="error", message="待回复案件不存在或已处理，请刷新待办"), 409
+            if request.method == "GET":
+                result = mercado_rights_reply.inspect_case(token_id, row)
+            else:
+                result = mercado_rights_reply.reply_case(
+                    token_id, row, request.form.get("text"), request.files.get("document"),
+                )
+            response = jsonify(status="success", data=result)
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        except ValueError as exc:
+            return jsonify(status="error", message=str(exc)), 400
+        except Exception:
+            logging.exception("权利人案件处理异常")
+            return jsonify(status="error", message="案件处理异常，请在店铺浏览器核实当前状态后处理"), 502
 
     @blueprint.route("/api/mercado/today/tasks/<int:task_id>", methods=["PATCH"])
     @login_required

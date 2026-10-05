@@ -258,7 +258,7 @@ class BrowserPurchasePlatform:
             return {"status": "not_found", "message": "平台未找到该采购订单"}
         result = extract_tracking(text)
         if not result["tracking_number"]:
-            return {"status": "pending", "message": "订单尚未发货或平台未显示物流号"}
+            return {"status": "pending", "message": "未发货"}
         return {"status": "synced", **result}
 
 
@@ -589,12 +589,16 @@ class PluginPurchaseTrackingManager:
             if not order:
                 raise ValueError("物流号同步结果包含未选择的订单")
             results = list(state.get("results") or [])
+            default_message = {
+                "pending": "未发货",
+                "not_found": "平台未找到该采购订单，已跳过",
+            }.get(status, "")
             result = {
                 **order,
                 "status": status,
                 "tracking_number": str(tracking_number or "").strip().upper(),
                 "logistics_company": str(logistics_company or "").strip(),
-                "message": str(message or ("平台未找到该采购订单，已跳过" if status == "not_found" else "")).strip(),
+                "message": str(message or default_message).strip(),
                 "recorded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
             replaced = False

@@ -1,13 +1,61 @@
 """Read the complete listing for a product belonging to an accessible order."""
+import copy
 import json
 import re
+import threading
+import time
 from html.parser import HTMLParser
 
 from erp.mercadolibre_translation import ListingTranslationError, translate_texts
 
-from bit import bit_mysql
-from bit.bit_order_labels import _refresh_store_token, _is_invalid_token_error
+from bit import bit_mysql, mercado_tokens
+from bit.bit_order_labels import _is_invalid_token_error
 from mercado_api.client import MercadoLibreClient, MercadoAPIError
+
+
+# An interactive read must not inherit the API client's four 30-second attempts.
+_DETAIL_HTTP_TIMEOUT = (3, 8)
+_DETAIL_CACHE_TTL = 300
+_DETAIL_CACHE_LIMIT = 256
+_DETAIL_CACHE = {}
+_DETAIL_CACHE_LOCK = threading.Lock()
+
+
+def _refresh_store_token(token_id):
+    mercado_tokens.refresh_and_save(
+        int(token_id),
+        get_token=bit_mysql.get_mercado_store_token,
+        update_token=bit_mysql.update_mercado_store_token,
+        record_error=bit_mysql.record_mercado_store_token_error,
+        timeout=8,
+        lock_timeout=2,
+    )
+    return bit_mysql.get_mercado_store_token(int(token_id))
+
+
+def _cached_detail(key, *, refresh=False):
+    with _DETAIL_CACHE_LOCK:
+        cached = _DETAIL_CACHE.get(key)
+        if refresh or (cached and time.monotonic() - cached[0] >= cached[1]):
+            _DETAIL_CACHE.pop(key, None)
+            return None
+        return copy.deepcopy(cached[2]) if cached else None
+
+
+def _cache_detail(key, detail):
+    # Retry a temporarily missing description sooner; normal listings can be
+    # reused by the separate Chinese-translation request and repeated opens.
+    ttl = 10 if detail.get('warnings') else _DETAIL_CACHE_TTL
+    with _DETAIL_CACHE_LOCK:
+        _DETAIL_CACHE[key] = (time.monotonic(), ttl, copy.deepcopy(detail))
+        while len(_DETAIL_CACHE) > _DETAIL_CACHE_LIMIT:
+            oldest = min(_DETAIL_CACHE, key=lambda entry: _DETAIL_CACHE[entry][0])
+            _DETAIL_CACHE.pop(oldest, None)
+
+
+def _http_status(error):
+    match = re.search(r'失败\s*\((\d{3})\)', str(error))
+    return int(match.group(1)) if match else None
 
 
 class _DescriptionText(HTMLParser):
@@ -50,7 +98,8 @@ def translate_product_detail(item, description):
     return translations
 
 
-def get_order_product_detail(order_ids, product_id, allowed_token_ids=None):
+def get_order_product_detail(order_ids, product_id, allowed_token_ids=None, *,
+                             include_translation=False, force_refresh=False):
     product_id = str(product_id or '').strip().upper()
     if not re.fullmatch(r'[A-Z]{3}\d+', product_id):
         raise ValueError('商品编号无效')
@@ -85,45 +134,88 @@ def get_order_product_detail(order_ids, product_id, allowed_token_ids=None):
                 raw = {}
         if not isinstance(raw, dict):
             raw = {}
-        products = {str(candidate.get('product_id') or '')}
-        products.update(str((entry.get('item') or {}).get('id') or '') for entry in raw.get('order_items', []))
+        products = {str(candidate.get('product_id') or '').upper()}
+        order_items = raw.get('order_items') or []
+        if isinstance(order_items, list):
+            products.update(str((entry.get('item') or {}).get('id') or '').upper()
+                            for entry in order_items if isinstance(entry, dict)
+                            and isinstance(entry.get('item') or {}, dict))
         if product_id in products:
             context = candidate
             break
     if context is None:
         raise ValueError('商品不属于所选订单或无权查看')
-    client = MercadoLibreClient(context['access_token'])
+    # Always authorize against the selected order before reading the cache.
+    # Token IDs separate listings belonging to different stores.
+    cache_key = (int(context['token_id']), product_id)
+    detail = _cached_detail(cache_key, refresh=bool(force_refresh))
+    if detail is None:
+        client = MercadoLibreClient(context['access_token'], timeout=_DETAIL_HTTP_TIMEOUT,
+                                    admission_timeout=2)
+        refreshed = False
 
-    def read(path, **kwargs):
-        nonlocal client
+        def read(path, **kwargs):
+            nonlocal client, refreshed
+            try:
+                return client.request('GET', path, max_attempts=1, **kwargs)
+            except MercadoAPIError as exc:
+                # The API client handles a 401 first and reports missing OAuth
+                # credentials because this client stores them centrally. This
+                # message must also trigger the persisted store-token refresh.
+                invalid_token = (_is_invalid_token_error(exc)
+                                 or 'access token 已失效' in str(exc).lower())
+                if refreshed or not invalid_token or not context.get('refresh_token'):
+                    raise
+                refreshed = True
+                token = _refresh_store_token(context['token_id'])
+                client.session.close()
+                client = MercadoLibreClient(token['access_token'], timeout=_DETAIL_HTTP_TIMEOUT,
+                                            admission_timeout=2)
+                return client.request('GET', path, max_attempts=1, **kwargs)
+
         try:
-            return client.request('GET', path, **kwargs)
-        except MercadoAPIError as exc:
-            if not _is_invalid_token_error(exc) or not context.get('refresh_token'):
-                raise
-            token = _refresh_store_token(context['token_id'])
-            client = MercadoLibreClient(token['access_token'])
-            return client.request('GET', path, **kwargs)
+            params = {'include_attributes': 'all', 'include_internal_attributes': 'true'}
+            local_path = f'/items/{product_id}'
+            marketplace_path = f'/marketplace/items/{product_id}'
+            # Global Selling authorizations also own localized MLA/MLB/etc.
+            # listings. Their item prefixes do not identify the token's API
+            # scope: /items can reject these with 403 while /marketplace/items
+            # serves the same order and token successfully.
+            primary, fallback = marketplace_path, local_path
+            try:
+                item = read(primary, params=params)
+            except MercadoAPIError as exc:
+                # A network failure or rate limit affects both paths. Fall back
+                # only when the primary endpoint cannot serve this listing.
+                if _http_status(exc) not in {404, 405}:
+                    raise
+                item = read(fallback, params=params)
+            if not isinstance(item, dict) or not item.get('id'):
+                raise ValueError('平台未返回完整商品资料，请稍后重试')
+            warnings = []
+            try:
+                description = read(f'/items/{product_id}/description') or {}
+                if not isinstance(description, dict):
+                    description = {}
+                    warnings.append('商品描述暂时读取失败，请重试')
+            except (MercadoAPIError, ValueError) as exc:
+                description = {}
+                # A listing without a description is a valid product detail.
+                if _http_status(exc) != 404:
+                    warnings.append('商品描述暂时读取失败，请重试')
+            detail = {'item': item, 'description': description, 'warnings': warnings}
+            _cache_detail(cache_key, detail)
+        finally:
+            client.session.close()
 
-    params = {'include_attributes': 'all', 'include_internal_attributes': 'true'}
-    try:
-        item = read(f'/marketplace/items/{product_id}', params=params)
-    except MercadoAPIError:
-        item = read(f'/items/{product_id}', params=params)
-    if not isinstance(item, dict) or not item.get('id'):
-        raise ValueError('平台未返回完整商品资料，请稍后重试')
-    warnings = []
-    try:
-        description = read(f'/items/{product_id}/description') or {}
-    except MercadoAPIError:
-        description = {}
-        warnings.append('商品描述暂时读取失败，请重试')
-    try:
-        translations = translate_product_detail(item, description)
-    except ListingTranslationError as exc:
-        translations = {}
-        warnings.append(f'中文翻译暂时不可用，已保留原文。{exc}')
-    except Exception:
-        translations = {}
-        warnings.append('中文翻译暂时不可用，已保留原文；请检查本地翻译模型配置后刷新重试')
-    return {'item': item, 'description': description, 'warnings': warnings, 'translations_zh': translations}
+    detail.update(translations_zh={}, translation_error='')
+    if include_translation:
+        try:
+            detail['translations_zh'] = translate_product_detail(detail['item'], detail['description'])
+        except ListingTranslationError as exc:
+            detail['translation_error'] = f'中文翻译暂时不可用，已保留原文。{exc}'
+        except Exception:
+            detail['translation_error'] = '中文翻译暂时不可用，已保留原文；请检查本地翻译模型配置后重试'
+        if detail['translation_error']:
+            detail['warnings'].append(detail['translation_error'])
+    return detail
