@@ -9,7 +9,7 @@ test('collection polling launches direct search and prevents overlapping claims'
   let release;
   let calls = 0;
   const launched = [];
-  const context = vm.createContext({aiWeightPriceRunPromise: null, authSession: async () => ({}),
+  const context = vm.createContext({aiWeightPriceRunPromise: null, aiWeightPriceCommandPromise: null, authSession: async () => ({}),
     aiWeightPriceAction: async action => { assert.equal(action, 'collection/claim'); calls++; return new Promise(resolve => {release = resolve;}); },
     startAIWeightPriceClientRun: step => launched.push(step)});
   vm.runInContext(claimCode, context);
@@ -26,7 +26,7 @@ test('collection polling launches direct search and prevents overlapping claims'
 });
 
 test('collection polling does not run without authentication', async () => {
-  const context = vm.createContext({aiWeightPriceRunPromise: null, authSession: async () => null,
+  const context = vm.createContext({aiWeightPriceRunPromise: null, aiWeightPriceCommandPromise: null, authSession: async () => null,
     aiWeightPriceAction: () => {throw Error('must not claim');}});
   vm.runInContext(claimCode, context);
   await context.claimCollectionAiCheck();

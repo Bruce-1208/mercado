@@ -543,6 +543,7 @@ def test_purchase_tracking_order_lookup_uses_database_service_in_client_mode(mon
     }
 
 
+@pytest.mark.usefixtures("subscribed_workbench_account")
 def test_order_print_route_returns_pdf_and_records_operator_log():
     with (
         patch.object(
@@ -557,7 +558,7 @@ def test_order_print_route_returns_pdf_and_records_operator_log():
         ) as download_labels,
         patch.object(workbench.bit_db_api, "record_order_print_logs", return_value=1) as record_logs,
     ):
-        response = _client().post("/api/orders/print", json={"order_ids": ["20001"]})
+        response = _client().post("/api/orders/print", json={"order_ids": ["20001"], "request_id": "test-print-001"})
 
     assert response.status_code == 200
     assert response.mimetype == "application/pdf"
@@ -566,12 +567,13 @@ def test_order_print_route_returns_pdf_and_records_operator_log():
     assert response.headers["X-Mercado-Shipment-Count"] == "1"
     assert response.headers["X-Mercado-Printed-Order-Count"] == "1"
     assert response.headers["X-Mercado-Result"] == "success"
-    download_labels.assert_called_once_with(["20001"])
+    download_labels.assert_called_once_with(["20001"], actor_id=1, request_id="test-print-001", organization_key="")
     record_logs.assert_called_once_with(
         ["20001"], operator_id=1, operator_name="测试用户"
     )
 
 
+@pytest.mark.usefixtures("subscribed_workbench_account")
 def test_order_print_route_returns_partial_pdf_and_records_only_successful_orders():
     with (
         patch.object(
@@ -590,7 +592,7 @@ def test_order_print_route_returns_partial_pdf_and_records_only_successful_order
     ):
         response = _client().post(
             "/api/orders/print",
-            json={"order_ids": ["20001", "20002", "20003"]},
+            json={"order_ids": ["20001", "20002", "20003"], "request_id": "test-print-001"},
         )
 
     assert response.status_code == 200
@@ -604,6 +606,7 @@ def test_order_print_route_returns_partial_pdf_and_records_only_successful_order
     )
 
 
+@pytest.mark.usefixtures("subscribed_workbench_account")
 def test_order_print_route_keeps_valid_pdf_when_print_log_write_fails():
     with (
         patch.object(
@@ -622,21 +625,27 @@ def test_order_print_route_keeps_valid_pdf_when_print_log_write_fails():
             side_effect=RuntimeError("数据库暂时不可用"),
         ),
     ):
-        response = _client().post("/api/orders/print", json={"order_ids": ["20001"]})
+        response = _client().post("/api/orders/print", json={"order_ids": ["20001"], "request_id": "test-print-001"})
 
     assert response.status_code == 200
     assert response.data.startswith(b"%PDF")
     assert response.headers["X-Mercado-Print-Log"] == "failed"
 
 
+@pytest.mark.usefixtures("subscribed_workbench_account")
 def test_warehouse_manual_print_marks_only_successful_orders_as_waiting_to_ship():
     client = _client()
     with client.session_transaction() as flask_session:
         flask_session["workbench_user"] = {
             **flask_session["workbench_user"],
             "role_key": "warehouse",
+            "warehouse_key": "shahu",
         }
     with (
+        patch.object(workbench.bit_db_api, "get_order_access_contexts", return_value=[
+            {"order_id": value, "token_id": 7, "transfer_warehouse": "shahu"}
+            for value in ["20001", "20002"]
+        ]),
         patch.object(
             workbench.bit_db_api,
             "download_order_labels",
@@ -657,13 +666,14 @@ def test_warehouse_manual_print_marks_only_successful_orders_as_waiting_to_ship(
     ):
         response = client.post(
             "/api/orders/print",
-            json={"order_ids": ["20001", "20002"]},
+            json={"order_ids": ["20001", "20002"], "request_id": "test-print-001"},
         )
 
     assert response.status_code == 200
     bulk_update.assert_called_once_with(
         ["20001"],
         workflow_status="待发",
+        allowed_warehouse="shahu",
         operator_id=1,
         operator_name="测试用户",
     )
@@ -702,4 +712,4 @@ def test_order_operation_logs_route_returns_audit_rows():
 
 
 # These route tests mock business data; they must not authenticate against production MySQL.
-pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user")
+pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user", "subscribed_workbench_account")

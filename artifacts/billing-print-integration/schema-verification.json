@@ -1,0 +1,26 @@
+{
+  "record_counts_unchanged": true,
+  "added_columns": {
+    "workbench_print_wallets": [],
+    "workbench_print_wallet_records": [
+      "actor_role_key",
+      "actor_username"
+    ],
+    "workbench_print_requests": [],
+    "workbench_print_request_orders": [
+      "print_time_source",
+      "printed_at",
+      "salesperson_name",
+      "salesperson_username",
+      "shop_name",
+      "site_id",
+      "token_id"
+    ]
+  },
+  "row_counts": {
+    "workbench_print_wallets": 0,
+    "workbench_print_wallet_records": 0,
+    "workbench_print_requests": 0,
+    "workbench_print_request_orders": 0
+  }
+}

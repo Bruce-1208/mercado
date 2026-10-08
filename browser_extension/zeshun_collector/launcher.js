@@ -12,11 +12,29 @@
   let suppressClick = false;
 
   function storageGet(key) {
-    return new Promise(resolve => chrome.storage.local.get([key], resolve));
+    return new Promise(resolve => {
+      const local = globalThis.chrome?.storage?.local;
+      if (!local) return resolve({});
+      try {
+        local.get([key], values => {
+          void globalThis.chrome?.runtime?.lastError;
+          resolve(values || {});
+        });
+      } catch (_) { resolve({}); }
+    });
   }
 
   function storageSet(values) {
-    return new Promise(resolve => chrome.storage.local.set(values, resolve));
+    return new Promise(resolve => {
+      const local = globalThis.chrome?.storage?.local;
+      if (!local) return resolve();
+      try {
+        local.set(values, () => {
+          void globalThis.chrome?.runtime?.lastError;
+          resolve();
+        });
+      } catch (_) { resolve(); }
+    });
   }
 
   function defaultPosition() {
@@ -47,13 +65,22 @@
 
   function openPlugin() {
     if (!button) return;
+    const runtime = globalThis.chrome?.runtime;
+    const disconnected = () => {
+      button.classList.remove("is-opening");
+      button.title = "插件连接已失效，请刷新当前网页后重试；若仍失败，请重新加载泽顺插件";
+      button.setAttribute("aria-label", button.title);
+      button.querySelector("span").textContent = "请刷新";
+    };
+    if (typeof runtime?.sendMessage !== "function") return disconnected();
     button.classList.add("is-opening");
-    chrome.runtime.sendMessage({type: "OPEN_FLOATING_WINDOW"}, () => {
-      // Reading lastError prevents Chrome from logging an unchecked error when
-      // the extension is reloaded while a page is still open.
-      void chrome.runtime.lastError;
-      window.setTimeout(() => button?.classList.remove("is-opening"), 260);
-    });
+    try {
+      runtime.sendMessage({type: "OPEN_FLOATING_WINDOW"}, response => {
+        // A previously injected launcher survives an extension reload.
+        if (runtime.lastError || response?.ok === false) return disconnected();
+        window.setTimeout(() => button?.classList.remove("is-opening"), 260);
+      });
+    } catch (_) { disconnected(); }
   }
 
   function finishDrag(event) {

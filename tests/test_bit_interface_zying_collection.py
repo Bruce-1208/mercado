@@ -96,7 +96,7 @@ def test_build_zying_collection_params_accepts_product_cursor_and_limit():
     )
 
     assert params["start_page"] == 1
-    assert params["number"] == 10000
+    assert params["number"] is None
     assert params["start_product_id"] == "801623017"
     assert params["max_items"] == 25
 
@@ -104,7 +104,7 @@ def test_build_zying_collection_params_accepts_product_cursor_and_limit():
 @pytest.mark.parametrize("payload", [
     {"start_product_id": "abc", "max_items": 10},
     {"start_product_id": "1", "max_items": 0},
-    {"start_product_id": "1", "max_items": 10001},
+    {"start_product_id": "1", "max_items": 1.5},
 ])
 def test_build_zying_collection_params_rejects_bad_product_cursor(payload):
     with pytest.raises(ValueError):

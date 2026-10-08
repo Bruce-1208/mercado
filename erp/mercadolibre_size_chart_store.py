@@ -112,6 +112,29 @@ class SizeChartStore:
                 raise ValueError("模板已被修改或删除，请刷新后重试")
         return self.get_template(organization_key, template_id)
 
+    def ensure_builtin_templates(self, organization_key: str, templates: list[dict], previous_templates=()) -> list[dict]:
+        """Seed missing reference categories atomically; retain local edits."""
+        org = normalize_organization(organization_key)
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            replacements = {t["standard_template"]["preset_id"]: t for t in templates}
+            for previous in previous_templates:
+                replacement = replacements[previous["standard_template"]["preset_id"]]
+                # Upgrade only untouched house references; never overwrite edits.
+                db.execute("UPDATE size_chart_templates SET payload_json=?,revision=revision+1,updated_at=? WHERE organization_key=? AND payload_json=?",
+                           (json_text(replacement), now_iso(), org, json_text(previous)))
+            existing = {json.loads(row[0]).get("standard_template", {}).get("preset_id")
+                        for row in db.execute("SELECT payload_json FROM size_chart_templates WHERE organization_key=?", (org,))}
+            now = now_iso()
+            for template in templates:
+                source = template["standard_template"]["preset_id"]
+                if source in existing:
+                    continue
+                db.execute("INSERT INTO size_chart_templates(organization_key,payload_json,created_at,updated_at) VALUES(?,?,?,?)",
+                           (org, json_text(template), now, now))
+                existing.add(source)
+        return self.list_templates(org)
+
     def delete_template(self, organization_key: str, template_id: int, revision: int) -> None:
         with self._connect() as db:
             changed = db.execute(

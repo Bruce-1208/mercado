@@ -249,11 +249,17 @@ def send_alert(user_id, event: dict, secret_key, path=None, dedupe_seconds=1800,
         return _send_alert(user_id, event, secret_key, path, dedupe_seconds, **smtp_factories)
     from bit.bit_runtime_lock import InterProcessLock
     digest = hashlib.sha256(f"{_path(path)}|{user_id}|{incident}".encode()).hexdigest()
+    receipt = _path(path).parent / "mail-receipts" / (digest + ".json")
+    # A receipt confirms delivery even while another caller still holds the lock.
+    if receipt.is_file():
+        return {"sent": False, "deduplicated": True}
     lock = InterProcessLock("awp_mail_" + digest)
     if not lock.acquire():
+        # The active sender may have completed between our first check and acquire.
+        if receipt.is_file():
+            return {"sent": False, "deduplicated": True}
         return {"sent": False, "pending": True}
     try:
-        receipt = _path(path).parent / "mail-receipts" / (digest + ".json")
         if receipt.is_file():
             return {"sent": False, "deduplicated": True}
         result = _send_alert(user_id, event, secret_key, path, dedupe_seconds, **smtp_factories)

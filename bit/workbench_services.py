@@ -1,7 +1,7 @@
-"""Supervise a public Web process and one loopback scheduler worker.
+"""Supervise Web and four independently restartable loopback task services.
 
 Run: python -m bit.workbench_services
-Both children use the same checkout, secret file and persistent data paths.
+Children share durable data and session secrets, but not pools or schedulers.
 """
 import os
 import json
@@ -13,6 +13,7 @@ import threading
 import time
 
 from bit.bit_runtime_lock import InterProcessLock
+from bit.service_topology import GROUPS, DEFAULT_CONNECTIONS, group_port, validate_topology
 
 
 def child_environment(mode):
@@ -30,16 +31,36 @@ def child_environment(mode):
             if isinstance(value, str) and value.strip() and not env.get(key):
                 env[key] = value
     env['BIT_RUNTIME_ROLE'] = 'server'
-    env['BIT_SERVICE_MODE'] = mode
+    env['BIT_SERVICE_MODE'] = 'web' if mode == 'web' else 'worker'
+    env['BIT_WORKER_ISOLATION'] = '1'
+    env['BIT_WORKER_GROUP'] = 'worker' if mode == 'web' else mode
+    if mode != 'web':
+        env['BIT_LISTEN_PORT'] = str(group_port(mode))
     env['PYTHONUNBUFFERED'] = '1'
-    pool_name = 'BIT_WEB_DB_CONNECTIONS' if mode == 'web' else 'BIT_WORKER_DB_CONNECTIONS'
-    env['MYSQL_POOL_MAX_CONNECTIONS'] = env.get(pool_name, '6' if mode == 'web' else '8')
-    if mode == 'worker':
-        env['BIT_WSGI_THREADS'] = env.get('BIT_WORKER_WSGI_THREADS', '16')
+    env['MYSQL_POOL_MAX_CONNECTIONS'] = env.get(f'BIT_{mode.upper()}_DB_CONNECTIONS', str(DEFAULT_CONNECTIONS[mode]))
+    env['MYSQL_POOL_MIN_CACHED'] = '0'
+    env['MYSQL_POOL_MAX_CACHED'] = str(min(2, int(env['MYSQL_POOL_MAX_CONNECTIONS'])))
+    env['MYSQL_POOL_ACQUIRE_TIMEOUT'] = env.get(f'BIT_{mode.upper()}_DB_ACQUIRE_TIMEOUT', '5')
+    if mode != 'web':
+        env['BIT_WSGI_THREADS'] = env.get(f'BIT_{mode.upper()}_WSGI_THREADS', '4')
+    limits = {
+        'MERCADO_SYNC_STORE_BUDGET': '2', 'MERCADO_SYNC_ORDER_RESERVE': '1',
+        'MERCADO_ORDER_STORE_WORKERS': '2', 'MERCADO_ORDER_PRINT_STORE_WORKERS': '2',
+        'MERCADO_ORDER_STATUS_WORKERS': '2', 'MERCADO_API_BACKFILL_WORKERS': '2',
+        'MERCADO_STORE_LINK_STORE_WORKERS': '1', 'MERCADO_STORE_LINK_DETAIL_WORKERS': '2',
+        'MERCADO_PROFIT_REFRESH_WORKERS': '1',
+        'MERCADO_INFRACTION_STORE_WORKERS': '1', 'MERCADO_INFRACTION_DETAIL_WORKERS': '2',
+        'MERCADO_PROHIBITED_STORE_WORKERS': '1', 'MERCADO_PROHIBITED_DETAIL_WORKERS': '2',
+    }
+    for key, value in limits.items():
+        env[key] = env.get(f'BIT_{mode.upper()}_{key}', value)
     return env
 
 
 def main():
+    modes = (*GROUPS, 'web')
+    environments = {mode: child_environment(mode) for mode in modes}
+    validate_topology(environments)
     lock = InterProcessLock('workbench-services-supervisor', owner='workbench_services')
     if not lock.acquire(timeout=0):
         raise SystemExit('服务管理进程已运行')
@@ -48,36 +69,41 @@ def main():
         stop.set()
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, stopping)
+    log_dir = Path(os.environ.get('BIT_SERVICE_LOG_DIR', str(Path(__file__).resolve().parents[1] / '.logs/services')))
+    log_dir.mkdir(parents=True, exist_ok=True)
     children = {}
-    attempts = {'worker':0, 'web':0}
+    attempts = {mode: 0 for mode in modes}
     started_at = {}
-    retry_at = {'worker':0, 'web':0}
+    retry_at = {mode: 0 for mode in modes}
     try:
         while not stop.is_set():
-            for mode in ('worker', 'web'):
+            for mode in modes:
                 child = children.get(mode)
                 if child is not None and child.poll() is not None:
                     lifetime = time.monotonic() - started_at[mode]
                     attempts[mode] = 1 if lifetime > 60 else attempts[mode] + 1
-                    if attempts[mode] >= 5:
-                        raise RuntimeError(f'{mode} 连续启动失败，请检查日志和已有服务')
-                    retry_at[mode] = time.monotonic() + min(30, 2 ** attempts[mode])
+                    delay = min(60, 2 ** min(attempts[mode], 6))
+                    print(f'{mode} 服务退出，{delay} 秒后独立重启', flush=True)
+                    retry_at[mode] = time.monotonic() + delay
                     del children[mode]
                 if mode not in children and time.monotonic() >= retry_at[mode]:
-                    children[mode] = subprocess.Popen(
-                        [sys.executable, '-m', 'bit.workbench_services', '--child'],
-                        env=child_environment(mode),
-                    )
+                    # Separate logs make pool saturation and task failures attributable.
+                    with (log_dir / f'{mode}.log').open('ab') as output:
+                        children[mode] = subprocess.Popen(
+                            [sys.executable, '-m', 'bit.workbench_services', '--child'],
+                            env=environments[mode], stdout=output, stderr=subprocess.STDOUT,
+                        )
                     started_at[mode] = time.monotonic()
-                    print(f'{mode} 服务启动 pid={children[mode].pid}', flush=True)
+                    print(f'{mode} 服务启动 pid={children[mode].pid} db_limit={environments[mode]["MYSQL_POOL_MAX_CONNECTIONS"]} log={log_dir / (mode + ".log")}', flush=True)
             stop.wait(1)
     finally:
         for child in children.values():
             if child.poll() is None:
                 child.terminate()
+        shutdown_deadline = time.monotonic() + 20
         for child in children.values():
             try:
-                child.wait(timeout=20)
+                child.wait(timeout=max(0, shutdown_deadline - time.monotonic()))
             except subprocess.TimeoutExpired:
                 child.kill()
                 child.wait(timeout=5)

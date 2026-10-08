@@ -1,0 +1,24 @@
+{
+  "tested_at": "2026-10-06T09:39:39.754Z",
+  "template": "bit/templates/index.html",
+  "method": "Real function source executed in a Node VM with mocked DOM, fetch, and timers; zero API access",
+  "results": [
+    {
+      "scenario": "Open store-links while the background sync is running",
+      "list_requests_before_first_result": 2,
+      "first_request_aborted": true,
+      "queries_identical": true
+    },
+    {
+      "scenario": "The store-links tab is inactive when the sync status responds",
+      "next_status_poll_ms": 1500,
+      "background_poll_scheduled": true
+    },
+    {
+      "scenario": "Two activations overlap before either sync status request returns",
+      "simultaneous_status_requests": 2,
+      "active_poll_timers_after_both_responses": 2,
+      "referenced_poll_timer_id": 2
+    }
+  ]
+}

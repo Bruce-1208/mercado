@@ -135,6 +135,8 @@ _sync_state: dict[str, Any] = {
     "total_stores": 0,
     "processed_stores": 0,
     "active_stores": [],
+    "active_token_ids": [],
+    "target_token_ids": [],
     "detection_scanned_count": 0,
     "detection_matched_count": 0,
     "rights_holder_count": 0,
@@ -169,7 +171,7 @@ def _append_log(message: str) -> None:
         _sync_state["logs"] = logs[-300:]
 
 
-def _set_store_active(store_name: str, active: bool) -> None:
+def _set_store_active(store_name: str, active: bool, token_id: int) -> None:
     with _state_guard:
         names = list(_sync_state.get("active_stores") or [])
         if active and store_name not in names:
@@ -177,6 +179,12 @@ def _set_store_active(store_name: str, active: bool) -> None:
         elif not active and store_name in names:
             names.remove(store_name)
         _sync_state["active_stores"] = names
+        ids = set(_sync_state.get("active_token_ids") or [])
+        if active:
+            ids.add(token_id)
+        else:
+            ids.discard(token_id)
+        _sync_state["active_token_ids"] = sorted(ids)
 
 
 def official_infraction_sync_status() -> dict[str, Any]:
@@ -1440,7 +1448,7 @@ def collect_live_detection_infractions(
     ).strftime("%Y-%m-%d")
     worker_count = max(
         1,
-        min(int(max_workers or 1), len(normalized_targets), 8),
+        min(int(max_workers or 1), len(normalized_targets), INFRACTION_STORE_WORKERS, 8),
     )
     print(
         f"{_now_text()} 侵权列表使用 Mercado Moderations API + 官方禁限售快照，"
@@ -1461,7 +1469,8 @@ def collect_live_detection_infractions(
                 "message": record_load_errors.get(token_id) or "店铺 Token 记录不存在",
             }
         try:
-            return _collect_live_detection_target(
+            return run_capacity_store(
+                "infractions", token_id, _collect_live_detection_target,
                 record,
                 target,
                 date_created_since=date_created_since,
@@ -1679,9 +1688,10 @@ def run_official_infraction_sync(
         running=True,
         status="running",
         message="正在同步官方侵权数据",
+        target_token_ids=[int(record["id"]) for record in records],
         total_stores=len(records),
         processed_stores=0,
-        active_stores=[],
+        active_stores=[], active_token_ids=[],
         detection_scanned_count=0,
         detection_matched_count=0,
         rights_holder_count=0,
@@ -1700,7 +1710,7 @@ def run_official_infraction_sync(
     def sync_one(record: dict) -> dict:
         store_name = str(record.get("display_name") or record.get("nickname") or record.get("id"))
         token_id = int(record["id"])
-        _set_store_active(store_name, True)
+        _set_store_active(store_name, True, token_id)
         mark_infraction_sync_started(token_id)
         try:
             if pppi or get_infraction_sync_context(token_id).get("pppi_requested_at"):
@@ -1743,7 +1753,7 @@ def run_official_infraction_sync(
                 "rights_holder": 0,
             }
         finally:
-            _set_store_active(store_name, False)
+            _set_store_active(store_name, False, token_id)
 
     with ThreadPoolExecutor(
         max_workers=worker_count,
@@ -1782,7 +1792,7 @@ def run_official_infraction_sync(
         running=False,
         status="completed" if problem_count == 0 else "partial",
         message=message,
-        active_stores=[],
+        active_stores=[], active_token_ids=[],
         finished_at=_now_text(),
         results=list(results),
     )
@@ -1814,7 +1824,7 @@ def _run_background(token_ids: list[int], pppi: bool = False) -> None:
             running=False,
             status="error",
             message=str(exc),
-            active_stores=[],
+            active_stores=[], active_token_ids=[],
             finished_at=_now_text(),
         )
         _append_log(f"任务失败：{exc}")
@@ -1849,9 +1859,10 @@ def start_official_infraction_sync(
             task_id=uuid.uuid4().hex,
             status="starting",
             message="正在启动官方侵权同步",
+            target_token_ids=list(selected_ids),
             total_stores=0,
             processed_stores=0,
-            active_stores=[],
+            active_stores=[], active_token_ids=[],
             detection_scanned_count=0,
             detection_matched_count=0,
             rights_holder_count=0,

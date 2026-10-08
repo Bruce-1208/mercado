@@ -1,0 +1,2125 @@
+{
+  "collected": 5623,
+  "covered": 5623,
+  "counts": {
+    "passed": 5271,
+    "failure": 333,
+    "error": 18,
+    "skipped": 1
+  },
+  "note": "Later focused results supersede earlier runs. Failures include stale fixtures and blocked real dependencies; not a count of confirmed product defects.",
+  "failures": [
+    {
+      "test": "tests/test_account_integrations.py::test_account_integration_api_uses_logged_in_user_id",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_account_integrations.py::test_plugin_alert_dispatches_email_and_webhook",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_account_integrations.py::test_private_account_integrations_reveals_credentials_only_explicitly",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_ad_profit.py::test_profit_route_requires_execute_and_store_scope",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "AssertionError: assert 503 == 403"
+    },
+    {
+      "test": "tests/test_ai_original_autopublish_browser.py::test_preview_confirm_poll_and_live_status[amazon-1440]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 'material' in ''"
+    },
+    {
+      "test": "tests/test_ai_original_autopublish_browser.py::test_preview_confirm_poll_and_live_status[yandex-390]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 'material' in ''"
+    },
+    {
+      "test": "tests/test_ai_usage_instrumentation.py::test_video_final_usage_keeps_creator_and_is_idempotent[failed]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "ValueError: deepseek API Key 无法解密，请在控制台“集成与凭证设置”中重新保存"
+    },
+    {
+      "test": "tests/test_ai_usage_instrumentation.py::test_video_final_usage_keeps_creator_and_is_idempotent[succeeded]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "ValueError: deepseek API Key 无法解密，请在控制台“集成与凭证设置”中重新保存"
+    },
+    {
+      "test": "tests/test_ai_weight_price_performance.py::test_status_reuses_single_database_connection",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 15 == 1"
+    },
+    {
+      "test": "tests/test_billing_print_browser.py::test_unified_payment_print_details_filters_and_permissions[1440-super_admin]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.fill: Timeout 30000ms exceeded."
+    },
+    {
+      "test": "tests/test_billing_print_browser.py::test_unified_payment_print_details_filters_and_permissions[1440-warehouse]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.fill: Timeout 30000ms exceeded."
+    },
+    {
+      "test": "tests/test_billing_print_browser.py::test_unified_payment_print_details_filters_and_permissions[390-enterprise_admin]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.fill: Timeout 30000ms exceeded."
+    },
+    {
+      "test": "tests/test_billing_print_browser.py::test_unified_payment_print_details_filters_and_permissions[390-member]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.fill: Timeout 30000ms exceeded."
+    },
+    {
+      "test": "tests/test_bit_access_control.py::test_access_management_page_contains_role_user_and_permission_controls",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert '仅可查看和操作本人店铺及产品数据' in '<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-10-04-responsive-ui\">\\n<head>\\n    <meta charset=\"UTF-8\">\\n...ipt src=\"{{ url_for(\\'static\\', filename=\\'console-preload.js\\') }}?v=20261008-one-page\"></script>\\n</body>\\n</html>\\n'"
+    },
+    {
+      "test": "tests/test_bit_access_control.py::test_server_appeal_execution_requires_super_admin",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert '仅超级管理员' in '只有超级管理员可以使用服务器执行，请选择 Agent'"
+    },
+    {
+      "test": "tests/test_bit_ai_video.py::test_ai_video_routes_use_central_api",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_ai_video.py::test_workbench_contains_ai_video_module",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_appeal_phrases.py::test_appeal_phrase_crud_api",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "AssertionError: assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_appeal_report.py::test_appeal_record_captures_executor_hostname",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert {'runtime_rol...ame': '', ...} == {'runtime_rol...: 'appeal-pc'}"
+    },
+    {
+      "test": "tests/test_bit_appeal_stability.py::test_ai_appeal_summary_persists_complete_chat_json",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert [] == [{'conversati...xt': '已收到'}]}]"
+    },
+    {
+      "test": "tests/test_bit_appeal_stability.py::test_real_dom_snapshot_handles_shadow_root_and_iframe",
+      "outcome": "skipped",
+      "category": "测试主动跳过",
+      "reason": "isolated DOM test needs local Edge"
+    },
+    {
+      "test": "tests/test_bit_appeal_stability.py::test_real_multiprocess_rotation_keeps_every_event",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert None == 0"
+    },
+    {
+      "test": "tests/test_bit_appeal_stability.py::test_send_confirmation_requires_new_echo_and_empty_input",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert '' == 'new'"
+    },
+    {
+      "test": "tests/test_bit_appeal_stability.py::test_stop_after_click_preserves_possible_submission",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "Failed: DID NOT RAISE AppealExecutionError"
+    },
+    {
+      "test": "tests/test_bit_browser_api_rate.py::test_independent_processes_share_the_rate_budget",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "_queue.Empty"
+    },
+    {
+      "test": "tests/test_bit_browser_api_rate.py::test_one_process_rate_limit_is_seen_by_next_worker",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "_queue.Empty"
+    },
+    {
+      "test": "tests/test_bit_browser_lifecycle.py::test_capacity_is_shared_across_independent_processes",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "_queue.Empty"
+    },
+    {
+      "test": "tests/test_bit_browser_lifecycle.py::test_killed_worker_is_recovered_from_durable_registry",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert False"
+    },
+    {
+      "test": "tests/test_bit_check_risk.py::test_unreviewed_knowledge_neither_blocks_nor_allows_products[auto-blacklist]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}"
+    },
+    {
+      "test": "tests/test_bit_check_risk.py::test_unreviewed_knowledge_neither_blocks_nor_allows_products[auto-whitelist]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}"
+    },
+    {
+      "test": "tests/test_bit_check_risk.py::test_unreviewed_knowledge_neither_blocks_nor_allows_products[manual-pending]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}"
+    },
+    {
+      "test": "tests/test_bit_check_risk.py::test_unreviewed_knowledge_neither_blocks_nor_allows_products[wikidata-blacklist]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}"
+    },
+    {
+      "test": "tests/test_bit_check_risk.py::test_unreviewed_knowledge_neither_blocks_nor_allows_products[wipo-blacklist]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "KeyError: 'products'"
+    },
+    {
+      "test": "tests/test_bit_collection_orchestration.py::CollectionOrchestrationTests::test_concurrent_reputation_page_does_not_switch_global_clash",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'Mock'"
+    },
+    {
+      "test": "tests/test_bit_daily_task.py::test_shop_executor_sends_expected_form[\\u4fb5\\u6743-\\u4fb5\\u6743]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]"
+    },
+    {
+      "test": "tests/test_bit_daily_task.py::test_shop_executor_sends_expected_form[\\u53d6\\u6d88\\u7387-\\u53d6\\u6d88\\u7387]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]"
+    },
+    {
+      "test": "tests/test_bit_daily_task.py::test_shop_executor_sends_expected_form[\\u5ef6\\u8bef\\u7387-\\u5ef6\\u8bef]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]"
+    },
+    {
+      "test": "tests/test_bit_daily_task.py::test_shop_executor_sends_expected_form[\\u6295\\u8bc9-\\u6295\\u8bc9]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]"
+    },
+    {
+      "test": "tests/test_bit_daily_task.py::test_shop_executor_sends_expected_form[\\u7981\\u9650\\u552e-\\u7981\\u9650\\u552e]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]"
+    },
+    {
+      "test": "tests/test_bit_funds.py::test_funds_all_shops_is_limited_to_selected_salesperson",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 200"
+    },
+    {
+      "test": "tests/test_bit_funds.py::test_funds_api_supports_owner_filter",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 200"
+    },
+    {
+      "test": "tests/test_bit_funds.py::test_funds_collection_can_be_stopped",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "KeyError: 'data'"
+    },
+    {
+      "test": "tests/test_bit_funds.py::test_funds_group_filter_api",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 200"
+    },
+    {
+      "test": "tests/test_bit_funds.py::test_funds_single_shop_api_starts_background_refresh",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 200"
+    },
+    {
+      "test": "tests/test_bit_funds.py::test_manual_funds_api_saves_snapshot",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 200"
+    },
+    {
+      "test": "tests/test_bit_high_after_sales.py::test_high_after_sale_api_passes_filters",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_high_profits.py::test_high_profit_api_passes_filters",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_ai_appeal_records_are_enriched_for_filters",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert {'salespeople...des': ['未记录']} == {'salespeople...s': ['办公室电脑']}"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_collection_options_returns_active_shop_site_mapping",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 200"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_collection_page_uses_shop_status_style_checkbox_multiselect",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 'id=\"infraction-collection-shops-all\" type=\"checkbox\"' in '<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-10-04-responsive-ui\">\\n<head>\\n    <meta charset=\"UTF-8\">\\n...ipt src=\"{{ url_for(\\'static\\', filename=\\'console-preload.js\\') }}?v=20261008-one-page\"></script>\\n</body>\\n</html>\\n'"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_collection_start_passes_selected_scope_and_defaults_to_ten_workers[/api/infractions/collect-_infraction_collect_state-run_infraction_collect_job]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 200"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_collection_start_passes_selected_scope_and_defaults_to_ten_workers[/api/reputation/collect-_reputation_collect_state-run_reputation_collect_job]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 200"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_collection_start_passes_selected_scope_and_defaults_to_ten_workers[/api/reputation/update-selected-_reputation_collect_state-run_reputation_collect_job]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 200"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_collection_start_rejects_shop_site_without_configured_intersection",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 400"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_daily_task_console_exposes_all_task_switches_and_shop_group",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 'id=\"daily-task-max-workers\" value=\"10\" min=\"1\" max=\"30\"' in '<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-10-04-responsive-ui\">\\n<head>\\n    <meta charset=\"UTF-8\">\\n...ipt src=\"{{ url_for(\\'static\\', filename=\\'console-preload.js\\') }}?v=20261008-one-page\"></script>\\n</body>\\n</html>\\n'"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_daily_task_options_returns_all_active_salespeople",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_daily_task_status_keeps_instance_logs_separate",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "KeyError: 'data'"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_daily_task_status_projects_external_task_when_no_local_task",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "KeyError: 'data'"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_daily_task_status_returns_runtime_log",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_daily_task_stop_endpoint_sets_stop_event",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_finite_loop_count_stops_after_configured_rounds[10]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 0 == (10 * 2)"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_finite_loop_count_stops_after_configured_rounds[20]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 0 == (20 * 2)"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_finite_loop_count_stops_after_configured_rounds[50]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 0 == (50 * 2)"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_login_verification_stops_remaining_sites",
+      "outcome": "failure",
+      "category": "模拟场景超时；需核对任务执行模型",
+      "reason": "Failed: Isolated functional test exceeded 45 seconds: tests/test_bit_interface_appeal.py::test_login_verification_stops_remaining_sites"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_selected_forms_run_in_fixed_order_within_one_round",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert [] == [('墨西哥', '延误'...('智利', '取消率')]"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_selected_sites_run_sequentially_for_every_mode_and_form[\\u4fb5\\u6743-AI\\u5ba2\\u670d-60]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert [] == [('AI客服', '墨西... '乌拉圭', '侵权')]"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_selected_sites_run_sequentially_for_every_mode_and_form[\\u53d6\\u6d88\\u7387-AI\\u5ba2\\u670d-60]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert [] == [('AI客服', '墨西...'乌拉圭', '取消率')]"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_selected_sites_run_sequentially_for_every_mode_and_form[\\u5ef6\\u8bef-AI\\u5ba2\\u670d-60]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert [] == [('AI客服', '墨西... '乌拉圭', '延误')]"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_selected_sites_run_sequentially_for_every_mode_and_form[\\u6295\\u8bc9-AI\\u5ba2\\u670d-60]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert [] == [('AI客服', '墨西... '乌拉圭', '投诉')]"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_selected_sites_run_sequentially_for_every_mode_and_form[\\u7981\\u9650\\u552e-AI\\u5ba2\\u670d-60]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert [] == [('AI客服', '墨西...'乌拉圭', '禁限售')]"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_shop_status_ui_refreshes_rows_once_after_login_task_finishes",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 'JSON.stringify({window_ids: windowIds, workers})' in '<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-10-04-responsive-ui\">\\n<head>\\n    <meta charset=\"UTF-8\">\\n...ipt src=\"{{ url_for(\\'static\\', filename=\\'console-preload.js\\') }}?v=20261008-one-page\"></script>\\n</body>\\n</html>\\n'"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_shop_status_ui_uses_single_shop_auto_login_action",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 'JSON.stringify({window_ids: windowIds, workers})' in '<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-10-04-responsive-ui\">\\n<head>\\n    <meta charset=\"UTF-8\">\\n...ipt src=\"{{ url_for(\\'static\\', filename=\\'console-preload.js\\') }}?v=20261008-one-page\"></script>\\n</body>\\n</html>\\n'"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_stop_api_sets_registered_task_event",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_interface_appeal.py::test_stop_request_prevents_remaining_sites",
+      "outcome": "failure",
+      "category": "模拟场景超时；需核对任务执行模型",
+      "reason": "Failed: Isolated functional test exceeded 45 seconds: tests/test_bit_interface_appeal.py::test_stop_request_prevents_remaining_sites"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_batch_publish_endpoint_builds_all_compatible_account_site_targets",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_batch_publish_endpoint_can_select_targets_by_site_group",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_batch_publish_endpoint_ignores_missing_weight_and_starts_valid_rows",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_batch_publish_endpoint_moves_missing_weight_back_to_collection",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_batch_publish_endpoint_moves_nonpositive_net_to_collection",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_batch_publish_endpoint_moves_unapproved_product_to_collection",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_batch_publish_endpoint_rejects_cross_site_for_local_store",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_batch_publish_endpoint_rejects_nonpositive_worker_count",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_batch_publish_endpoint_rejects_unsupported_site",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_batch_publish_endpoint_starts_background_task_for_selected_store",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_bulk_collection_measurement_update_endpoint",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_bulk_product_content_update_endpoint",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_collection_and_product_delete_endpoints",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_collection_list_and_batch_add_endpoints",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_collection_quality_pass_retries_only_rows_missing_actual_weight",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 'hasUsableActualWeight && row.title && row.main_image_url' in '<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-10-04-responsive-ui\">\\n<head>\\n    <meta charset=\"UTF-8\">\\n...ipt src=\"{{ url_for(\\'static\\', filename=\\'console-preload.js\\') }}?v=20261008-one-page\"></script>\\n</body>\\n</html>\\n'"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_group_publish_endpoint_applies_strategy_and_historical_account_ownership",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_management_category_endpoints_support_crud_assignment_and_filtering",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_product_content_update_endpoint",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_mercado_collection.py::test_product_list_filters_and_review_status_endpoint",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_interface_zying_collection.py::test_zying_collection_options_refreshes_categories_and_developers_together",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 200"
+    },
+    {
+      "test": "tests/test_bit_interface_zying_collection.py::test_zying_collection_start_runs_script_with_database_dedup",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 200"
+    },
+    {
+      "test": "tests/test_bit_interface_zying_collection.py::test_zying_collection_stop_endpoint_sets_safe_stop_event",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 200"
+    },
+    {
+      "test": "tests/test_bit_interface_zying_collection.py::test_zying_login_buttons_open_and_capture_visible_browser",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 200"
+    },
+    {
+      "test": "tests/test_bit_interface_zying_collection.py::test_zying_product_developers_refresh_auth_and_backfill_database",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 401 == 200"
+    },
+    {
+      "test": "tests/test_bit_inventory.py::test_inventory_movement_api_uses_authenticated_operator",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_inventory.py::test_inventory_stock_api_passes_filters_to_database_adapter",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_inventory.py::test_movement_api_passes_person_filters",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_login_remember.py::test_login_expiry_is_72_hours_even_when_account_name_is_not_remembered",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_login_remember.py::test_login_uses_fixed_72_hour_permanent_session",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_mercado_applications.py::test_browser_routes_manage_apps_and_change_store_app",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "AssertionError: assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_mercado_applications.py::test_store_authorization_template_contains_application_management",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 'id=\"mercado-token-application\"' in '{\"message\":\"\\\\u6682\\\\u65f6\\\\u65e0\\\\u6cd5\\\\u9a8c\\\\u8bc1\\\\u8d26\\\\u6237\\\\u8ba2\\\\u9605\\\\uff0c\\\\u8bf7\\\\u7a0d\\\\u540e\\\\u91cd\\\\u8bd5\",\"status\":\"error\"}\\n'"
+    },
+    {
+      "test": "tests/test_bit_mercado_tokens.py::test_browser_routes_return_metadata_and_accept_management_actions",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_bit_mercado_tokens.py::test_console_template_contains_store_token_module",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_order_management.py::test_bulk_update_orders_supports_status_and_complete_purchase_order",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: expected call not found."
+    },
+    {
+      "test": "tests/test_bit_order_management.py::test_non_warehouse_cannot_manually_set_waiting_to_ship_status",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "TypeError: Object of type MagicMock is not JSON serializable"
+    },
+    {
+      "test": "tests/test_bit_order_management.py::test_order_api_passes_filters_and_pagination",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: expected call not found."
+    },
+    {
+      "test": "tests/test_bit_order_management.py::test_order_management_displays_pack_number_without_exposing_child_number",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert b\"copyOrderNumber('${encodedDisplayNumber}', this)\" in b'<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-10-04-responsive-ui\">\\n<head>\\n    <meta charset=\"UTF-8\">\\...61007-preload\"></script>\\n    <script src=\"/static/console-preload.js?v=20261008-one-page\"></script>\\n</body>\\n</html>'"
+    },
+    {
+      "test": "tests/test_bit_order_management.py::test_purchase_tracking_sync_rejects_selected_order_without_purchase_number",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert '尚未填写采购订单号' in '所选订单均未填写采购订单号'"
+    },
+    {
+      "test": "tests/test_bit_order_management.py::test_purchase_tracking_sync_status_is_not_cached",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 0 == 2"
+    },
+    {
+      "test": "tests/test_bit_order_management.py::test_workbench_contains_order_management_ui",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert b'\\xe6\\x89\\x93\\xe5\\x8c\\x85\\xe5\\x8d\\x95\\xe5\\x8f\\xb7\\xe5\\x92\\x8c\\xe5\\xad\\x90\\xe8\\xae\\xa2\\xe5\\x8d\\x95\\xe5\\x8f\\xb7\\xe9\\x83\\xbd\\xe6\\x94\\xaf\\xe6\\x8c\\x81\\xe6\\x90\\x9c\\xe7\\xb4\\xa2' in b'<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-10-04-responsive-ui\">\\n<head>\\n    <meta charset=\"UTF-8\">\\...61007-preload\"></"
+    },
+    {
+      "test": "tests/test_bit_order_sync.py::test_mysql_bulk_update_changes_only_authorized_store_orders",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "ValueError: 请选择有效的订单状态"
+    },
+    {
+      "test": "tests/test_bit_prohibited_listings.py::test_all_store_prohibited_sync_ignores_selected_ids",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 202"
+    },
+    {
+      "test": "tests/test_bit_prohibited_listings.py::test_manual_prohibited_sync_route_can_target_one_store",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 202"
+    },
+    {
+      "test": "tests/test_bit_prohibited_listings.py::test_prohibited_listing_export_keeps_filters_and_exports_all_pages",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_prohibited_listings.py::test_prohibited_listing_ui_and_list_route",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_bit_prohibited_listings.py::test_salesperson_sync_resolves_authorized_store_ids",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 202"
+    },
+    {
+      "test": "tests/test_bit_store_link_video.py::test_upload_route_and_missing_file",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "AssertionError: assert 503 == 400"
+    },
+    {
+      "test": "tests/test_bit_store_links.py::test_list_store_links_filters_site_and_defaults_to_sales_descending[MLA2,MLM2]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert '`remote_json`' not in '\\n         ...            '"
+    },
+    {
+      "test": "tests/test_bit_store_links.py::test_list_store_links_filters_site_and_defaults_to_sales_descending[Toys]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert '`remote_json`' not in '\\n         ...            '"
+    },
+    {
+      "test": "tests/test_bit_store_links.py::test_workbench_store_link_ui_and_routes",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert b'\\xe6\\xaf\\x8f 3 \\xe5\\xa4\\xa9\\xe8\\x87\\xaa\\xe5\\x8a\\xa8\\xe5\\x90\\x8c\\xe6\\xad\\xa5\\xe9\\x93\\xbe\\xe6\\x8e\\xa5\\xe7\\x8a\\xb6\\xe6\\x80\\x81' in b'<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-10-04-responsive-ui\">\\n<head>\\n    <meta charset=\"UTF-8\">\\...61007-preload\"></script>\\n    <script src=\"/static/console-pre"
+    },
+    {
+      "test": "tests/test_bit_zying_desktop_export_mysql.py::test_filter_verification_retries_transient_empty_salesperson",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AttributeError: <module 'pywinauto' from '/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pywinauto/__init__.py'> has no attribute 'Desktop'"
+    },
+    {
+      "test": "tests/test_bit_zying_desktop_export_mysql.py::test_scaled_coordinates_follow_actual_window_size",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AttributeError: <module 'ctypes' from '/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/ctypes/__init__.py'> has no attribute 'windll'"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_destination_categories_use_extension_login_and_standard_rows",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_invalid_destination_rejected_before_creating_collection_task[-1]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 400"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_invalid_destination_rejected_before_creating_collection_task[0]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 400"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_invalid_destination_rejected_before_creating_collection_task[1.5]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 400"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_invalid_destination_rejected_before_creating_collection_task[23.0]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 400"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_invalid_destination_rejected_before_creating_collection_task[9223372036854775808]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 400"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_invalid_destination_rejected_before_creating_collection_task[99]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 400"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_invalid_destination_rejected_before_creating_collection_task[False]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 400"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_invalid_destination_rejected_before_creating_collection_task[True]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 400"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_invalid_destination_rejected_before_creating_collection_task[wrong]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 400"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_mercado_collection_saves_selected_destination[product- 23 ]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 201"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_mercado_collection_saves_selected_destination[product-23_0]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 201"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_mercado_collection_saves_selected_destination[product-23_1]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 201"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_mercado_collection_saves_selected_destination[request- 23 ]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 201"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_mercado_collection_saves_selected_destination[request-23_0]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 201"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_mercado_collection_saves_selected_destination[request-23_1]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 201"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_mercado_destination_and_existing_product_change_in_one_transaction",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 'enterprise' == 23"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_zying_destination_is_written_only_with_valid_product_rows",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 'enterprise' == 23"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_zying_start_keeps_source_and_destination_categories_independent",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_browser_extension_management_categories.py::test_zying_start_rejects_deleted_destination_before_launch",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 400"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_admin_termination_cleans_job_owner_state_only",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 403 == 200"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_claim_callback_identity_and_completion",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 403 == 200"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_dead_agent_is_reported_and_can_restart",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "TypeError: 'NoneType' object is not subscriptable"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_default_dispatches_real_agent_job_and_rejects_duplicate",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: {'message': '当前账号无权调用此 Agent，请选择本人或本公司授权范围内的 Agent', 'status': 'error'}"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_dispatch_function_also_restores_existing_browser_actions",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 403 == 200"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_employee_cannot_terminate_another_owners_job",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 403 == 409"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_offline_agent_returns_error_and_releases_batch",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 403 == 409"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_server_edge_runs_whole_batch_with_actor_scope",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 403 == 200"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_server_permission_and_admin_dispatch",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 403 == 200"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_start_preserves_live_worker_and_exposes_blocking_job",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 403 == 409"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_start_reaps_expired_worker_without_visiting_agent_list[False]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: {'message': '只能调用本人绑定的本地 Agent', 'status': 'error'}"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_start_reaps_expired_worker_without_visiting_agent_list[True]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: {'message': '只能调用本人绑定的本地 Agent', 'status': 'error'}"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_terminate_controls_users_job_on_previous_agent",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 403 == 200"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_terminate_endpoint_clears_stale_running_status",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: {'message': '只能调用本人绑定的本地 Agent', 'status': 'error'}"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_terminate_login_job_without_batch[False]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: {'message': '只能调用本人绑定的本地 Agent', 'status': 'error'}"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_terminate_login_job_without_batch[True]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: {'message': '只能调用本人绑定的本地 Agent', 'status': 'error'}"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_terminate_orphan_batch_unblocks_login_and_preserves_history[blocked]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: {'message': '只能调用本人绑定的本地 Agent', 'status': 'error'}"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_terminate_orphan_batch_unblocks_login_and_preserves_history[completed]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: {'message': '只能调用本人绑定的本地 Agent', 'status': 'error'}"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_terminate_orphan_batch_unblocks_login_and_preserves_history[failed]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: {'message': '只能调用本人绑定的本地 Agent', 'status': 'error'}"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_terminate_orphan_batch_unblocks_login_and_preserves_history[running]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: {'message': '只能调用本人绑定的本地 Agent', 'status': 'error'}"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_terminate_orphan_batch_unblocks_login_and_preserves_history[stopped]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: {'message': '只能调用本人绑定的本地 Agent', 'status': 'error'}"
+    },
+    {
+      "test": "tests/test_collection_ai_agent.py::test_terminate_orphan_works_when_agent_offline",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 403 == 200"
+    },
+    {
+      "test": "tests/test_console_navigation.py::test_navigation_search_collapse_and_permissions",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 30000ms exceeded."
+    },
+    {
+      "test": "tests/test_console_ui_browser.py::test_clearance_alerts_opens_as_lazy_workspace_tab",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert False"
+    },
+    {
+      "test": "tests/test_console_ui_browser.py::test_reputation_store_notices_appear_in_matching_warning_cell",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert '原有告警' == '原有告警\\n\\n店铺提醒...t>文本</script>'"
+    },
+    {
+      "test": "tests/test_employee_tasks.py::test_registered_app_login_and_rpc_scope",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_console_download_enroll_heartbeat_and_list",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_console_downloads_macos_agent_package",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_console_rejects_unknown_agent_download_platform",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 400"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_console_renders_agent_as_default_appeal_execution_target",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_daily_agent_endpoints_do_not_control_appeal_jobs",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "AssertionError: assert 503 == 404"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_daily_agent_rejects_unavailable_executor[agent-missing-capabilities0-None]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 409"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_daily_agent_rejects_unavailable_executor[agent-offline-capabilities2-1]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 409"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_daily_agent_rejects_unavailable_executor[agent-old-capabilities1-None]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 409"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_daily_agent_stop_reaches_the_selected_job[False]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_daily_agent_stop_reaches_the_selected_job[True]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_daily_page_defaults_to_the_appropriate_executor[client-local]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_daily_page_defaults_to_the_appropriate_executor[server-agent]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_daily_task_uses_agent_queue_and_reports_logs[appeal_types0]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_daily_task_uses_agent_queue_and_reports_logs[appeal_types1]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_public_appeal_is_queued_for_selected_agent_and_streamed",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_public_stop_marks_agent_job_for_cancellation",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_agent_interface.py::test_task_operator_can_enroll_and_list_daily_agents",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_agent_open_store.py::test_open_store_worker_saves_actionable_error_result",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert {'status': 'e...浏览器 API 无法连接'} == {'status': 'e...浏览器 API 无法连接'}"
+    },
+    {
+      "test": "tests/test_local_agent_worker.py::test_daily_worker_releases_lock_on_business_failure",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "PermissionError: Functional regression blocks business-service networking"
+    },
+    {
+      "test": "tests/test_local_agent_worker.py::test_daily_worker_runs_with_shared_process_controls[False]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "PermissionError: Functional regression blocks business-service networking"
+    },
+    {
+      "test": "tests/test_local_agent_worker.py::test_daily_worker_runs_with_shared_process_controls[True]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "PermissionError: Functional regression blocks business-service networking"
+    },
+    {
+      "test": "tests/test_local_executor_auth.py::test_distinct_server_and_client_keys_integrate_through_real_bridge",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_executor_auth.py::test_logged_in_user_can_get_and_verify_token_without_db_secret",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_local_executor_auth.py::test_token_issuance_still_requires_the_requested_permission",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 403"
+    },
+    {
+      "test": "tests/test_mercado_attribute_preflight_browser.py::test_user_can_complete_a_missing_attribute_and_recheck[1440]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.fill: Timeout 30000ms exceeded."
+    },
+    {
+      "test": "tests/test_mercado_attribute_preflight_browser.py::test_user_can_complete_a_missing_attribute_and_recheck[390]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.fill: Timeout 30000ms exceeded."
+    },
+    {
+      "test": "tests/test_mercado_attribute_preflight_routes.py::test_preview_persists_server_generated_draft_and_returns_only_report_and_revision",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_mercado_attribute_preflight_routes.py::test_preview_rejects_unbounded_work",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_mercado_attribute_preflight_routes.py::test_publish_loads_owned_server_draft_and_passes_it_to_worker",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_mercado_communications.py::test_customer_service_aggregate_keeps_single_store_failure_isolated",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_mercado_communications.py::test_customer_service_aggregate_queries_claim_stores_with_thread_pool",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_mercado_communications.py::test_customer_service_claim_browser_requires_exact_store_binding",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 400"
+    },
+    {
+      "test": "tests/test_mercado_communications.py::test_customer_service_claim_browser_uses_order_shop_name_hint",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_mercado_communications.py::test_customer_service_claim_can_open_exact_store_bit_browser",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_mercado_communications.py::test_customer_service_manager_can_send_claim_message",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_mercado_communications.py::test_customer_service_supports_owner_group_aggregation_and_row_store_replies",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 'customerServiceAllRows = await customerServiceLoadPostSale(stores, search)' in '<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-10-04-responsive-ui\">\\n<head>\\n    <meta charset=\"UTF-8\">\\n...ipt src=\"{{ url_for(\\'static\\', filename=\\'console-preload.js\\') }}?v=20261008-one-page\"></script>\\n</body>\\n</h"
+    },
+    {
+      "test": "tests/test_mercado_communications.py::test_customer_service_view_can_read_but_cannot_reply",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_mercado_communications.py::test_customer_service_view_can_read_pre_sale_summary",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_mercado_communications.py::test_customer_service_view_can_request_pre_sale_translation",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_mercado_communications.py::test_pre_sale_aggregate_queries_stores_with_thread_pool",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_mercado_communications.py::test_pre_sale_workbench_module_has_filters_table_pagination_and_reply",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert '线程完成查询' in '<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-10-04-responsive-ui\">\\n<head>\\n    <meta charset=\"UTF-8\">\\n...ipt src=\"{{ url_for(\\'static\\', filename=\\'console-preload.js\\') }}?v=20261008-one-page\"></script>\\n</body>\\n</html>\\n'"
+    },
+    {
+      "test": "tests/test_mercado_infraction_dashboard.py::test_dashboard_sync_endpoint_starts_background_job",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 202"
+    },
+    {
+      "test": "tests/test_mercado_infraction_dashboard.py::test_independent_dashboard_page_and_data_api",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_mercado_infraction_dashboard.py::test_infraction_export_keeps_group_filter_and_store_drilldown",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_mercado_infraction_dashboard.py::test_ip_rights_export_keeps_filters_and_exports_all_pages",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_mercado_infraction_dashboard.py::test_overview_auto_sync_switch_is_persisted_through_db_api",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_mercado_infraction_dashboard.py::test_pppi_refresh_requests_authoritative_browser_snapshot",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 202"
+    },
+    {
+      "test": "tests/test_mercado_infringement_browser.py::test_both_lists_render_clickable_risk_and_single_item_detection[collection]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 14 == 15"
+    },
+    {
+      "test": "tests/test_mercado_infringement_routes.py::test_public_start_detail_and_task_ownership",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_mercado_infringement_routes.py::test_review_requires_evidence_scope_and_uses_authenticated_actor",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_mercado_official_news.py::test_news_and_store_reminders_have_separate_routes_and_permissions",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "KeyError: 'data'"
+    },
+    {
+      "test": "tests/test_mercado_official_news.py::test_reminders_panel_is_inside_reputation_page",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert None"
+    },
+    {
+      "test": "tests/test_mercado_product_developers.py::test_public_directory_uses_current_users_product_scope[None-expected0]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: Expected 'mock' to be called once. Called 0 times."
+    },
+    {
+      "test": "tests/test_mercado_product_developers.py::test_public_directory_uses_current_users_product_scope[tokens1-expected1]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: expected call not found."
+    },
+    {
+      "test": "tests/test_mercado_product_developers.py::test_public_directory_uses_current_users_product_scope[tokens2-expected2]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: expected call not found."
+    },
+    {
+      "test": "tests/test_mercado_product_developers.py::test_selected_company_and_ordinary_user_directory_keep_the_original_product_scope[False-?organization_key=wuhan-zeshun]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: expected call not found."
+    },
+    {
+      "test": "tests/test_mercado_product_developers.py::test_selected_company_and_ordinary_user_directory_keep_the_original_product_scope[False-]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: expected call not found."
+    },
+    {
+      "test": "tests/test_mercado_product_developers.py::test_selected_company_and_ordinary_user_directory_keep_the_original_product_scope[True-?organization_key=wuhan-zeshun]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: expected call not found."
+    },
+    {
+      "test": "tests/test_mercadolibre_category_tree.py::test_category_paths_use_official_hierarchy_and_cache",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "KeyError: 0"
+    },
+    {
+      "test": "tests/test_mercadolibre_category_tree.py::test_saved_paths_survive_process_cache_reset",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: saved paths should avoid downloading the full catalog"
+    },
+    {
+      "test": "tests/test_model_balance.py::test_balances_api_only_uses_logged_in_accounts_saved_tokens",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_order_product_detail_routes.py::test_public_detail_forwards_stages_and_keeps_authorization[&translate=0&refresh=1-False-True]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_order_product_detail_routes.py::test_public_detail_forwards_stages_and_keeps_authorization[&translate=1-True-False]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_order_product_detail_routes.py::test_public_detail_forwards_stages_and_keeps_authorization[-False-False]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_pdd_orders_browser.py::DetailBrowserTests::test_launch_and_reuse_dynamic_edge_port",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "RuntimeError: 找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe"
+    },
+    {
+      "test": "tests/test_pdd_orders_browser.py::DetailBrowserTests::test_two_orders_and_logistics_export",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "RuntimeError: 找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe"
+    },
+    {
+      "test": "tests/test_product_list_query_routing.py::test_ordinary_list_loads_once_and_keeps_existing_filters[products]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "KeyError: 'token_ids'"
+    },
+    {
+      "test": "tests/test_product_list_query_routing.py::test_product_single_page_flag_reaches_storage",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "KeyError: 'token_ids'"
+    },
+    {
+      "test": "tests/test_publish_concurrency.py::test_all_roles_publish_with_shared_default[admin]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_publish_concurrency.py::test_all_roles_publish_with_shared_default[custom]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_publish_concurrency.py::test_all_roles_publish_with_shared_default[member]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_publish_concurrency.py::test_all_roles_publish_with_shared_default[super_admin]",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_publish_concurrency.py::test_shared_settings_permissions_and_roundtrip",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 401 == 403"
+    },
+    {
+      "test": "tests/test_purchase_net_proceeds_persistence.py::test_ai_recollection_and_inflight_worker_keep_purchase_metadata_and_override",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "sqlite3.OperationalError: no such column: organization_key"
+    },
+    {
+      "test": "tests/test_purchase_net_proceeds_persistence.py::test_collection_measurement_edit_keeps_matching_product_purchase_target",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "sqlite3.OperationalError: no such column: c.organization_key"
+    },
+    {
+      "test": "tests/test_purchase_net_proceeds_persistence.py::test_collection_refresh_updates_capture_without_overwriting_purchase_product",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "sqlite3.OperationalError: no such column: newer.organization_key"
+    },
+    {
+      "test": "tests/test_purchase_net_proceeds_persistence.py::test_pulled_listing_import_keeps_purchase_value_and_metadata",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "sqlite3.OperationalError: table erp_mercadolibre_products has no column named organization_key"
+    },
+    {
+      "test": "tests/test_purchase_net_proceeds_persistence.py::test_readding_collection_capture_keeps_product_purchase_and_refreshes_other_source_data",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "sqlite3.OperationalError: table erp_mercadolibre_products has no column named organization_key"
+    },
+    {
+      "test": "tests/test_purchase_net_proceeds_persistence.py::test_zying_recollection_refreshes_source_without_erasing_purchase_target[False]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "sqlite3.OperationalError: table erp_mercadolibre_products has no column named organization_key"
+    },
+    {
+      "test": "tests/test_purchase_net_proceeds_persistence.py::test_zying_recollection_refreshes_source_without_erasing_purchase_target[True]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "sqlite3.OperationalError: table erp_mercadolibre_products has no column named organization_key"
+    },
+    {
+      "test": "tests/test_purchase_net_proceeds_routes.py::test_purchase_ratio_internal_route_forwards_to_transaction",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: expected call not found."
+    },
+    {
+      "test": "tests/test_purchase_tracking_sync.py::test_plugin_direct_start_and_result_routes",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "AssertionError: {'message': '暂时无法验证账户订阅，请稍后重试', 'status': 'error'}"
+    },
+    {
+      "test": "tests/test_rights_holder_reply.py::test_browser_fallback_queues_only_authorized_store",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 403 == 202"
+    },
+    {
+      "test": "tests/test_salesperson_stats_browser.py::test_statistics_ui_filters_empty_error_and_safe_names",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert '服务不可用' in '当前范围暂无操作记录'"
+    },
+    {
+      "test": "tests/test_shipment_compensation.py::test_saved_records_recompute_stale_freight_and_use_same_filter_for_count_and_rows",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert False"
+    },
+    {
+      "test": "tests/test_store_link_audit.py::test_history_endpoint_requires_platform_admin",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "AssertionError: assert 503 == 403"
+    },
+    {
+      "test": "tests/test_store_link_enrollment_browser.py::test_link_enrollment_opens_exact_campaign_prices_previews_and_submits",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert 2 == 1"
+    },
+    {
+      "test": "tests/test_store_link_metadata_loading.py::test_metadata_aggregates_real_rows_without_cross_scope_data[None]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "sqlite3.OperationalError: no such column: product.organization_key"
+    },
+    {
+      "test": "tests/test_store_link_metadata_loading.py::test_metadata_aggregates_real_rows_without_cross_scope_data[scope1]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "sqlite3.OperationalError: no such column: product.organization_key"
+    },
+    {
+      "test": "tests/test_store_link_metadata_loading.py::test_metadata_aggregates_real_rows_without_cross_scope_data[scope2]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "sqlite3.OperationalError: no such column: product.organization_key"
+    },
+    {
+      "test": "tests/test_store_link_metadata_loading.py::test_metadata_aggregates_real_rows_without_cross_scope_data[scope4]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "sqlite3.OperationalError: no such column: product.organization_key"
+    },
+    {
+      "test": "tests/test_store_link_video_browser.py::test_ai_video_card_shows_platform_error_beside_upload_button",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 30000ms exceeded."
+    },
+    {
+      "test": "tests/test_store_link_video_browser.py::test_video_details_page_shows_upload_history",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "jinja2.exceptions.UndefinedError: 'url_for' is undefined"
+    },
+    {
+      "test": "tests/test_weight_dimensions_browser_recovery.py::test_missing_login_retains_recovery_page_and_releases_lock[False]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: expected call not found."
+    },
+    {
+      "test": "tests/test_weight_dimensions_preflight.py::test_already_succeeded_orders_skip_browser_check",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "ValueError: 服务正在关闭，请重新连接后执行重量尺寸更新"
+    },
+    {
+      "test": "tests/test_weight_dimensions_preflight.py::test_browser_check_failure_preserves_all_38_orders_and_does_not_start_worker[False-combined]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: Regex pattern did not match."
+    },
+    {
+      "test": "tests/test_weight_dimensions_preflight.py::test_browser_check_failure_preserves_all_38_orders_and_does_not_start_worker[False-zying]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: Regex pattern did not match."
+    },
+    {
+      "test": "tests/test_weight_dimensions_preflight.py::test_browser_check_failure_preserves_all_38_orders_and_does_not_start_worker[True-combined]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: Regex pattern did not match."
+    },
+    {
+      "test": "tests/test_weight_dimensions_preflight.py::test_browser_check_failure_preserves_all_38_orders_and_does_not_start_worker[True-zying]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: Regex pattern did not match."
+    },
+    {
+      "test": "tests/test_weight_dimensions_preflight.py::test_browser_check_runs_once_before_38_orders_are_queued",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "ValueError: 服务正在关闭，请重新连接后执行重量尺寸更新"
+    },
+    {
+      "test": "tests/test_weight_dimensions_preflight.py::test_competing_request_cannot_replace_records_or_start_second_worker",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: Regex pattern did not match."
+    },
+    {
+      "test": "tests/test_weight_dimensions_preflight.py::test_missing_measurements_fail_before_opening_edge",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: Regex pattern did not match."
+    },
+    {
+      "test": "tests/test_weight_dimensions_preflight.py::test_overlapping_preflight_only_starts_one_worker",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: Regex pattern did not match."
+    },
+    {
+      "test": "tests/test_weight_dimensions_preflight.py::test_server_api_returns_recovery_error_instead_of_accepting_failed_batch",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert {'message': '...tus': 'error'} == {'status': 'e...用，请登录智赢后重新执行'}"
+    },
+    {
+      "test": "tests/test_weight_dimensions_preflight.py::test_zeshun_does_not_require_an_edge_browser",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "ValueError: 服务正在关闭，请重新连接后执行重量尺寸更新"
+    },
+    {
+      "test": "tests/test_weight_dimensions_same_title.py::test_server_zying_updates_latest_product_without_marketplace_writes",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "ValueError: 服务正在关闭，请重新连接后执行重量尺寸更新"
+    },
+    {
+      "test": "tests/test_workbench_runtime_interface.py::test_database_health_requires_shared_token_for_remote_clients",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert {'connection_...le': 'server'} == {'role': 'ser...cal': 3, ...}}"
+    },
+    {
+      "test": "tests/test_workbench_runtime_interface.py::test_public_workbench_issues_short_lived_local_executor_token",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_workbench_runtime_interface.py::test_server_mode_starts_reputation_and_order_sync_schedulers",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "pymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)\")"
+    },
+    {
+      "test": "tests/test_yandex_unified_order_routes.py::test_list_negative_store_is_scoped_without_leaking_other_stores",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_yandex_unified_order_routes.py::test_other_organizations_cannot_see_yandex_logs",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 403"
+    },
+    {
+      "test": "tests/test_yandex_unified_order_routes.py::test_unauthorized_yandex_sync_does_not_start",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 403"
+    },
+    {
+      "test": "tests/test_yandex_unified_order_routes.py::test_yandex_cannot_be_sent_to_mercado_label_api",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 400"
+    },
+    {
+      "test": "tests/test_yandex_unified_order_routes.py::test_yandex_sync_returns_durable_progress",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 202"
+    },
+    {
+      "test": "tests/test_yandex_workbench_integration.py::YandexWorkbenchIntegrationTests::test_workbench_contains_yandex_tab",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "AssertionError: 503 != 200"
+    },
+    {
+      "test": "tests/test_yandex_workbench_integration.py::YandexWorkbenchIntegrationTests::test_yandex_proxy_forwards_to_local_service",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "AssertionError: 503 != 200"
+    },
+    {
+      "test": "tests/test_yandex_workbench_integration.py::YandexWorkbenchIntegrationTests::test_yandex_proxy_rewrites_assets_for_an_existing_process",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: 'href=\"/yandex-console/static/styles.css\"' not found in '{\"message\":\"\\\\u6682\\\\u65f6\\\\u65e0\\\\u6cd5\\\\u9a8c\\\\u8bc1\\\\u8d26\\\\u6237\\\\u8ba2\\\\u9605\\\\uff0c\\\\u8bf7\\\\u7a0d\\\\u540e\\\\u91cd\\\\u8bd5\",\"status\":\"error\"}\\n'"
+    },
+    {
+      "test": "tests/test_yandex_workbench_integration.py::YandexWorkbenchIntegrationTests::test_yandex_start_returns_embedded_url",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "AssertionError: 503 != 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_account_integration_settings_route_never_returns_api_keys",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_ai_original_image_proxy_canonicalizes_1688_resize_url",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_ai_original_source_image_proxy_allows_only_1688_cdn",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_browser_extension_collect_requires_login_and_writes_one_quick_item",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 201"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_browser_extension_collect_routes_1688_to_ai_original_products",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 201"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_browser_extension_login_returns_signed_short_lived_session",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_browser_extension_starts_ai_weight_price_on_local_workstation",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_browser_extension_starts_zying_collection_from_current_browser_credential",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_browser_extension_starts_zying_infringement_with_fixed_title_batches",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_browser_extension_zying_options_falls_back_to_known_developers",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_browser_extension_zying_options_uses_developers_from_current_page",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_collection_ai_endpoint_requires_execute_and_queues_for_current_actor",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_console_downloads_complete_zeshun_extension_package",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_integrated_ai_weight_price_is_read_only_from_other_terminals",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_integrated_ai_weight_price_page_points_launch_to_extension",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_weight_price_extension_login_and_resume_routes",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "AssertionError: assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_weight_price_pause_email_waits_ten_minutes_and_is_one_shot",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert 'AI_WEIGHT_PRICE_PAUSE_NOTICE_MS = 10 * 60 * 1000' in '\"use strict\";\\n\\nimportScripts(\"zying-page.js\");\\nimportScripts(\"1688-page.js\");\\nimportScripts(\"1688-verification.js...ed),\\n    status: Number(error.status) || 0,\\n    error: error.message || String(error)\\n  }));\\n  return true;\\n});\\n'"
+    },
+    {
+      "test": "tests/test_zeshun_browser_extension.py::test_zying_options_fresh_developers_override_cached_response",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_1688_list_does_not_restore_known_wrong_stale_metrics",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert ['8 g', '长：5 ... 高：7 cm', '—'] == ['—', '—', '—']"
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_1688_variant_detail_displays_actual_weight_and_package",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "assert '10 × 8 × 4 cm' in '<div class=\"p1688-variant-wrap\"><table><thead><tr><th>变体</th><th>SKU（选填）</th><th>库存</th><th>采购价</th><th>重量</th><th>包装... 宽：8 cm · 高：4 cm</td><td>—</td><td>—</td><td><div class=\"p1688-variant-images\">—</div></td></tr></tbody></table></div>'"
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_ai_weight_price_open_login_returns_before_slow_status_request",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert {'timeout': True} == {'ok': True, ...isting': True}"
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_auth_state_does_not_wait_for_purchase_network",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.Error: Page.evaluate: TypeError: chrome.storage[area].set is not a function"
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_background_open_zying_login_navigates_existing_tab_to_login_route",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert [7, {'active': True}] == [7, {'url': '...ctive': True}]"
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_batch_collection_reads_zying_511_closed_shadow_root",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: {'ok': False, 'error': \"Cannot read properties of undefined (reading 'listingId')\", 'retryable': None, 'status': None, ...}"
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_categories_use_names_and_keep_ids_in_values",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_page_extractor_handles_custom_fields_react_labels_and_empty_inner_options",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_page_extractor_reads_developers_from_loaded_zying_bridge",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_real_chromium_extension_api_reads_closed_shadow_root",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: {'ok': False, 'error': '请先登录泽顺控制台账号', 'retryable': False, 'status': 401, ...}"
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_real_extension_decodes_zying_protected_svg_metrics_across_isolated_worlds",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: {'ok': False, 'error': '请先登录泽顺控制台账号', 'retryable': False, 'status': 401, ...}"
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_resume_requires_acknowledgement_and_keeps_range",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_shared_zying_read_waits_for_categories_before_developers",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "AssertionError: assert [] == [{'id': '18', 'name': '开发甲'}]"
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_start_and_busy_controls",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_start_hint_explains_login_permission_and_cursor",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_supplier_login_keeps_state_without_reloading_status",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_weight_price_can_run_in_test_mode_when_erp_writeback_is_disabled",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_weight_price_can_select_product_developer",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_weight_price_categories_use_zying_fields",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_weight_price_shows_current_category_and_execution_terminal",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_yandex_background_uses_bridge_and_opens_the_matching_run",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.Error: Page.evaluate: Error: 仅超级管理员可以使用 Yandex 采集"
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_yandex_collection_starts_and_reopens_results",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_zying_collection_opens_web_login_and_validates_cursor_limit",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_zying_developers_refresh_live_selector_without_webpack",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_zying_infringement_starts_with_product_cursor_and_pending_only_copy",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_zying_modes_reuse_logged_in_tab_and_forward_page_developers",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_zying_product_collection_forwards_selected_category_and_developer",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_popup_browser.py::test_zying_product_tab_preferred_over_active_login",
+      "outcome": "error",
+      "category": "旧夹具点击已隐藏的插件入口",
+      "reason": "failed on setup with \"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zeshun_runtime_recovery_browser.py::test_real_extension_reload_reinjects_and_refreshes_old_page",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.evaluate: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zying_extension_options_fast.py::test_history_failure_keeps_current_categories_available",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zying_extension_options_fast.py::test_page_only_cache_does_not_suppress_legacy_directory_lookup",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zying_extension_options_fast.py::test_page_only_refresh_uses_cached_directory_without_history",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zying_extension_options_fast.py::test_page_only_refresh_uses_history_without_api_or_redundant_sync",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zying_extension_options_fast.py::test_web_options_still_require_extension_login_and_view_permission",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 403"
+    },
+    {
+      "test": "tests/test_zying_extension_options_fast.py::test_web_selector_refresh_preserves_page_developer_sync",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zying_extension_options_fast.py::test_worker_start_seeds_page_developers_before_starting_collection",
+      "outcome": "failure",
+      "category": "依赖隔离 / 订阅或数据库模拟需复核",
+      "reason": "assert 503 == 200"
+    },
+    {
+      "test": "tests/test_zying_order_sync_browser.py::test_active_task_does_not_lock_next_execution_selection[None-1440]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zying_order_sync_browser.py::test_active_task_does_not_lock_next_execution_selection[None-390]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zying_order_sync_browser.py::test_active_task_does_not_lock_next_execution_selection[stopping-1440]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zying_order_sync_browser.py::test_active_task_does_not_lock_next_execution_selection[stopping-390]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zying_order_sync_browser.py::test_active_task_does_not_lock_next_execution_selection[syncing-1440]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zying_order_sync_browser.py::test_active_task_does_not_lock_next_execution_selection[syncing-390]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zying_order_sync_browser.py::test_active_task_does_not_lock_next_execution_selection[waiting_login-1440]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded."
+    },
+    {
+      "test": "tests/test_zying_order_sync_browser.py::test_active_task_does_not_lock_next_execution_selection[waiting_login-390]",
+      "outcome": "failure",
+      "category": "待复核的回归失败",
+      "reason": "playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded."
+    }
+  ]
+}

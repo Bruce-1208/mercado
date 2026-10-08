@@ -1,0 +1,51 @@
+[
+  {
+    "user_id": 9,
+    "name": "学员",
+    "username": "xueyuan888",
+    "order_count": 53,
+    "required_cents": 15900
+  },
+  {
+    "user_id": 5,
+    "name": "张泽文",
+    "username": "zhangzewen888",
+    "order_count": 36,
+    "required_cents": 10800
+  },
+  {
+    "user_id": 1,
+    "name": "管理员",
+    "username": "admin",
+    "order_count": 16,
+    "required_cents": 4800
+  },
+  {
+    "user_id": 2,
+    "name": "杨雨萌",
+    "username": "yangyumeng888",
+    "order_count": 16,
+    "required_cents": 4800
+  },
+  {
+    "user_id": 8,
+    "name": "胡瑞泽",
+    "username": "huruize888",
+    "order_count": 11,
+    "required_cents": 3300
+  },
+  {
+    "user_id": 7,
+    "name": "向子立",
+    "username": "xiangzili888",
+    "order_count": 9,
+    "required_cents": 2700
+  },
+  {
+    "user_id": 3,
+    "name": "黄羽飞",
+    "username": "huangyufei888",
+    "order_count": 6,
+    "required_cents": 1800
+  }
+]

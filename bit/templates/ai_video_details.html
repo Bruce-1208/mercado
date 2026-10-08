@@ -1,7 +1,8 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>视频上传明细</title>
-<style>body{font:14px system-ui;margin:32px;background:#f5f7fb;color:#17263c}main{max-width:1400px;margin:auto}a{color:#245bc4}table{border-collapse:collapse;width:100%;background:white}td,th{padding:14px;text-align:left;border-bottom:1px solid #e2e7ef}th{white-space:nowrap}video{max-height:320px;max-width:100%;margin:20px 0}.table{overflow:auto}#message{padding:18px 0}small{display:block;color:#68758a;max-width:300px;overflow-wrap:anywhere}</style><link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261004-responsive">
-    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261004-responsive"></script>
+<style>body{font:14px system-ui;margin:32px;background:#f5f7fb;color:#17263c}main{max-width:1400px;margin:auto}a{color:#245bc4}table{border-collapse:collapse;width:100%;background:white}td,th{padding:14px;text-align:left;border-bottom:1px solid #e2e7ef}th{white-space:nowrap}video{max-height:320px;max-width:100%;margin:20px 0}.table{overflow:auto}#message{padding:18px 0}small{display:block;color:#68758a;max-width:300px;overflow-wrap:anywhere}</style><link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261007-date-filters">
+<script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261007"></script>
+    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261007-date-filters"></script>
 </head>
 <body class="zs-standalone"><main><a href="javascript:history.back()">← 返回视频列表</a><h1>视频上传明细</h1><p id="meta"></p><video id="preview" controls hidden></video><div id="message">正在读取上传记录…</div><div class="table"><table><thead><tr><th>美客多编号</th><th>业务员（上传人）</th><th>店铺名</th><th>店铺编号 / 站点</th><th>上传时间</th><th>审核状态</th><th>最近同步</th></tr></thead><tbody id="records"></tbody></table></div></main>
 <script>

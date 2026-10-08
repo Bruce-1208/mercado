@@ -7,6 +7,13 @@ from flask import jsonify, request
 from erp.ai_original_publish import PublicationService, PublicationStore, platform_id
 
 
+def _public_error_message(error):
+    message = str(error)
+    if re.search(r"(?:api[-_ ]?key|client[-_ ]?secret|(?:access|refresh)[-_ ]?token|authorization)\s*[:=]|bearer\s+\S+", message, re.I):
+        return "发布参数或授权信息无效，请检查配置后重试"
+    return message
+
+
 def register_routes(app, *, login_required, current_user, has_permission, load_rows,
                     own_store_only=lambda user: False, service=None):
     initialization_lock = threading.Lock()
@@ -77,11 +84,11 @@ def register_routes(app, *, login_required, current_user, has_permission, load_r
             response.headers["Cache-Control"] = "no-store"
             return response, 202 if action in {"submit", "retry"} else 200
         except PermissionError as exc:
-            return jsonify(status="error", message=str(exc)), 403
+            return jsonify(status="error", message=_public_error_message(exc)), 403
         except KeyError:
             return jsonify(status="error", message="店铺、预览或任务不存在"), 404
         except (ValueError, TypeError) as exc:
-            return jsonify(status="error", message=str(exc)), 400
+            return jsonify(status="error", message=_public_error_message(exc)), 400
         except Exception as exc:
             # Exceptions from SDKs may contain request credentials. Do not log
             # their repr/traceback or forward it into an HTTP response.

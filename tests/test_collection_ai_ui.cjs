@@ -100,6 +100,6 @@ test('both list renderers display escaped successful and unsuccessful audit labe
     assert.match(tag, /核重核价未成功/);
     assert.doesNotMatch(tag, /<script>/);
   }
-  assert.ok(html.includes('<td>${mercadoWeightPriceTags(row)}'));
+  assert.match(html, /<td\b[^>]*>\$\{mercadoWeightPriceTags\(row\)\}/);
   assert.ok(html.includes('const weightCheckTag = mercadoWeightPriceTags(row)'));
 });

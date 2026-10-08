@@ -50,7 +50,7 @@ STORE_LINK_DETAIL_ATTRIBUTES = (
     "pictures", "status", "sub_status", "deleted", "price", "currency_id", "available_quantity",
     "sold_quantity", "seller_custom_field", "category_id", "listing_type_id",
     "shipping", "attributes", "variations", "seller_id", "cbt_item_id",
-    "net_proceeds",
+    "net_proceeds", "start_time", "date_created",
 )
 STORE_LINK_STATUSES = ("active", "paused", "closed", "under_review")
 SITE_ITEM_URLS = {
@@ -76,6 +76,8 @@ _sync_state = {
     "processed_stores": 0,
     "current_store": "",
     "active_stores": [],
+    "active_token_ids": [],
+    "target_token_ids": [],
     "discovered_count": 0,
     "inserted_count": 0,
     "updated_count": 0,
@@ -105,7 +107,7 @@ def _state_increment(**deltas: int) -> None:
             _sync_state[field] = int(_sync_state.get(field) or 0) + int(value or 0)
 
 
-def _set_store_active(store_name: str, active: bool) -> None:
+def _set_store_active(store_name: str, active: bool, token_id: int) -> None:
     with _state_guard:
         names = list(_sync_state.get("active_stores") or [])
         if active and store_name not in names:
@@ -113,6 +115,12 @@ def _set_store_active(store_name: str, active: bool) -> None:
         elif not active and store_name in names:
             names.remove(store_name)
         _sync_state["active_stores"] = names
+        ids = set(_sync_state.get("active_token_ids") or [])
+        if active:
+            ids.add(token_id)
+        else:
+            ids.discard(token_id)
+        _sync_state["active_token_ids"] = sorted(ids)
         _sync_state["current_store"] = "、".join(names[:STORE_LINK_STORE_WORKERS])
 
 
@@ -164,19 +172,18 @@ def _token_records(selected_token_ids=None) -> list[dict]:
         for summary in summaries
         if not bool(summary.get("enabled", True))
     } & selected
-    if disabled:
-        raise ValueError(f"选择的店铺已关闭：{', '.join(map(str, sorted(disabled)))}")
     summaries = [summary for summary in summaries if bool(summary.get("enabled", True))]
-    if not selected:
-        ordered_ids = order_store_link_token_ids_for_full_sync(
-            summary.get("id") for summary in summaries
-        )
-        summary_by_id = {
-            int(summary.get("id") or 0): summary
-            for summary in summaries
-            if int(summary.get("id") or 0) > 0
-        }
-        summaries = [summary_by_id[token_id] for token_id in ordered_ids if token_id in summary_by_id]
+    if selected:
+        summaries = [summary for summary in summaries if int(summary.get("id") or 0) in selected]
+    ordered_ids = order_store_link_token_ids_for_full_sync(
+        summary.get("id") for summary in summaries
+    )
+    summary_by_id = {
+        int(summary.get("id") or 0): summary
+        for summary in summaries
+        if int(summary.get("id") or 0) > 0
+    }
+    summaries = [summary_by_id[token_id] for token_id in ordered_ids if token_id in summary_by_id]
     records = []
     for summary in summaries:
         token_id = int(summary.get("id") or 0)
@@ -186,10 +193,12 @@ def _token_records(selected_token_ids=None) -> list[dict]:
         if record:
             records.append(dict(record))
     if selected:
-        missing = selected.difference(int(row.get("id") or 0) for row in records)
+        missing = (selected - disabled).difference(int(row.get("id") or 0) for row in records)
         if missing:
             raise ValueError(f"选择的店铺授权不存在：{', '.join(map(str, sorted(missing)))}")
     if not records:
+        if disabled:
+            raise ValueError("所选店铺均已关闭，暂无可同步的店铺")
         raise ValueError("暂无已授权店铺，请先在“店铺授权”中完成授权")
     return records
 
@@ -271,6 +280,23 @@ def _is_unauthorized_error(exc: BaseException) -> bool:
     return "401" in message or "access token" in message.lower()
 
 
+def _marketplace_item_with_quality(client, item_id, *, attributes):
+    detail = client.get_marketplace_item(item_id, attributes=attributes)
+    if not isinstance(detail, dict) or not detail.get("id"):
+        return detail
+    detail = dict(detail)
+    try:
+        performance = client.request("GET", f"/item/{item_id}/performance")
+        if isinstance(performance, dict):
+            detail["listing_performance"] = {
+                key: performance.get(key) for key in ("score", "level", "calculated_at")
+            }
+    except Exception:
+        # Optional quality data must not discard successfully fetched listings.
+        detail["listing_performance"] = None
+    return detail
+
+
 def _enrich_marketplace_items(
     client: MercadoLibreClient,
     stubs: list[dict],
@@ -286,7 +312,8 @@ def _enrich_marketplace_items(
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = {
             executor.submit(
-                client.get_marketplace_item,
+                _marketplace_item_with_quality,
+                client,
                 str(stub["id"]),
                 attributes=STORE_LINK_DETAIL_ATTRIBUTES,
             ): str(stub["id"])
@@ -453,10 +480,11 @@ def run_store_link_sync(token_ids=None) -> dict:
         running=True,
         status="running",
         message="正在同步店铺链接",
+        target_token_ids=[int(record["id"]) for record in records],
         total_stores=len(records),
         processed_stores=0,
         current_store="",
-        active_stores=[],
+        active_stores=[], active_token_ids=[],
         discovered_count=0,
         inserted_count=0,
         updated_count=0,
@@ -474,14 +502,13 @@ def run_store_link_sync(token_ids=None) -> dict:
         f"任务启动，共 {len(records)} 家店铺；{worker_count} 家店铺并行，"
         f"每家最多 {STORE_LINK_DETAIL_WORKERS} 个详情线程"
     )
-    if not _token_ids(token_ids):
-        _append_log("同步全部：未同步过的店铺优先，其余按最久未同步优先")
+    _append_log("同步排序：尚未完成首次拉取的店铺优先，其余按最久未同步优先")
     results = []
 
     def sync_one_store(record: dict) -> dict:
         store_name = str(record.get("display_name") or record.get("nickname") or record.get("id"))
         token_id = int(record["id"])
-        _set_store_active(store_name, True)
+        _set_store_active(store_name, True, token_id)
         _append_log(f"开始同步 {store_name}")
         try:
             mark_store_link_sync_started(token_id)
@@ -497,14 +524,14 @@ def run_store_link_sync(token_ids=None) -> dict:
                 f"详情失败 {result['failed']}"
             )
         except Exception as exc:
-            result = {"store": store_name, "status": "error", "message": str(exc)}
+            result = {"store": store_name, "token_id": token_id, "status": "error", "message": str(exc)}
             try:
                 mark_store_link_sync_finished(token_id, "error", str(exc))
             except Exception as state_exc:
                 _append_log(f"{store_name} 同步状态写入失败：{state_exc}")
             _append_log(f"{store_name} 失败：{exc}")
         finally:
-            _set_store_active(store_name, False)
+            _set_store_active(store_name, False, token_id)
         return result
 
     with ThreadPoolExecutor(
@@ -533,7 +560,7 @@ def run_store_link_sync(token_ids=None) -> dict:
         status="completed" if failed == 0 else "partial",
         message=message,
         current_store="",
-        active_stores=[],
+        active_stores=[], active_token_ids=[],
         finished_at=_now_text(),
         results=list(results),
     )
@@ -564,7 +591,7 @@ def _run_background(token_ids) -> None:
             status="error",
             message=str(exc),
             current_store="",
-            active_stores=[],
+            active_stores=[], active_token_ids=[],
             finished_at=_now_text(),
         )
         _append_log(f"任务失败：{exc}")
@@ -576,7 +603,7 @@ def _run_background(token_ids) -> None:
 def start_store_link_sync(token_ids=None) -> tuple[bool, dict]:
     selected_ids = _token_ids(token_ids)
     if selected_ids:
-        _token_records(selected_ids)
+        selected_ids = [int(row["id"]) for row in _token_records(selected_ids)]
     queued_ids = selected_ids
     if not queued_ids:
         queued_ids = _token_ids(
@@ -594,10 +621,11 @@ def start_store_link_sync(token_ids=None) -> tuple[bool, dict]:
             task_id=uuid.uuid4().hex,
             status="starting",
             message="正在启动店铺链接同步",
+            target_token_ids=list(queued_ids),
             total_stores=0,
             processed_stores=0,
             current_store="",
-            active_stores=[],
+            active_stores=[], active_token_ids=[],
             discovered_count=0,
             inserted_count=0,
             updated_count=0,
@@ -616,13 +644,29 @@ def start_store_link_sync(token_ids=None) -> tuple[bool, dict]:
         name="mercado-store-link-sync",
         daemon=True,
     )
-    thread.start()
+    try:
+        thread.start()
+    except Exception as exc:
+        # The durable request remains queued. Clear process-local ownership so
+        # the scheduler can retry instead of believing a missing worker is live.
+        _state_update(
+            running=False,
+            status="queued",
+            message=f"店铺链接同步已排队，后台线程启动失败：{exc}",
+            finished_at=_now_text(),
+        )
+        raise
     return True, store_link_sync_status()
 
 
 def start_due_store_link_sync() -> dict:
     """Start one batch of stores due for their automatic three-day refresh."""
 
+    state = store_link_sync_status()
+    if state.get("running"):
+        # Interrupted running rows are due immediately. Do not turn a live
+        # worker's rows into new requests at every scheduler tick.
+        return {"started": False, "due_token_ids": [], "state": state}
     token_ids = list_due_store_link_token_ids(
         interval_days=STORE_LINK_AUTO_SYNC_DAYS,
         retry_minutes=STORE_LINK_AUTO_RETRY_MINUTES,

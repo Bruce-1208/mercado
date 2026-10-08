@@ -76,7 +76,8 @@ def test_platform_drafts_generate_edit_export_without_mercado_mutations(console_
     assert "SOLO_MERCADO" not in page.locator("#ai-original-grid").inner_text()
     assert "/mercado-only.jpg" not in page.locator("#ai-original-grid").inner_html()
     assert "俄语" not in page.locator("#ai-original-platform-rules").inner_text()
-    page.locator("#ai-original-generator-filter").fill("业务员甲")
+    page.locator("#ai-original-generator-filter").evaluate("select => select.add(new Option('业务员甲', '业务员甲'))")
+    page.locator("#ai-original-generator-filter").select_option("业务员甲")
     page.locator("#ai-original-platform").select_option("yandex")
     page.wait_for_function("document.querySelector('.ai-original-copy').textContent.includes('Органайзер')")
     page.wait_for_timeout(50)
@@ -132,7 +133,7 @@ def test_mercado_unified_status_and_manual_fields(console_page, width):
           main_image_url:'/test-ai-white.jpg', ai_original:{status:'completed', image_generation_method:'ai_image_edit',
           attributes:[{id:'MATERIAL',value_name:'Plastic'}]}, original_1688:{title:'测试产品'}};
         aiOriginalRows = [ready, {...ready,id:2,review_status:'unreviewed'},
-          {...ready,id:3,ai_status:'failed'}, {...ready,id:4,weight_g:null},
+          {...ready,id:3,ai_status:'failed',review_status:'unreviewed'}, {...ready,id:4,weight_g:null,review_status:'unreviewed'},
           {...ready,id:5,review_status:'suspected'}];
         renderAiOriginalProducts(); decorateAiOriginalWorkbench();
     }''')
@@ -142,7 +143,12 @@ def test_mercado_unified_status_and_manual_fields(console_page, width):
         assert page.locator(f'#ai-original-count-{status}').inner_text() == '1'
     page.locator('#ai-original-status-filter').select_option('incomplete')
     assert page.locator('.ai-original-card').count() == 1
+    # Offscreen cards defer rendering with content-visibility: auto.
+    page.locator('.ai-original-card').scroll_into_view_if_needed()
+    page.wait_for_function("document.querySelector('.ai-original-badge')?.innerText === '待补充'")
     assert page.locator('.ai-original-badge').inner_text() == '待补充'
+    assert page.locator('.ai-original-check-panel').get_attribute('open') is None
+    page.locator('.ai-original-check-panel > summary').click()
     assert page.locator('.ai-original-check-panel').inner_text().find('人工填写的上架资料') >= 0
     assert page.evaluate("aiOriginalRows.find(row => row.id === 4).ai_status") == 'completed'
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')

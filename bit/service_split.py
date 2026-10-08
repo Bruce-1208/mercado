@@ -11,6 +11,7 @@ import os
 import time
 
 import requests
+from bit.service_topology import isolation_enabled, worker_group, group_port, request_group
 from flask import Response, g, jsonify, request, stream_with_context
 
 MODES = {"combined", "web", "worker"}
@@ -18,9 +19,13 @@ HOP_HEADER = "X-Workbench-Worker-Auth"
 HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
               "te", "trailer", "transfer-encoding", "upgrade", "host", "content-length"}
 STATEFUL_PREFIXES = (
+    # Mercado product-data reads use the Web pool. Their shared SQLite cache
+    # and session renewal are already protected by an interprocess file lock.
+    "/api/mercado/infringement/", "/api/risk-check/",
     "/api/ai-original-products/publish",
     "/api/browser-extension/purchase-tracking/",
-    "/api/browser-extension/mercado-data/",
+    "/api/browser-extension/zying-order-sync/",
+    "/api/infringement-knowledge/analysis/",
     "/api/infringement-knowledge/wipo/", "/api/db/infringement-knowledge/wipo/",
     "/api/size-charts/", "/api/db/size-charts/",
     "/api/clearance-alerts", "/api/db/clearance-alerts",
@@ -28,7 +33,7 @@ STATEFUL_PREFIXES = (
     "/api/order-sync/", "/api/db/order-sync/", "/api/store-links/sync/",
     "/api/db/store-links/sync/", "/api/prohibited-listings/sync/",
     "/api/db/prohibited-listings/sync/", "/api/official-infractions/sync",
-    "/api/db/official-infractions/sync", "/api/mercado-reputation/",
+    "/api/db/official-infractions/sync", "/api/db/official-infractions/live", "/api/mercado-reputation/",
     "/api/orders/zying-sync/", "/api/orders/purchase-tracking/", "/api/zying-collection/",
     "/api/exports/", "/api/tasks/daily/", "/api/run_shensu",
     "/api/mercado-collection/", "/api/db/mercado-collection/",
@@ -42,6 +47,7 @@ STATEFUL_PREFIXES = (
     "/api/mercado/today/tasks/", "/api/mercado/today/events/",
 )
 STATEFUL_PATHS = {
+    "/api/mercado-products",
     "/api/overview-auto-sync", "/api/db/overview-auto-sync",
     "/api/mercado-collection/start", "/api/mercado-collection/stop",
     "/api/mercado-collection/status", "/api/mercado-products/publish",
@@ -70,13 +76,32 @@ def service_mode():
 
 
 def worker_port():
+    if isolation_enabled():
+        return group_port(worker_group())
     port = int(os.environ.get("BIT_WORKER_PORT", "5001"))
     if not 1024 <= port <= 65535 or port == 5000:
         raise ValueError("BIT_WORKER_PORT must be 1024..65535 and different from 5000")
     return port
 
 
-def is_worker_path(path):
+def is_worker_path(path, method=None):
+    # Catalog reads must not queue behind publishing/sync jobs on the worker.
+    # The same public product URL also accepts DELETE, which must keep sharing
+    # the worker's publishing lock and task state.
+    if method in {"GET", "HEAD"} and path in {
+        "/api/mercado-products", "/api/db/mercado-products",
+        "/api/mercado-collection/items", "/api/db/mercado-collection/items",
+        "/api/tasks/daily/options",
+        "/api/size-charts/templates", "/api/size-charts/options", "/api/size-charts/records",
+        "/api/risk-check/categories", "/api/risk-check/options", "/api/risk-check/results",
+    }:
+        return False
+    # Saved filter choices are a read-only Web query; they do not share the
+    # scheduler's collection/publishing task state.
+    if path in {"/api/mercado-products/developers", "/api/db/mercado-products/developers"}:
+        return False
+    if isolation_enabled() and request_group(path) != "worker":
+        return True
     return path in STATEFUL_PATHS or any(path.startswith(p) for p in STATEFUL_PREFIXES)
 
 
@@ -92,7 +117,7 @@ def install_service_routing(app):
         mode = service_mode()
         if mode == "combined":
             return None
-        if mode == "web" and not is_worker_path(request.path):
+        if mode == "web" and not is_worker_path(request.path, request.method):
             return None
         path = request.path + ("?" + request.query_string.decode("latin1") if request.query_string else "")
         body = request.get_data()
@@ -108,6 +133,12 @@ def install_service_routing(app):
                     not hmac.compare_digest(digest, signature(app.secret_key, request.method, path, body, timestamp, original_ip))):
                 return jsonify(status="error", message="Private worker request required"), 403
             g.worker_original_remote_addr = original_ip
+            if request.path == "/api/internal/worker-health" and request.method == "GET":
+                return jsonify(status="success", group=worker_group(), pid=os.getpid(),
+                               db_limit=int(os.environ.get("MYSQL_POOL_MAX_CONNECTIONS", "12")))
+            if (isolation_enabled() and is_worker_path(request.path, request.method)
+                    and request_group(request.path) != worker_group()):
+                return jsonify(status="error", message="请求未发送到任务所属服务"), 409
             return None
         headers = {k: v for k, v in request.headers.items()
                    if k.lower() not in HOP_BY_HOP and not k.lower().startswith(("x-workbench-", "x-forwarded-"))}
@@ -124,7 +155,7 @@ def install_service_routing(app):
         while True:
             try:
                 upstream = transport.request(request.method,
-                    f"http://127.0.0.1:{worker_port()}{path}", data=body, headers=headers,
+                    f"http://127.0.0.1:{group_port(request_group(request.path)) if isolation_enabled() else worker_port()}{path}", data=body, headers=headers,
                     timeout=(2, 120), allow_redirects=False, stream=True)
                 break
             except requests.RequestException as exc:

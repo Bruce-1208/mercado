@@ -5,6 +5,7 @@ import pytest
 from bit import mercado_reputation as api
 from bit import bit_reputation_info, reputation_browser_sync as browser
 
+pytestmark = pytest.mark.usefixtures("subscribed_workbench_account")
 
 @pytest.mark.parametrize('active_index,missing,expected', [(49, False, 'active'), (None, False, 'inactive'),
                                                           (None, True, None), (0, True, 'active')])
@@ -40,23 +41,21 @@ def test_fewer_than_fifty_and_empty(monkeypatch, total, expected):
     assert result['listing_sample_status'] == expected
 
 
-def test_listing_status_clears_previous_ban_days():
+def test_listing_status_cannot_override_explicit_restriction():
     row = {'account_status': 'restricted', 'site_status_display': '永久封禁（已 10 天）',
            'suspension_days': 10, 'suspension_until': '2027-01-01'}
-    api._apply_listing_sample_status(row, {'listing_sample_status': 'active'})
-    assert row['account_status'] == 'normal'
-    assert row['site_status_display'] == '活跃中'
-    assert row['suspension_days'] is None
-    assert row['suspension_until'] == ''
-    api._apply_listing_sample_status(row, {'listing_sample_status': 'inactive'})
-    assert row['account_status'] == 'restricted'
-    assert row['site_status_display'] == '暂停状态'
+    for status in ('active', 'inactive'):
+        api._apply_listing_sample_status(row, {'listing_sample_status': status})
+        assert row['account_status'] == 'restricted'
+        assert row['site_status_display'] == '永久封禁（已 10 天）'
+        assert row['suspension_days'] == 10
+        assert row['suspension_until'] == '2027-01-01'
 
 
 def test_api_update_does_not_open_browser_by_default():
     assert inspect.signature(bit_reputation_info.get_reputation_info_all).parameters['collect_browser_auxiliary'].default is False
     row = bit_reputation_info._api_reputation_database_row('店铺', {}, 'now')
-    assert row[9] is None  # Preserve browser-owned warnings.
+    assert row[9] is None  # Missing API warning is handled as a failed refresh.
 
 
 def test_browser_persist_rejects_foreign_scope(monkeypatch):
@@ -93,24 +92,18 @@ def console(monkeypatch, tmp_path):
     return user, store, web.app.test_client()
 
 
-def test_server_requires_super_admin(console):
+def test_server_browser_sync_is_disabled(console):
     user, store, client = console
     response = client.post('/api/reputation/browser-sync', json={'shops': ['店铺'], 'execution_target': 'server'})
-    assert response.status_code == 403
+    assert response.status_code in (403, 410)
     assert not store.list_jobs()
 
 
-def test_agent_dispatch_and_status_ownership(console):
+def test_agent_browser_sync_does_not_enqueue_a_job(console):
     user, store, client = console
     response = client.post('/api/reputation/browser-sync', json={'shops': ['店铺'], 'execution_target': 'agent', 'agent_id': 'test-agent'})
-    assert response.status_code == 200, response.json
-    task_id = response.json['data']['task_id']
-    job = store.get_job(task_id)
-    assert job['job_type'] == 'reputation_browser_sync'
-    assert job['payload']['configs'] == [['', '店铺', '', '墨西哥', ['店铺']]]
-    assert client.get(f'/api/reputation/browser-sync/{task_id}').json['data']['running']
-    user['id'] = 18
-    assert client.get(f'/api/reputation/browser-sync/{task_id}').status_code == 403
+    assert response.status_code == 410, response.json
+    assert not store.list_jobs()
 
 
 def test_browser_database_patch_only_updates_owned_columns(monkeypatch):
@@ -139,11 +132,12 @@ def test_browser_database_patch_only_updates_owned_columns(monkeypatch):
     assert params == ['正常', '店铺', '墨西哥', 'now']
 
 
-def test_agent_completion_persists_without_browser_poll(console, monkeypatch):
+def test_old_browser_job_completion_cannot_overwrite_api_data(console, monkeypatch):
     from bit import bit_interface as web
     user, store, client = console
-    response = client.post('/api/reputation/browser-sync', json={'shops': ['店铺'], 'execution_target': 'agent', 'agent_id': 'test-agent'})
-    task_id = response.json['data']['task_id']
+    task_id = 'legacy-browser-job'
+    store.enqueue_job(task_id, 'test-agent', 'reputation_browser_sync', {'configs': []},
+                      created_by_id=user['id'])
     store.claim_job('test-agent', session_id='s')
     calls = []
     monkeypatch.setattr(browser, 'persist', lambda result, configs: calls.append((result, configs)))
@@ -154,11 +148,12 @@ def test_agent_completion_persists_without_browser_poll(console, monkeypatch):
                                headers={'X-Local-Agent-Token': credential},
                                json={'agent_id': 'test-agent', 'status': 'success', 'result': result})
         assert response.status_code == 200, response.json
-    assert len(calls) == 1
-    assert store.get_job(task_id)['status'] == 'success'
+    assert calls == []
+    assert store.get_job(task_id)['status'] == 'error'
+    assert store.get_job(task_id)['result']['status'] == 'error'
 
 
-def test_server_super_admin_collects_and_persists(console, monkeypatch):
+def test_server_super_admin_cannot_start_browser_collection(console, monkeypatch):
     from bit import bit_interface as web
     user, _, client = console
     user['role_key'] = 'super_admin'
@@ -172,10 +167,8 @@ def test_server_super_admin_collects_and_persists(console, monkeypatch):
         def start(self): self.target()
     monkeypatch.setattr(web.threading, 'Thread', ImmediateThread)
     response = client.post('/api/reputation/browser-sync', json={'shops': ['店铺'], 'execution_target': 'server'})
-    assert response.status_code == 200, response.json
-    state = client.get('/api/reputation/browser-sync/' + response.json['data']['task_id']).json['data']
-    assert state == {'running': False, 'status': 'partial', 'message': '一个站点失败'}
-    assert len(calls) == 1
+    assert response.status_code == 410, response.json
+    assert calls == []
 
 
 def test_warning_failure_preserves_traffic_and_does_not_return_account_status(monkeypatch):
@@ -191,7 +184,7 @@ def test_warning_failure_preserves_traffic_and_does_not_return_account_status(mo
     assert '系统告警' in row['error']
 
 
-def test_browser_window_is_resolved_on_execution_host(monkeypatch):
+def test_legacy_browser_job_never_opens_a_session(monkeypatch):
     from bit import bit_api
     opened = []
     monkeypatch.setattr(bit_api, 'listBrowsers', lambda: [{'name': '店铺', 'id': 'local-window'}])
@@ -205,6 +198,6 @@ def test_browser_window_is_resolved_on_execution_host(monkeypatch):
         def __exit__(self, *args): pass
     monkeypatch.setattr(browser, 'BitPlaywrightSession', Session)
     monkeypatch.setattr(browser, 'collect_site', lambda session, name, site: {'store_name': name, 'site': site, 'error': ''})
-    result = browser.collect([['', '店铺', '', '墨西哥', ['店铺']]])
-    assert opened == ['local-window']
-    assert result['status'] == 'success'
+    with pytest.raises(RuntimeError, match='已停用'):
+        browser.collect([['', '店铺', '', '墨西哥', ['店铺']]])
+    assert opened == []

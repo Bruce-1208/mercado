@@ -14,7 +14,8 @@ def test_yandex_is_in_default_list_and_platform_filter_preserves_negative_store(
            'source': 'Yandex Market', 'data_origin': 'yandex', 'country': '俄罗斯', 'shop_name': 'Yandex测试店',
            'title': '测试商品', 'product_id': 'SKU-1', 'quantity': 2, 'ordered_at': '2026-10-05 13:00:00',
            'status': '找货-没汇总', 'amount': None, 'amount_local': 20, 'currency_id': 'CNY',
-           'fee': None, 'balance': None, 'profit': None, 'freight_missing': 1}
+           'yandex_prices': {'original': {'value': 20, 'currency': 'CNY'}, 'points': {'value': 5, 'currency': 'CNY'}, 'total': {'value': 25, 'currency': 'CNY'}},
+           'image_url': 'https://example.com/yandex-main.png', 'fee': None, 'balance': None, 'profit': None, 'freight_missing': 1}
     def orders(route):
         calls.append(parse_qs(urlsplit(route.request.url).query, keep_blank_values=True))
         route.fulfill(content_type='application/json', body=json.dumps({'status': 'success', 'data': {
@@ -30,6 +31,10 @@ def test_yandex_is_in_default_list_and_platform_filter_preserves_negative_store(
     assert calls[-1]['origin'] == ['']
     assert 'Yandex Market' in page.locator('#order-table-body').inner_text()
     assert 'CNY 20' in page.locator('#order-table-body').inner_text()
+    assert '积分 CNY 5.00' in page.locator('#order-table-body').inner_text()
+    assert '全部价格 CNY 25.00' in page.locator('#order-table-body').inner_text()
+    assert '$' not in page.locator('#order-table-body').inner_text()
+    assert page.locator('#order-table-body img').first.get_attribute('src') == 'https://example.com/yandex-main.png'
     assert '待结算核实' in page.locator('#order-table-body').inner_text()
     assert page.locator('#order-table-body button[title="调用美客多接口打印发货面单"]').is_disabled()
     page.locator('.order-origin-button[data-origin="yandex"]').click()
@@ -44,6 +49,8 @@ def test_yandex_is_in_default_list_and_platform_filter_preserves_negative_store(
     assert calls[-1]['store_id'] == ['-2']
     page.evaluate('showOrderDetail(0)')
     assert 'CNY 20' in page.locator('#order-detail-content').inner_text()
+    assert '美元' not in page.locator('#order-detail-content').inner_text()
+    assert '全部价格' in page.locator('#order-detail-content').inner_text()
     assert page.get_by_role('button', name='产品详情', exact=True).is_disabled()
     page.evaluate('orderDetailDialog.close()')
     output = Path(__file__).resolve().parents[1] / 'artifacts/yandex-unified-orders'

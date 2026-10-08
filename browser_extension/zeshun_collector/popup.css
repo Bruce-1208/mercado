@@ -51,6 +51,13 @@ main { padding: 14px 18px; }
 .mode-tab { border: 0; border-radius: 8px; padding: 8px 6px; background: transparent; color: #67768a; cursor: pointer; font-size: 12px; font-weight: 700; }
 .mode-tab.active { background: #fff; color: #145db7; box-shadow: 0 2px 8px rgba(43, 68, 103, .1); }
 .mode-panel[hidden] { display: none; }
+.appeal-picker { margin: 12px 0 0; padding: 8px; border: 1px solid #dce5f0; border-radius: 8px; color: #526176; font-size: 11px; }
+.appeal-picker legend { padding: 0 4px; font-weight: 700; }
+.appeal-picker label { display: inline-flex; align-items: center; gap: 4px; margin: 4px 9px 4px 0; }
+.appeal-picker input { margin: 0; }
+.appeal-card textarea { width: 100%; min-width: 0; resize: vertical; border: 1px solid #d4dfec; border-radius: 8px; padding: 8px 9px; font: inherit; font-size: 12px; }
+.appeal-card select:disabled, .appeal-card textarea:disabled { opacity: .6; }
+.appeal-card .product-batch-help { overflow-wrap: anywhere; }
 
 .auth-line {
   color: #68778c;
@@ -208,3 +215,50 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline:2px so
 @media(max-width:380px) { header { flex-wrap:wrap; } .yandex-card .zying-actions { grid-template-columns:1fr; } .mode-tab { font-size:11px; padding:8px 3px; } }
 
 .auth-line.logged-out { color: #a43120; background: #fff0eb; border: 1px solid #e9a493; border-radius: 6px; padding: 10px; font-weight: 700; }
+
+/* Compact workbench: keep navigation visible and let each form fit the panel. */
+[hidden] { display: none !important; }
+body { height: auto; min-height: 100vh; font-size: 13px; }
+header { padding: 14px 16px; }
+.logo { flex-shrink: 0; box-shadow: none; }
+.version { align-self: center; flex-shrink: 0; }
+main { background: #f3f5f9; padding: 12px; }
+.account-card { padding: 10px 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; }
+.account-dot { flex-shrink: 0; }
+.auth-line { min-width: 0; overflow-wrap: anywhere; line-height: 1.5; }
+.mode-tabs { position: sticky; top: 0; z-index: 2; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 6px; background: #e9eef5; border: 1px solid #dce3ec; }
+.mode-tab { min-height: 36px; line-height: 1.4; }
+.mode-tab:hover:not(.active) { background: #f7f9fc; color: #334155; }
+.mode-tab.active { background: #2563eb; color: #fff; box-shadow: none; }
+.page-card { padding: 14px; }
+.page-card-heading { color: #334155; font-size: 13px; margin-bottom: 12px; line-height: 1.5; }
+.platform-badge { flex-shrink: 0; font-weight: 500; }
+.zying-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.zying-grid label, .zying-field { min-width: 0; font-size: 12px; line-height: 1.5; }
+input:not([type=checkbox]):not([type=radio]), select { width: 100%; padding: 8px 10px; border: 1px solid #dce3ec; background: #fff; color: #26364b; font: inherit; font-size: 12px; }
+input:disabled, select:disabled { background: #f1f5f9; color: #64748b; }
+.purchase-card > label { display: block; margin: 12px 0 6px; color: #5b6a7e; font-size: 12px; font-weight: 600; }
+.purchase-card > .status { margin-top: 12px; }
+.collection-help { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; }
+.collection-help summary { cursor: pointer; color: #64748b; font-size: 12px; }
+.collection-help summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+.collection-help .product-batch-help { line-height: 1.7; }
+.zying-task-status, .purchase-task-status { padding-top: 12px; border-top: 1px solid #e2e8f0; overflow-wrap: anywhere; line-height: 1.5; }
+.zying-summary, .purchase-summary { line-height: 1.7; overflow-wrap: anywhere; }
+.support-line { flex-wrap: wrap; }
+#yandex-support { display: inline-flex; gap: 6px; align-items: center; }
+footer { padding: 12px; }
+button:disabled { cursor: not-allowed; }
+.secondary:disabled { opacity: .55; }
+@media (min-width: 520px) {
+  .mode-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  main, header, footer { padding-left: 20px; padding-right: 20px; }
+}
+@media (max-width: 340px) {
+  .zying-grid, .product-search-grid { grid-template-columns: minmax(0, 1fr); }
+  .page-card-heading { flex-wrap: wrap; }
+  main { padding: 8px; }
+  .page-card { padding: 12px; }
+}
+
+.collection-mode-field { grid-column: 1 / -1; grid-row: 1; }

@@ -1,0 +1,86 @@
+[
+  {
+    "name": "baseline_count",
+    "seconds": 0.188,
+    "plan": [
+      {
+        "id": 1,
+        "select_type": "SIMPLE",
+        "table": "erp_mercadolibre_store_links",
+        "partitions": null,
+        "type": "ref",
+        "possible_keys": "idx_erp_meli_store_link_current,idx_erp_meli_store_link_store,idx_erp_meli_store_link_sales_page,idx_erp_meli_store_link_site_page,idx_erp_meli_store_link_category_page,idx_erp_meli_link_sort_price,idx_erp_meli_link_sort_weight_g,idx_erp_meli_link_sort_available_quantity,idx_erp_meli_link_sort_last_synced_at,idx_erp_meli_link_sort_net_proceeds_usd",
+        "key": "idx_erp_meli_link_sort_last_synced_at",
+        "key_len": "1",
+        "ref": "const",
+        "rows": 487756,
+        "filtered": 100.0,
+        "Extra": "Using index"
+      }
+    ]
+  },
+  {
+    "name": "scoped_covering_count",
+    "seconds": 0.602,
+    "plan": [
+      {
+        "id": 1,
+        "select_type": "SIMPLE",
+        "table": "erp_mercadolibre_store_links",
+        "partitions": null,
+        "type": "index",
+        "possible_keys": "idx_erp_meli_store_link_store",
+        "key": "idx_erp_meli_store_link_store",
+        "key_len": "267",
+        "ref": null,
+        "rows": 975513,
+        "filtered": 100.0,
+        "Extra": "Using where; Using index"
+      }
+    ]
+  },
+  {
+    "name": "baseline_last_sync",
+    "seconds": 0.0,
+    "plan": [
+      {
+        "id": 1,
+        "select_type": "SIMPLE",
+        "table": null,
+        "partitions": null,
+        "type": null,
+        "possible_keys": null,
+        "key": null,
+        "key_len": null,
+        "ref": null,
+        "rows": null,
+        "filtered": null,
+        "Extra": "Select tables optimized away"
+      }
+    ]
+  },
+  {
+    "name": "scoped_ordered_last_sync",
+    "seconds": 0.0,
+    "plan": [
+      {
+        "id": 1,
+        "select_type": "SIMPLE",
+        "table": "erp_mercadolibre_store_links",
+        "partitions": null,
+        "type": "ref",
+        "possible_keys": "idx_erp_meli_link_sort_last_synced_at",
+        "key": "idx_erp_meli_link_sort_last_synced_at",
+        "key_len": "1",
+        "ref": "const",
+        "rows": 975513,
+        "filtered": 50.0,
+        "Extra": "Using where; Backward index scan"
+      }
+    ]
+  },
+  {
+    "equivalence_check": "passed in same read-only transaction",
+    "scope_size": 133
+  }
+]

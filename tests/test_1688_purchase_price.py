@@ -79,9 +79,10 @@ def test_missing_price_is_not_saved_as_success(supplier_page):
       const n=document.createElement('div');n.id='productPrice';n.textContent='登录后查看价格，100件起批';document.body.append(n);
     }""")
     result = supplier_extract(supplier_page)
-    assert result['ok'] is False
-    assert '采购价' in result['error']
-    assert 'product' not in result
+    assert result['ok'] is True
+    assert result['product']['price'] is None
+    assert result['product']['scrape_status'] == 'partial'
+    assert '采购价' in result['product']['error_message']
 
 
 @pytest.mark.parametrize('has_offer_price', [False, True])
@@ -109,3 +110,43 @@ def test_empty_primary_price_does_not_hide_valid_amount(supplier_page):
       node.__reactFiber$test={memoizedProps:{priceRanges:[{price:'',priceAmount:'18.50'}]}};
     }""")
     assert supplier_extract(supplier_page)['product']['price'] == 18.5
+
+
+def test_one_yuan_placeholder_does_not_hide_real_sku_cost(supplier_page):
+    supplier_page.evaluate("""() => {
+      for (const row of document.querySelector('#skuSelection').__reactFiber$test.memoizedProps.skuItems) {
+        row.discountPrice = 1; row.price = '26.00';
+      }
+    }""")
+    product = supplier_extract(supplier_page)['product']
+    assert product['price'] == 26
+    assert [row['price'] for row in product['variations']] == [26, 26]
+
+
+@pytest.mark.parametrize('source', ['react', 'dom', 'offer'])
+def test_unverified_one_yuan_is_saved_empty(supplier_page, source):
+    clear_sku_prices(supplier_page)
+    supplier_page.evaluate("""source => {
+      const now=Date.now; let reads=0; Date.now=()=>now()+(reads++ > 1 ? 20000 : 0);
+      const selection=document.querySelector('#skuSelection');
+      if (source === 'react') {
+        selection.__reactFiber$test.memoizedProps.skuItems.forEach(row => row.price=1);
+      } else if (source === 'dom') {
+        selection.innerHTML='<table class="sku-table"><thead><tr><th>规格</th><th>价格</th></tr></thead><tbody><tr data-sku-id="11"><td>小号</td><td>¥1</td></tr></tbody></table>';
+      } else {
+        const n=document.createElement('div');n.id='productPrice';n.innerHTML='<span class="price-value">¥1</span>';document.body.append(n);
+      }
+    }""", source)
+    product = supplier_extract(supplier_page)['product']
+    assert product['price'] is None
+    assert all(row['price'] is None for row in product['variations'])
+    assert product['scrape_status'] == 'partial'
+
+
+def test_explicitly_missing_cost_stays_blank_in_list(browser):
+    from pathlib import Path
+    page = browser.new_page()
+    page.add_script_tag(path=str(Path(__file__).resolve().parents[1] / 'bit/static/1688-products.js'))
+    assert page.evaluate("products1688SourceValue({price:1,original_1688:{price:null}}, 'price')") is None
+    assert page.evaluate("products1688SourceValue({price:1,original_1688:{price:null},source_1688_overrides:{price:26}}, 'price')") == 26
+    page.close()

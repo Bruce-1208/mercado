@@ -32,6 +32,78 @@ _pools_pid = os.getpid()
 _last_capacity_warning: dict[int, float] = {}
 
 
+class _ConnectionOperationalError(pymysql.OperationalError):
+    """A lost socket, rather than a server-side statement failure."""
+
+
+class _ConnectionInterfaceError(pymysql.InterfaceError):
+    """PyMySQL was asked to use an already closed connection."""
+
+
+def _call_with_connection_errors(method, *args, **kwargs):
+    try:
+        return method(*args, **kwargs)
+    except pymysql.OperationalError as error:
+        # DBUtils otherwise retries every OperationalError up to twice,
+        # including statement timeouts (3024), lock waits (1205), and deadlocks
+        # (1213). Those need to reach the caller without replaying its SQL.
+        if error.args and error.args[0] in {2006, 2013, 2055}:
+            raise _ConnectionOperationalError(*error.args) from error
+        raise
+    except pymysql.InterfaceError as error:
+        if error.args and error.args[0] == 0:
+            raise _ConnectionInterfaceError(*error.args) from error
+        raise
+
+
+class _ConnectionErrorProxy:
+    """Classify driver errors while preserving the DB-API object interface."""
+
+    def __init__(self, wrapped):
+        self._wrapped = wrapped
+
+    def __getattr__(self, name):
+        value = getattr(self._wrapped, name)
+        if not callable(value):
+            return value
+
+        def call(*args, **kwargs):
+            return _call_with_connection_errors(value, *args, **kwargs)
+
+        return call
+
+
+class _CursorProxy(_ConnectionErrorProxy):
+    def __iter__(self):
+        iterator = _call_with_connection_errors(iter, self._wrapped)
+        return self if iterator is self._wrapped else _CursorProxy(iterator)
+
+    def __next__(self):
+        return _call_with_connection_errors(next, self._wrapped)
+
+
+class _ConnectionProxy(_ConnectionErrorProxy):
+    def cursor(self, *args, **kwargs):
+        cursor = _call_with_connection_errors(self._wrapped.cursor, *args, **kwargs)
+        return _CursorProxy(cursor)
+
+
+class _PoolDriver:
+    # Keep the public PyMySQL module unchanged for unpooled connections and
+    # other users. DBUtils receives this adapter only for workbench pools.
+    threadsafety = pymysql.threadsafety
+
+    def __getattr__(self, name):
+        return getattr(pymysql, name)
+
+    @staticmethod
+    def connect(*args, **kwargs):
+        return _ConnectionProxy(pymysql.connect(*args, **kwargs))
+
+
+_pool_driver = _PoolDriver()
+
+
 class PoolAcquireTimeout(TimeoutError):
     """The process connection budget remained exhausted for too long."""
 
@@ -133,7 +205,7 @@ def _new_pool(config: Mapping[str, Any], available: int) -> PooledDB:
     )
     max_usage = _env_int("MYSQL_POOL_MAX_USAGE", 1000, 0, 1000000) or None
     return PooledDB(
-        creator=pymysql,
+        creator=_pool_driver,
         maxconnections=max_connections,
         mincached=min_cached,
         maxcached=max_cached,
@@ -141,6 +213,7 @@ def _new_pool(config: Mapping[str, Any], available: int) -> PooledDB:
         blocking=False,
         maxusage=max_usage,
         reset=True,
+        failures=(_ConnectionOperationalError, _ConnectionInterfaceError),
         ping=1,
         **dict(config),
     )

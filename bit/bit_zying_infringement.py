@@ -1,7 +1,7 @@
-"""Review pending ZYing products with DeepSeek and update their audit status.
+"""Review pending ZYing products with 千问 and update their audit status.
 
 Only the list payload is used: product id, title, thumbnail and audit status.
-Titles are sent to DeepSeek in fixed groups of 20.  A product is queried again
+Titles are sent to 千问 in fixed groups of 20.  A product is queried again
 with the pending-status filter immediately before ``sale.update`` so a product
 changed by another operator is never overwritten.
 """
@@ -160,7 +160,7 @@ def review_pending_products(
     stop_event=None,
     api_call: Callable | None = None,
     classifier: Callable | None = None,
-    deepseek_api_key: str = "",
+    dashscope_api_key: str = "",
     log_callback: Callable | None = None,
     progress_callback: Callable | None = None,
 ):
@@ -211,7 +211,7 @@ def review_pending_products(
     developer = product_developer_name or product_developer_id or "全部"
     log(
         f"智赢产品查侵权启动：第 {start_page}-{end_page} 页，分类 {scope}，"
-        f"产品开发 {developer}；仅查询待审核，每 20 个标题提交一次 DeepSeek"
+        f"产品开发 {developer}；仅查询待审核，每 20 个标题提交一次 千问"
         + (
             f"；从产品 {requested_start_product_id or '分类首件'} 开始，最多 {item_limit} 个"
             if cursor_mode else ""
@@ -269,15 +269,15 @@ def review_pending_products(
     batches = list(_chunks(candidates))
     for batch_number, batch in enumerate(batches, start=1):
         _check_stopped(stop_event)
-        log(f"第 {batch_number}/{len(batches)} 批提交 DeepSeek：{len(batch)} 个标题")
+        log(f"第 {batch_number}/{len(batches)} 批提交 千问：{len(batch)} 个标题")
         results = (
-            classifier(batch, api_key=deepseek_api_key)
-            if deepseek_api_key
+            classifier(batch, api_key=dashscope_api_key)
+            if dashscope_api_key
             else classifier(batch)
         )
         by_id = {str(item.get("record_key") or item.get("row_id")): item for item in results}
         if set(by_id) != {row["product_id"] for row in batch}:
-            raise ValueError("DeepSeek 未完整返回本批次全部产品，已停止本批写回")
+            raise ValueError("千问 未完整返回本批次全部产品，已停止本批写回")
 
         for candidate in batch:
             _check_stopped(stop_event)

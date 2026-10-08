@@ -4,12 +4,13 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../bit/static/store-analysis.js'), 'utf8');
 
-function setup() {
+function setup(savedQuery = null) {
     const elements = new Map();
     const calls = [];
     const pending = [];
     const context = vm.createContext({
         Date, URLSearchParams, Map, Set,
+        localStorage: savedQuery ? {getItem: () => JSON.stringify(savedQuery), setItem() {}} : undefined,
         document: {getElementById(id) {
             if (!elements.has(id)) elements.set(id, {value: id.endsWith('-metric') ? 'orders' : '', textContent: '', innerHTML: '', addEventListener() {}});
             return elements.get(id);
@@ -48,6 +49,22 @@ test('defaults to seven Beijing days and loads analysis before filters; deduplic
     app.respond('/api/store-analysis', {sites: []});
     await forced;
     app.respond('/api/mercado-tokens', {rows: []});
+});
+
+test('preload descriptors match default and restored analysis without starting requests', async () => {
+    for (const savedQuery of [null, {
+        start_date: '2026-09-01', end_date: '2026-09-30', metric: 'gmv',
+        category_level: '3', salesperson: '业务员甲', group_name: 'A组', token_id: '25',
+    }]) {
+        const app = setup(savedQuery);
+        const urls = Array.from(app.context.storeAnalysisPreloadUrls());
+        assert.equal(app.calls.length, 0);
+        const load = app.context.loadStoreAnalysis();
+        assert.deepEqual(app.calls, urls);
+        app.respond('/api/store-analysis', {sites: []});
+        app.respond('/api/mercado-tokens', {rows: []});
+        await load;
+    }
 });
 
 test('older responses cannot overwrite a newer filter selection; failed filters do not block results', async () => {

@@ -1,0 +1,12 @@
+{
+  "date_start": "2026-07-01",
+  "date_end": "2026-10-08",
+  "preparation_seconds": 4.580730041998322,
+  "rows": 22457,
+  "page_size": 2000,
+  "existing_task_ids_preserved": true,
+  "new_orders_since_previous_task": 4,
+  "missing_previous_orders": 0,
+  "rich_first_page_seconds": 0.6085848750008154,
+  "rich_and_thin_first_page_equal": true
+}

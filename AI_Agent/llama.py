@@ -1,6 +1,8 @@
 import requests
 import json
 
+from erp.ai_usage_billing import record_usage
+
 
 def chat_with_llama(prompt):
     url = "http://localhost:11434/api/generate"
@@ -13,13 +15,19 @@ def chat_with_llama(prompt):
     response = requests.post(url, json=data)
 
     if response.status_code == 200:
-        return response.json().get("response")
+        payload = response.json()
+        record_usage(payload, usage={"input_tokens": payload.get("prompt_eval_count"),
+                                     "output_tokens": payload.get("eval_count")},
+                     model="llama3.1:8b", provider="ollama", base_url=url,
+                     task_type="ai_appeal", task_name="本地 AI 客服申诉")
+        return payload.get("response")
     else:
         return f"Error: {response.text}"
 
 
 # 测试
-print(
+if __name__ == "__main__":
+    print(
     chat_with_llama(
         """亲爱的客服，我叫Mike，因为菜鸟没有及时揽收我的物流，对我店铺声誉造成了影响，我总结了下面这些订单，你能帮我消除对我声誉的影响吗？
 Hi! Someone from our team will join the conversation soon to help you. Your case number is 450789482.

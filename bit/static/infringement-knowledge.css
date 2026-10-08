@@ -4,7 +4,7 @@
 #tab-infringement-knowledge .knowledge-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 #tab-infringement-knowledge .knowledge-heading h2 { margin: 4px 0 6px; }
 #tab-infringement-knowledge .knowledge-eyebrow { font-size: 11px; letter-spacing: 1px; color: #64748b; }
-#tab-infringement-knowledge .knowledge-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; margin: 22px 0; }
+#tab-infringement-knowledge .knowledge-metrics { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 14px; margin: 22px 0; }
 #tab-infringement-knowledge .knowledge-metric { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding: 18px 20px; border: 1px solid var(--knowledge-line); border-radius: 12px; background: #fff; color: #344054; text-align: left; box-shadow: none; white-space: normal; }
 #tab-infringement-knowledge .knowledge-metric.selected { border-color: #2563eb; box-shadow: inset 0 0 0 1px #2563eb; background: #f8fbff; }
 #tab-infringement-knowledge .knowledge-metric span { font-size: 13px; font-weight: 600; }
@@ -75,3 +75,18 @@
 @media(max-width: 760px) { #tab-infringement-knowledge .knowledge-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; } #tab-infringement-knowledge .knowledge-metric { padding: 14px; } #tab-infringement-knowledge .knowledge-source-grid, #tab-infringement-knowledge #wipo-sync-panel { grid-template-columns: 1fr; } #tab-infringement-knowledge .knowledge-heading { align-items: flex-start; } #tab-infringement-knowledge .knowledge-rule-note { flex-direction: column; gap: 4px; } #tab-infringement-knowledge .knowledge-filters { grid-template-columns: 1fr 1fr; } #tab-infringement-knowledge .knowledge-filters .field:first-child { grid-column: 1/-1; } #tab-infringement-knowledge .knowledge-pagination { flex-wrap: wrap; } #tab-infringement-knowledge #knowledge-records-panel { padding: 14px; } #tab-infringement-knowledge .knowledge-metric small { line-height: 1.5; } }
 #tab-infringement-knowledge .knowledge-heading > div { flex: 1; min-width: 0; }
 #tab-infringement-knowledge .knowledge-heading > button { flex: none; width: auto; }
+#tab-infringement-knowledge .knowledge-scope-label { display: block; margin-top: 8px; color: #64748b; overflow-wrap: anywhere; font-size: 11px; line-height: 1.6; }
+#tab-infringement-knowledge .knowledge-scope-fields { min-width: 0; margin: 0; padding: 14px; border: 1px solid var(--knowledge-line); border-radius: 8px; display: flex; flex-direction: column; gap: 12px; }
+#tab-infringement-knowledge .knowledge-scope-fields legend { color: #475569; padding: 0 6px; font-size: 12px; }
+#tab-infringement-knowledge .knowledge-scope-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+#tab-infringement-knowledge .knowledge-scope-grid > .field:last-child { grid-column: 1 / -1; }
+#tab-infringement-knowledge #knowledge-review-history-content { overflow-wrap: anywhere; }
+#tab-infringement-knowledge .knowledge-history-entry { border-top: 1px solid var(--knowledge-line); padding: 10px 0; }
+#tab-infringement-knowledge .knowledge-history-entry > span { display: block; color: #64748b; margin-top: 4px; }
+#tab-infringement-knowledge .knowledge-history-entry pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto; padding: 10px; background: #f4f7fb; font-size: 12px; }
+#tab-infringement-knowledge .knowledge-products-dialog { width: min(840px, calc(100vw - 32px)); }
+#tab-infringement-knowledge .knowledge-related-content { padding: 22px; }
+#tab-infringement-knowledge .knowledge-related-table { width: 100%; min-width: 600px; }
+#tab-infringement-knowledge .knowledge-related-table :is(th,td) { vertical-align: top; text-align: left; font-size: 12px; padding: 12px; overflow-wrap: anywhere; }
+#tab-infringement-knowledge .knowledge-related-table td > span { display: block; color: #64748b; margin-top: 5px; }
+@media(max-width: 500px) { #tab-infringement-knowledge .knowledge-scope-grid { grid-template-columns: 1fr; } #tab-infringement-knowledge #infringement-knowledge-form, #tab-infringement-knowledge .knowledge-related-content { padding: 16px; } }

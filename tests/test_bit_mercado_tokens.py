@@ -788,3 +788,78 @@ def test_account_group_validation_rejects_blank_name_and_invalid_members():
 
     with pytest.raises(ValueError, match="分组中包含无效账号"):
         bit_mysql.create_mercado_account_group("精品组", token_ids=["bad-id"])
+
+
+def test_exchange_carries_authorizing_salesperson(oauth_env):
+    captured = {}
+    mercado_tokens.exchange_and_save(
+        "学员店铺", "TG-once", salesperson="学员本人",
+        upsert=lambda record: captured.update(record) or {"id": 7},
+        http=OAuthSession(),
+    )
+    assert captured["authorization_salesperson"] == "学员本人"
+
+
+def test_member_exchange_binds_session_identity(monkeypatch):
+    user = {"id": 71, "username": "student", "display_name": "学员本人",
+            "role_key": "member", "organization_key": "other-company"}
+    captured = {}
+    monkeypatch.setattr(bit_interface, "get_current_workbench_user", lambda: user)
+    monkeypatch.setattr(bit_db_api, "exchange_mercado_store_token",
+                        lambda *args, **kwargs: captured.update(kwargs) or {"id": 7})
+    monkeypatch.setattr(bit_db_api, "start_store_link_sync", lambda ids: {})
+    with bit_interface.app.test_request_context("/api/mercado-tokens/exchange", method="POST",
+            json={"display_name": "店铺", "code": "TG-once", "salesperson": "其他人"}):
+        response = bit_interface.api_exchange_mercado_token.__wrapped__()
+    assert response.get_json()["status"] == "success"
+    assert captured == {"organization_key": "other-company", "salesperson": "学员本人"}
+
+
+@pytest.mark.parametrize("existing_owner", [False, True])
+def test_token_upsert_binds_unassigned_store_in_same_transaction(monkeypatch, existing_owner):
+    calls = []
+    class Cursor:
+        lastrowid = 7
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def execute(self, sql, params=None): calls.append((sql, params))
+        def fetchall(self):
+            if "SELECT `salesperson`" in calls[-1][0] and existing_owner:
+                return [{"salesperson": "原业务员"}]
+            return []
+    class Connection:
+        def cursor(self): return Cursor()
+        def commit(self): calls.append(("COMMIT", None))
+        def rollback(self): calls.append(("ROLLBACK", None))
+        def close(self): pass
+    monkeypatch.setattr(bit_mysql.pymysql, "connect", lambda **kwargs: Connection())
+    monkeypatch.setattr(bit_mysql, "_ensure_mercado_store_tokens_table", lambda cursor: None)
+    monkeypatch.setattr(bit_mysql, "_ensure_mercado_store_site_settings_table", lambda cursor: None)
+    monkeypatch.setattr(bit_mysql, "get_mercado_store_token_summary", lambda token_id: {"id": token_id})
+    bit_mysql.upsert_mercado_store_token({"display_name": "店铺", "access_token": "test",
+        "refresh_token": "test", "authorization_salesperson": "学员本人"})
+    bindings = [params for sql, params in calls if sql.startswith("INSERT INTO `mercado_store_site_settings`")]
+    assert len(bindings) == (0 if existing_owner else len(bit_mysql.MERCADO_CONFIGURABLE_SITES))
+    assert all(params[2] == "学员本人" for params in bindings)
+    assert calls[-1][0] == "COMMIT"
+
+
+@pytest.mark.parametrize("mode", ["mysql", "api"])
+def test_exchange_transports_salesperson(monkeypatch, mode):
+    captured = {}
+    monkeypatch.setattr(bit_db_api, "DB_MODE", mode)
+    monkeypatch.setattr(mercado_tokens, "exchange_and_save",
+        lambda *args, **kwargs: captured.update(kwargs) or {"id": 7})
+    monkeypatch.setattr(bit_db_api, "_request",
+        lambda *args, **kwargs: captured.update(kwargs["json"]) or {"id": 7})
+    bit_db_api.exchange_mercado_store_token("店铺", "TG-once", salesperson="学员本人")
+    assert captured["salesperson"] == "学员本人"
+
+
+def test_bound_member_can_see_store():
+    user = {"id": 71, "username": "student", "display_name": "学员本人",
+            "role_key": "member", "access_version": 1, "organization_key": "wuhan-zeshun"}
+    store = {"id": 7, "organization_key": "wuhan-zeshun",
+             "site_settings": [{"site_id": "MLM", "salesperson": "学员本人"}]}
+    result = bit_interface._filter_mercado_tokens_for_user({"rows": [store]}, user)
+    assert [row["id"] for row in result["rows"]] == [7]

@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-08",
+  "version": "1.8.53",
+  "root_causes": [
+    "/up/MLMU URLs did not enter catalog selected-offer extraction because the regex only matched listing-shaped IDs.",
+    "Current pages store selected listing IDs in _n.ctx.r.appProps.pageProps.initialState; the old parser only read legacy state."
+  ],
+  "observed_before": {
+    "processed": 26,
+    "success": 1,
+    "failed": 24,
+    "skipped": 1,
+    "error": "读取超时（90秒）：当前页面未识别到 Mercado Libre 商品编号"
+  },
+  "live_single": {
+    "user_product_id": "MLMU5281509106",
+    "listing_id": "MLM3537128673",
+    "weight_g": 280,
+    "size_cm": [
+      10,
+      10,
+      12
+    ],
+    "result": "已采集到泽顺控制台"
+  },
+  "live_batch": {
+    "processed": 6,
+    "success": 5,
+    "failed": 0,
+    "skipped": 1,
+    "skip_reason": "Full海外仓",
+    "duration_seconds": 14
+  },
+  "validation": {
+    "focused_python_initial": "54 passed",
+    "additional_catalog_and_explicit_offer_tests": "18 passed (16 overlap with initial group; 2 new)",
+    "node_scheduling_auth": "26 passed",
+    "diff_check": "passed",
+    "package_and_installed_source_match": true,
+    "broader_suite_limitations": "Broader pre-existing weight-price/infringement route and category VM tests fail due to outdated expectations/fixtures; these paths were not modified. The pre-existing manifest/popup version mismatch was fixed and its test rerun successfully."
+  },
+  "installation": {
+    "path": "/Users/a11/Downloads/zeshun-collector-extension (17)",
+    "reload_confirmed": true,
+    "version_confirmed_in_edge": "1.8.53",
+    "original_batch_max_items_restored": 50
+  },
+  "package": "artifacts/zeshun-collector-extension-1.8.53-mercado-up-fix.zip",
+  "package_sha256": "d9a4c7f33e363338cbcd5715fa2d2cc80f15cf96b6e8ae6051648976fd7c47c0"
+}

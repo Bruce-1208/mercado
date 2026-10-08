@@ -134,7 +134,7 @@ def test_algorithm_worker_dispatches_real_types_and_honors_stop(monkeypatch, alg
     monkeypatch.setattr(daily, "_resolve_login_anomaly", lambda *args: None)
     result = daily._appeal_one_shop_locked(
         plan, "window", object(), appeal_type="算法模式", site_pause=0, stop_event=stop,
-        appeal_copy_mode="AI话术模式", deepseek_api_key="test-token",
+        appeal_copy_mode="AI话术模式", dashscope_api_key="test-token",
     )
     assert len(calls) == 3
     assert all(form in {"侵权", "延误", "投诉", "取消率"} for _, form, _ in calls)

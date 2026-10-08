@@ -240,17 +240,23 @@ def test_failed_edit_stays_open_and_can_retry(products_page):
     assert "￥29.99" in page.locator("#products-1688-body tr").first.inner_text()
 
 
-def test_saved_edit_survives_followup_list_failure(products_page):
+def test_saved_edit_avoids_followup_list_and_slow_ai_refresh(products_page):
     page = products_page
     page.locator("#products-1688-body tr").first.get_by_role("button", name="修改资料").click()
     page.locator("#products-1688-edit-net_proceeds_usd").fill("19.5")
-    page.evaluate("mock.failList = true")
+    page.evaluate("""() => {
+      mock.failList = true;
+      mock.requests = [];
+      window.loadAiOriginalProducts = () => new Promise(() => {});
+    }""")
     page.locator("#products-1688-edit-save").click()
     page.wait_for_function("!document.querySelector('#products-1688-edit-dialog').open")
     assert _patches(page)[-1]["body"] == {"net_proceeds_usd": 19.5}
     assert "$19.50" in page.locator("#products-1688-body tr").first.inner_text()
     message = page.locator("#products-1688-status").inner_text()
-    assert "资料已保存" in message and "模拟刷新失败" in message
+    assert message == "商品资料已保存"
+    assert page.evaluate("mock.requests.map(r => r.method)") == ["PATCH"]
+    assert page.locator("#products-1688-edit-save").is_enabled()
     page.locator("#products-1688-body tr").first.get_by_role("button", name="查看详情").click()
     assert "$19.50" in page.locator("#products-1688-detail-content").inner_text()
 

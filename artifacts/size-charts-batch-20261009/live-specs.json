@@ -1,0 +1,4993 @@
+{
+  "domains": [
+    {
+      "id": "SNEAKERS",
+      "domain_id": "SNEAKERS",
+      "full_domain_id": "CBT-SNEAKERS",
+      "name": "SNEAKERS"
+    },
+    {
+      "id": "BOOTS_AND_BOOTIES",
+      "domain_id": "BOOTS_AND_BOOTIES",
+      "full_domain_id": "CBT-BOOTS_AND_BOOTIES",
+      "name": "BOOTS_AND_BOOTIES"
+    },
+    {
+      "id": "LOAFERS_AND_OXFORDS",
+      "domain_id": "LOAFERS_AND_OXFORDS",
+      "full_domain_id": "CBT-LOAFERS_AND_OXFORDS",
+      "name": "LOAFERS_AND_OXFORDS"
+    },
+    {
+      "id": "FOOTBALL_SHOES",
+      "domain_id": "FOOTBALL_SHOES",
+      "full_domain_id": "CBT-FOOTBALL_SHOES",
+      "name": "FOOTBALL_SHOES"
+    },
+    {
+      "id": "SANDALS_AND_CLOGS",
+      "domain_id": "SANDALS_AND_CLOGS",
+      "full_domain_id": "CBT-SANDALS_AND_CLOGS",
+      "name": "SANDALS_AND_CLOGS"
+    },
+    {
+      "id": "SNEAKERS_TEST",
+      "domain_id": "SNEAKERS_TEST",
+      "full_domain_id": "CBT-SNEAKERS_TEST",
+      "name": "SNEAKERS_TEST"
+    },
+    {
+      "id": "PANTS_TEST",
+      "domain_id": "PANTS_TEST",
+      "full_domain_id": "CBT-PANTS_TEST",
+      "name": "PANTS_TEST"
+    },
+    {
+      "id": "T_SHIRTS",
+      "domain_id": "T_SHIRTS",
+      "full_domain_id": "CBT-T_SHIRTS",
+      "name": "T_SHIRTS"
+    },
+    {
+      "id": "PAJAMAS",
+      "domain_id": "PAJAMAS",
+      "full_domain_id": "CBT-PAJAMAS",
+      "name": "PAJAMAS"
+    },
+    {
+      "id": "SHIRTS",
+      "domain_id": "SHIRTS",
+      "full_domain_id": "CBT-SHIRTS",
+      "name": "SHIRTS"
+    },
+    {
+      "id": "JACKETS_AND_COATS",
+      "domain_id": "JACKETS_AND_COATS",
+      "full_domain_id": "CBT-JACKETS_AND_COATS",
+      "name": "JACKETS_AND_COATS"
+    },
+    {
+      "id": "DRESSES",
+      "domain_id": "DRESSES",
+      "full_domain_id": "CBT-DRESSES",
+      "name": "DRESSES"
+    },
+    {
+      "id": "SWEATSHIRTS_AND_HOODIES",
+      "domain_id": "SWEATSHIRTS_AND_HOODIES",
+      "full_domain_id": "CBT-SWEATSHIRTS_AND_HOODIES",
+      "name": "SWEATSHIRTS_AND_HOODIES"
+    },
+    {
+      "id": "BLOUSES",
+      "domain_id": "BLOUSES",
+      "full_domain_id": "CBT-BLOUSES",
+      "name": "BLOUSES"
+    },
+    {
+      "id": "SHORTS",
+      "domain_id": "SHORTS",
+      "full_domain_id": "CBT-SHORTS",
+      "name": "SHORTS"
+    },
+    {
+      "id": "PANTS",
+      "domain_id": "PANTS",
+      "full_domain_id": "CBT-PANTS",
+      "name": "PANTS"
+    },
+    {
+      "id": "LEGGINGS",
+      "domain_id": "LEGGINGS",
+      "full_domain_id": "CBT-LEGGINGS",
+      "name": "LEGGINGS"
+    },
+    {
+      "id": "HIKING_BOOTS",
+      "domain_id": "HIKING_BOOTS",
+      "full_domain_id": "CBT-HIKING_BOOTS",
+      "name": "HIKING_BOOTS"
+    },
+    {
+      "id": "HEELS_AND_WEDGES",
+      "domain_id": "HEELS_AND_WEDGES",
+      "full_domain_id": "CBT-HEELS_AND_WEDGES",
+      "name": "HEELS_AND_WEDGES"
+    },
+    {
+      "id": "SLIPPERS",
+      "domain_id": "SLIPPERS",
+      "full_domain_id": "CBT-SLIPPERS",
+      "name": "SLIPPERS"
+    },
+    {
+      "id": "FLATS",
+      "domain_id": "FLATS",
+      "full_domain_id": "CBT-FLATS",
+      "name": "FLATS"
+    },
+    {
+      "id": "BABIES_FOOTWEAR",
+      "domain_id": "BABIES_FOOTWEAR",
+      "full_domain_id": "CBT-BABIES_FOOTWEAR",
+      "name": "BABIES_FOOTWEAR"
+    },
+    {
+      "id": "ESPADRILLES",
+      "domain_id": "ESPADRILLES",
+      "full_domain_id": "CBT-ESPADRILLES",
+      "name": "ESPADRILLES"
+    },
+    {
+      "id": "TACTICAL_BOOTS",
+      "domain_id": "TACTICAL_BOOTS",
+      "full_domain_id": "CBT-TACTICAL_BOOTS",
+      "name": "TACTICAL_BOOTS"
+    },
+    {
+      "id": "NEOPRENE_BOOTS",
+      "domain_id": "NEOPRENE_BOOTS",
+      "full_domain_id": "CBT-NEOPRENE_BOOTS",
+      "name": "NEOPRENE_BOOTS"
+    },
+    {
+      "id": "DANCE_SNEAKERS_AND_SHOES",
+      "domain_id": "DANCE_SNEAKERS_AND_SHOES",
+      "full_domain_id": "CBT-DANCE_SNEAKERS_AND_SHOES",
+      "name": "DANCE_SNEAKERS_AND_SHOES"
+    },
+    {
+      "id": "SAFETY_FOOTWEAR",
+      "domain_id": "SAFETY_FOOTWEAR",
+      "full_domain_id": "CBT-SAFETY_FOOTWEAR",
+      "name": "SAFETY_FOOTWEAR"
+    },
+    {
+      "id": "MOTORCYCLE_BOOTS",
+      "domain_id": "MOTORCYCLE_BOOTS",
+      "full_domain_id": "CBT-MOTORCYCLE_BOOTS",
+      "name": "MOTORCYCLE_BOOTS"
+    },
+    {
+      "id": "FOOTBALL_SHIRTS",
+      "domain_id": "FOOTBALL_SHIRTS",
+      "full_domain_id": "CBT-FOOTBALL_SHIRTS",
+      "name": "FOOTBALL_SHIRTS"
+    },
+    {
+      "id": "SPORT_PANTS",
+      "domain_id": "SPORT_PANTS",
+      "full_domain_id": "CBT-SPORT_PANTS",
+      "name": "SPORT_PANTS"
+    },
+    {
+      "id": "UNDERPANTS",
+      "domain_id": "UNDERPANTS",
+      "full_domain_id": "CBT-UNDERPANTS",
+      "name": "UNDERPANTS"
+    },
+    {
+      "id": "SPORT_T_SHIRTS",
+      "domain_id": "SPORT_T_SHIRTS",
+      "full_domain_id": "CBT-SPORT_T_SHIRTS",
+      "name": "SPORT_T_SHIRTS"
+    },
+    {
+      "id": "SWEATERS_AND_CARDIGANS",
+      "domain_id": "SWEATERS_AND_CARDIGANS",
+      "full_domain_id": "CBT-SWEATERS_AND_CARDIGANS",
+      "name": "SWEATERS_AND_CARDIGANS"
+    },
+    {
+      "id": "CYCLING_JERSEYS",
+      "domain_id": "CYCLING_JERSEYS",
+      "full_domain_id": "CBT-CYCLING_JERSEYS",
+      "name": "CYCLING_JERSEYS"
+    },
+    {
+      "id": "VESTS",
+      "domain_id": "VESTS",
+      "full_domain_id": "CBT-VESTS",
+      "name": "VESTS"
+    },
+    {
+      "id": "ROBES",
+      "domain_id": "ROBES",
+      "full_domain_id": "CBT-ROBES",
+      "name": "ROBES"
+    },
+    {
+      "id": "THERMAL_SHIRTS",
+      "domain_id": "THERMAL_SHIRTS",
+      "full_domain_id": "CBT-THERMAL_SHIRTS",
+      "name": "THERMAL_SHIRTS"
+    },
+    {
+      "id": "FISHING_SHIRTS",
+      "domain_id": "FISHING_SHIRTS",
+      "full_domain_id": "CBT-FISHING_SHIRTS",
+      "name": "FISHING_SHIRTS"
+    },
+    {
+      "id": "FOOTBALL_JACKETS",
+      "domain_id": "FOOTBALL_JACKETS",
+      "full_domain_id": "CBT-FOOTBALL_JACKETS",
+      "name": "FOOTBALL_JACKETS"
+    },
+    {
+      "id": "BASKETBALL_JERSEYS",
+      "domain_id": "BASKETBALL_JERSEYS",
+      "full_domain_id": "CBT-BASKETBALL_JERSEYS",
+      "name": "BASKETBALL_JERSEYS"
+    },
+    {
+      "id": "PONCHOS",
+      "domain_id": "PONCHOS",
+      "full_domain_id": "CBT-PONCHOS",
+      "name": "PONCHOS"
+    },
+    {
+      "id": "FASHION_KIMONOS",
+      "domain_id": "FASHION_KIMONOS",
+      "full_domain_id": "CBT-FASHION_KIMONOS",
+      "name": "FASHION_KIMONOS"
+    },
+    {
+      "id": "AMERICAN_FOOTBALL_JERSEYS",
+      "domain_id": "AMERICAN_FOOTBALL_JERSEYS",
+      "full_domain_id": "CBT-AMERICAN_FOOTBALL_JERSEYS",
+      "name": "AMERICAN_FOOTBALL_JERSEYS"
+    },
+    {
+      "id": "FOOTBALL_SWEATSHIRTS_AND_HOODIES",
+      "domain_id": "FOOTBALL_SWEATSHIRTS_AND_HOODIES",
+      "full_domain_id": "CBT-FOOTBALL_SWEATSHIRTS_AND_HOODIES",
+      "name": "FOOTBALL_SWEATSHIRTS_AND_HOODIES"
+    },
+    {
+      "id": "BASEBALL_AND_SOFTBALL_JERSEYS",
+      "domain_id": "BASEBALL_AND_SOFTBALL_JERSEYS",
+      "full_domain_id": "CBT-BASEBALL_AND_SOFTBALL_JERSEYS",
+      "name": "BASEBALL_AND_SOFTBALL_JERSEYS"
+    },
+    {
+      "id": "FISHING_VESTS",
+      "domain_id": "FISHING_VESTS",
+      "full_domain_id": "CBT-FISHING_VESTS",
+      "name": "FISHING_VESTS"
+    },
+    {
+      "id": "RUGBY_JERSEYS",
+      "domain_id": "RUGBY_JERSEYS",
+      "full_domain_id": "CBT-RUGBY_JERSEYS",
+      "name": "RUGBY_JERSEYS"
+    },
+    {
+      "id": "SCHOOL_SMOCKS",
+      "domain_id": "SCHOOL_SMOCKS",
+      "full_domain_id": "CBT-SCHOOL_SMOCKS",
+      "name": "SCHOOL_SMOCKS"
+    },
+    {
+      "id": "NIGHTGOWNS",
+      "domain_id": "NIGHTGOWNS",
+      "full_domain_id": "CBT-NIGHTGOWNS",
+      "name": "NIGHTGOWNS"
+    },
+    {
+      "id": "WADERS",
+      "domain_id": "WADERS",
+      "full_domain_id": "CBT-WADERS",
+      "name": "WADERS"
+    },
+    {
+      "id": "FISHING_PANTS",
+      "domain_id": "FISHING_PANTS",
+      "full_domain_id": "CBT-FISHING_PANTS",
+      "name": "FISHING_PANTS"
+    },
+    {
+      "id": "TACTICAL_PANTS",
+      "domain_id": "TACTICAL_PANTS",
+      "full_domain_id": "CBT-TACTICAL_PANTS",
+      "name": "TACTICAL_PANTS"
+    },
+    {
+      "id": "WORK_PANTS",
+      "domain_id": "WORK_PANTS",
+      "full_domain_id": "CBT-WORK_PANTS",
+      "name": "WORK_PANTS"
+    },
+    {
+      "id": "SPORT_SHORTS",
+      "domain_id": "SPORT_SHORTS",
+      "full_domain_id": "CBT-SPORT_SHORTS",
+      "name": "SPORT_SHORTS"
+    },
+    {
+      "id": "SKIRTS",
+      "domain_id": "SKIRTS",
+      "full_domain_id": "CBT-SKIRTS",
+      "name": "SKIRTS"
+    },
+    {
+      "id": "SPORT_SKIRTS",
+      "domain_id": "SPORT_SKIRTS",
+      "full_domain_id": "CBT-SPORT_SKIRTS",
+      "name": "SPORT_SKIRTS"
+    },
+    {
+      "id": "TUTUS",
+      "domain_id": "TUTUS",
+      "full_domain_id": "CBT-TUTUS",
+      "name": "TUTUS"
+    },
+    {
+      "id": "BRAS",
+      "domain_id": "BRAS",
+      "full_domain_id": "CBT-BRAS",
+      "name": "BRAS"
+    },
+    {
+      "id": "PANTIES",
+      "domain_id": "PANTIES",
+      "full_domain_id": "CBT-PANTIES",
+      "name": "PANTIES"
+    }
+  ],
+  "domain_id": "T_SHIRTS",
+  "identity": {
+    "seller_id": 3500826362,
+    "site_id": "CBT"
+  },
+  "sites": [
+    {
+      "site_id": "MCO"
+    },
+    {
+      "site_id": "MLA"
+    },
+    {
+      "site_id": "MLB"
+    },
+    {
+      "site_id": "MLC"
+    },
+    {
+      "site_id": "MLM"
+    },
+    {
+      "site_id": "MLU"
+    }
+  ],
+  "template_fields": [
+    {
+      "hierarchy": "PARENT_PK",
+      "id": "BRAND",
+      "name": "Brand",
+      "relevance": 1,
+      "tags": [],
+      "value_max_length": 255,
+      "value_type": "string",
+      "values": [],
+      "required": false,
+      "allowed_units": []
+    },
+    {
+      "hierarchy": "PARENT_PK",
+      "id": "GENDER",
+      "name": "Gender",
+      "relevance": 1,
+      "tags": [],
+      "value_type": "list",
+      "values": [],
+      "required": false,
+      "allowed_units": []
+    }
+  ],
+  "row_fields": [],
+  "main_attributes": [],
+  "technical_specs": {
+    "full": {
+      "input": {
+        "groups": [
+          {
+            "components": [
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PARENT_PK",
+                    "id": "BRAND",
+                    "name": "Brand",
+                    "relevance": 1,
+                    "tags": [
+                      "grid_filter",
+                      "catalog_required",
+                      "required"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string",
+                    "values": [
+                      {
+                        "id": "2786622",
+                        "name": "AY Not Dead"
+                      },
+                      {
+                        "id": "23128",
+                        "name": "Abercrombie & Fitch"
+                      },
+                      {
+                        "id": "433262",
+                        "name": "Admit One"
+                      },
+                      {
+                        "id": "433264",
+                        "name": "Airborn"
+                      },
+                      {
+                        "id": "433265",
+                        "name": "Altamont"
+                      },
+                      {
+                        "id": "14868",
+                        "name": "Armani"
+                      },
+                      {
+                        "id": "433267",
+                        "name": "Ayres"
+                      },
+                      {
+                        "id": "433263",
+                        "name": "Aéropostale"
+                      },
+                      {
+                        "id": "433268",
+                        "name": "Bolivia"
+                      },
+                      {
+                        "id": "2731558",
+                        "name": "Brooks"
+                      },
+                      {
+                        "id": "433269",
+                        "name": "Brooksfield"
+                      },
+                      {
+                        "id": "252895",
+                        "name": "Bross"
+                      },
+                      {
+                        "id": "428833",
+                        "name": "Burton"
+                      },
+                      {
+                        "id": "252310",
+                        "name": "Converse"
+                      },
+                      {
+                        "id": "433270",
+                        "name": "Cultura"
+                      },
+                      {
+                        "id": "511135",
+                        "name": "DC"
+                      },
+                      {
+                        "id": "2631277",
+                        "name": "Daniel Hechter"
+                      },
+                      {
+                        "id": "23461",
+                        "name": "Diesel"
+                      },
+                      {
+                        "id": "33243",
+                        "name": "Disney"
+                      },
+                      {
+                        "id": "23618",
+                        "name": "Dolce & Gabbana"
+                      },
+                      {
+                        "id": "433272",
+                        "name": "Ed Hardy"
+                      },
+                      {
+                        "id": "433273",
+                        "name": "Emerica"
+                      },
+                      {
+                        "id": "428837",
+                        "name": "Fox Head"
+                      },
+                      {
+                        "id": "433274",
+                        "name": "GAP"
+                      },
+                      {
+                        "id": "433275",
+                        "name": "Garzon García"
+                      },
+                      {
+                        "id": "35977846",
+                        "name": "Generic"
+                      },
+                      {
+                        "id": "433276",
+                        "name": "GoodPeople"
+                      },
+                      {
+                        "id": "433277",
+                        "name": "Grisino"
+                      },
+                      {
+                        "id": "14724",
+                        "name": "Guess"
+                      },
+                      {
+                        "id": "24338",
+                        "name": "Hollister"
+                      },
+                      {
+                        "id": "433278",
+                        "name": "Inkpronta"
+                      },
+                      {
+                        "id": "433279",
+                        "name": "Inside"
+                      },
+                      {
+                        "id": "433280",
+                        "name": "Jazmin Chebar"
+                      },
+                      {
+                        "id": "2153504",
+                        "name": "John L. Cook"
+                      },
+                      {
+                        "id": "23863",
+                        "name": "Kosiuko"
+                      },
+                      {
+                        "id": "23001",
+                        "name": "Lacoste"
+                      },
+                      {
+                        "id": "433282",
+                        "name": "Lee"
+                      },
+                      {
+                        "id": "14679",
+                        "name": "Levi's"
+                      },
+                      {
+                        "id": "235060",
+                        "name": "Mistral"
+                      },
+                      {
+                        "id": "14671",
+                        "name": "Nike"
+                      },
+                      {
+                        "id": "433283",
+                        "name": "No Fear"
+                      },
+                      {
+                        "id": "433284",
+                        "name": "Old Navy"
+                      },
+                      {
+                        "id": "24073",
+                        "name": "Ona Saez"
+                      },
+                      {
+                        "id": "433285",
+                        "name": "Ossira"
+                      },
+                      {
+                        "id": "154970",
+                        "name": "Paula Cahen D'Anvers"
+                      },
+                      {
+                        "id": "433286",
+                        "name": "Penguin"
+                      },
+                      {
+                        "id": "130933",
+                        "name": "Polo Ralph Lauren"
+                      },
+                      {
+                        "id": "433287",
+                        "name": "Pony"
+                      },
+                      {
+                        "id": "240356",
+                        "name": "Prototype"
+                      },
+                      {
+                        "id": "23132",
+                        "name": "Puma"
+                      },
+                      {
+                        "id": "55691",
+                        "name": "Quiksilver"
+                      },
+                      {
+                        "id": "9188",
+                        "name": "Reebok"
+                      },
+                      {
+                        "id": "433288",
+                        "name": "Reef"
+                      },
+                      {
+                        "id": "433289",
+                        "name": "Rever Pass"
+                      },
+                      {
+                        "id": "26680",
+                        "name": "Rip Curl"
+                      },
+                      {
+                        "id": "433290",
+                        "name": "Rusty"
+                      },
+                      {
+                        "id": "433291",
+                        "name": "Siamo Fuori"
+                      },
+                      {
+                        "id": "433292",
+                        "name": "Sismo"
+                      },
+                      {
+                        "id": "26704",
+                        "name": "Soho"
+                      },
+                      {
+                        "id": "428844",
+                        "name": "Stone"
+                      },
+                      {
+                        "id": "428938",
+                        "name": "Sweet"
+                      },
+                      {
+                        "id": "433293",
+                        "name": "Tannery"
+                      },
+                      {
+                        "id": "433294",
+                        "name": "Tascani"
+                      },
+                      {
+                        "id": "14711",
+                        "name": "Tommy Hilfiger"
+                      },
+                      {
+                        "id": "415948",
+                        "name": "Topper"
+                      },
+                      {
+                        "id": "433295",
+                        "name": "Tucci"
+                      },
+                      {
+                        "id": "415950",
+                        "name": "Under Armour"
+                      },
+                      {
+                        "id": "124578",
+                        "name": "Vans"
+                      },
+                      {
+                        "id": "433296",
+                        "name": "Wanama"
+                      },
+                      {
+                        "id": "44392",
+                        "name": "Wrangler"
+                      },
+                      {
+                        "id": "170888",
+                        "name": "X Games"
+                      },
+                      {
+                        "id": "433297",
+                        "name": "Zara"
+                      },
+                      {
+                        "id": "14810",
+                        "name": "adidas"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Brand",
+                "ui_config": {
+                  "hint": "Indicate the actual brand of the product or 'Generic' if it has no brand.",
+                  "allow_custom_value": true,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PARENT_PK",
+                    "id": "LINE",
+                    "name": "Line",
+                    "relevance": 1,
+                    "tags": [
+                      "hidden"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "Line",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PARENT_PK",
+                    "id": "MODEL",
+                    "name": "Model",
+                    "relevance": 1,
+                    "tags": [
+                      "grid_filter",
+                      "catalog_required",
+                      "required"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "Model",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PARENT_PK",
+                    "id": "GENDER",
+                    "name": "Gender",
+                    "relevance": 1,
+                    "tags": [
+                      "grid_template_required",
+                      "grid_filter",
+                      "catalog_required",
+                      "required"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "339665",
+                        "name": "Woman"
+                      },
+                      {
+                        "id": "339666",
+                        "name": "Man"
+                      },
+                      {
+                        "id": "339668",
+                        "name": "Girls"
+                      },
+                      {
+                        "id": "339667",
+                        "name": "Boys"
+                      },
+                      {
+                        "id": "371795",
+                        "name": "Babies"
+                      },
+                      {
+                        "id": "19159491",
+                        "name": "Gender neutral kid"
+                      },
+                      {
+                        "id": "110461",
+                        "name": "Gender neutral"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Gender",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PARENT_PK",
+                    "id": "AGE_GROUP",
+                    "name": "Age group",
+                    "relevance": 1,
+                    "tags": [
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "6725189",
+                        "name": "Adults"
+                      },
+                      {
+                        "id": "1065183",
+                        "name": "Kids"
+                      },
+                      {
+                        "id": "371795",
+                        "name": "Babies"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Age group",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PARENT_PK",
+                    "id": "GARMENT_TYPE",
+                    "name": "Garment type",
+                    "relevance": 1,
+                    "tags": [
+                      "catalog_required",
+                      "required"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "12038970",
+                        "name": "T-shirt"
+                      },
+                      {
+                        "id": "12038971",
+                        "name": "Polo"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Garment type",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_PK",
+                    "id": "SALE_FORMAT",
+                    "name": "Sale format",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "1359391",
+                        "name": "Unit"
+                      },
+                      {
+                        "id": "1359392",
+                        "name": "Pack"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Sale format",
+                "ui_config": {
+                  "tooltip": "It's the way you'll sell your product; it can be in a pack or individually. Pack means selling multiple identical units grouped together, such as 2 t-shirts. Individual means selling the product separately, for example, just 1 single t-shirt.",
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_PK",
+                    "id": "COLOR",
+                    "name": "Color",
+                    "relevance": 1,
+                    "tags": [
+                      "defines_picture",
+                      "allow_variations",
+                      "required"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string",
+                    "values": [
+                      {
+                        "id": "283148",
+                        "name": "Light coral"
+                      },
+                      {
+                        "id": "283149",
+                        "name": "Coral"
+                      },
+                      {
+                        "id": "283150",
+                        "name": "Light orange"
+                      },
+                      {
+                        "id": "283151",
+                        "name": "Dark orange"
+                      },
+                      {
+                        "id": "283156",
+                        "name": "Khaki"
+                      },
+                      {
+                        "id": "283157",
+                        "name": "Lime green"
+                      },
+                      {
+                        "id": "283158",
+                        "name": "Moss green"
+                      },
+                      {
+                        "id": "283152",
+                        "name": "Chocolate"
+                      },
+                      {
+                        "id": "283153",
+                        "name": "Cleat"
+                      },
+                      {
+                        "id": "283154",
+                        "name": "Light brown"
+                      },
+                      {
+                        "id": "283155",
+                        "name": "Dark brown"
+                      },
+                      {
+                        "id": "283164",
+                        "name": "Golden"
+                      },
+                      {
+                        "id": "51993",
+                        "name": "Red"
+                      },
+                      {
+                        "id": "283165",
+                        "name": "Gray"
+                      },
+                      {
+                        "id": "51994",
+                        "name": "Pink"
+                      },
+                      {
+                        "id": "283160",
+                        "name": "Turquoise"
+                      },
+                      {
+                        "id": "51996",
+                        "name": "Terracotta"
+                      },
+                      {
+                        "id": "283161",
+                        "name": "Navy blue"
+                      },
+                      {
+                        "id": "283162",
+                        "name": "Indigo"
+                      },
+                      {
+                        "id": "51998",
+                        "name": "Maroon"
+                      },
+                      {
+                        "id": "283163",
+                        "name": "Pink gum"
+                      },
+                      {
+                        "id": "52000",
+                        "name": "Orange"
+                      },
+                      {
+                        "id": "52001",
+                        "name": "Beige"
+                      },
+                      {
+                        "id": "52003",
+                        "name": "Nude"
+                      },
+                      {
+                        "id": "52005",
+                        "name": "Brown"
+                      },
+                      {
+                        "id": "52007",
+                        "name": "Yellow"
+                      },
+                      {
+                        "id": "52008",
+                        "name": "Cream"
+                      },
+                      {
+                        "id": "52010",
+                        "name": "Ochre"
+                      },
+                      {
+                        "id": "52012",
+                        "name": "Dark gold"
+                      },
+                      {
+                        "id": "52014",
+                        "name": "Green"
+                      },
+                      {
+                        "id": "52015",
+                        "name": "Light green"
+                      },
+                      {
+                        "id": "52019",
+                        "name": "Dark green"
+                      },
+                      {
+                        "id": "52021",
+                        "name": "Heavenly"
+                      },
+                      {
+                        "id": "52022",
+                        "name": "Water"
+                      },
+                      {
+                        "id": "52024",
+                        "name": "Oil blue"
+                      },
+                      {
+                        "id": "52028",
+                        "name": "Blue"
+                      },
+                      {
+                        "id": "52029",
+                        "name": "Light blue"
+                      },
+                      {
+                        "id": "52031",
+                        "name": "Blue steel"
+                      },
+                      {
+                        "id": "52033",
+                        "name": "Dark blue"
+                      },
+                      {
+                        "id": "52035",
+                        "name": "Violet"
+                      },
+                      {
+                        "id": "52036",
+                        "name": "Lavender"
+                      },
+                      {
+                        "id": "52038",
+                        "name": "Lilac"
+                      },
+                      {
+                        "id": "52042",
+                        "name": "Fuchsia"
+                      },
+                      {
+                        "id": "52043",
+                        "name": "Light pink"
+                      },
+                      {
+                        "id": "52045",
+                        "name": "Pale pink"
+                      },
+                      {
+                        "id": "52047",
+                        "name": "Dark violet"
+                      },
+                      {
+                        "id": "52049",
+                        "name": "Black"
+                      },
+                      {
+                        "id": "52051",
+                        "name": "Dark grey"
+                      },
+                      {
+                        "id": "52053",
+                        "name": "Silver"
+                      },
+                      {
+                        "id": "52055",
+                        "name": "White"
+                      },
+                      {
+                        "id": "338779",
+                        "name": "Cyan"
+                      }
+                    ]
+                  },
+                  {
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "MAIN_COLOR",
+                    "name": "Main color",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "variation_attribute"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "2450295",
+                        "metadata": {
+                          "rgb": "000000"
+                        },
+                        "name": "Black"
+                      },
+                      {
+                        "id": "2450293",
+                        "metadata": {
+                          "rgb": "1717FF"
+                        },
+                        "name": "Blue"
+                      },
+                      {
+                        "id": "2450307",
+                        "metadata": {
+                          "rgb": "FF0000"
+                        },
+                        "name": "Red"
+                      },
+                      {
+                        "id": "2450311",
+                        "metadata": {
+                          "rgb": "9F00FF"
+                        },
+                        "name": "Violet"
+                      },
+                      {
+                        "id": "2450291",
+                        "metadata": {
+                          "rgb": "A0522D"
+                        },
+                        "name": "Brown"
+                      },
+                      {
+                        "id": "2450314",
+                        "metadata": {
+                          "rgb": "0DA600"
+                        },
+                        "name": "Green"
+                      },
+                      {
+                        "id": "2450327",
+                        "metadata": {
+                          "rgb": "FF8C00"
+                        },
+                        "name": "Orange"
+                      },
+                      {
+                        "id": "2450278",
+                        "metadata": {
+                          "rgb": "83DDFF"
+                        },
+                        "name": "Sky blue"
+                      },
+                      {
+                        "id": "2450312",
+                        "metadata": {
+                          "rgb": "FCB1BE"
+                        },
+                        "name": "Pink"
+                      },
+                      {
+                        "id": "2450289",
+                        "metadata": {
+                          "rgb": "FFD700"
+                        },
+                        "name": "Golden"
+                      },
+                      {
+                        "id": "2450303",
+                        "metadata": {
+                          "rgb": "CBCFD0"
+                        },
+                        "name": "Silver"
+                      },
+                      {
+                        "id": "2450296",
+                        "metadata": {
+                          "rgb": "FFED00"
+                        },
+                        "name": "Yellow"
+                      },
+                      {
+                        "id": "2450294",
+                        "metadata": {
+                          "rgb": "E1E1E1"
+                        },
+                        "name": "Gray"
+                      },
+                      {
+                        "id": "46671867",
+                        "metadata": {
+                          "rgb": "FFFFFF"
+                        },
+                        "name": "Multicolored"
+                      },
+                      {
+                        "id": "2450308",
+                        "metadata": {
+                          "rgb": "FFFFFF"
+                        },
+                        "name": "White"
+                      },
+                      {
+                        "id": "2450281",
+                        "metadata": {
+                          "rgb": "F5F3DC",
+                          "parent_id": "2450291"
+                        },
+                        "name": "Beige"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COLOR_INPUT",
+                "label": "Color",
+                "ui_config": {
+                  "connector": ""
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_PK",
+                    "id": "PRINT_DESIGN",
+                    "name": "Print design",
+                    "relevance": 1,
+                    "tags": [
+                      "defines_picture",
+                      "allow_variations"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string",
+                    "values": [
+                      {
+                        "id": "6351487",
+                        "name": "Galaxy"
+                      },
+                      {
+                        "id": "4519999",
+                        "name": "Skull"
+                      },
+                      {
+                        "id": "6351486",
+                        "name": "Wolf"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Print design",
+                "ui_config": {
+                  "allow_custom_value": true,
+                  "allow_filtering": true,
+                  "example": "Wolf"
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_PK",
+                    "id": "SIZE",
+                    "name": "Size",
+                    "relevance": 1,
+                    "tags": [
+                      "allow_variations",
+                      "required"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string",
+                    "values": [
+                      {
+                        "id": "3259494",
+                        "name": "11"
+                      },
+                      {
+                        "id": "3423409",
+                        "name": "5"
+                      },
+                      {
+                        "id": "3423411",
+                        "name": "7"
+                      },
+                      {
+                        "id": "4119847",
+                        "name": "4"
+                      },
+                      {
+                        "id": "3423405",
+                        "name": "1"
+                      },
+                      {
+                        "id": "3423407",
+                        "name": "3"
+                      },
+                      {
+                        "id": "3189094",
+                        "name": "16"
+                      },
+                      {
+                        "id": "3189167",
+                        "name": "10"
+                      },
+                      {
+                        "id": "4119848",
+                        "name": "6"
+                      },
+                      {
+                        "id": "3259446",
+                        "name": "12"
+                      },
+                      {
+                        "id": "3189177",
+                        "name": "15"
+                      },
+                      {
+                        "id": "10490141",
+                        "name": "L"
+                      },
+                      {
+                        "id": "3423416",
+                        "name": "14"
+                      },
+                      {
+                        "id": "2282666",
+                        "name": "M"
+                      },
+                      {
+                        "id": "3189098",
+                        "name": "18"
+                      },
+                      {
+                        "id": "433336",
+                        "name": "XL"
+                      },
+                      {
+                        "id": "3329193",
+                        "name": "2"
+                      },
+                      {
+                        "id": "3189173",
+                        "name": "13"
+                      },
+                      {
+                        "id": "17552780",
+                        "name": "S"
+                      },
+                      {
+                        "id": "3423412",
+                        "name": "8"
+                      },
+                      {
+                        "id": "3330808",
+                        "name": "XS"
+                      },
+                      {
+                        "id": "3423413",
+                        "name": "9"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Size",
+                "ui_config": {
+                  "allow_custom_value": true,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_PK",
+                    "id": "FABRIC_DESIGN",
+                    "name": "Fabric design",
+                    "relevance": 1,
+                    "tags": [
+                      "defines_picture",
+                      "allow_variations"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string",
+                    "values": [
+                      {
+                        "id": "930483",
+                        "name": "Plain"
+                      },
+                      {
+                        "id": "34241287",
+                        "name": "Localized print"
+                      },
+                      {
+                        "id": "2750846",
+                        "name": "Personalized"
+                      },
+                      {
+                        "id": "3793854",
+                        "name": "Embroidery"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Fabric design",
+                "ui_config": {
+                  "tooltip": "It refers to the design of the print.",
+                  "allow_custom_value": true,
+                  "allow_filtering": true,
+                  "example": "Smooth"
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_PK",
+                    "id": "SIZE_GRID_ROW_ID",
+                    "name": "Size grid row ID",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "variation_attribute"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "grid_row_id"
+                  }
+                ],
+                "component": "GRID_ROW_INPUT",
+                "label": "Size grid row ID",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_PK",
+                    "id": "UNITS_PER_PACK",
+                    "name": "Shirts number",
+                    "relevance": 1,
+                    "rendering_conditions": {
+                      "inactive_render_mode": "HIDDEN",
+                      "visibility_conditions": {
+                        "conditions": [
+                          {
+                            "attribute_id": "SALE_FORMAT",
+                            "operator": "IN",
+                            "values": [
+                              {
+                                "id": "1359392",
+                                "name": "Pack"
+                              },
+                              {
+                                "name": "Kit"
+                              }
+                            ]
+                          }
+                        ],
+                        "operator": "AND"
+                      }
+                    },
+                    "tags": [
+                      "conditional_required"
+                    ],
+                    "value_max_length": 18,
+                    "value_type": "number"
+                  }
+                ],
+                "component": "NUMBER_INPUT",
+                "label": "Shirts number",
+                "ui_config": {
+                  "tooltip": "It is the number of products each pack brings, for example 2 t-shirts",
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              }
+            ],
+            "id": "MAIN",
+            "label": "Características principales",
+            "relevance": 1,
+            "section": "SPECIFICATIONS",
+            "ui_config": {}
+          },
+          {
+            "components": [
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "IMPORT_DECLARATION_NUMBER",
+                    "name": "Import declaration number",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden"
+                    ],
+                    "value_max_length": 18,
+                    "value_type": "number"
+                  }
+                ],
+                "component": "NUMBER_INPUT",
+                "label": "Import declaration number",
+                "ui_config": {
+                  "tooltip": "15-digit number from the customs document covering the import of this merchandise (first-hand sale only). This information will be used for the issuance of utility bills associated with the sale of this product.",
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              }
+            ],
+            "id": "LEGAL",
+            "label": "Legal",
+            "relevance": 1,
+            "section": "SPECIFICATIONS",
+            "ui_config": {}
+          },
+          {
+            "components": [
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "INVOICE_PRODUCT_NAME",
+                    "name": "Invoice product name",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "Invoice product name",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "SAT_KEY",
+                    "name": "Sat key",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_max_length": 255,
+                    "value_type": "string",
+                    "values": [
+                      {
+                        "id": "82021094",
+                        "name": "Does not exist in the catalog"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Sat key",
+                "ui_config": {
+                  "tooltip": "The product key is a code assigned by the SAT to classify products sold in the country.",
+                  "allow_custom_value": true,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "MEASURE_UNIT_KEY",
+                    "name": "Measure unit key",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_max_length": 255,
+                    "value_type": "string",
+                    "values": [
+                      {
+                        "id": "82021108",
+                        "name": "Does not exist in the catalog"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Measure unit key",
+                "ui_config": {
+                  "tooltip": "The unit of measure key is a standardized code defined by the SAT.",
+                  "allow_custom_value": true,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "MEASURE_UNIT_DESCRIPTION",
+                    "name": "Measure unit description",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "Measure unit description",
+                "ui_config": {
+                  "tooltip": "The unit of measure is how the SAT categorizes the quantity of a product. Examples: piece, box, kit.",
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "IVA_FOR_RESALE",
+                    "name": "IVA for resale",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "81861616",
+                        "name": "16%"
+                      },
+                      {
+                        "id": "81861613",
+                        "name": "0%"
+                      },
+                      {
+                        "id": "81861612",
+                        "name": "Exempt"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "IVA for resale",
+                "ui_config": {
+                  "tooltip": "Select the applicable VAT (Value Added Tax) rate (0%, 16%, or Exempt) that must be paid by the buyer for each product.",
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "IEPS",
+                    "name": "IEPS",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "82021095",
+                        "name": "0%"
+                      },
+                      {
+                        "id": "82021096",
+                        "name": "3%"
+                      },
+                      {
+                        "id": "82021097",
+                        "name": "6%"
+                      },
+                      {
+                        "id": "82021098",
+                        "name": "7%"
+                      },
+                      {
+                        "id": "82021099",
+                        "name": "8%"
+                      },
+                      {
+                        "id": "82021100",
+                        "name": "9%"
+                      },
+                      {
+                        "id": "82021101",
+                        "name": "25%"
+                      },
+                      {
+                        "id": "82021102",
+                        "name": "26.5%"
+                      },
+                      {
+                        "id": "82021103",
+                        "name": "30%"
+                      },
+                      {
+                        "id": "82021104",
+                        "name": "30.4%"
+                      },
+                      {
+                        "id": "82021105",
+                        "name": "50%"
+                      },
+                      {
+                        "id": "82021106",
+                        "name": "53%"
+                      },
+                      {
+                        "id": "82021107",
+                        "name": "160%"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "IEPS",
+                "ui_config": {
+                  "tooltip": "Select the IEPS (Special Tax on Production and Services) rate that must be paid by the buyer for products in the following categories: fuel, beverages, and tobacco.",
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              }
+            ],
+            "id": "FISCAL_INFO",
+            "label": "Datos fiscales del producto",
+            "relevance": 1,
+            "section": "SPECIFICATIONS",
+            "ui_config": {}
+          },
+          {
+            "components": [
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "VALUE_ADDED_TAX",
+                    "name": "Value added tax",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "Value added tax",
+                "ui_config": {
+                  "tooltip": "The value-added tax is applied to the sale price of goods or services purchases.",
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "IMPORT_DUTY",
+                    "name": "Import duty",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "49553239",
+                        "name": "0 %"
+                      },
+                      {
+                        "id": "49553240",
+                        "name": "1 %"
+                      },
+                      {
+                        "id": "49553241",
+                        "name": "2.5 %"
+                      },
+                      {
+                        "id": "49553242",
+                        "name": "4 %"
+                      },
+                      {
+                        "id": "49553243",
+                        "name": "5 %"
+                      },
+                      {
+                        "id": "49553244",
+                        "name": "8 %"
+                      },
+                      {
+                        "id": "49553245",
+                        "name": "9.5 %"
+                      },
+                      {
+                        "id": "49553246",
+                        "name": "10 %"
+                      },
+                      {
+                        "id": "49553247",
+                        "name": "14 %"
+                      },
+                      {
+                        "id": "49553248",
+                        "name": "15 %"
+                      },
+                      {
+                        "id": "49553249",
+                        "name": "18 %"
+                      },
+                      {
+                        "id": "49553250",
+                        "name": "19 %"
+                      },
+                      {
+                        "id": "49553251",
+                        "name": "20 %"
+                      },
+                      {
+                        "id": "49553252",
+                        "name": "23 %"
+                      },
+                      {
+                        "id": "49553253",
+                        "name": "25 %"
+                      },
+                      {
+                        "id": "49553254",
+                        "name": "26 %"
+                      },
+                      {
+                        "id": "49553255",
+                        "name": "70 %"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Import duty",
+                "ui_config": {
+                  "tooltip": "The excise tax is applied only to specific products considered luxury or non-essential, such as alcoholic beverages, microwave ovens, among others.",
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              }
+            ],
+            "id": "PRICING",
+            "label": "Pricing",
+            "relevance": 1,
+            "section": "SPECIFICATIONS",
+            "ui_config": {}
+          },
+          {
+            "components": [
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "DETAILED_MODEL",
+                    "name": "Detailed model",
+                    "relevance": 1,
+                    "tags": [
+                      "hidden",
+                      "variation_attribute"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "Detailed model",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "SIZE_GRID_ID",
+                    "name": "Size grid ID",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "grid_id"
+                  }
+                ],
+                "component": "GRID_INPUT",
+                "label": "Size grid ID",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "IS_SPORTIVE",
+                    "name": "Sportive",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "Is",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "RECOMMENDED_USES",
+                    "name": "Recommended uses",
+                    "relevance": 1,
+                    "tags": [
+                      "multivalued"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string",
+                    "values": [
+                      {
+                        "id": "12039014",
+                        "name": "Tennis"
+                      },
+                      {
+                        "id": "12039015",
+                        "name": "Golf"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Recommended uses",
+                "ui_config": {
+                  "allow_custom_value": true,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "FABRIC_TYPE",
+                    "name": "Fabric type",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_max_length": 255,
+                    "value_type": "string",
+                    "values": [
+                      {
+                        "id": "12039023",
+                        "name": "Gabardine"
+                      },
+                      {
+                        "id": "12039024",
+                        "name": "Jean"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Fabric type",
+                "ui_config": {
+                  "allow_custom_value": true,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "COMPOSITION",
+                    "name": "Composition",
+                    "relevance": 1,
+                    "tags": [
+                      "multivalued"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string",
+                    "values": [
+                      {
+                        "id": "466793",
+                        "name": "Cotton"
+                      },
+                      {
+                        "id": "466794",
+                        "name": "Polyester"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Composition",
+                "ui_config": {
+                  "allow_custom_value": true,
+                  "allow_filtering": true,
+                  "example": "60% Cotton 40% Polyester"
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "SLEEVE_TYPE",
+                    "name": "Sleeve type",
+                    "relevance": 1,
+                    "tags": [
+                      "required"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "466804",
+                        "name": "Short"
+                      },
+                      {
+                        "id": "466805",
+                        "name": "Long"
+                      },
+                      {
+                        "id": "498514",
+                        "name": "3/4"
+                      },
+                      {
+                        "id": "466806",
+                        "name": "Strapless"
+                      },
+                      {
+                        "id": "39231826",
+                        "name": "Sleeveless"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Sleeve type",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "T_SHIRT_COLLAR_TYPE",
+                    "name": "T-shirt collar type",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "466787",
+                        "name": "Round neck"
+                      },
+                      {
+                        "id": "466789",
+                        "name": "Polo"
+                      },
+                      {
+                        "id": "466788",
+                        "name": "V neck"
+                      },
+                      {
+                        "id": "34241291",
+                        "name": "Buttons"
+                      },
+                      {
+                        "id": "34241292",
+                        "name": "High"
+                      },
+                      {
+                        "id": "34241293",
+                        "name": "Boat"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "T-shirt collar type",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "WEDGE_SHAPE",
+                    "name": "Wedge shape",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "12039025",
+                        "name": "Straight fit"
+                      },
+                      {
+                        "id": "34241294",
+                        "name": "Loose fit"
+                      },
+                      {
+                        "id": "34241295",
+                        "name": "Slim fit"
+                      },
+                      {
+                        "id": "34241296",
+                        "name": "Oversized fit"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Wedge shape",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "IS_SUITABLE_FOR_PREGNACY",
+                    "name": "Suitable for pregnacy",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "Is",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "FAMILY",
+                    "id": "PACKAGE_HEIGHT",
+                    "name": "Package height",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "catalog_listing_required",
+                      "variation_attribute",
+                      "required"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      },
+                      {
+                        "id": "ft",
+                        "name": "ft"
+                      },
+                      {
+                        "id": "m",
+                        "name": "m"
+                      },
+                      {
+                        "id": "mm",
+                        "name": "mm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "NUMBER_UNIT_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Package height",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": [
+                  {
+                    "id": "\"",
+                    "name": "\""
+                  },
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  },
+                  {
+                    "id": "ft",
+                    "name": "ft"
+                  },
+                  {
+                    "id": "m",
+                    "name": "m"
+                  },
+                  {
+                    "id": "mm",
+                    "name": "mm"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "FAMILY",
+                    "id": "PACKAGE_WIDTH",
+                    "name": "Package width",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "catalog_listing_required",
+                      "variation_attribute",
+                      "required"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      },
+                      {
+                        "id": "ft",
+                        "name": "ft"
+                      },
+                      {
+                        "id": "m",
+                        "name": "m"
+                      },
+                      {
+                        "id": "mm",
+                        "name": "mm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "NUMBER_UNIT_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Package width",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": [
+                  {
+                    "id": "\"",
+                    "name": "\""
+                  },
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  },
+                  {
+                    "id": "ft",
+                    "name": "ft"
+                  },
+                  {
+                    "id": "m",
+                    "name": "m"
+                  },
+                  {
+                    "id": "mm",
+                    "name": "mm"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "MAIN_MATERIAL",
+                    "name": "Main material",
+                    "relevance": 1,
+                    "tags": [
+                      "catalog_required",
+                      "required"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string",
+                    "values": [
+                      {
+                        "id": "508652",
+                        "name": "Sequins"
+                      },
+                      {
+                        "id": "4684513",
+                        "name": "Satin"
+                      },
+                      {
+                        "id": "466793",
+                        "name": "Cotton"
+                      },
+                      {
+                        "id": "34241290",
+                        "name": "Viscolycra"
+                      },
+                      {
+                        "id": "3629910",
+                        "name": "Microfiber"
+                      },
+                      {
+                        "id": "5370276",
+                        "name": "Tulle"
+                      },
+                      {
+                        "id": "4402106",
+                        "name": "Lycra"
+                      },
+                      {
+                        "id": "4327467",
+                        "name": "Bamboo"
+                      },
+                      {
+                        "id": "433343",
+                        "name": "Silk"
+                      },
+                      {
+                        "id": "34241289",
+                        "name": "Pima cotton"
+                      },
+                      {
+                        "id": "466794",
+                        "name": "Polyester"
+                      },
+                      {
+                        "id": "3580423",
+                        "name": "Polyamide"
+                      },
+                      {
+                        "id": "3630111",
+                        "name": "Wool"
+                      },
+                      {
+                        "id": "7980354",
+                        "name": "Nylon"
+                      },
+                      {
+                        "id": "462318",
+                        "name": "Linen"
+                      },
+                      {
+                        "id": "462316",
+                        "name": "Denim"
+                      },
+                      {
+                        "id": "34241288",
+                        "name": "Piquet"
+                      },
+                      {
+                        "id": "3726493",
+                        "name": "Viscose"
+                      },
+                      {
+                        "id": "1258198",
+                        "name": "Suede"
+                      },
+                      {
+                        "id": "84982094",
+                        "name": "Coated"
+                      },
+                      {
+                        "id": "6518971",
+                        "name": "Crepe"
+                      },
+                      {
+                        "id": "6336419",
+                        "name": "Crochet"
+                      },
+                      {
+                        "id": "3580424",
+                        "name": "Spandex"
+                      },
+                      {
+                        "id": "85684445",
+                        "name": "Knit"
+                      },
+                      {
+                        "id": "84982107",
+                        "name": "Fleece"
+                      },
+                      {
+                        "id": "433348",
+                        "name": "Lace"
+                      },
+                      {
+                        "id": "85686112",
+                        "name": "Knitted fabric"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Main material",
+                "ui_config": {
+                  "tooltip": "It is the raw material used to manufacture most of your product. This information is usually on the label of the garment.",
+                  "allow_custom_value": true,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "FAMILY",
+                    "id": "PACKAGE_LENGTH",
+                    "name": "Package length",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "catalog_listing_required",
+                      "variation_attribute",
+                      "required"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      },
+                      {
+                        "id": "ft",
+                        "name": "ft"
+                      },
+                      {
+                        "id": "m",
+                        "name": "m"
+                      },
+                      {
+                        "id": "mm",
+                        "name": "mm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "NUMBER_UNIT_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Package length",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": [
+                  {
+                    "id": "\"",
+                    "name": "\""
+                  },
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  },
+                  {
+                    "id": "ft",
+                    "name": "ft"
+                  },
+                  {
+                    "id": "m",
+                    "name": "m"
+                  },
+                  {
+                    "id": "mm",
+                    "name": "mm"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "g",
+                    "hierarchy": "FAMILY",
+                    "id": "PACKAGE_WEIGHT",
+                    "name": "Package weight",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "catalog_listing_required",
+                      "variation_attribute",
+                      "required"
+                    ],
+                    "units": [
+                      {
+                        "id": "g",
+                        "name": "g"
+                      },
+                      {
+                        "id": "kg",
+                        "name": "kg"
+                      },
+                      {
+                        "id": "lb",
+                        "name": "lb"
+                      },
+                      {
+                        "id": "mg",
+                        "name": "mg"
+                      },
+                      {
+                        "id": "oz",
+                        "name": "oz"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "NUMBER_UNIT_INPUT",
+                "default_unified_unit_id": "g",
+                "label": "Package weight",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": [
+                  {
+                    "id": "g",
+                    "name": "g"
+                  },
+                  {
+                    "id": "kg",
+                    "name": "kg"
+                  },
+                  {
+                    "id": "lb",
+                    "name": "lb"
+                  },
+                  {
+                    "id": "mg",
+                    "name": "mg"
+                  },
+                  {
+                    "id": "oz",
+                    "name": "oz"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "WITH_RECYCLED_MATERIALS",
+                    "name": "Recycled materials",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "With",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PRODUCT_IDENTIFIER",
+                    "id": "GTIN",
+                    "name": "Universal product code",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "multivalued",
+                      "used_hidden",
+                      "variation_attribute",
+                      "conditional_required",
+                      "validate"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "Universal product code",
+                "ui_config": {
+                  "hint": "It may be an EAN, UPC or another GTIN.",
+                  "tooltip": "How do I find it?\n\nIt is the number that identifies a product globally and has between 8 and 14 digits. Look for it on the packaging or label, next to the bar code. You must add a code for each variation. If you can not find it, you can ask the manufacturer or use a code search engine on the internet.",
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "EMPTY_GTIN_REASON",
+                    "name": "Empty GTIN reason",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "variation_attribute",
+                      "conditional_required"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "17055158",
+                        "name": "The product is a handcrafted piece"
+                      },
+                      {
+                        "id": "17055159",
+                        "name": "The product is a kit or pack"
+                      },
+                      {
+                        "id": "17055160",
+                        "name": "The product does not have registered code"
+                      },
+                      {
+                        "id": "17055161",
+                        "name": "Another reason"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Empty GTIN reason",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "VERTICAL_TAGS",
+                    "name": "Vertical tags",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string",
+                    "values": [
+                      {
+                        "id": "53559152",
+                        "name": "is_tom_brand"
+                      },
+                      {
+                        "id": "53559153",
+                        "name": "is_polos"
+                      },
+                      {
+                        "id": "53559154",
+                        "name": "is_social_brands"
+                      },
+                      {
+                        "id": "53559155",
+                        "name": "is_beauty_premium"
+                      },
+                      {
+                        "id": "53559156",
+                        "name": "has_dimensions_images"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Vertical tags",
+                "ui_config": {
+                  "allow_custom_value": true,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "WITH_VIRTUAL_TRY_ON",
+                    "name": "Virtual try on",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "With",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "IS_SUITABLE_FOR_LACTANTING_PEOPLE",
+                    "name": "Suitable for lactanting people",
+                    "relevance": 2,
+                    "tags": [
+                      "hidden"
+                    ],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "Is",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "RELEASE_SEASON",
+                    "name": "Release season",
+                    "relevance": 2,
+                    "tags": [
+                      "hidden"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "994283",
+                        "name": "Spring/Summer"
+                      },
+                      {
+                        "id": "994284",
+                        "name": "Autumn/Winter"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Release season",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "RELEASE_YEAR",
+                    "name": "Release year",
+                    "relevance": 2,
+                    "tags": [
+                      "hidden"
+                    ],
+                    "value_max_length": 18,
+                    "value_type": "number"
+                  }
+                ],
+                "component": "NUMBER_INPUT",
+                "label": "Release year",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "WITH_EMBROIDERY",
+                    "name": "Embroidery",
+                    "relevance": 2,
+                    "tags": [
+                      "hidden"
+                    ],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "With",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "WITH_POSITIVE_IMPACT",
+                    "name": "Positive impact",
+                    "relevance": 2,
+                    "tags": [
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "With",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PRODUCT_IDENTIFIER",
+                    "id": "MPN",
+                    "name": "MPN",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "multivalued",
+                      "variation_attribute"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "MPN",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "SIZE_COVERAGE",
+                    "name": "Size coverage",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "18587623",
+                        "name": "Limited coverage"
+                      },
+                      {
+                        "id": "18587624",
+                        "name": "Partial coverage"
+                      },
+                      {
+                        "id": "18587625",
+                        "name": "Balanced coverage"
+                      },
+                      {
+                        "id": "18587626",
+                        "name": "Extended coverage"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Size coverage",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "FILTRABLE_GENDER",
+                    "name": "Filtrable gender",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "18549360",
+                        "name": "Man"
+                      },
+                      {
+                        "id": "18549361",
+                        "name": "Woman"
+                      },
+                      {
+                        "id": "18549362",
+                        "name": "Girls"
+                      },
+                      {
+                        "id": "18549363",
+                        "name": "Boys"
+                      },
+                      {
+                        "id": "18549364",
+                        "name": "Babies"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Filtrable gender",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "FILTRABLE_SIZE",
+                    "name": "Filtrable size",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued",
+                      "variation_attribute"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "12917836",
+                        "name": "2XS"
+                      },
+                      {
+                        "id": "12917776",
+                        "name": "XS"
+                      },
+                      {
+                        "id": "12917796",
+                        "name": "S"
+                      },
+                      {
+                        "id": "12917795",
+                        "name": "M"
+                      },
+                      {
+                        "id": "12917787",
+                        "name": "XL"
+                      },
+                      {
+                        "id": "12917846",
+                        "name": "2XL"
+                      },
+                      {
+                        "id": "12917837",
+                        "name": "3XL"
+                      },
+                      {
+                        "id": "12917843",
+                        "name": "4XL"
+                      },
+                      {
+                        "id": "12917842",
+                        "name": "5XL"
+                      },
+                      {
+                        "id": "12917841",
+                        "name": "7XL"
+                      },
+                      {
+                        "id": "12917845",
+                        "name": "8XL"
+                      },
+                      {
+                        "id": "12917844",
+                        "name": "9XL"
+                      },
+                      {
+                        "id": "12917839",
+                        "name": "10XL"
+                      },
+                      {
+                        "id": "12917838",
+                        "name": "6XL"
+                      },
+                      {
+                        "id": "12917809",
+                        "name": "Premature"
+                      },
+                      {
+                        "id": "13735569",
+                        "name": "0-3 months"
+                      },
+                      {
+                        "id": "12917811",
+                        "name": "3-6 months"
+                      },
+                      {
+                        "id": "12917812",
+                        "name": "6-9 months"
+                      },
+                      {
+                        "id": "12917813",
+                        "name": "9-12 months"
+                      },
+                      {
+                        "id": "12917815",
+                        "name": "12-18 months"
+                      },
+                      {
+                        "id": "12917817",
+                        "name": "18-24 months"
+                      },
+                      {
+                        "id": "13735570",
+                        "name": "24-36 months"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Filtrable size",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "ITEM_CONDITION",
+                    "name": "Item condition",
+                    "relevance": 2,
+                    "tags": [
+                      "hidden"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "2230284",
+                        "name": "New"
+                      },
+                      {
+                        "id": "2230581",
+                        "name": "Used"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Item condition",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "IS_TOM_BRAND",
+                    "name": "TOM brand",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "Is",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "IS_EMERGING_BRAND",
+                    "name": "Emerging brand",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "Is",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "IS_HIGHLIGHT_BRAND",
+                    "name": "Highlight brand",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "Is",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "SELLER_SKU",
+                    "name": "SKU",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "variation_attribute"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "SKU",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "SELLER_PACKAGE_DATA_SOURCE",
+                    "name": "Seller package data source",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "Seller package data source",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "ITEM",
+                    "id": "SELLER_PACKAGE_WIDTH",
+                    "name": "Seller package width",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden"
+                    ],
+                    "units": [
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "NUMBER_UNIT_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Seller package width",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": [
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "ITEM",
+                    "id": "SELLER_PACKAGE_LENGTH",
+                    "name": "Seller package length",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden"
+                    ],
+                    "units": [
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "NUMBER_UNIT_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Seller package length",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": [
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "ITEM",
+                    "id": "SELLER_PACKAGE_HEIGHT",
+                    "name": "Seller package height",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden"
+                    ],
+                    "units": [
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "NUMBER_UNIT_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Seller package height",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": [
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "g",
+                    "hierarchy": "ITEM",
+                    "id": "SELLER_PACKAGE_WEIGHT",
+                    "name": "Seller package weight",
+                    "relevance": 1,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden"
+                    ],
+                    "units": [
+                      {
+                        "id": "g",
+                        "name": "g"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "NUMBER_UNIT_INPUT",
+                "default_unified_unit_id": "g",
+                "label": "Seller package weight",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": [
+                  {
+                    "id": "g",
+                    "name": "g"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "HAZMAT_TRANSPORTABILITY",
+                    "name": "Hazmat transportability",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "13414677",
+                        "name": "Excepted"
+                      },
+                      {
+                        "id": "13414678",
+                        "name": "Limited"
+                      },
+                      {
+                        "id": "13414679",
+                        "name": "Exceeded"
+                      },
+                      {
+                        "id": "13414680",
+                        "name": "Indeterminate"
+                      },
+                      {
+                        "id": "75989961",
+                        "name": "Noticed"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Hazmat transportability",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "IS_KIT",
+                    "name": "Kit",
+                    "relevance": 2,
+                    "tags": [
+                      "hidden"
+                    ],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "Is",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "DESCRIPTIVE_TAGS",
+                    "name": "Descriptive tags",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "Descriptive tags",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "PRODUCT_CHEMICAL_FEATURES",
+                    "name": "Product chemical features",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "7651070",
+                        "name": "Flammable"
+                      },
+                      {
+                        "id": "7651071",
+                        "name": "Aerosol"
+                      },
+                      {
+                        "id": "7651072",
+                        "name": "Oxidizer"
+                      },
+                      {
+                        "id": "7651073",
+                        "name": "Corrosive"
+                      },
+                      {
+                        "id": "7651074",
+                        "name": "Explosive"
+                      },
+                      {
+                        "id": "7651075",
+                        "name": "Toxic or infectious"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Product chemical features",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "FOODS_AND_DRINKS",
+                    "name": "Foods and drinks",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "7575926",
+                        "name": "For humans"
+                      },
+                      {
+                        "id": "7575927",
+                        "name": "For animals"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Foods and drinks",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "MEDICINES",
+                    "name": "Medicines",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "7575930",
+                        "name": "For humans with a medical prescription"
+                      },
+                      {
+                        "id": "7575931",
+                        "name": "For humans without a medical prescription"
+                      },
+                      {
+                        "id": "7575932",
+                        "name": "For animals with a medical prescription"
+                      },
+                      {
+                        "id": "7575933",
+                        "name": "For animals without a medical prescription"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Medicines",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "BATTERIES_FEATURES",
+                    "name": "Batteries features",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "7575934",
+                        "name": "Stand-alone lithium (loose or isolated)"
+                      },
+                      {
+                        "id": "7575935",
+                        "name": "Lithium installed"
+                      },
+                      {
+                        "id": "7575936",
+                        "name": "For cars (lead-acid)"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Batteries features",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "SHIPMENT_PACKING",
+                    "name": "Shipment packing",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "7435891",
+                        "name": "Bag"
+                      },
+                      {
+                        "id": "7435892",
+                        "name": "Box"
+                      },
+                      {
+                        "id": "7575937",
+                        "name": "Envelope"
+                      },
+                      {
+                        "id": "7575939",
+                        "name": "Self-shipping"
+                      },
+                      {
+                        "id": "27037932",
+                        "name": "EXB"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Shipment packing",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "ADDITIONAL_INFO_REQUIRED",
+                    "name": "Additional info required",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "7435893",
+                        "name": "Has IMEI"
+                      },
+                      {
+                        "id": "7435894",
+                        "name": "Has serial number"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Additional info required",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "EXCLUDED_PLATFORMS",
+                    "name": "Excluded platforms",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "9936777",
+                        "name": "Android"
+                      },
+                      {
+                        "id": "9936778",
+                        "name": "iOS"
+                      },
+                      {
+                        "id": "9936779",
+                        "name": "Desktop"
+                      },
+                      {
+                        "id": "9936780",
+                        "name": "Mobile"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Excluded platforms",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "IS_SUITABLE_FOR_SHIPMENT",
+                    "name": "Suitable for shipment",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "Is",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "PRODUCT_DATA_SOURCE",
+                    "name": "Product data source",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "Product data source",
+                "ui_config": {
+                  "tooltip": "Indicate the country of origin of the product.",
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "LIMITED_MARKETPLACE_VISIBILITY_REASONS",
+                    "name": "Limited Marketplace visibility reasons",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string",
+                    "values": [
+                      {
+                        "id": "24219544",
+                        "name": "Pharma"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Limited Marketplace visibility reasons",
+                "ui_config": {
+                  "allow_custom_value": true,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "HAS_COMPATIBILITIES",
+                    "name": "Has compatibilities",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "Has compatibilities",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "CATALOG_TITLE",
+                    "name": "Catalog title",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "Catalog title",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "SEARCH_ENHANCEMENT_FIELDS",
+                    "name": "Search enhancement fields",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "Search enhancement fields",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "PRODUCT_FEATURES",
+                    "name": "Product features",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued"
+                    ],
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "7435885",
+                        "name": "Contains liquid"
+                      },
+                      {
+                        "id": "7435883",
+                        "name": "Fragile"
+                      },
+                      {
+                        "id": "7435888",
+                        "name": "With expiration"
+                      },
+                      {
+                        "id": "8847339",
+                        "name": "Without expiration"
+                      },
+                      {
+                        "id": "7575925",
+                        "name": "Health device"
+                      },
+                      {
+                        "id": "7575917",
+                        "name": "Disinfectant and sanitizer"
+                      },
+                      {
+                        "id": "7575924",
+                        "name": "MAPA"
+                      },
+                      {
+                        "id": "7575923",
+                        "name": "Health and correlates"
+                      },
+                      {
+                        "id": "8721108",
+                        "name": "Voluminous"
+                      },
+                      {
+                        "id": "10490116",
+                        "name": "Unflyable"
+                      },
+                      {
+                        "id": "12928414",
+                        "name": "No rotatable"
+                      },
+                      {
+                        "id": "41722098",
+                        "name": "Folding"
+                      },
+                      {
+                        "id": "52092586",
+                        "name": "Magnetic"
+                      },
+                      {
+                        "id": "52233302",
+                        "name": "Can roll"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Product features",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "IS_NEW_OFFER",
+                    "name": "New offer",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "Is",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "SYI_PYMES_ID",
+                    "name": "syi pymes id",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "syi pymes id",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "IS_FLAMMABLE",
+                    "name": "Flammable",
+                    "relevance": 2,
+                    "tags": [
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_type": "boolean",
+                    "values": [
+                      {
+                        "id": "242084",
+                        "metadata": {
+                          "value": false
+                        },
+                        "name": "No"
+                      },
+                      {
+                        "id": "242085",
+                        "metadata": {
+                          "value": true
+                        },
+                        "name": "Yes"
+                      }
+                    ]
+                  }
+                ],
+                "component": "BOOLEAN_INPUT",
+                "label": "Is",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": true
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "PACKAGE_DATA_SOURCE",
+                    "name": "Package data source",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "Package data source",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              }
+            ],
+            "id": "OTHER",
+            "label": "Otros",
+            "relevance": 1,
+            "section": "SPECIFICATIONS",
+            "ui_config": {}
+          }
+        ]
+      },
+      "output": {
+        "groups": [
+          {
+            "components": [
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PARENT_PK",
+                    "id": "BRAND",
+                    "name": "Brand",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Brand",
+                "ui_config": {
+                  "hint": "Indicate the actual brand of the product or 'Generic' if it has no brand."
+                }
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PARENT_PK",
+                    "id": "LINE",
+                    "name": "Line",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Line",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PARENT_PK",
+                    "id": "MODEL",
+                    "name": "Model",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Model",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PARENT_PK",
+                    "id": "GENDER",
+                    "name": "Gender",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "list"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Gender",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PARENT_PK",
+                    "id": "AGE_GROUP",
+                    "name": "Age group",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "list"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Age group",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PARENT_PK",
+                    "id": "GARMENT_TYPE",
+                    "name": "Garment type",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "list"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Garment type",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_PK",
+                    "id": "COLOR",
+                    "name": "Color",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "COLOR_OUTPUT",
+                "label": "Color",
+                "ui_config": {
+                  "connector": ""
+                }
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_PK",
+                    "id": "PRINT_DESIGN",
+                    "name": "Print design",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Print design",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_PK",
+                    "id": "SIZE",
+                    "name": "Size",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Size",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_PK",
+                    "id": "FABRIC_DESIGN",
+                    "name": "Fabric design",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Fabric design",
+                "ui_config": {}
+              }
+            ],
+            "id": "MAIN",
+            "label": "Características principales",
+            "relevance": 1,
+            "section": "SPECIFICATIONS",
+            "ui_config": {}
+          },
+          {
+            "components": [
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_PK",
+                    "id": "SALE_FORMAT",
+                    "name": "Sale format",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "list"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Sale format",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_PK",
+                    "id": "UNITS_PER_PACK",
+                    "name": "Shirts number",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "number"
+                  }
+                ],
+                "component": "NUMBER_OUTPUT",
+                "label": "Shirts number",
+                "ui_config": {}
+              }
+            ],
+            "id": "SALES_CHARACTERISTICS",
+            "label": "Sales characteristics",
+            "relevance": 1,
+            "section": "SPECIFICATIONS",
+            "ui_config": {}
+          },
+          {
+            "components": [
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "DETAILED_MODEL",
+                    "name": "Detailed model",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Detailed model",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "IS_SPORTIVE",
+                    "name": "Sportive",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "boolean"
+                  }
+                ],
+                "component": "BOOLEAN_OUTPUT",
+                "label": "Is",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "RECOMMENDED_USES",
+                    "name": "Recommended uses",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Recommended uses",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "FABRIC_TYPE",
+                    "name": "Fabric type",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Fabric type",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "COMPOSITION",
+                    "name": "Composition",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Composition",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "SLEEVE_TYPE",
+                    "name": "Sleeve type",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "list"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Sleeve type",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "T_SHIRT_COLLAR_TYPE",
+                    "name": "T-shirt collar type",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "list"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "T-shirt collar type",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "WEDGE_SHAPE",
+                    "name": "Wedge shape",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "list"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Wedge shape",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "IS_SUITABLE_FOR_PREGNACY",
+                    "name": "Suitable for pregnacy",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "boolean"
+                  }
+                ],
+                "component": "BOOLEAN_OUTPUT",
+                "label": "Is",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "MAIN_MATERIAL",
+                    "name": "Main material",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Main material",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "WITH_RECYCLED_MATERIALS",
+                    "name": "Recycled materials",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "boolean"
+                  }
+                ],
+                "component": "BOOLEAN_OUTPUT",
+                "label": "With",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "INVOICE_PRODUCT_NAME",
+                    "name": "Invoice product name",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Invoice product name",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "SAT_KEY",
+                    "name": "Sat key",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Sat key",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "MEASURE_UNIT_KEY",
+                    "name": "Measure unit key",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Measure unit key",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "MEASURE_UNIT_DESCRIPTION",
+                    "name": "Measure unit description",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Measure unit description",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "IVA_FOR_RESALE",
+                    "name": "IVA for resale",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "list"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "IVA for resale",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "IEPS",
+                    "name": "IEPS",
+                    "relevance": 1,
+                    "tags": [],
+                    "value_type": "list"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "IEPS",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "IS_SUITABLE_FOR_LACTANTING_PEOPLE",
+                    "name": "Suitable for lactanting people",
+                    "relevance": 2,
+                    "tags": [],
+                    "value_type": "boolean"
+                  }
+                ],
+                "component": "BOOLEAN_OUTPUT",
+                "label": "Is",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "RELEASE_SEASON",
+                    "name": "Release season",
+                    "relevance": 2,
+                    "tags": [],
+                    "value_type": "list"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Release season",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "RELEASE_YEAR",
+                    "name": "Release year",
+                    "relevance": 2,
+                    "tags": [],
+                    "value_type": "number"
+                  }
+                ],
+                "component": "NUMBER_OUTPUT",
+                "label": "Release year",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "WITH_EMBROIDERY",
+                    "name": "Embroidery",
+                    "relevance": 2,
+                    "tags": [],
+                    "value_type": "boolean"
+                  }
+                ],
+                "component": "BOOLEAN_OUTPUT",
+                "label": "With",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "WITH_POSITIVE_IMPACT",
+                    "name": "Positive impact",
+                    "relevance": 2,
+                    "tags": [],
+                    "value_type": "boolean"
+                  }
+                ],
+                "component": "BOOLEAN_OUTPUT",
+                "label": "With",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "ITEM_CONDITION",
+                    "name": "Item condition",
+                    "relevance": 2,
+                    "tags": [],
+                    "value_type": "list"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Item condition",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "IS_KIT",
+                    "name": "Kit",
+                    "relevance": 2,
+                    "tags": [],
+                    "value_type": "boolean"
+                  }
+                ],
+                "component": "BOOLEAN_OUTPUT",
+                "label": "Is",
+                "ui_config": {}
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "FAMILY",
+                    "id": "IS_FLAMMABLE",
+                    "name": "Flammable",
+                    "relevance": 2,
+                    "tags": [],
+                    "value_type": "boolean"
+                  }
+                ],
+                "component": "BOOLEAN_OUTPUT",
+                "label": "Is",
+                "ui_config": {}
+              }
+            ],
+            "id": "OTHER",
+            "label": "Otros",
+            "relevance": 1,
+            "section": "SPECIFICATIONS",
+            "ui_config": {}
+          }
+        ],
+        "main_title": "Características Principales"
+      }
+    },
+    "grids": {}
+  },
+  "max_rows": null,
+  "errors": [
+    "官方未返回尺码行属性，当前无法上传；请检查商品域及筛选属性"
+  ]
+}

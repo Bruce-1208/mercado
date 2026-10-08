@@ -120,7 +120,7 @@
 
   function assignedJson(scriptText) {
     const text = String(scriptText || "");
-    const marker = /(?:__PRELOADED_STATE__|__INITIAL_STATE__|__NEXT_DATA__|__APOLLO_STATE__|preloadedState)\s*[:=]\s*/i.exec(text);
+    const marker = /(?:__PRELOADED_STATE__|__INITIAL_STATE__|__NEXT_DATA__|__APOLLO_STATE__|preloadedState|_n\.ctx\.r)\s*[:=]\s*/i.exec(text);
     if (!marker) return null;
     const start = text.indexOf("{", marker.index + marker[0].length);
     if (start < 0) return null;
@@ -219,7 +219,11 @@
 
   function extractItemId(doc, pageUrl, product) {
     const url = new URL(pageUrl);
-    const catalogId = normalizeItemId(url.pathname.match(/\/(?:p|up)\/((?:ML[A-Z]|CBT)-?\d+)/i)?.[1]);
+    // User-product URLs use MLMU/MLBU/etc. These are not listing IDs and
+    // must still enter selected-offer extraction even though normalizeItemId
+    // deliberately rejects them.
+    const catalogMatch = url.pathname.match(/\/(?:p|up)\/((?:ML[A-Z]|MCO|CBT)U?-?\d+)(?:\/|$)/i);
+    const catalogId = normalizeItemId(catalogMatch?.[1]);
     const valid = value => {
       const id = normalizeItemId(value);
       return id && id !== catalogId ? id : "";
@@ -228,9 +232,11 @@
       const id = valid(url.searchParams.get(key));
       if (id) return id;
     }
+    const filteredId = valid((url.searchParams.get("pdp_filters") || "").match(/(?:^|\|)item_id:([^|]+)/i)?.[1]);
+    if (filteredId) return filteredId;
     // The path of a catalog page identifies a product, not a seller listing.
     // Only use selected-offer facts here, never recommendation-card data IDs.
-    if (catalogId) {
+    if (catalogMatch) {
       const candidates = [product?.sku, product?.productID,
         meta(doc, 'meta[property="product:retailer_item_id"]'),
         meta(doc, 'meta[itemprop="sku"]')];
@@ -248,16 +254,22 @@
       // Some catalog layouts put the selected offer only in hydration JSON.
       // Read explicit page/buy-box fields; do not search arbitrary nested IDs.
       for (const script of doc.querySelectorAll('script[type="application/json"], script#__PRELOADED_STATE__, script')) {
-        let raw = script.textContent || "";
-        const assignment = raw.match(/^(?:\s*window\.)?\s*__PRELOADED_STATE__\s*=\s*([\s\S]*)/);
-        if (assignment) raw = assignment[1].replace(/;\s*$/, "");
-        else if (script.type !== "application/json" && script.id !== "__PRELOADED_STATE__") continue;
-        let state;
-        try { state = JSON.parse(raw); } catch (_) { continue; }
-        for (const page of [state, state?.initialState, state?.pageState?.initialState]) {
+        const raw = script.textContent || "";
+        if (raw.length > 5_000_000) continue;
+        let state = null;
+        if (script.type === "application/json" || script.id === "__PRELOADED_STATE__") {
+          try { state = JSON.parse(raw); } catch (_) {}
+        }
+        // Nordic emits `_n.ctx.r={...};` with trailing bootstrap code.
+        // Parse only the balanced JSON value, never execute page scripts.
+        if (!state) state = assignedJson(raw);
+        for (const page of [state, state?.initialState, state?.pageState?.initialState,
+          state?.appProps?.pageProps?.initialState]) {
           if (!page || typeof page !== "object") continue;
           candidates.push(page.item_id, page.item?.id,
             page.components?.buy_box?.item_id, page.components?.buy_box?.item?.id,
+            page.components?.main_actions?.form?.item_id,
+            page.components?.track?.melidata_event?.event_data?.item_id,
             page.track?.melidata?.event_data?.item_id);
         }
       }

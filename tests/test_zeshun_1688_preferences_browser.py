@@ -20,9 +20,9 @@ def test_page_reminder_category_restore_save_and_clear(products_browser):
       };
     }""")
     source = Path('browser_extension/zeshun_collector/content-1688.js').read_text()
-    start = source.index('  async function mountCollectionPreferences()')
+    start = source.index('  async function sendRuntimeMessage(')
     end = source.index('  async function collectFromPage(', start)
-    page.add_script_tag(content=source[start:end])
+    page.add_script_tag(content='let preferencesFocusListener = null;\n' + source[start:end])
     page.evaluate('mountCollectionPreferences()')
     panel = page.locator('.zeshun-1688-preferences')
     assert '未登录' in panel.inner_text()

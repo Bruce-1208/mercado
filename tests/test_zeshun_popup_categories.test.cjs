@@ -82,7 +82,7 @@ async function createPopup({saved = {}, authenticated = true, platform = 'mercad
     }
   };
   const context = vm.createContext({
-    chrome, document: {getElementById: node, createElement: () => new Element('span')},
+    window: {addEventListener() {}}, chrome, document: {getElementById: node, createElement: () => new Element('span')},
     Option, URL, Date, setTimeout() { return 1; }, clearTimeout() {}
   });
   vm.runInContext(popupSource, context);

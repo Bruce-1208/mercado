@@ -815,7 +815,18 @@ def test_mysql_existing_product_reader_returns_only_found_ids(monkeypatch):
             captured["params"] = params
 
         def fetchall(self):
-            return [{"产品编号": "801623245"}]
+            complete = {
+                "zying_net_proceeds_usd": 0, "weight_g": 200,
+                "package_length_cm": 10, "package_width_cm": 5,
+                "package_height_cm": 3, "plugin_snapshot": {"salesperson": "业务甲"},
+            }
+            return [
+                {"产品编号": "801623245", "上架快照": json.dumps(complete)},
+                {"产品编号": "801623017", "上架快照": json.dumps({**complete, "zying_net_proceeds_usd": None})},
+                {"产品编号": "no-salesperson", "上架快照": json.dumps({**complete, "plugin_snapshot": {}})},
+                {"产品编号": "no-size", "上架快照": json.dumps({**complete, "package_height_cm": None})},
+                {"产品编号": "invalid", "上架快照": "invalid"},
+            ]
 
     class Connection:
         def cursor(self):

@@ -60,7 +60,7 @@ def normalize_runtime_role(value: object) -> str:
 
 
 def _parse_runtime_arguments(argv: Sequence[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(add_help=False)
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     parser.add_argument("--role", "--workbench-role", dest="role")
     parser.add_argument("--runtime-config", dest="config_path")
     parser.add_argument("--api-base-url", dest="api_base_url")

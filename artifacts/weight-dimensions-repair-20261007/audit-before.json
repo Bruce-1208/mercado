@@ -1,0 +1,763 @@
+{
+  "row_count": 27003,
+  "states": [
+    [
+      [
+        "",
+        "",
+        ""
+      ],
+      26716
+    ],
+    [
+      [
+        "失败",
+        "",
+        "失败"
+      ],
+      93
+    ],
+    [
+      [
+        "执行中",
+        "",
+        "执行中"
+      ],
+      76
+    ],
+    [
+      [
+        "失败",
+        "",
+        "执行中"
+      ],
+      38
+    ],
+    [
+      [
+        "失败",
+        "",
+        "部分完成"
+      ],
+      36
+    ],
+    [
+      [
+        "失败",
+        "失败",
+        "失败"
+      ],
+      29
+    ],
+    [
+      [
+        "",
+        "失败",
+        "失败"
+      ],
+      7
+    ],
+    [
+      [
+        "",
+        "",
+        "执行中"
+      ],
+      2
+    ],
+    [
+      [
+        "成功",
+        "",
+        "完成"
+      ],
+      2
+    ],
+    [
+      [
+        "失败",
+        "执行中",
+        "执行中"
+      ],
+      1
+    ],
+    [
+      [
+        "",
+        "执行中",
+        "执行中"
+      ],
+      1
+    ],
+    [
+      [
+        "成功",
+        "失败",
+        "失败"
+      ],
+      1
+    ],
+    [
+      [
+        "",
+        "成功",
+        "智赢产品已更新"
+      ],
+      1
+    ]
+  ],
+  "stage_counts": [
+    [
+      [
+        "美客多链接",
+        "进行中"
+      ],
+      5825
+    ],
+    [
+      [
+        "美客多链接",
+        "失败"
+      ],
+      3285
+    ],
+    [
+      [
+        "美客多链接",
+        "成功"
+      ],
+      2540
+    ],
+    [
+      [
+        "净收益",
+        "跳过"
+      ],
+      714
+    ],
+    [
+      [
+        "同名链接",
+        "进行中"
+      ],
+      350
+    ],
+    [
+      [
+        "同名链接",
+        "失败"
+      ],
+      216
+    ],
+    [
+      [
+        "任务",
+        "失败"
+      ],
+      100
+    ],
+    [
+      [
+        "净收益",
+        "进行中"
+      ],
+      98
+    ],
+    [
+      [
+        "智赢插件",
+        "进行中"
+      ],
+      56
+    ],
+    [
+      [
+        "智赢插件",
+        "失败"
+      ],
+      51
+    ],
+    [
+      [
+        "净收益",
+        "成功"
+      ],
+      48
+    ],
+    [
+      [
+        "智赢插件",
+        "INFO"
+      ],
+      6
+    ],
+    [
+      [
+        "同名链接",
+        "跳过"
+      ],
+      5
+    ],
+    [
+      [
+        "同名链接",
+        "成功"
+      ],
+      3
+    ],
+    [
+      [
+        "修复验证",
+        "失败"
+      ],
+      2
+    ],
+    [
+      [
+        "修复验证",
+        "成功"
+      ],
+      2
+    ],
+    [
+      [
+        "智赢插件",
+        "记录"
+      ],
+      1
+    ],
+    [
+      [
+        "智赢插件",
+        "成功"
+      ],
+      1
+    ]
+  ],
+  "failure_causes": [
+    [
+      [
+        "美客多链接",
+        "美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\""
+      ],
+      2777
+    ],
+    [
+      [
+        "美客多链接",
+        "美客多链接重量尺寸更新失败：GET /global/items/ITEM 失败 (405): <html>\r\n<head><title>405 Not Allowed</title></head>\r\n<body>\r\n<center><h1>405 Not Allowed</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n"
+      ],
+      181
+    ],
+    [
+      [
+        "美客多链接",
+        "美客多链接重量尺寸更新失败：美客多要求包装长宽高至少 3 厘米"
+      ],
+      124
+    ],
+    [
+      [
+        "美客多链接",
+        "美客多链接重量尺寸更新失败：Cannot update item ITEM；item.attributes.not_modifiable: attributes is not modifiable."
+      ],
+      100
+    ],
+    [
+      [
+        "任务",
+        "重量尺寸更新异常结束：'str' object has no attribute 'get'"
+      ],
+      65
+    ],
+    [
+      [
+        "美客多链接",
+        "美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Cannot update item ITEM\",\"error\":\"validation_error\",\"status\":400,\"cause\":[{\"department\":\"items\",\"cause_id\":247,\"type\":\"ERROR\",\"code\":\"item.attributes.not_modifiable\",\"references\":[\"attrib"
+      ],
+      62
+    ],
+    [
+      [
+        "同名链接",
+        "同名链接查询失败：店铺缺少 Access Token，请重新授权"
+      ],
+      48
+    ],
+    [
+      [
+        "智赢插件",
+        "智赢产品更新失败：<urlopen error [Errno 61] Connection refused>"
+      ],
+      38
+    ],
+    [
+      [
+        "同名链接",
+        "店铺缺少 Access Token，请重新授权"
+      ],
+      37
+    ],
+    [
+      [
+        "同名链接",
+        "缺少 Global 商品关联"
+      ],
+      36
+    ],
+    [
+      [
+        "任务",
+        "重量尺寸更新异常结束：cannot schedule new futures after interpreter shutdown"
+      ],
+      35
+    ],
+    [
+      [
+        "同名链接",
+        "同名链接查询失败：同名链接 ITEM 缺少 Global 商品关联"
+      ],
+      27
+    ],
+    [
+      [
+        "同名链接",
+        "该店铺已关闭，任何业务操作均不会执行"
+      ],
+      22
+    ],
+    [
+      [
+        "同名链接",
+        "同名链接查询失败：该店铺已关闭，任何业务操作均不会执行"
+      ],
+      20
+    ],
+    [
+      [
+        "美客多链接",
+        "美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Cannot update item ITEM\",\"error\":\"validation_error\",\"status\":400,\"cause\":[{\"department\":\"items\",\"cause_id\":146,\"type\":\"ERROR\",\"code\":\"item.attributes.invalid\",\"references\":[\"item.attribut"
+      ],
+      11
+    ],
+    [
+      [
+        "智赢插件",
+        "智赢产品更新失败：无法唯一定位智赢产品编号搜索框，请配置 erp_product_id_search（当前匹配 0 个）；已暂停，待人工核对页面后继续"
+      ],
+      11
+    ],
+    [
+      [
+        "美客多链接",
+        "美客多链接重量尺寸更新失败：提交后回读尚未确认重量尺寸生效：PACKAGE_WEIGHT, PACKAGE_LENGTH, PACKAGE_WIDTH, PACKAGE_HEIGHT"
+      ],
+      7
+    ],
+    [
+      [
+        "美客多链接",
+        "美客多链接重量尺寸更新失败：Cannot update item ITEM；item.attributes.invalid: Same attributes are used in more than of item.attributes, variation.attribute_combinations and variation.attributes"
+      ],
+      4
+    ],
+    [
+      [
+        "同名链接",
+        "同名链接更新成功 0/11 条；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\"；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-"
+      ],
+      2
+    ],
+    [
+      [
+        "美客多链接",
+        "链接 MCO2214395003：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\""
+      ],
+      2
+    ],
+    [
+      [
+        "美客多链接",
+        "链接 MCO2187863439：美客多链接重量尺寸更新失败：美客多要求包装长宽高至少 3 厘米"
+      ],
+      2
+    ],
+    [
+      [
+        "美客多链接",
+        "链接 MCO4230325036：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\""
+      ],
+      2
+    ],
+    [
+      [
+        "美客多链接",
+        "链接 MCO4168239418：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\""
+      ],
+      2
+    ],
+    [
+      [
+        "美客多链接",
+        "链接 MCO2068128683：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\""
+      ],
+      2
+    ],
+    [
+      [
+        "美客多链接",
+        "链接 MCO4244504384：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\""
+      ],
+      2
+    ],
+    [
+      [
+        "同名链接",
+        "同名链接查询失败：同名链接 MCO2108977073 缺少 Global 商品关联"
+      ],
+      1
+    ],
+    [
+      [
+        "美客多链接",
+        "链接 MCO4458202718：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\""
+      ],
+      1
+    ],
+    [
+      [
+        "美客多链接",
+        "链接 MCO2144701991：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\""
+      ],
+      1
+    ],
+    [
+      [
+        "同名链接",
+        "同名链接更新成功 0/5 条；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\"；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-v"
+      ],
+      1
+    ],
+    [
+      [
+        "修复验证",
+        "PUT /global/user-products/CBTU5111799579 失败 (404): {\"error\": \"resource not found\", \"message\":\"Si quieres conocer los recursos de la API que se encuentran disponibles visita el Sitio de Desarrolladores de MercadoLibre (http://developers.mercadolibre.com)\"}"
+      ],
+      1
+    ],
+    [
+      [
+        "同名链接",
+        "同名链接更新成功 2/14 条；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Cannot update item ITEM\",\"error\":\"validation_error\",\"status\":400,\"cause\":[{\"department\":\"items\",\"cause_id\":247,\"type\":\"ERROR\",\"code\":\"item.attributes.not_modifiable\",\"references\":[\"attrib；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Cannot update item ITEM\",\"error\":\"validation_error\",\"status\":400,\"cause\":[{\"department\":\"items\",\"cause_id\":247,\"ty"
+      ],
+      1
+    ],
+    [
+      [
+        "修复验证",
+        "Cannot update item ITEM；item.attributes.not_modifiable: attributes is not modifiable."
+      ],
+      1
+    ],
+    [
+      [
+        "同名链接",
+        "同名链接更新成功 0/4 条；ITEM：美客多链接重量尺寸更新失败：美客多要求包装长宽高至少 3 厘米；ITEM：美客多链接重量尺寸更新失败：美客多要求包装长宽高至少 3 厘米；ITEM：美客多链接重量尺寸更新失败：美客多要求包装长宽高至少 3 厘米；ITEM：美客多链接重量尺寸更新失败：美客多要求包装长宽高至少 3 厘米"
+      ],
+      1
+    ],
+    [
+      [
+        "同名链接",
+        "同名链接更新成功 6/37 条；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\"；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-"
+      ],
+      1
+    ],
+    [
+      [
+        "同名链接",
+        "同名链接更新成功 0/1 条；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Cannot update item ITEM\",\"error\":\"validation_error\",\"status\":400,\"cause\":[{\"department\":\"items\",\"cause_id\":247,\"type\":\"ERROR\",\"code\":\"item.attributes.not_modifiable\",\"references\":[\"attrib"
+      ],
+      1
+    ],
+    [
+      [
+        "同名链接",
+        "同名链接更新成功 0/20 条；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\"；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-"
+      ],
+      1
+    ],
+    [
+      [
+        "同名链接",
+        "同名链接更新成功 0/78 条；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\"；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-"
+      ],
+      1
+    ],
+    [
+      [
+        "同名链接",
+        "同名链接更新成功 4/22 条；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\"；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-"
+      ],
+      1
+    ],
+    [
+      [
+        "同名链接",
+        "同名链接更新成功 1/6 条；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\"；ITEM：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-v"
+      ],
+      1
+    ],
+    [
+      [
+        "美客多链接",
+        "链接 MCO4179198810：美客多链接重量尺寸更新失败：PUT /global/items/ITEM 失败 (400): {\"message\":\"Error calling Global Update API\",\"error\":\"global_update_error\",\"status\":400,\"cause\":[{\"department\":\"cbt-item-validation\",\"cause_id\":5125,\"type\":\"ERROR\",\"code\":\"item.dimensions\",\"references\":null,\""
+      ],
+      1
+    ]
+  ],
+  "failure_batches": [
+    [
+      [
+        "2026-09-28",
+        ""
+      ],
+      3055
+    ],
+    [
+      [
+        "2026-09-28",
+        "bb003d3108de47bfacfacd4bde465707"
+      ],
+      245
+    ],
+    [
+      [
+        "2026-09-27",
+        ""
+      ],
+      182
+    ],
+    [
+      [
+        "2026-09-30",
+        ""
+      ],
+      64
+    ],
+    [
+      [
+        "2026-10-07",
+        "12a73c693cdf4e7ba5622469e9f9c019"
+      ],
+      47
+    ],
+    [
+      [
+        "2026-09-30",
+        "2aa8e822c93e4080bc8f4dbf1422d064"
+      ],
+      38
+    ],
+    [
+      [
+        "2026-10-07",
+        "a5a7b1d250e54ec59a19f6a5168fa01d"
+      ],
+      9
+    ],
+    [
+      [
+        "2026-10-01",
+        "a237323f85dd48d88c5c806ab17f07a7"
+      ],
+      5
+    ],
+    [
+      [
+        "2026-10-01",
+        "8b485450d0864f30993dc7c4fb0a6fb6"
+      ],
+      5
+    ],
+    [
+      [
+        "2026-10-01",
+        "58d6c598ea5a404e98f3acb35c79901c"
+      ],
+      2
+    ],
+    [
+      [
+        "2026-10-02",
+        "dfdaabc94a104e0193bece2b8b89deb8"
+      ],
+      1
+    ],
+    [
+      [
+        "2026-09-30",
+        "f0f55cc1a3df4c368656e227612d9cda"
+      ],
+      1
+    ]
+  ],
+  "latest_failed_records": [
+    {
+      "order": "2000012273475606",
+      "updated": "2026-10-07 19:12:48",
+      "status": "部分完成",
+      "error": "美客多链接重量尺寸更新失败：GET /global/items/CBT2136891670 失败 (405): <html>\r\n<head><title>405 Not Allowed</title></head>\r\n<body>\r\n<center><h1>405 Not Allowed</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n",
+      "latest": [
+        {
+          "time": "2026-09-27T19:55:52",
+          "stage": "美客多链接",
+          "status": "进行中",
+          "message": "正在更新 Global 商品 CBT2136891670；采用最新成功订单 2000012273475606（2025-07-13 01:53:23）的重量 408g；官方未提供尺寸，仅更新重量"
+        },
+        {
+          "time": "2026-09-27T19:55:52",
+          "stage": "美客多链接",
+          "status": "失败",
+          "message": "美客多链接重量尺寸更新失败：GET /global/items/CBT2136891670 失败 (405): <html>\r\n<head><title>405 Not Allowed</title></head>\r\n<body>\r\n<center><h1>405 Not Allowed</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n"
+        },
+        {
+          "time": "2026-09-27T19:55:57",
+          "stage": "净收益",
+          "status": "跳过",
+          "message": "美客多链接重量尺寸未更新成功，按执行顺序跳过净收益重提"
+        }
+      ]
+    },
+    {
+      "order": "2000008429132887",
+      "updated": "2026-10-07 19:12:48",
+      "status": "部分完成",
+      "error": "美客多链接重量尺寸更新失败：GET /global/items/CBT2006291452 失败 (405): <html>\r\n<head><title>405 Not Allowed</title></head>\r\n<body>\r\n<center><h1>405 Not Allowed</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n",
+      "latest": [
+        {
+          "time": "2026-09-27T19:55:52",
+          "stage": "美客多链接",
+          "status": "进行中",
+          "message": "正在更新 Global 商品 CBT2006291452；采用最新成功订单 2000008429132887（2025-07-08 05:53:16）的重量 336g；官方未提供尺寸，仅更新重量"
+        },
+        {
+          "time": "2026-09-27T19:55:54",
+          "stage": "美客多链接",
+          "status": "失败",
+          "message": "美客多链接重量尺寸更新失败：GET /global/items/CBT2006291452 失败 (405): <html>\r\n<head><title>405 Not Allowed</title></head>\r\n<body>\r\n<center><h1>405 Not Allowed</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n"
+        },
+        {
+          "time": "2026-09-27T19:55:57",
+          "stage": "净收益",
+          "status": "跳过",
+          "message": "美客多链接重量尺寸未更新成功，按执行顺序跳过净收益重提"
+        }
+      ]
+    },
+    {
+      "order": "2000012214880566",
+      "updated": "2026-10-07 19:12:48",
+      "status": "部分完成",
+      "error": "美客多链接重量尺寸更新失败：GET /global/items/CBT2113140831 失败 (405): <html>\r\n<head><title>405 Not Allowed</title></head>\r\n<body>\r\n<center><h1>405 Not Allowed</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n",
+      "latest": [
+        {
+          "time": "2026-09-27T19:55:52",
+          "stage": "美客多链接",
+          "status": "进行中",
+          "message": "正在更新 Global 商品 CBT2113140831；采用最新成功订单 2000012214880566（2025-07-08 05:43:12）的重量 740g；官方未提供尺寸，仅更新重量"
+        },
+        {
+          "time": "2026-09-27T19:55:52",
+          "stage": "美客多链接",
+          "status": "失败",
+          "message": "美客多链接重量尺寸更新失败：GET /global/items/CBT2113140831 失败 (405): <html>\r\n<head><title>405 Not Allowed</title></head>\r\n<body>\r\n<center><h1>405 Not Allowed</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n"
+        },
+        {
+          "time": "2026-09-27T19:55:57",
+          "stage": "净收益",
+          "status": "跳过",
+          "message": "美客多链接重量尺寸未更新成功，按执行顺序跳过净收益重提"
+        }
+      ]
+    },
+    {
+      "order": "2000012611072092",
+      "updated": "2026-10-07 19:12:48",
+      "status": "部分完成",
+      "error": "美客多链接重量尺寸更新失败：GET /global/items/CBT2564644990 失败 (405): <html>\r\n<head><title>405 Not Allowed</title></head>\r\n<body>\r\n<center><h1>405 Not Allowed</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n",
+      "latest": [
+        {
+          "time": "2026-09-27T19:55:52",
+          "stage": "美客多链接",
+          "status": "进行中",
+          "message": "正在更新 Global 商品 CBT2564644990；采用最新成功订单 2000012611072092（2025-08-10 21:51:07）的重量 549g；官方未提供尺寸，仅更新重量"
+        },
+        {
+          "time": "2026-09-27T19:55:54",
+          "stage": "美客多链接",
+          "status": "失败",
+          "message": "美客多链接重量尺寸更新失败：GET /global/items/CBT2564644990 失败 (405): <html>\r\n<head><title>405 Not Allowed</title></head>\r\n<body>\r\n<center><h1>405 Not Allowed</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n"
+        },
+        {
+          "time": "2026-09-27T19:55:57",
+          "stage": "净收益",
+          "status": "跳过",
+          "message": "美客多链接重量尺寸未更新成功，按执行顺序跳过净收益重提"
+        }
+      ]
+    },
+    {
+      "order": "2000008843443577",
+      "updated": "2026-10-07 19:12:48",
+      "status": "部分完成",
+      "error": "美客多链接重量尺寸更新失败：GET /global/items/CBT2564670774 失败 (405): <html>\r\n<head><title>405 Not Allowed</title></head>\r\n<body>\r\n<center><h1>405 Not Allowed</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n",
+      "latest": [
+        {
+          "time": "2026-09-27T19:55:52",
+          "stage": "美客多链接",
+          "status": "进行中",
+          "message": "正在更新 Global 商品 CBT2564670774；采用最新成功订单 2000008843443577（2025-08-14 02:09:53）的重量 611g；官方未提供尺寸，仅更新重量"
+        },
+        {
+          "time": "2026-09-27T19:55:54",
+          "stage": "美客多链接",
+          "status": "失败",
+          "message": "美客多链接重量尺寸更新失败：GET /global/items/CBT2564670774 失败 (405): <html>\r\n<head><title>405 Not Allowed</title></head>\r\n<body>\r\n<center><h1>405 Not Allowed</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n"
+        },
+        {
+          "time": "2026-09-27T19:55:57",
+          "stage": "净收益",
+          "status": "跳过",
+          "message": "美客多链接重量尺寸未更新成功，按执行顺序跳过净收益重提"
+        }
+      ]
+    },
+    {
+      "order": "2000012582771438",
+      "updated": "2026-10-07 19:12:48",
+      "status": "部分完成",
+      "error": "美客多链接重量尺寸更新失败：GET /global/items/CBT2564722666 失败 (405): <html>\r\n<head><title>405 Not Allowed</title></head>\r\n<body>\r\n<center><h1>405 Not Allowed</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n",
+      "latest": [
+        {
+          "time": "2026-09-27T19:55:52",
+          "stage": "美客多链接",
+          "status": "进行中",
+          "message": "正在更新 Global 商品 CBT2564722666；采用最新成功订单 2000012582771438（2025-08-08 06:28:36）的重量 114g；官方未提供尺寸，仅更新重量"
+        },
+        {
+          "time": "2026-09-27T19:55:53",
+          "stage": "美客多链接",
+          "status": "失败",
+          "message": "美客多链接重量尺寸更新失败：GET /global/items/CBT2564722666 失败 (405): <html>\r\n<head><title>405 Not Allowed</title></head>\r\n<body>\r\n<center><h1>405 Not Allowed</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n"
+        },
+        {
+          "time": "2026-09-27T19:55:57",
+          "stage": "净收益",
+          "status": "跳过",
+          "message": "美客多链接重量尺寸未更新成功，按执行顺序跳过净收益重提"
+        }
+      ]
+    }
+  ]
+}

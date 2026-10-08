@@ -1,3 +1,4 @@
+import pytest
 from datetime import timedelta
 from pathlib import Path
 
@@ -210,3 +211,6 @@ def test_generated_session_secret_is_reused(monkeypatch, tmp_path):
     assert len(first) == 64
     assert second == first
     assert secret_path.read_text(encoding="utf-8") == first
+
+
+pytestmark = pytest.mark.usefixtures("subscribed_workbench_account")

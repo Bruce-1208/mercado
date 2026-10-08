@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-07",
+  "causes": [
+    "Default scoped list materialized the authorized product IDs twice for count and page; paging probed every authorized product before LIMIT.",
+    "List request waited for auxiliary menus; repeated tab activation could duplicate auxiliary requests and late callbacks could requery the list.",
+    "Risk-filtered routes queried an ordinary page before discarding it and scanning the filtered scope."
+  ],
+  "changes": [
+    "Reuse one UNION CTE for exact total and ID pagination when token scope is the only predicate; full product rows load after LIMIT.",
+    "Request products immediately while loading menus concurrently, with in-flight deduplication and no late list reload.",
+    "Route risk filters before the initial ordinary list query."
+  ],
+  "measurements": [
+    {
+      "scope": "five_stores",
+      "round": 0,
+      "baseline_count_page_ms": 465.0,
+      "optimized_count_page_ms": 131.4,
+      "reduction_percent": 71.7,
+      "same_total": true,
+      "same_ordered_ids": true
+    },
+    {
+      "scope": "five_stores",
+      "round": 1,
+      "baseline_count_page_ms": 313.7,
+      "optimized_count_page_ms": 137.1,
+      "reduction_percent": 56.3,
+      "same_total": true,
+      "same_ordered_ids": true
+    },
+    {
+      "scope": "all_linked_stores",
+      "round": 0,
+      "baseline_count_page_ms": 6917.1,
+      "optimized_count_page_ms": 4463.6,
+      "reduction_percent": 35.5,
+      "same_total": true,
+      "same_ordered_ids": true
+    },
+    {
+      "scope": "all_linked_stores",
+      "round": 1,
+      "baseline_count_page_ms": 7204.8,
+      "optimized_count_page_ms": 2947.1,
+      "reduction_percent": 59.1,
+      "same_total": true,
+      "same_ordered_ids": true
+    }
+  ],
+  "measurement_limits": "Two rounds per scope on local MySQL 8.0.42 in the same read-only transaction snapshot; SELECT only, no DDL. Excludes auth, schema migration, HTTP and rendering. Live background sync can affect latency. CTE fast path applies only to token-only scope; other filters keep their existing SQL.",
+  "validation": {
+    "python": "100 passed, 1 deselected (existing full-server import test requires database initialization; isolated route tests passed)",
+    "node": "45 passed",
+    "compile": "passed",
+    "diff_check": "passed",
+    "independent_review": "scoped pagination and empty total passed"
+  },
+  "activation": {
+    "status": "awaiting_restart_decision",
+    "reason": "Current store-link synchronization is running; last status 3 of 8 stores completed. No restart performed."
+  }
+}

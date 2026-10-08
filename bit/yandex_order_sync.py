@@ -56,15 +56,24 @@ def _utc(value):
     return parsed.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
 
+def display_prices(order, finance=None):
+    from yandex.app.order_finance import build_order_finance, _sum_money
+    finance = finance or order.get('finance') or build_order_finance(order)
+    original = finance.get('buyer_payment')
+    points = finance.get('cashback')
+    return {'original': original, 'points': points,
+            'total': _sum_money([original, points])}
+
+
 def normalize(store, order):
     from yandex.app.order_finance import build_order_finance
-    finance = build_order_finance(order)
+    finance = order.get('finance') or build_order_finance(order)
     payment = finance.get('buyer_payment') or {}
     currency = payment.get('currency') or 'UNKNOWN'
     currency = 'RUB' if currency == 'RUR' else currency
     items = [{'item': {'id': str(item.get('offerId') or ''),
                        'title': str(item.get('offerName') or item.get('offerId') or ''),
-                       'thumbnail': item.get('picture') or ''},
+                       'thumbnail': item.get('image_url') or item.get('pictureUrl') or item.get('picture') or ''},
               'quantity': item.get('count') or 0} for item in order.get('items') or []]
     remote_id = str(order.get('orderId') or order.get('id') or '')
     if not remote_id:
@@ -79,9 +88,10 @@ def normalize(store, order):
         'currency_id': currency, 'amount_currency_id': currency, 'total_amount': payment.get('value'),
         'product_id': items[0]['item']['id'] if items else '',
         'title': ' / '.join(item['item']['title'] for item in items),
+        'image_url': items[0]['item']['thumbnail'] if items else '',
         'quantity': sum(int(item['quantity']) for item in items),
         'raw_json': json.dumps({'platform': 'yandex', 'pack_id': remote_id, 'order_items': items,
-                                'yandex_order': order}, ensure_ascii=False),
+                                'yandex_order': order, 'yandex_finance': finance}, ensure_ascii=False),
     }
 
 
@@ -157,6 +167,9 @@ async def sync_all(*, full=True, start_date=None, end_date=None, progress=None):
                 while True:
                     page = await client.get_orders(store['business_id'], campaign_id=store['campaign_id'], date_from=begin.isoformat(), date_to=last.isoformat(), page_token=token, limit=50)
                     orders = page.get('orders') or []
+                    if orders:
+                        from yandex.app.order_finance import enrich_order_finances
+                        orders = await enrich_order_finances(client, store['business_id'], store['campaign_id'], orders)
                     counts = await asyncio.to_thread(upsert_orders, store, orders)
                     result['fetched'] += len(orders)
                     for key in ('inserted', 'updated'):

@@ -80,6 +80,7 @@ def test_expansion_pages_exact_title_scope_and_duplicate_links():
 def test_execute_deduplicates_latest_measurements_and_keeps_each_net(failed_item):
     originals = [order("1"), order("2")]
     originals[1]["actual_weight_g"] = "600"
+    originals[1]["actual_dimensions_cm"] = "10x10x10"
     task = {"owner": "user", "records": originals, "authorized_ids": [1, 2]}
     client = Mock(access_token="test", timeout=10)
     def read(item, **kwargs):
@@ -104,7 +105,9 @@ def test_execute_deduplicates_latest_measurements_and_keeps_each_net(failed_item
          patch.object(records.bit_db_api, "append_weight_dimensions_record_log"):
         records._run_execute("test", "user", action="zeshun")
     assert package.call_count == 2
-    assert {c.args[1:] for c in package.call_args_list} == {("CBT1", "41.667", "10x5x5"), ("CBT2", "41.667", "10x5x5")}
+    assert {c.args[1:] for c in package.call_args_list} == {("CBT1", "167", "10x10x10"), ("CBT2", "167", "10x10x10")}
+    assert {log["submitted_weight_g"] for row in originals for log in row["execution_logs"]
+            if log["stage"] == "美客多链接"} == {"167"}
     expected_net = {("MLM1", 11)} if failed_item == "CBT2" else {("MLM1", 11), ("MLB2", 22)}
     assert {(c.args[0], c.args[1]["net_proceeds"]) for c in client.update_global_item.call_args_list} == expected_net
     assert all(r["_zeshun_status"] == ("失败" if failed_item else "成功") for r in originals)
@@ -196,6 +199,42 @@ def test_equal_measurements_skip_remote_write_with_unit_conversion():
     remote["attributes"][0]["value_name"] = "0.6 kg"
     client.get_marketplace_item.return_value = remote
     records._package_attributes(client, "CBT1", "600", "")
+    client.update_global_item.assert_not_called()
+
+
+@pytest.mark.parametrize("submitted,rounded", [("2402.5", "2403"), ("366.167", "366")])
+def test_fractional_package_weight_submits_integer_grams_and_confirms_readback(submitted, rounded):
+    client = Mock()
+    client.get_marketplace_item.side_effect = [package_item(), package_item(rounded)]
+    records._package_attributes(client, "CBT1", submitted, "10x10x10")
+    attributes = client.update_global_item.call_args.args[1]["attributes"]
+    assert next(attribute["value_name"] for attribute in attributes
+                if attribute["id"] == "PACKAGE_WEIGHT") == rounded + " g"
+    assert client.get_marketplace_item.call_count == 2
+
+
+@pytest.mark.parametrize("submitted,rounded", [("2402.5", "2403"), ("366.167", "366")])
+def test_fractional_package_weight_is_idempotent_at_platform_precision(submitted, rounded):
+    client = Mock()
+    client.get_marketplace_item.return_value = package_item(rounded)
+    records._package_attributes(client, "CBT1", submitted, "10x10x10")
+    client.update_global_item.assert_not_called()
+
+
+def test_integer_gram_precision_does_not_accept_a_genuinely_different_readback():
+    client = Mock()
+    client.get_marketplace_item.side_effect = [package_item(), *[package_item("2402") for _ in range(6)]]
+    with patch.object(records.time, "sleep"), pytest.raises(RuntimeError, match="PACKAGE_WEIGHT"):
+        records._package_attributes(client, "CBT1", "2402.5", "10x10x10")
+    assert client.update_global_item.call_count == 1
+
+
+@pytest.mark.parametrize("weight", ["49.6", "49.999", "0", "-1", "NaN", "Infinity", "invalid"])
+def test_rounding_does_not_allow_invalid_or_under_minimum_weight(weight):
+    client = Mock()
+    with pytest.raises(ValueError, match="至少 50 克"):
+        records._package_attributes(client, "CBT1", weight, "10x10x10")
+    client.get_marketplace_item.assert_not_called()
     client.update_global_item.assert_not_called()
 
 
@@ -305,3 +344,33 @@ def test_server_zying_updates_latest_product_without_marketplace_writes():
     assert task['execute_status'] == 'completed'
     assert all(row['_zying_status'] == '成功' for row in rows)
     assert all('_zeshun_status' not in row for row in rows)
+
+
+def test_combined_rounds_only_marketplace_weight_and_snapshots_actual_submission():
+    from contextlib import contextmanager
+    row = order("1", product_id="P1")
+    row.update(actual_weight_g="900", actual_dimensions_cm="13x13x13")
+    task = {"owner": "user", "records": [row]}
+    browser = Mock()
+    client = Mock(access_token="test", timeout=10)
+    client.get_marketplace_item.return_value = {
+        "id": "MLM1", "net_proceeds": [{"currency_id": "USD", "amount": 12.34}]}
+
+    @contextmanager
+    def factory(log):
+        yield browser
+
+    with patch.object(records, "_tasks", {"test": task}), \
+         patch.object(records, "_order_history_context", return_value={}), \
+         patch.object(records.bit_mysql, "get_mercado_store_token", return_value={}), \
+         patch.object(records, "_client_and_token", return_value=(client, {})), \
+         patch.object(records, "MercadoLibreClient", return_value=client), \
+         patch.object(records, "_package_attributes") as package, \
+         patch.object(records.bit_db_api, "append_weight_dimensions_record_log"):
+        records._run_execute("test", "user", action="combined", erp_browser_factory=factory)
+    browser.update_package_by_product_id.assert_called_once_with("P1", "366.167", "13x13x13")
+    package.assert_called_once_with(client, "CBT1", "366", "13x13x13")
+    assert {log["submitted_weight_g"] for log in row["execution_logs"]
+            if log["stage"] in {"美客多链接", "净收益"}} == {"366"}
+    assert row["_zeshun_status"] == row["_zying_status"] == "成功"
+    assert row["actual_weight_g"] == "900"

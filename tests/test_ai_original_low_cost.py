@@ -63,7 +63,7 @@ def flow(monkeypatch, tmp_path):
         assert ledger["reserved_yuan"] > 0
         assert ledger["spent_yuan"] + ledger["reserved_yuan"] <= 0.03
         assert kwargs["thinking"] is False
-        assert kwargs["model"] == "deepseek-flash"
+        assert kwargs["model"] == "qwen3.7-flash"
         assert kwargs["max_retries"] == 0
         state["calls"].append(deepcopy(kwargs))
         prompt = kwargs["messages"][0]["content"]
@@ -77,7 +77,7 @@ def flow(monkeypatch, tmp_path):
         else:
             assert "一次生成美客多JSON文案" in prompt, "unexpected duplicate paid category/attribute pass"
             content = deepcopy(generated)
-        return {"content": json.dumps(content, ensure_ascii=False), "model": "deepseek-flash",
+        return {"content": json.dumps(content, ensure_ascii=False), "model": "qwen3.7-flash",
                 "finish_reason": "stop", "usage": {"prompt_tokens": 100, "completion_tokens": 100}}
 
     row = {"id": 1, "source_item_id": "1688001", "source_snapshot_json": {"original_1688": {
@@ -85,7 +85,7 @@ def flow(monkeypatch, tmp_path):
         "properties": [{"name": "材质", "value_name": "不锈钢"}],
         "main_image_url": "https://example.invalid/source.jpg", "variations": [],
     }}}
-    options = {"cost_control": True, "budget_transport": transport, "on_preparation_checkpoint": save}
+    options = {"api_key": "test-dashscope-key", "cost_control": True, "budget_transport": transport, "on_preparation_checkpoint": save}
     return row, LiveCategories(), state, options
 
 
@@ -103,31 +103,32 @@ def test_one_paid_copy_reuses_reference_and_translations_against_live_schema(flo
     assert [path for path, _ in client.calls] == [
         "/marketplace/domain_discovery/search", "/categories/CBT123/attributes"]
     ledger = result["ai_original"]["generation_budget"]
-    assert ledger["spent_yuan"] == 0.0005
+    assert ledger["spent_yuan"] == 0.0001
     assert ledger["reserved_yuan"] == 0
     assert ledger["calls"][0]["state"] == "complete"
 
 
-def test_completed_result_reuses_all_paid_work_but_refreshes_schema(flow):
+def test_completed_result_skips_all_generation_and_schema_calls(flow):
     row, client, state, options = flow
     first = products.prepare_ai_original_product(row, category_client=client, **options)
     second = products.prepare_ai_original_product(saved_row(row, first), category_client=client, **options)
     assert second["ai_original"]["status"] == "completed"
     assert len(state["calls"]) == state["images"] == 1
-    assert [path for path, _ in client.calls].count("/categories/CBT123/attributes") == 2
+    assert [path for path, _ in client.calls].count("/categories/CBT123/attributes") == 1
     assert [path for path, _ in client.calls].count("/marketplace/domain_discovery/search") == 1
-    assert second["ai_original"]["generation_budget"]["spent_yuan"] == 0.0005
+    assert second["ai_original"]["generation_budget"]["spent_yuan"] == 0.0001
 
 
 def test_changed_product_facts_invalidate_copy_without_resetting_budget(flow):
     row, client, state, options = flow
     first = products.prepare_ai_original_product(row, category_client=client, **options)
     changed = saved_row(row, first)
+    changed["source_snapshot_json"]["ai_original"]["status"] = "failed"
     changed["source_snapshot_json"]["original_1688"]["title"] = "不锈钢水瓶750ml"
     second = products.prepare_ai_original_product(changed, category_client=client, **options)
     assert len(state["calls"]) == 2 and state["images"] == 1
     assert "750ml" in state["calls"][-1]["messages"][0]["content"]
-    assert second["ai_original"]["generation_budget"]["spent_yuan"] == 0.001
+    assert second["ai_original"]["generation_budget"]["spent_yuan"] == 0.0002
     assert len(second["ai_original"]["generation_budget"]["calls"]) == 2
 
 
@@ -135,7 +136,9 @@ def test_live_schema_drift_invalidates_old_attribute_ids_without_new_copy(flow):
     row, client, state, options = flow
     first = products.prepare_ai_original_product(row, category_client=client, **options)
     client.schema[0]["id"] = "BODY_MATERIAL"
-    second = products.prepare_ai_original_product(saved_row(row, first), category_client=client, **options)
+    retry = saved_row(row, first)
+    retry["source_snapshot_json"]["ai_original"]["status"] = "failed"
+    second = products.prepare_ai_original_product(retry, category_client=client, **options)
     assert len(state["calls"]) == 1
     assert [item["id"] for item in second["ai_original"]["attributes"]] == ["BODY_MATERIAL"]
 

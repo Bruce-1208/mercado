@@ -1,0 +1,149 @@
+/* Product cards share the collection body's selection and loading lifecycle. */
+#mercado-list-module.product-mode #mercado-product-filters.zs-simple-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+#mercado-list-module.product-mode .market-filter-actions { justify-content: flex-end; }
+#mercado-list-module.product-mode .market-table-wrap {
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+#mercado-list-module.product-mode .market-product-table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    border: 0;
+}
+#mercado-list-module.product-mode .market-product-table thead { display: none; }
+#mercado-list-module.product-mode #mercado-list-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+    align-items: start;
+    gap: 16px;
+}
+#mercado-list-module.product-mode .market-product-table tr {
+    display: block;
+    min-width: 0;
+    background: transparent;
+}
+#mercado-list-module.product-mode .market-product-table tr:hover { background: transparent; }
+#mercado-list-module.product-mode .market-product-table td {
+    display: block;
+    width: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    white-space: normal;
+}
+#mercado-list-module.product-mode #mercado-list-body > tr:not(.market-product-card-row) { grid-column: 1 / -1; }
+#mercado-list-module.product-mode .market-product-table td.empty-state {
+    padding: 48px 20px;
+    border: 1px dashed #d9e2ef;
+    border-radius: 12px;
+    background: #f8fafc;
+    text-align: center;
+}
+.market-product-card {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid #dfe6ef;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 2px 6px #172b4d04;
+    transition: border-color .15s, box-shadow .15s;
+}
+.market-product-card:hover { border-color: #a8bddc; box-shadow: 0 4px 14px #172b4d0a; }
+.market-product-card.is-selected { border-color: #2563eb; box-shadow: 0 0 0 1px #2563eb; }
+.market-card-header, .market-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
+.market-card-header { border-bottom: 1px solid #edf1f5; background: #fafbfd; }
+#mercado-list-module.product-mode .market-card-header .market-source-tag {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 8px;
+}
+#mercado-list-module.product-mode .market-card-header .market-source-tag-icon { width: 26px; height: 26px; border-radius: 7px; }
+.market-card-header .market-source-tag-copy small { display: none; }
+.market-card-select { display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; color: #5e6d82; font-size: 12px; cursor: pointer; }
+.market-card-select:has(input:checked) { color: #2563eb; font-weight: 600; }
+.market-card-main { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 14px; padding: 16px; }
+.market-card-image { display: grid; place-items: center; min-width: 0; height: 88px; border: 1px solid #e7edf4; border-radius: 10px; background: #f8fafc; overflow: hidden; }
+.market-card-image > a { display: block; width: 100%; height: 100%; }
+#mercado-list-module.product-mode .market-card-image .market-product-image { width: 100%; height: 100%; border: 0; border-radius: 0; }
+.market-card-image.is-missing { color: #8b98aa; font-size: 12px; }
+.market-card-image.is-missing::after { content: '暂无主图'; }
+.market-card-main h4 { margin: 0; min-width: 0; font-size: 14px; line-height: 1.6; }
+#mercado-list-module.product-mode .market-card-main .market-product-title {
+    display: -webkit-box;
+    overflow: hidden;
+    max-width: none;
+    color: #25364d;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+}
+.market-card-main a.market-product-title:hover { color: #2563eb; }
+.market-card-id { display: block; margin-top: 7px; color: #7a889b; font-size: 11px; overflow-wrap: anywhere; }
+.market-card-finance { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 16px 14px; padding: 12px; border-radius: 10px; background: #f7f9fc; }
+.market-card-finance > div { min-width: 0; }
+.market-card-label { display: block; margin-bottom: 5px; color: #728095; font-size: 11px; font-weight: 500; line-height: 1.4; }
+.market-card-finance .market-metric-main { font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.market-card-finance .market-card-net .market-metric-main { color: #15805b; font-weight: 750; }
+.market-card-finance .market-card-net .market-net-negative { color: #c23939; }
+.market-card-finance .market-card-net.is-missing .market-metric-main { color: #7a889b; }
+#mercado-list-module.product-mode .market-product-card .market-metric-note { display: block; margin-top: 3px; color: #7a889b; font-size: 11px; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; }
+.market-card-specs, .market-card-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; margin: 0; }
+.market-card-specs { padding: 0 16px 14px; }
+.market-card-specs > div, .market-card-metadata > div { min-width: 0; }
+.market-card-specs dt, .market-card-metadata dt { margin-bottom: 4px; color: #728095; font-size: 11px; }
+.market-card-specs dd, .market-card-metadata dd { margin: 0; color: #354760; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.market-card-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 0 16px 14px; }
+.market-card-controls label { display: block; min-width: 0; }
+#mercado-list-module.product-mode .market-card-controls select { width: 100%; min-width: 0; height: 34px; margin: 0; padding: 5px 24px 5px 9px; border-radius: 7px; font-size: 12px; }
+.market-card-status { margin: 0 16px; padding: 12px 0; border-top: 1px solid #edf1f5; }
+.market-card-status-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.market-card-status-tags .market-status-tag { margin: 0; font-size: 11px; }
+.market-card-risk { margin-top: 10px; min-width: 0; }
+.market-card-risk .mi-row-risk { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.market-card-risk .mi-row-risk > small { flex-basis: 100%; overflow-wrap: anywhere; }
+.market-card-risk .mi-result-detail-button { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.market-card-risk .mi-risk-badge { padding: 3px 7px; font-size: 11px; }
+.market-card-details { margin: 0 16px; border-top: 1px solid #edf1f5; }
+.market-card-details > summary { padding: 12px 0; color: #60738e; font-size: 12px; cursor: pointer; }
+.market-card-details[open] > summary { color: #2563eb; }
+.market-card-details > summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.market-card-metadata { padding-bottom: 14px; }
+.market-card-metadata .market-card-metadata-wide { grid-column: 1 / -1; }
+.market-card-details .market-copy-preview-trigger { margin: 8px 0 12px; font-size: 12px; }
+.market-card-footer { border-top: 1px solid #edf1f5; }
+#mercado-list-module.product-mode .market-card-footer .market-product-edit-button { min-height: 32px; margin: 0; padding: 5px 12px; font-size: 12px; }
+.market-card-footer .market-item-link { margin: 0; font-size: 12px; }
+#mercado-list-module.product-mode .market-table-heading { margin-top: 12px; }
+@media (max-width: 1100px) {
+    #mercado-list-module.product-mode #mercado-product-filters.zs-simple-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 650px) {
+    #mercado-list-module.product-mode #mercado-product-filters.zs-simple-filters { grid-template-columns: minmax(0, 1fr); }
+    #mercado-list-module.product-mode .market-table-wrap { margin: 0 12px; }
+    #mercado-list-module.product-mode #mercado-list-body { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    #mercado-list-module.product-mode .market-table-heading { margin-right: 12px; margin-left: 12px; align-items: flex-start; flex-wrap: wrap; gap: 4px; }
+    .market-card-finance { gap: 6px; padding: 10px; }
+    .market-card-finance .market-metric-main { font-size: 15px; }
+    #mercado-list-module.product-mode .market-card-controls select { min-height: 44px; height: 44px; }
+    #mercado-list-module.product-mode .market-card-footer .market-product-edit-button { min-height: 44px; }
+    .market-card-select { min-height: 32px; }
+    .market-card-details > summary { padding-top: 14px; padding-bottom: 14px; }
+    .market-card-risk .mi-row-actions button { min-height: 32px; }
+    #mercado-list-module.product-mode .zs-bulk-menu { width: 100%; flex-basis: 100%; }
+    #mercado-list-module.product-mode :is(.market-selection-tools, .market-mode-actions, .market-review-bulk, .market-category-bulk) { width: 100%; min-width: 0; flex-wrap: wrap; }
+    #mercado-list-module.product-mode .market-selection-tools > button { max-width: 100%; white-space: normal; }
+}
+

@@ -1,0 +1,1333 @@
+{
+  "start_at": "2026-10-05T04:24:32.580233+00:00",
+  "end_at": "2026-10-07T04:24:32.580233+00:00",
+  "store_count": 141,
+  "fetched": 374,
+  "candidate_count": 147,
+  "failed_stores": 0,
+  "results": [
+    {
+      "token_id": 9,
+      "shop_name": "五福临门",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 148,
+      "shop_name": "yym cs",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 17,
+      "shop_name": "一跃千里",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 22,
+      "shop_name": "健步如飞",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 70,
+      "shop_name": "cs",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 50,
+      "shop_name": "光彩夺目",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 11,
+      "shop_name": "七星高照",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 24,
+      "shop_name": "健步如飞2",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 12,
+      "shop_name": "八方来财",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 23,
+      "shop_name": "健步如飞1",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 58,
+      "shop_name": "功成名就fti",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 145,
+      "shop_name": "半托管（腾）",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 10,
+      "shop_name": "六六大顺",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 144,
+      "shop_name": "刘威豪2",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 96,
+      "shop_name": "向华章3",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 95,
+      "shop_name": "向华章2",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 97,
+      "shop_name": "向华章4",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 114,
+      "shop_name": "发财猪",
+      "status": "success",
+      "fetched": 1,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 98,
+      "shop_name": "向华章5",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 67,
+      "shop_name": "向子立3",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 94,
+      "shop_name": "向华章1",
+      "status": "success",
+      "fetched": 2,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018838942992"
+      ]
+    },
+    {
+      "token_id": 143,
+      "shop_name": "刘威豪1",
+      "status": "success",
+      "fetched": 5,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018836069330",
+        "2000018836473410"
+      ]
+    },
+    {
+      "token_id": 8,
+      "shop_name": "四季如春",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 20,
+      "shop_name": "大展宏图",
+      "status": "success",
+      "fetched": 1,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018841418848"
+      ]
+    },
+    {
+      "token_id": 103,
+      "shop_name": "吴佳侃1",
+      "status": "success",
+      "fetched": 8,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018831751954",
+        "2000018837087804",
+        "2000018837248306",
+        "2000018837248328"
+      ]
+    },
+    {
+      "token_id": 139,
+      "shop_name": "孙董一郎1",
+      "status": "success",
+      "fetched": 6,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018823714452",
+        "2000018825163940",
+        "2000018838832132"
+      ]
+    },
+    {
+      "token_id": 140,
+      "shop_name": "孙董一郎2",
+      "status": "success",
+      "fetched": 4,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018836413218",
+        "2000018837523898",
+        "2000018840284938",
+        "2000018841003622"
+      ]
+    },
+    {
+      "token_id": 84,
+      "shop_name": "向子立5",
+      "status": "success",
+      "fetched": 10,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018820170458",
+        "2000018841896024"
+      ]
+    },
+    {
+      "token_id": 80,
+      "shop_name": "向子立4",
+      "status": "success",
+      "fetched": 13,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018822423540",
+        "2000018830701116",
+        "2000018832264774",
+        "2000018839868506",
+        "2000018842100396",
+        "2000018842122570"
+      ]
+    },
+    {
+      "token_id": 141,
+      "shop_name": "孙董一郎3",
+      "status": "success",
+      "fetched": 4,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018838932124"
+      ]
+    },
+    {
+      "token_id": 142,
+      "shop_name": "孙董一郎4",
+      "status": "success",
+      "fetched": 4,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018827221582",
+        "2000018836268784"
+      ]
+    },
+    {
+      "token_id": 32,
+      "shop_name": "张健6",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 29,
+      "shop_name": "张健2",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 31,
+      "shop_name": "张健5",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 133,
+      "shop_name": "徐家强1",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 134,
+      "shop_name": "徐家强2",
+      "status": "success",
+      "fetched": 1,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 136,
+      "shop_name": "徐家强4",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 90,
+      "shop_name": "拉里佩奇",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 135,
+      "shop_name": "徐家强3",
+      "status": "success",
+      "fetched": 4,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018826987878"
+      ]
+    },
+    {
+      "token_id": 104,
+      "shop_name": "吴佳侃2",
+      "status": "success",
+      "fetched": 29,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018820071002",
+        "2000018823550634",
+        "2000018823736730",
+        "2000018823961904",
+        "2000018823992262",
+        "2000018824866904",
+        "2000018835471348",
+        "2000018835518936",
+        "2000018837063808",
+        "2000018837075314",
+        "2000018840838740",
+        "2000018842007744"
+      ]
+    },
+    {
+      "token_id": 30,
+      "shop_name": "张健3",
+      "status": "success",
+      "fetched": 12,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018821471996",
+        "2000018841377558",
+        "2000018841384524",
+        "2000018842357800"
+      ]
+    },
+    {
+      "token_id": 76,
+      "shop_name": "招财猫222",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 77,
+      "shop_name": "招财猫333",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 33,
+      "shop_name": "招财猫",
+      "status": "success",
+      "fetched": 6,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018820157986",
+        "2000018825224428",
+        "2000018825968980"
+      ]
+    },
+    {
+      "token_id": 28,
+      "shop_name": "张健1",
+      "status": "success",
+      "fetched": 12,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018820527156",
+        "2000018824559214",
+        "2000018829146792",
+        "2000018833910832",
+        "2000018835595066",
+        "2000018838830756"
+      ]
+    },
+    {
+      "token_id": 75,
+      "shop_name": "招财猫11",
+      "status": "success",
+      "fetched": 4,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018831178844",
+        "2000018834163148",
+        "2000018835103424"
+      ]
+    },
+    {
+      "token_id": 112,
+      "shop_name": "李安琪1",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 34,
+      "shop_name": "旺财狗",
+      "status": "success",
+      "fetched": 1,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 124,
+      "shop_name": "李泽1",
+      "status": "success",
+      "fetched": 1,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 14,
+      "shop_name": "春暖花开",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 127,
+      "shop_name": "李泽2",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 37,
+      "shop_name": "杨柳依依4",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 35,
+      "shop_name": "杨柳依依2",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 113,
+      "shop_name": "李安琪2",
+      "status": "success",
+      "fetched": 5,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018820259188",
+        "2000018840237782",
+        "2000018841044772"
+      ]
+    },
+    {
+      "token_id": 69,
+      "shop_name": "杨雨萌15",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 146,
+      "shop_name": "杨雨萌7",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 147,
+      "shop_name": "杨雨萌8",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 102,
+      "shop_name": "张昕1",
+      "status": "success",
+      "fetched": 27,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018818417220",
+        "2000018818587410",
+        "2000018825263356",
+        "2000018826915928",
+        "2000018828614554",
+        "2000018834774714",
+        "2000018837162384",
+        "2000018841346234"
+      ]
+    },
+    {
+      "token_id": 36,
+      "shop_name": "杨柳依依1",
+      "status": "success",
+      "fetched": 6,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 47,
+      "shop_name": "梁山好汉1",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 49,
+      "shop_name": "梁山好汉333",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 115,
+      "shop_name": "杨雨萌f",
+      "status": "success",
+      "fetched": 4,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018821374378"
+      ]
+    },
+    {
+      "token_id": 48,
+      "shop_name": "梁山好汉222",
+      "status": "success",
+      "fetched": 2,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018837638582"
+      ]
+    },
+    {
+      "token_id": 60,
+      "shop_name": "来财马",
+      "status": "success",
+      "fetched": 12,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018820226904",
+        "2000018820226908",
+        "2000018822951388",
+        "2000018830172794"
+      ]
+    },
+    {
+      "token_id": 118,
+      "shop_name": "段思齐3",
+      "status": "success",
+      "fetched": 5,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018835920962"
+      ]
+    },
+    {
+      "token_id": 106,
+      "shop_name": "王俊琦1",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 116,
+      "shop_name": "段思齐1",
+      "status": "success",
+      "fetched": 8,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018841276018",
+        "2000018841935118"
+      ]
+    },
+    {
+      "token_id": 137,
+      "shop_name": "王碟1",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 117,
+      "shop_name": "段思齐2",
+      "status": "success",
+      "fetched": 8,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018824307608",
+        "2000018831695036"
+      ]
+    },
+    {
+      "token_id": 51,
+      "shop_name": "流光溢彩",
+      "status": "success",
+      "fetched": 5,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018835487682"
+      ]
+    },
+    {
+      "token_id": 119,
+      "shop_name": "段思齐4",
+      "status": "success",
+      "fetched": 10,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018825973654",
+        "2000018834425480",
+        "2000018835455866"
+      ]
+    },
+    {
+      "token_id": 13,
+      "shop_name": "策马奔腾",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 5,
+      "shop_name": "腾",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 61,
+      "shop_name": "聚财鼠",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 100,
+      "shop_name": "蒋学斌2",
+      "status": "success",
+      "fetched": 2,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018834134878",
+        "2000018834125752"
+      ]
+    },
+    {
+      "token_id": 138,
+      "shop_name": "王碟2",
+      "status": "success",
+      "fetched": 8,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018826211758",
+        "2000018841614600"
+      ]
+    },
+    {
+      "token_id": 105,
+      "shop_name": "王俊琦2",
+      "status": "success",
+      "fetched": 13,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018834380794",
+        "2000018838869706"
+      ]
+    },
+    {
+      "token_id": 99,
+      "shop_name": "蒋学斌3",
+      "status": "success",
+      "fetched": 2,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 111,
+      "shop_name": "蓝海峰1",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 44,
+      "shop_name": "蓝海峰2",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 52,
+      "shop_name": "虎虎生威fti",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 19,
+      "shop_name": "跃马扬鞭fti",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 101,
+      "shop_name": "蒋学斌4",
+      "status": "success",
+      "fetched": 3,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018824619458",
+        "2000018828172012"
+      ]
+    },
+    {
+      "token_id": 4,
+      "shop_name": "蒋学斌1",
+      "status": "success",
+      "fetched": 9,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018831336230",
+        "2000018831327134",
+        "2000018831336252",
+        "2000018831338246",
+        "2000018831332718",
+        "2000018831523912",
+        "2000018831533038",
+        "2000018831607478",
+        "2000018831611230"
+      ]
+    },
+    {
+      "token_id": 122,
+      "shop_name": "遥遥领先10号店",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 88,
+      "shop_name": "遥遥领先14号店",
+      "status": "success",
+      "fetched": 2,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 64,
+      "shop_name": "杨雨萌11",
+      "status": "success",
+      "fetched": 29,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018820966170",
+        "2000018821838870",
+        "2000018823366728",
+        "2000018823707428",
+        "2000018825339792",
+        "2000018828328572",
+        "2000018829489168",
+        "2000018829490918",
+        "2000018832860592",
+        "2000018836274076",
+        "2000018837108582",
+        "2000018837309584",
+        "2000018838693488",
+        "2000018840352428",
+        "2000018841981512"
+      ]
+    },
+    {
+      "token_id": 91,
+      "shop_name": "遥遥领先15",
+      "status": "success",
+      "fetched": 1,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 93,
+      "shop_name": "遥遥领先17",
+      "status": "success",
+      "fetched": 1,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 92,
+      "shop_name": "遥遥领先16",
+      "status": "success",
+      "fetched": 2,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018839644876"
+      ]
+    },
+    {
+      "token_id": 85,
+      "shop_name": "遥遥领先11号店",
+      "status": "success",
+      "fetched": 8,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018834983902",
+        "2000018836058636",
+        "2000018836062230",
+        "2000018840649428"
+      ]
+    },
+    {
+      "token_id": 6,
+      "shop_name": "虎",
+      "status": "success",
+      "fetched": 9,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018821180890",
+        "2000018828791448",
+        "2000018832593774",
+        "2000018832604694"
+      ]
+    },
+    {
+      "token_id": 128,
+      "shop_name": "遥遥领先18号店",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 86,
+      "shop_name": "遥遥领先12号店",
+      "status": "success",
+      "fetched": 6,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 130,
+      "shop_name": "遥遥领先20号店",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 87,
+      "shop_name": "遥遥领先13号店",
+      "status": "success",
+      "fetched": 6,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018832572264",
+        "2000018833202444"
+      ]
+    },
+    {
+      "token_id": 150,
+      "shop_name": "遥遥领先23号店",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 129,
+      "shop_name": "遥遥领先19号店",
+      "status": "success",
+      "fetched": 2,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018840015962"
+      ]
+    },
+    {
+      "token_id": 151,
+      "shop_name": "遥遥领先24号店",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 65,
+      "shop_name": "遥遥领先2号店",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 68,
+      "shop_name": "遥遥领先3号店",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 71,
+      "shop_name": "遥遥领先4号店",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 63,
+      "shop_name": "遥遥领先1号店",
+      "status": "success",
+      "fetched": 7,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018820031812",
+        "2000018838051494",
+        "2000018840234964",
+        "2000018842254348"
+      ]
+    },
+    {
+      "token_id": 81,
+      "shop_name": "遥遥领先7号店",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 120,
+      "shop_name": "遥遥领先5号店",
+      "status": "success",
+      "fetched": 1,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018837725628"
+      ]
+    },
+    {
+      "token_id": 149,
+      "shop_name": "遥遥领先22号店",
+      "status": "success",
+      "fetched": 7,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018835648058",
+        "2000018837607370"
+      ]
+    },
+    {
+      "token_id": 82,
+      "shop_name": "遥遥领先8号店",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 121,
+      "shop_name": "遥遥领先6号店",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 83,
+      "shop_name": "遥遥领先9号店",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 131,
+      "shop_name": "遥遥领先21号店",
+      "status": "success",
+      "fetched": 6,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018836139532"
+      ]
+    },
+    {
+      "token_id": 109,
+      "shop_name": "郭兆亿3",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 110,
+      "shop_name": "郭兆亿4",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 107,
+      "shop_name": "郭兆亿1",
+      "status": "success",
+      "fetched": 2,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018832525266"
+      ]
+    },
+    {
+      "token_id": 57,
+      "shop_name": "金光闪闪",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 108,
+      "shop_name": "郭兆亿2",
+      "status": "success",
+      "fetched": 1,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 74,
+      "shop_name": "金满园555",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 39,
+      "shop_name": "钱程似锦2",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 78,
+      "shop_name": "金玉满堂fti",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 38,
+      "shop_name": "钱程似锦",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 40,
+      "shop_name": "钱程似锦3",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 42,
+      "shop_name": "钱程似锦5",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 15,
+      "shop_name": "钱途无量",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 73,
+      "shop_name": "金满园2",
+      "status": "success",
+      "fetched": 2,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018837465684"
+      ]
+    },
+    {
+      "token_id": 59,
+      "shop_name": "顺财羊",
+      "status": "success",
+      "fetched": 1,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018831414702"
+      ]
+    },
+    {
+      "token_id": 18,
+      "shop_name": "风调雨顺",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 72,
+      "shop_name": "金满园1",
+      "status": "success",
+      "fetched": 6,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018825735084",
+        "2000018836541446"
+      ]
+    },
+    {
+      "token_id": 25,
+      "shop_name": "飞黄腾达2",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 26,
+      "shop_name": "飞黄腾达3",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 41,
+      "shop_name": "钱程似锦4",
+      "status": "success",
+      "fetched": 3,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018820770902",
+        "2000018820786194"
+      ]
+    },
+    {
+      "token_id": 27,
+      "shop_name": "飞黄腾达5",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 89,
+      "shop_name": "马斯克",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 132,
+      "shop_name": "高人一等",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 56,
+      "shop_name": "高风亮节",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 16,
+      "shop_name": "鸿运当头",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 1,
+      "shop_name": "龙",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 21,
+      "shop_name": "马到成功",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 46,
+      "shop_name": "龙凤呈祥",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 79,
+      "shop_name": "高屋建瓴",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 2,
+      "shop_name": "顺风顺水(fti)",
+      "status": "success",
+      "fetched": 5,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018834200702",
+        "2000018842315918"
+      ]
+    },
+    {
+      "token_id": 45,
+      "shop_name": "龙吟虎啸",
+      "status": "success",
+      "fetched": 0,
+      "restricted_order_ids": [],
+      "candidate_order_ids": []
+    },
+    {
+      "token_id": 43,
+      "shop_name": "龙争虎斗",
+      "status": "success",
+      "fetched": 10,
+      "restricted_order_ids": [],
+      "candidate_order_ids": [
+        "2000018822293158",
+        "2000018826270848",
+        "2000018832475942",
+        "2000018833649494",
+        "2000018833731244"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI 账单 · 泽顺运营中心</title>
+  <script src="{{ url_for('static', filename='console-performance.js') }}?v=20261007-json-fix"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261007-ai-billing">
+  <link rel="stylesheet" href="{{ url_for('static', filename='ai-billing.css') }}?v=20261007-1">
+<link rel="stylesheet" href="{{ url_for('static', filename='date-filter-controls.css') }}?v=20261008">
+<script defer src="{{ url_for('static', filename='date-filter-controls.js') }}?v=20261008"></script>
+<script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261008"></script>
+</head>
+<body class="zs-standalone ai-billing-page">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="泽顺运营中心工作台"><span class="brand-mark">ZS</span><span>泽顺运营中心<small>AI 用量与费用</small></span></a>
+    <nav class="topbar-actions" aria-label="页面导航"><a class="back-link" href="/">返回工作台</a><a href="/billing">支付管理</a></nav>
+  </header>
+  <main class="page">
+    <div class="page-heading">
+      <div><p class="eyebrow">AI BILLING</p><h1>AI 账单</h1><p>查看每次 AI 任务的业务员、Token 用量与人民币估值。</p></div>
+      <button id="ai-billing-refresh" type="button" class="secondary">刷新账单</button>
+    </div>
+
+    <section class="metrics" aria-label="当前筛选范围统计" aria-busy="true" id="ai-billing-metrics">
+      <article class="metric"><span>调用次数</span><strong id="ai-billing-calls">—</strong><small>当前筛选范围内的 AI 调用</small></article>
+      <article class="metric"><span>Token 总用量</span><strong id="ai-billing-tokens">—</strong><small id="ai-billing-token-hint">输入与输出 Token 合计</small></article>
+      <article class="metric metric-cost"><span>人民币估值</span><strong id="ai-billing-cost">—</strong><small id="ai-billing-cost-hint">按调用时的模型单价估算</small></article>
+      <article class="metric"><span>待确认记录</span><strong id="ai-billing-pending">—</strong><small id="ai-billing-pending-hint">用量待确认 / 费用待估值</small></article>
+    </section>
+
+    <section class="panel filters-panel" aria-labelledby="ai-billing-filter-title">
+      <div class="section-heading"><h2 id="ai-billing-filter-title">筛选账单</h2><span class="hint">时间均为北京时间</span></div>
+      <form id="ai-billing-filters" class="filters">
+        <label class="field">开始日期<input id="ai-billing-start-date" name="start_date" type="date"></label>
+        <label class="field">结束日期<input id="ai-billing-end-date" name="end_date" type="date"></label>
+        <label class="field">业务员<select name="salesperson" id="ai-billing-salesperson"><option value="">全部业务员</option></select></label>
+        <label class="field">任务类型<select name="task_type" id="ai-billing-task-type"><option value="">全部任务类型</option></select></label>
+        <label class="field model-field">模型<select name="model" id="ai-billing-model"><option value="">全部模型</option></select></label>
+        <label class="field keyword-field">关键词<input name="keyword" id="ai-billing-keyword" type="search" maxlength="200" placeholder="任务名称、编号或请求编号" autocomplete="off"></label>
+        <div class="filter-actions"><button class="primary" type="submit" id="ai-billing-apply">筛选</button><button type="button" id="ai-billing-clear">清空</button></div>
+      </form>
+    </section>
+
+    <p id="ai-billing-message" class="message" role="status" aria-live="polite" hidden></p>
+    <section class="panel records-panel" aria-labelledby="ai-billing-records-title">
+      <div class="section-heading records-heading"><div><h2 id="ai-billing-records-title">调用明细</h2><p class="hint" id="ai-billing-records-hint">每条记录对应一次 AI 调用，同一任务的多次调用分别记录。</p><p class="hint mobile-table-hint">左右滑动查看业务员、Token 用量与估值</p></div><span class="records-count" id="ai-billing-count">正在加载…</span></div>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="AI 调用账单明细，可横向滚动" id="ai-billing-table-wrap" aria-busy="true">
+        <table>
+          <thead><tr><th scope="col">时间</th><th scope="col">任务</th><th scope="col">业务员 / 操作人</th><th scope="col">模型</th><th scope="col" class="number-cell">Token 用量</th><th scope="col" class="number-cell">人民币估值</th></tr></thead>
+          <tbody id="ai-billing-records"><tr><td colspan="6" class="state-cell"><span class="loading-dot" aria-hidden="true"></span>正在加载账单…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pagination" aria-label="账单分页"><span id="ai-billing-page-info">—</span><div class="pagination-controls"><label for="ai-billing-page-size">每页</label><select id="ai-billing-page-size" aria-label="每页记录数"><option value="20">20 条</option><option value="50">50 条</option><option value="100">100 条</option></select><button type="button" id="ai-billing-prev" disabled>上一页</button><button type="button" id="ai-billing-next" disabled>下一页</button></div></div>
+    </section>
+    <p class="billing-footnote">记录功能启用后的 AI 调用。估值用于核对 AI 使用成本，实际费用以模型服务商账单为准。用量缺失或模型价格未配置时显示“待确认”。</p>
+  </main>
+  <script src="{{ url_for('static', filename='ai-billing.js') }}?v=20261007-1" defer></script>
+</body>
+</html>

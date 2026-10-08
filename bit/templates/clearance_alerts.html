@@ -1,12 +1,14 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
+  <script src="{{ url_for('static', filename='console-performance.js') }}?v=20261007-json-fix"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>半托管清退告警 · 泽顺运营中心</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261004-responsive">
+  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261007-date-filters">
+<script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261007"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='clearance-alerts.css') }}?v=20261001-1">
-    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261004-responsive"></script>
+    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261007-date-filters"></script>
 </head>
 <body class="zs-standalone{{ ' ca-embedded' if embedded else '' }}">
   <main id="clearance-alerts" class="ca-shell" data-can-manage="{{ 'true' if can_manage else 'false' }}">
@@ -76,6 +78,6 @@
     </form>
   </dialog>
   <div id="ca-toast" class="ca-toast" role="status" aria-live="polite" hidden></div>
-  <script defer src="{{ url_for('static', filename='clearance-alerts.js') }}?v=20261001-1"></script>
+  <script defer src="{{ url_for('static', filename='clearance-alerts.js') }}?v=20261007-preload"></script>
 </body>
 </html>

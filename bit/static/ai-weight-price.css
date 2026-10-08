@@ -228,3 +228,93 @@ dialog { border-color: #dfe6ef; border-radius: 17px; box-shadow: 0 24px 80px #13
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* Result-focused workspace, scoped to this module. */
+body.awp-workspace { background: #f5f7fa; }
+body.awp-workspace > .page-heading { min-height: 100px; padding: 20px 24px; }
+body.awp-workspace .page-heading::after { display: none; }
+body.awp-workspace .brand-mark { width: 46px; height: 46px; flex-basis: 46px; border-radius: 12px; box-shadow: none; }
+body.awp-workspace .brand-mark svg { width: 29px; height: 29px; }
+body.awp-workspace .notice { margin: 12px 0; }
+body.awp-workspace #setup { padding: 10px 16px; background: #f0f4fa; border-color: #e2e8f0; color: #52647a; }
+body.awp-workspace .owner-toolbar { padding: 12px 16px; margin: 12px 0; }
+body.awp-workspace #run-progress { border-left: 3px solid #315ddc; }
+body.awp-workspace #run-progress.error { border-left-color: #bd4859; }
+body.awp-workspace #run-message:empty { display: none; }
+body.awp-workspace #latest-event { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+body.awp-workspace .live-console { position: static; padding: 14px 18px; margin: 12px 0; border-radius: 12px; box-shadow: none; }
+body.awp-workspace .live-task { line-height: 1.6; overflow-wrap: anywhere; }
+body.awp-workspace .live-log-details { margin: 8px 0 0; }
+body.awp-workspace .live-log-details summary { width: fit-content; color: #b8cdeb; font-size: 12px; padding: 4px 0; }
+body.awp-workspace .live-log-list { max-height: 260px; }
+body.awp-workspace .stats { margin: 16px 0; gap: 10px; }
+body.awp-workspace .stat { min-height: 108px; padding: 14px 16px; box-shadow: none; }
+body.awp-workspace .stat .n { margin: 5px 0; font-size: 28px; }
+body.awp-workspace .stat-success .n { color: #13866d; }
+body.awp-workspace .stat-exception .n, body.awp-workspace .stat-blocked .n { color: #b35059; }
+body.awp-workspace .awp-tabs { margin: 16px 0 12px; }
+body.awp-workspace .login-row { max-width: none; }
+body.awp-workspace .run-grid { grid-template-columns: minmax(240px, 2fr) repeat(3, minmax(120px, 1fr)); }
+body.awp-workspace .results-heading h2 { margin: 0; font-size: 17px; }
+body.awp-workspace .results-heading p { margin: 4px 0 16px; font-size: 12px; }
+body.awp-workspace .results-toolbar { padding: 14px; background: #f7f9fc; border: 1px solid #e7edf4; border-radius: 10px; }
+body.awp-workspace .results-toolbar .filters { flex: 1; flex-wrap: wrap; }
+body.awp-workspace .results-toolbar .actions { gap: 10px; }
+body.awp-workspace #list-refresh-state { font-size: 11px; }
+body.awp-workspace .export-menu { position: relative; margin: 0; }
+body.awp-workspace .export-menu summary { padding: 9px 14px; border: 1px solid #dce4ef; border-radius: 8px; background: #fff; color: #35465d; font-size: 13px; }
+body.awp-workspace .export-options { position: absolute; right: 0; top: calc(100% + 6px); z-index: 10; width: 184px; display: grid; gap: 4px; padding: 8px; border: 1px solid #dce4ef; border-radius: 10px; background: #fff; box-shadow: 0 12px 30px #19283b20; }
+body.awp-workspace .export-options button { text-align: left; border-color: transparent; box-shadow: none; }
+body.awp-workspace .results-table table { min-width: 1220px; }
+body.awp-workspace .results-table td { vertical-align: middle; line-height: 1.6; }
+body.awp-workspace .results-table td.title { min-width: 200px; max-width: 280px; overflow-wrap: anywhere; font-weight: 600; }
+body.awp-workspace .results-table td:nth-child(3), body.awp-workspace .results-table td:nth-child(4) { min-width: 135px; max-width: 200px; overflow-wrap: anywhere; }
+body.awp-workspace .results-table td:nth-child(9) { min-width: 200px; max-width: 280px; overflow-wrap: anywhere; }
+body.awp-workspace .results-table td:nth-child(5) { color: #23446d; font-weight: 600; font-variant-numeric: tabular-nums; }
+body.awp-workspace .results-table .sub { font-weight: 400; line-height: 1.65; white-space: normal; word-break: normal; overflow-wrap: anywhere; }
+body.awp-workspace .results-table td:last-child { position: sticky; right: 0; background: #fff; box-shadow: -5px 0 8px #19283b05; }
+body.awp-workspace .results-table tr:hover td:last-child { background: #f9fbff; }
+body.awp-workspace .results-table .empty:last-child { position: static; }
+body.awp-workspace .supplier-link { display: inline-block; margin-top: 8px; font-size: 11px; font-weight: 500; }
+body.awp-workspace summary:focus-visible { outline: 3px solid #315ddc55; outline-offset: 3px; }
+@media (max-width: 1100px) {
+  body.awp-workspace .run-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  body.awp-workspace .category-field { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  body.awp-workspace > .page-heading { padding: 16px; gap: 14px; }
+  body.awp-workspace .eyebrow { font-size: 9px; letter-spacing: 1px; }
+  body.awp-workspace .header-actions { width: 100%; }
+  body.awp-workspace .run-grid { grid-template-columns: 1fr; }
+  body.awp-workspace .stat { min-height: 102px; padding: 12px; }
+  body.awp-workspace .stat .foot { font-size: 10px; }
+  body.awp-workspace .results-toolbar .actions { flex-wrap: wrap; }
+  body.awp-workspace .live-console-head { flex-direction: column; gap: 10px; }
+  body.awp-workspace .owner-toolbar select { max-width: 100%; }
+  body.awp-workspace .export-options { right: auto; left: 0; }
+  body.awp-workspace .results-table { border: 0; overflow: visible; }
+  body.awp-workspace .results-table table { min-width: 0; display: block; }
+  body.awp-workspace .results-table thead { display: none; }
+  body.awp-workspace .results-table tbody { display: grid; gap: 12px; }
+  body.awp-workspace .results-table tr { display: grid; grid-template-columns: 72px minmax(0, 1fr); padding: 14px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
+  body.awp-workspace .results-table td { display: block; grid-column: 1 / -1; min-width: 0; max-width: none; padding: 9px 0; white-space: normal; border: 0; }
+  body.awp-workspace .results-table td:first-child:not(.empty) { grid-column: 1; padding-top: 0; }
+  body.awp-workspace .results-table td.title { grid-column: 2; min-width: 0; max-width: none; padding: 0 0 12px 8px; }
+  body.awp-workspace .results-table td:nth-child(n+3) { min-width: 0; max-width: none; border-top: 1px solid #f0f3f7; }
+  body.awp-workspace .results-table td:nth-child(n+3)::before { content: attr(data-label); display: block; margin-bottom: 3px; color: #718096; font-size: 11px; font-weight: 400; }
+  body.awp-workspace .results-table td:last-child { position: static; box-shadow: none; background: transparent; padding-bottom: 0; }
+  body.awp-workspace .results-table .product-thumb, body.awp-workspace .results-table .product-thumb-empty { width: 64px; height: 64px; }
+  body.awp-workspace .pagination { justify-content: center; flex-wrap: wrap; gap: 10px; }
+}
+body.awp-workspace #storage { min-width: 0; max-width: 100%; overflow-wrap: anywhere; font-size: 11px; }
+@media (max-width: 760px) {
+  body.awp-workspace .results-table tr { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+  body.awp-workspace .results-table td:first-child:not(.empty) { grid-column: 1 / -1; }
+  body.awp-workspace .results-table td.title { grid-column: 1 / -1; padding-left: 0; }
+  body.awp-workspace .results-table td:nth-child(4),
+  body.awp-workspace .results-table td:nth-child(5),
+  body.awp-workspace .results-table td:nth-child(6),
+  body.awp-workspace .results-table td:nth-child(7) { grid-column: auto; }
+}
+body.awp-workspace .results-table td:last-child:not(.empty) { min-width: 100px; }
+body.awp-workspace .results-table .row-actions button { white-space: nowrap; }

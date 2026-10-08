@@ -4,7 +4,6 @@
 const PRODUCT_BATCH_KEY = "productBatch";
 const PRODUCT_READ_TIMEOUT_MS = 30000;
 const PRODUCT_DETAIL_TIMEOUT_MS = 90000;
-const PRODUCT_BLOCK_RETRY_MS = 600000;
 const PRODUCT_SEARCH_HOSTS = {
   MLM: "listado.mercadolibre.com.mx", MLB: "lista.mercadolivre.com.br",
   MLA: "listado.mercadolibre.com.ar", MLC: "listado.mercadolibre.cl",
@@ -144,9 +143,9 @@ async function getProductBatchStatus() {
 
 async function saveProductBatch(run) {
   const snapshot = {...run.state};
-  run.saving = (run.saving || Promise.resolve()).then(() =>
-    storageSet("local", {[PRODUCT_BATCH_KEY]: snapshot})
-  );
+  run.saving = (run.saving || Promise.resolve()).catch(() => {}).then(() =>
+    productBatchReadWithin(() => storageSet("local", {[PRODUCT_BATCH_KEY]: snapshot}), Date.now() + 3000, undefined, "保存采集进度")
+  ).catch(() => { /* Keep in-memory progress usable if browser storage stalls. */ });
   await run.saving;
 }
 
@@ -225,6 +224,7 @@ function productBatchTabUrl(tab) {
 }
 
 function productBatchBlockReason(response) {
+  if (response?.errorSource === "data_service" || response?.authRequired) return "";
   const text = String(response?.error || response?.message || "");
   if (Number(response?.status) === 429 || /限频|访问(?:过于)?频繁|请求(?:过于)?频繁|操作频繁|too many requests|rate.?limit|HTTP\s*429/i.test(text)) return "美客多访问限频";
   if (response?.blocked || (!/泽顺商品数据/.test(text) && /买家.*登录|登录或.*验证|account.?verification/i.test(text))) return "需要美客多买家账号登录或完成验证";
@@ -242,28 +242,23 @@ async function pauseProductBatchForBlock(run, reason) {
     await saveProductBatch(run);
     return;
   }
-  run.state.phase = "paused";
-  run.state.retry_at = Date.now() + PRODUCT_BLOCK_RETRY_MS;
-  run.state.message = `${reason}，任务已暂停，10 分钟后自动重试；请按需在美客多页面完成买家登录。`;
-  reportProductBatchAttention(run.state.message, {source: "美客多商品采集"});
-  await saveProductBatch(run);
-  while (!run.stop && Date.now() < run.state.retry_at) {
-    await new Promise(resolve => setTimeout(resolve, Math.min(500, run.state.retry_at - Date.now())));
-  }
+  // Only a blocked search page is a batch-level failure. Detail pages are
+  // isolated below; never reset their deadlines or suspend unrelated lanes.
+  run.stop = true;
+  run.stopReason = `${reason}，列表页无法继续，任务已停止；已采集成功的商品保留，完成验证后可重新启动。`;
+  run.state.phase = "stopped";
   run.state.retry_at = null;
-  if (!run.stop) {
-    run.state.phase = "running";
-    run.state.message = "暂停结束，正在重试被拦截的页面";
-    await saveProductBatch(run);
-  }
+  run.state.message = run.stopReason;
+  reportProductBatchAttention(run.stopReason, {source: "美客多商品采集"});
+  await saveProductBatch(run);
 }
 
-function productBatchReadWithin(action, deadline, run) {
+function productBatchReadWithin(action, deadline, run, stage = "浏览器操作") {
   let timer, stopTimer;
   return Promise.race([
     Promise.resolve().then(action),
     new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error("页面或泽顺商品数据响应超时")), Math.max(0, deadline - Date.now()));
+      timer = setTimeout(() => reject(new Error(`${stage}响应超时`)), Math.max(0, deadline - Date.now()));
       if (run) stopTimer = setInterval(() => {
         if (run.stop) reject(new Error(run.stopReason || "已停止采集"));
       }, 100);
@@ -273,7 +268,7 @@ function productBatchReadWithin(action, deadline, run) {
 
 async function readProductBatchPage(run, url, type, consume) {
   if (run.stop) return null;
-  // 页面激活后独立读取；每个通道有自己的读取和上传超时。
+  // 重量尺寸由后台提供；页面激活后独立读取，各通道有自己的读取和上传超时。
   const needsForeground = type === "READ_PRODUCT_LIST" || type === "EXTRACT_BATCH_PRODUCT";
   const tabOptions = {url: productBatchUrl(url), active: false};
   if (run.windowId) tabOptions.windowId = run.windowId;
@@ -287,26 +282,24 @@ async function readProductBatchPage(run, url, type, consume) {
         void closeProductBatchTab(run, created.id);
       }
       return created;
-    }, Date.now() + PRODUCT_READ_TIMEOUT_MS, run);
+    }, Date.now() + PRODUCT_READ_TIMEOUT_MS, run, "打开美客多页面");
   } catch (error) { abandoned = true; throw error; }
   run.tabs.add(tab.id);
   try {
     const poll = async () => {
       const timeoutMs = type === "EXTRACT_BATCH_PRODUCT" ? PRODUCT_DETAIL_TIMEOUT_MS : PRODUCT_READ_TIMEOUT_MS;
-      let deadline = Date.now() + timeoutMs;
+      const deadline = Date.now() + timeoutMs;
       let lastError = "页面未加载完成";
       while (!run.stop && Date.now() < deadline) {
-        const current = await productBatchReadWithin(() => chrome.tabs.get(tab.id), deadline, run);
+        const current = await productBatchReadWithin(() => chrome.tabs.get(tab.id), deadline, run, "读取美客多标签页状态");
         let currentUrl;
         try {
           if (/\/(?:login|registration|account-verification|challenge|captcha)(?:[/?]|$)/i.test(current.pendingUrl || current.url || "")) throw new Error("买家登录验证");
           currentUrl = productBatchTabUrl(current);
         } catch (error) {
+          if (type === "EXTRACT_BATCH_PRODUCT") throw new Error("该商品需要买家登录或验证，已跳过，请完成验证后单独重试");
           await pauseProductBatchForBlock(run, "需要美客多买家账号登录或完成验证");
-          if (run.stop) return null;
-          await productBatchReadWithin(() => chrome.tabs.update(tab.id, {url}), Date.now() + PRODUCT_READ_TIMEOUT_MS, run);
-          deadline = Date.now() + timeoutMs;
-          continue;
+          return null;
         }
         if (!currentUrl) {
           lastError = "页面正在打开，等待商品页加载";
@@ -318,18 +311,21 @@ async function readProductBatchPage(run, url, type, consume) {
         // 直接尝试发消息，内容脚本尚未注入时只会进入下一轮重试。
         let response = null;
         try {
-          response = await productBatchReadWithin(() => sendTabMessage(tab.id, {type}), deadline, run);
+          response = await productBatchReadWithin(() => sendTabMessage(tab.id, {type}), deadline, run, type === "READ_PRODUCT_LIST" ? "读取美客多列表页" : "读取美客多详情及泽顺商品数据");
         } catch (error) { lastError = error.message || String(error); response = {status: error.status, error: lastError}; }
         const reason = productBatchBlockReason(response);
         if (reason) {
+          if (type === "EXTRACT_BATCH_PRODUCT" && reason !== "美客多访问限频") {
+            throw new Error("该商品需要买家登录或验证，已跳过，请完成验证后单独重试");
+          }
           await pauseProductBatchForBlock(run, reason);
-          if (run.stop) return null;
-          await productBatchReadWithin(() => chrome.tabs.update(tab.id, {url}), Date.now() + PRODUCT_READ_TIMEOUT_MS, run);
-          deadline = Date.now() + timeoutMs;
-          continue;
+          return null;
         }
         if (response?.ok) return response;
-        if (response?.retryable === false) throw new Error(response.error || "泽顺商品数据读取失败");
+        if (response?.authRequired || response?.retryable === false) throw Object.assign(
+          new Error(response.error || "泽顺商品数据读取失败"),
+          {authRequired: response.authRequired, status: response.status, errorSource: response.errorSource}
+        );
         if (response?.error) lastError = response.error;
         await new Promise(resolve => setTimeout(resolve, 500));
       }
@@ -388,7 +384,6 @@ async function runProductBatch(run) {
       let index = 0;
       await Promise.all(Array.from({length: Math.min(params.concurrency, candidates.length)}, async () => {
         while (!run.stop && index < candidates.length && run.state.completed_count + run.reserved < params.max_items) {
-          while (!run.stop && run.state.phase === "paused") await new Promise(resolve => setTimeout(resolve, 500));
           if (run.stop) break;
           const itemUrl = candidates[index++];
           run.state.candidate_count += 1;
@@ -411,7 +406,7 @@ async function runProductBatch(run) {
               try {
                 await productBatchReadWithin(
                   () => uploadProduct(product, {openConsole: false}),
-                  Date.now() + PRODUCT_DETAIL_TIMEOUT_MS
+                  Date.now() + PRODUCT_DETAIL_TIMEOUT_MS, undefined, "上传商品到泽顺控制台"
                 );
                 run.state.completed_count += 1;
                 succeeded = true;
@@ -475,9 +470,9 @@ async function startProductBatch(message) {
     if (!auth) throw new Error("请先在插件设置中登录泽顺控制台账号");
     const params = productBatchParams(message.params);
     assertManagementCategorySession(auth, params.management_category_id);
-    const tab = await chrome.tabs.get(Number(message.tab_id));
+    const tab = await productBatchReadWithin(() => chrome.tabs.get(Number(message.tab_id)), Date.now() + PRODUCT_READ_TIMEOUT_MS, undefined, "读取选中的美客多标签页");
     const originalUrl = productBatchUrl(tab.url);
-    const pageContext = await sendTabMessage(tab.id, {type: "READ_PRODUCT_LIST"});
+    const pageContext = await productBatchReadWithin(() => sendTabMessage(tab.id, {type: "READ_PRODUCT_LIST"}), Date.now() + PRODUCT_READ_TIMEOUT_MS, undefined, "读取美客多起始列表页");
     if (!pageContext.ok) throw new Error(pageContext.error || "请选择已加载完成的 Mercado Libre 搜索列表页");
     const dataService = await apiRequest("/api/browser-extension/mercado-data/status");
     if (!dataService.ready) throw new Error(dataService.message || "泽顺商品数据服务未就绪");

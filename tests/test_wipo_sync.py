@@ -1,4 +1,8 @@
 import json
+import os
+import sqlite3
+import subprocess
+import sys
 import threading
 from datetime import datetime, timedelta
 
@@ -15,7 +19,7 @@ def service(tmp_path, monkeypatch):
     return WipoSyncService("test-encryption-key", path=tmp_path / "wipo.sqlite3")
 
 
-def test_feed_deduplicates_and_queues_review_even_for_expired_marks():
+def test_feed_deduplicates_and_blacklists_all_named_marks():
     rows, summary = normalize_feed_rows([
         {"Brand name": "  Example   Mark ", "registration_number": "100", "status": "Expired", "list_type": "whitelist"},
         {"mark": "example mark", "number": "101", "country": "MX"},
@@ -24,7 +28,7 @@ def test_feed_deduplicates_and_queues_review_even_for_expired_marks():
     ])
     assert summary == {"fetched": 4, "unique": 2, "skipped": 1}
     assert rows[0]["evidence_count"] == 2
-    assert all(row["list_type"] == "pending" for row in rows)
+    assert all(row["list_type"] == "blacklist" for row in rows)
     detail = json.loads(rows[0]["source_detail"])
     assert detail["status"] == "Expired"
     assert detail["registration"] == ["100", "101"] and detail["country"] == "MX"
@@ -130,10 +134,10 @@ def test_manual_sync_dedupe_lock_success_and_history(service):
     assert state["status"] == "success" and state["running"] is False
     assert state["summary"]["inserted"] == 1
     assert len(written) == 1 and len(state["history"]) == 1
-    assert written[0]["list_type"] == "pending"
+    assert written[0]["list_type"] == "blacklist"
     assert "保留人工处置 2" in state["message"]
     assert "跳过已删除 3" in state["message"]
-    assert "需人工复核" in state["message"]
+    assert "黑名单同步完成" in state["message"]
     assert state["last_success_at"] and state["next_run_at"]
     assert service.tick() is False  # Persisted next run prevents a second fetch.
 
@@ -213,6 +217,7 @@ def test_editing_backfill_date_during_run_resets_saved_cursor(service):
         assert resume.wait(5)
         return [], {"fetched": 0, "unique": 0, "madrid_through_date": previous}
     service.fetcher = fetcher
+    service.writer = lambda _: {}
     service.start_sync()
     assert entered.wait(5)
     service.save_settings({"madrid_from_date": requested})
@@ -249,3 +254,148 @@ def test_client_routes_forward_to_central_server(service, monkeypatch):
     assert client.post("/api/infringement-knowledge/wipo/sync", json={}).status_code == 200
     assert calls == [("POST", "/api/db/infringement-knowledge/wipo/sync", {"json": {}})]
     assert client.get("/api/db/infringement-knowledge/wipo/status").status_code == 503
+
+
+def test_failed_import_resumes_saved_rows_without_fetching_again(service, monkeypatch):
+    monkeypatch.setattr(wipo_sync, "IMPORT_BATCH_ROWS", 2)
+    service.save_settings({"source_mode": "feed", "feed_url": "https://feed.example/data"})
+    service.fetcher = lambda *_: normalize_feed_rows([{"mark": name} for name in ("A", "B", "C")])
+    calls = []
+    def writer(rows):
+        calls.append([row["brand_name"] for row in rows])
+        if len(calls) == 2:
+            raise RuntimeError("database unavailable")
+        return {"inserted": len(rows)}
+    service.writer = writer
+    service.start_sync()
+    service.thread.join(5)
+    assert service.status()["status"] == "error"
+    with service.database() as db:
+        assert service._read(db, "batch", {})["processed"] == 2
+    clone = WipoSyncService("test-encryption-key", path=service.path,
+                            writer=lambda rows: calls.append([row["brand_name"] for row in rows]) or {"inserted": len(rows)},
+                            fetcher=lambda *_: pytest.fail("resume must use durable snapshot"))
+    clone.start_sync()
+    clone.thread.join(5)
+    state = clone.status()
+    assert state["status"] == "success"
+    assert calls == [["A", "B"], ["C"], ["C"]]
+    assert state["summary"]["inserted"] == state["summary"]["processed"] == 3
+    with clone.database() as db:
+        assert not clone._read(db, "batch", {})
+        assert db.execute("SELECT COUNT(*) FROM wipo_pending_rows").fetchone()[0] == 0
+
+
+def test_process_exit_after_database_commit_replays_only_uncheckpointed_chunk(service, tmp_path, monkeypatch):
+    target = tmp_path / "brands.sqlite3"
+    script = '''
+import os, sqlite3, sys
+from bit import wipo_sync
+wipo_sync.IMPORT_BATCH_ROWS = 2
+def writer(rows):
+    with sqlite3.connect(sys.argv[2]) as db:
+        db.execute("CREATE TABLE IF NOT EXISTS brands(name TEXT PRIMARY KEY)")
+        db.executemany("INSERT OR IGNORE INTO brands VALUES (?)", [(r["brand_name"],) for r in rows])
+    if rows[0]["brand_name"] == "C":
+        os._exit(0)  # Crash after the target commit, before the progress checkpoint.
+    return {"inserted": len(rows)}
+service = wipo_sync.WipoSyncService("test-encryption-key", path=sys.argv[1], writer=writer,
+    fetcher=lambda *_: wipo_sync.normalize_feed_rows([{"mark": n} for n in ("A", "B", "C", "D")]))
+service.save_settings({"source_mode":"feed", "feed_url":"https://feed.example/data"})
+service.start_sync()
+service.thread.join(10)
+raise SystemExit(1)
+'''
+    env = {**os.environ, "BIT_RUNTIME_LOCK_DIR": str(bit_runtime_lock.RUNTIME_LOCK_DIR)}
+    subprocess.run([sys.executable, "-c", script, str(service.path), str(target)],
+                   env=env, check=True, timeout=15, capture_output=True)
+    # The old process has exited; age the directory beyond the lock's creation guard.
+    lock = bit_runtime_lock.RUNTIME_LOCK_DIR / (service.lock_key + ".lockdir")
+    os.utime(lock, (1, 1))
+    resumed = []
+    def writer(rows):
+        resumed.extend(row["brand_name"] for row in rows)
+        with sqlite3.connect(target) as db:
+            before = db.total_changes
+            db.executemany("INSERT OR IGNORE INTO brands VALUES (?)", [(r["brand_name"],) for r in rows])
+            inserted = db.total_changes - before
+        return {"inserted": inserted, "unchanged": len(rows) - inserted}
+    service.writer = writer
+    service.fetcher = lambda *_: pytest.fail("restart must not re-download committed snapshot")
+    state = service.status()
+    assert state["status"] == "interrupted" and state["summary"]["processed"] == 2
+    assert datetime.fromisoformat(state["next_run_at"]) <= datetime.now(LOCAL)
+    assert service.tick() is True
+    service.thread.join(5)
+    assert resumed == ["C", "D"]
+    assert service.status()["status"] == "success"
+    with sqlite3.connect(target) as db:
+        assert db.execute("SELECT name FROM brands ORDER BY name").fetchall() == [("A",), ("B",), ("C",), ("D",)]
+
+
+def test_changing_source_discards_failed_snapshot(service):
+    service.save_settings({"source_mode": "feed", "feed_url": "https://feed.example/old"})
+    service.fetcher = lambda *_: normalize_feed_rows([{"mark": "Old"}])
+    def failed(_):
+        raise RuntimeError("database unavailable")
+    service.writer = failed
+    service.start_sync()
+    service.thread.join(5)
+    service.save_settings({"feed_url": "https://feed.example/new"})
+    written = []
+    service.fetcher = lambda *_: normalize_feed_rows([{"mark": "New"}])
+    service.writer = lambda rows: written.extend(rows) or {"inserted": len(rows)}
+    service.start_sync()
+    service.thread.join(5)
+    assert [row["brand_name"] for row in written] == ["New"]
+
+
+def test_upgrade_migrates_existing_wipo_brands_before_fetch_and_persists_version(service, monkeypatch):
+    from bit import bit_mysql
+    migrations = []
+    monkeypatch.setattr(bit_mysql, "migrate_wipo_blacklist", lambda: migrations.append(True) or 7)
+    monkeypatch.setattr(bit_mysql, "upsert_wipo_infringement_knowledge", lambda _: {})
+    def fetcher(*_):
+        assert migrations
+        return [], {"fetched": 0, "unique": 0}
+    service.fetcher = fetcher
+    with service.database() as db:
+        service._write(db, "state", {**wipo_sync.DEFAULT_STATE, "status": "success",
+                                    "next_run_at": (datetime.now(LOCAL) + timedelta(hours=24)).isoformat()})
+    assert service.tick() is True  # Upgrade reconciliation runs before the old schedule.
+    service.thread.join(5)
+    assert service.status()["blacklist_policy_version"] == wipo_sync.BLACKLIST_POLICY_VERSION
+    assert service.status()["summary"]["historical_blacklisted"] == 7
+    service.start_sync()
+    service.thread.join(5)
+    assert len(migrations) == 1
+
+
+def test_partial_download_schedules_quick_continuation_without_advancing_cursor(service):
+    class PartialDownload(ValueError):
+        summary = {"resume_pending": True, "cached_download_bytes": 12, "archive_bytes": 100}
+    def fetcher(*_):
+        raise PartialDownload("已保存下载进度，将继续下载")
+    service.fetcher = fetcher
+    service.writer = lambda _: pytest.fail("partial archive cannot be imported")
+    service.start_sync()
+    service.thread.join(5)
+    state = service.status()
+    assert state["status"] == "continuing"
+    assert state["last_success_at"] == state["madrid_through_date"] == ""
+    assert state["summary"]["cached_download_bytes"] == 12
+    assert timedelta() < datetime.fromisoformat(state["next_run_at"]) - datetime.now(LOCAL) < timedelta(seconds=61)
+
+
+def test_scheduler_startup_discovers_each_persisted_organization(tmp_path, monkeypatch):
+    from bit.knowledge_organization import scope
+    monkeypatch.setenv("BIT_WIPO_SYNC_PATH", str(tmp_path / "sync.sqlite3"))
+    monkeypatch.setattr(wipo_sync, "_service", None)
+    monkeypatch.setattr(wipo_sync, "_services", {})
+    for key in ("alpha-company", "beta-company"):
+        with scope(key):
+            WipoSyncService("key").save_settings({"enabled": True})
+    started = []
+    monkeypatch.setattr(WipoSyncService, "start_scheduler", lambda self: started.append(self.organization_key))
+    wipo_sync.start_schedulers("key")
+    assert set(started) == {"wuhan-zeshun", "alpha-company", "beta-company"}

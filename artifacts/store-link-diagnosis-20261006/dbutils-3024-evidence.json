@@ -1,0 +1,150 @@
+{
+  "default_pool_failures": {
+    "network_connections_opened": 0,
+    "observed_error_code": 3024,
+    "execute_attempts": [
+      {
+        "attempt": 1,
+        "physical_connection_id": 1,
+        "active_logical_pool_connections": 1,
+        "statement_budget_ms": 8000,
+        "error_code": 3024
+      },
+      {
+        "attempt": 2,
+        "physical_connection_id": 1,
+        "active_logical_pool_connections": 1,
+        "statement_budget_ms": 8000,
+        "error_code": 3024
+      },
+      {
+        "attempt": 3,
+        "physical_connection_id": 2,
+        "active_logical_pool_connections": 1,
+        "statement_budget_ms": 8000,
+        "error_code": 3024
+      }
+    ],
+    "aggregate_statement_budget_ms": 24000,
+    "active_logical_connections_before_close": 1,
+    "active_logical_connections_after_close": 0,
+    "events": [
+      {
+        "event": "physical_open",
+        "connection_id": 1
+      },
+      {
+        "event": "cursor_open",
+        "connection_id": 1
+      },
+      {
+        "event": "cursor_open",
+        "connection_id": 1
+      },
+      {
+        "event": "cursor_close",
+        "connection_id": 1
+      },
+      {
+        "event": "physical_open",
+        "connection_id": 2
+      },
+      {
+        "event": "cursor_open",
+        "connection_id": 2
+      },
+      {
+        "event": "cursor_close",
+        "connection_id": 2
+      },
+      {
+        "event": "physical_close",
+        "connection_id": 2
+      },
+      {
+        "event": "physical_close",
+        "connection_id": 1
+      }
+    ]
+  },
+  "exclude_operational_error_from_retry": {
+    "network_connections_opened": 0,
+    "observed_error_code": 3024,
+    "execute_attempts": [
+      {
+        "attempt": 1,
+        "physical_connection_id": 1,
+        "active_logical_pool_connections": 1,
+        "statement_budget_ms": 8000,
+        "error_code": 3024
+      }
+    ],
+    "aggregate_statement_budget_ms": 8000,
+    "active_logical_connections_before_close": 1,
+    "active_logical_connections_after_close": 0,
+    "events": [
+      {
+        "event": "physical_open",
+        "connection_id": 1
+      },
+      {
+        "event": "cursor_open",
+        "connection_id": 1
+      },
+      {
+        "event": "cursor_close",
+        "connection_id": 1
+      },
+      {
+        "event": "physical_close",
+        "connection_id": 1
+      }
+    ]
+  },
+  "explicit_transaction": {
+    "network_connections_opened": 0,
+    "observed_error_code": 3024,
+    "execute_attempts": [
+      {
+        "attempt": 1,
+        "physical_connection_id": 1,
+        "active_logical_pool_connections": 1,
+        "statement_budget_ms": 8000,
+        "error_code": 3024
+      }
+    ],
+    "aggregate_statement_budget_ms": 8000,
+    "active_logical_connections_before_close": 1,
+    "active_logical_connections_after_close": 0,
+    "events": [
+      {
+        "event": "physical_open",
+        "connection_id": 1
+      },
+      {
+        "event": "cursor_open",
+        "connection_id": 1
+      },
+      {
+        "event": "physical_open",
+        "connection_id": 2
+      },
+      {
+        "event": "cursor_open",
+        "connection_id": 2
+      },
+      {
+        "event": "cursor_close",
+        "connection_id": 1
+      },
+      {
+        "event": "physical_close",
+        "connection_id": 1
+      },
+      {
+        "event": "physical_close",
+        "connection_id": 2
+      }
+    ]
+  }
+}

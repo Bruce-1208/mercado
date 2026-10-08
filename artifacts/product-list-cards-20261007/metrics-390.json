@@ -1,0 +1,111 @@
+{
+  "viewport": 390,
+  "documentWidth": 390,
+  "documentClientWidth": 390,
+  "listWidth": 340,
+  "listScrollWidth": 340,
+  "columns": 1,
+  "cards": [
+    {
+      "x": 25,
+      "y": 1676.875,
+      "width": 340,
+      "height": 649.125
+    },
+    {
+      "x": 25,
+      "y": 2338,
+      "width": 340,
+      "height": 668.625
+    },
+    {
+      "x": 25,
+      "y": 3018.625,
+      "width": 340,
+      "height": 649.125
+    },
+    {
+      "x": 25,
+      "y": 3679.75,
+      "width": 340,
+      "height": 649.125
+    },
+    {
+      "x": 25,
+      "y": 4340.875,
+      "width": 340,
+      "height": 649.125
+    },
+    {
+      "x": 25,
+      "y": 5002,
+      "width": 340,
+      "height": 649.125
+    }
+  ],
+  "cardOverflow": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "emptyState": {
+    "bodyWidth": 340,
+    "rowWidth": 340,
+    "scrollWidth": 390,
+    "clientWidth": 390,
+    "overflowing": [
+      {
+        "name": "workspace-tab",
+        "right": 485.734375
+      },
+      {
+        "name": "workspace-tab",
+        "right": 581.734375
+      }
+    ]
+  },
+  "interactionChecks": [
+    "single_selection",
+    "selected_card_style",
+    "select_all",
+    "expand_details",
+    "review_update",
+    "edit_save",
+    "risk_detail",
+    "single_item_detection",
+    "bulk_edit_dialog",
+    "bilingual_preview_dialog",
+    "full_width_empty_state"
+  ],
+  "mutations": [
+    {
+      "kind": "review",
+      "payload": {
+        "product_item_ids": [
+          101
+        ],
+        "review_status": "approved"
+      }
+    },
+    {
+      "kind": "edit",
+      "payload": {
+        "title": "都市轻量双肩背包 · 多口袋防泼水款 · 离线编辑验证",
+        "main_image_url": "http://console.test/__qa/main-images/backpack.svg",
+        "price": 586.04,
+        "category_id": "MLM123456",
+        "weight_g": 320,
+        "package_length_cm": 24,
+        "package_width_cm": 16,
+        "package_height_cm": 32,
+        "description_text": "适合日常生活使用。无品牌标识，包装尺寸与实际重量已登记。",
+        "variations": [],
+        "variation_dimensions": []
+      }
+    }
+  ],
+  "pageErrors": []
+}

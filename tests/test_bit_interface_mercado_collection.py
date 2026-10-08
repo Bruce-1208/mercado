@@ -2,8 +2,23 @@ from datetime import datetime
 import asyncio
 from pathlib import Path
 from unittest.mock import patch
+import pytest
 
 import bit.bit_interface as workbench
+
+
+@pytest.fixture(autouse=True)
+def offline_console(monkeypatch, tmp_path, isolated_legacy_console_user, subscribed_workbench_account):
+    # These functional scenarios use an explicitly permitted offline admin.
+    # Account/permission enforcement has separate dedicated test suites.
+    monkeypatch.setattr(workbench, "_authorized_token_ids_for_user", lambda *args: None)
+    monkeypatch.setattr(workbench, "workbench_selected_organization", lambda *args: "")
+    monkeypatch.setattr(workbench.bit_db_api, "publish_workers", lambda *args: 16)
+    monkeypatch.setenv("MERCADO_INFRINGEMENT_TASK_PATH", str(tmp_path / "infringement.sqlite3"))
+    monkeypatch.setattr(workbench, "_mercado_infringement_service", None)
+    monkeypatch.setattr(workbench, "LOCAL_AGENT_HUB_PATH", tmp_path / "agents.sqlite3")
+    monkeypatch.setattr(workbench, "_local_agent_store_instance", None)
+    monkeypatch.setattr(workbench, "_local_agent_hub_migration_source", None)
 
 
 def _actual_shipping(weight):
@@ -208,6 +223,7 @@ def _client():
             "id": 1,
             "username": "tester",
             "display_name": "测试用户",
+            "role_key": "super_admin",
         }
     return client
 
@@ -271,7 +287,7 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     response = client.get("/")
 
     assert response.status_code == 200
-    assert b'data-ui-version="2026-09-15-console-ui-v3"' in response.data
+    assert b'data-ui-version="2026-10-04-responsive-ui"' in response.data
     assert b'window.location.protocol === "file:"' in response.data
     assert b'window.location.replace("http://127.0.0.1:5000/")' in response.data
     assert b'data-tab="mercado-collection"' in response.data
@@ -283,7 +299,7 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert b'id="mercado-list-module"' in response.data
     assert b'id="mercado-view-collection"' not in response.data
     assert b'id="mercado-view-products"' not in response.data
-    assert "商品采集".encode("utf-8") in response.data
+    assert "美客多跟卖采集".encode("utf-8") in response.data
     assert "产品资料库".encode("utf-8") in response.data
     assert "审核工作区".encode("utf-8") in response.data
     assert b'mountMercadoListModule("collection")' in response.data
@@ -383,7 +399,7 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert b'id="mercado-collection-filter-note"' not in response.data
     assert b'class="market-product-filters visible zs-filter-panel"' in response.data
     assert b'.market-list-panel.collection-mode .market-product-filters' not in response.data
-    assert "采集列表支持实重可用、未审核、未上架及重量、售价、收益和采集时间组合筛选".encode("utf-8") in response.data
+    assert "支持泽顺业务员、标题、主图、售价、重量、尺寸、审核状态和净收益查看".encode("utf-8") in response.data
     review_filter_markup = response.data.split(b'id="mercado-review-filter"', 1)[0].rsplit(b'<div', 1)[-1]
     publish_filter_markup = response.data.split(b'id="mercado-publish-filter"', 1)[0].rsplit(b'<div', 1)[-1]
     assert b'market-product-only-filter' not in review_filter_markup
@@ -415,8 +431,9 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
         assert status_name.encode("utf-8") in response.data
     assert "仅“通过”状态可上架".encode("utf-8") in response.data
     assert "批量上架".encode("utf-8") in response.data
-    assert "不可上架，将自动移回采集列表".encode("utf-8") in response.data
-    assert "最终上架净收益 = 产品净收益 ×".encode("utf-8") in response.data
+    assert "资料未就绪，将自动移回采集列表".encode("utf-8") in response.data
+    assert "侵权风险待处理，保留产品列表".encode("utf-8") in response.data
+    assert "最终上架售价 = 产品净收益 ×".encode("utf-8") in response.data
     assert 'partial: "部分完成"'.encode("utf-8") in response.data
 
 
@@ -931,7 +948,7 @@ def test_management_category_endpoints_support_crud_assignment_and_filtering():
             "/api/mercado-management-categories", json={"name": "待测款"}
         )
     assert response.status_code == 200
-    create_category.assert_called_once_with("待测款")
+    create_category.assert_called_once_with("待测款", 100)
 
     with patch.object(
         workbench,
@@ -942,7 +959,7 @@ def test_management_category_endpoints_support_crud_assignment_and_filtering():
             "/api/mercado-management-categories/5", json={"name": "重点款"}
         )
     assert response.status_code == 200
-    update_category.assert_called_once_with(5, "重点款")
+    update_category.assert_called_once_with(5, "重点款", None)
 
     with patch.object(
         workbench,
@@ -1176,7 +1193,12 @@ def test_product_list_filters_and_review_status_endpoint():
         )
 
     assert response.status_code == 200
-    assert response.get_json()["data"] == rows
+    data = response.get_json()["data"]
+    assert data["total"] == rows["total"]
+    assert len(data["rows"]) == len(rows["rows"])
+    for actual, expected in zip(data["rows"], rows["rows"]):
+        assert {key: actual[key] for key in expected} == expected
+    assert data["rows"][0]["infringement"]["status"] == "unchecked"
     list_products.assert_called_once_with(
         search="bag",
         limit=500,
@@ -1405,7 +1427,7 @@ def test_batch_publish_endpoint_starts_background_task_for_selected_store():
         )
 
     payload = response.get_json()
-    assert response.status_code == 200
+    assert response.status_code == 200, payload
     assert payload["data"]["running"] is True
     assert payload["data"]["store_name"] == "泽顺墨西哥"
     assert payload["data"]["site_id"] == "MLB"
@@ -2047,3 +2069,16 @@ def test_batch_publish_endpoint_rejects_cross_site_for_local_store():
 
     assert response.status_code == 400
     assert "Global Selling" in response.get_json()["message"]
+
+
+def test_collection_list_passes_salesperson_and_directory_options():
+    client = _client()
+    with patch.object(workbench, "db_list_mercado_collection_items", return_value={
+        "rows": [], "total": 0, "salespeople": ["业务甲", "业务乙"],
+    }) as read:
+        response = client.get('/api/mercado-collection/items?salesperson=业务乙&include_salesperson_options=1')
+    assert response.status_code == 200
+    assert response.get_json()['data']['salespeople'] == ['业务甲', '业务乙']
+    assert read.call_args.kwargs['salesperson'] == '业务乙'
+    assert read.call_args.kwargs['include_salesperson_options'] is True
+    assert read.call_args.kwargs['exclude_added'] is True

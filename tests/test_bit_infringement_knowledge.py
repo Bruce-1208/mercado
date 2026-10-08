@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("subscribed_workbench_account")
+
 from bit import bit_db_api, bit_interface
 from bit.bit_infringement_knowledge import (
     normalize_knowledge_record,
@@ -35,7 +37,7 @@ def test_knowledge_record_normalizes_brand_and_list_semantics():
     assert normalize_list_type("黑名单") == "blacklist"
     with pytest.raises(ValueError, match="品牌名称不能为空"):
         normalize_knowledge_record({"brand_name": "", "list_type": "whitelist"})
-    with pytest.raises(ValueError, match="待复核、风险拦截或人工放行"):
+    with pytest.raises(ValueError, match="待复核、风险拦截、人工放行或擦边品牌"):
         normalize_list_type("unknown")
 
 

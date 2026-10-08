@@ -7,13 +7,20 @@
   let lastUrl = location.href;
   let mutationTimer = null;
 
-  function sendMessage(message) {
+  function sendMessage(message, timeoutMs = 65000) {
     return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(message, response => {
-        const runtimeError = chrome.runtime.lastError;
-        if (runtimeError) reject(new Error(runtimeError.message));
-        else resolve(response || {});
-      });
+      const timer = setTimeout(() => reject(new Error("泽顺插件响应超时，请稍后重试")), timeoutMs);
+      try {
+        chrome.runtime.sendMessage(message, response => {
+          clearTimeout(timer);
+          const runtimeError = chrome.runtime.lastError;
+          if (runtimeError) reject(new Error(runtimeError.message));
+          else resolve(response || {});
+        });
+      } catch (_) {
+        clearTimeout(timer);
+        reject(new Error("泽顺插件已更新或连接失效，请刷新当前美客多页面后重试"));
+      }
     });
   }
 
@@ -67,7 +74,7 @@
     // distinguish it from a search result page while the page is settling.
     let decodedUrl = location.href;
     try { decodedUrl = decodeURIComponent(decodedUrl); } catch (_) {}
-    return /\b(?:ML[A-Z]|CBT)-?\d{5,}\b/i.test(decodedUrl) && Boolean(
+    return /\b(?:ML[A-Z]|MCO|CBT)U?-?\d{5,}\b/i.test(decodedUrl) && Boolean(
       document.querySelector("h1, meta[property='og:title'], link[rel='canonical']")
     );
   }
@@ -77,11 +84,99 @@
   const dataCache = new Map();
   let dataTimer;
   let dataRunning = false;
+  let alignmentFrame;
+  const observedCards = new WeakSet();
+  const alignmentObserver = typeof ResizeObserver === "function" ? new ResizeObserver(entries => {
+    // Card height changes are also caused by our alignment. Only widths and
+    // native content changes should schedule another measurement.
+    let changed = false;
+    for (const entry of entries) {
+      const width = entry.contentRect.width;
+      const height = entry.target.classList.contains("zeshun-collector-product-card") ? 0 : entry.contentRect.height;
+      const size = `${width}:${height}`;
+      if (entry.target._zsAlignmentSize !== size) changed = true;
+      entry.target._zsAlignmentSize = size;
+    }
+    if (changed) scheduleAlignment();
+  }) : null;
 
-  function queryProduct(sku, price) {
+  function scheduleAlignment() {
+    if (alignmentFrame) return;
+    alignmentFrame = requestAnimationFrame(() => {
+      alignmentFrame = null;
+      alignListingCards();
+    });
+  }
+
+  function alignListingCards() {
+    const groups = new Map();
+    const entries = [...document.querySelectorAll(".zeshun-collector-product-card:not(.zeshun-collector-product-card--horizontal)")]
+      .map(card => ({card, panel: card.querySelector(":scope > .zeshun-product-info")}))
+      .filter(entry => entry.panel);
+    // Clear the last measurement so shorter replacement data and narrower
+    // layouts can shrink again. Never alter the marketplace's inline styles.
+    for (const {card, panel} of entries) {
+      card.style.removeProperty("--zs-aligned-card-height");
+      panel.style.removeProperty("--zs-aligned-panel-gap");
+      panel.style.removeProperty("--zs-aligned-panel-height");
+      for (const child of panel.children) child.style.removeProperty("--zs-aligned-row-height");
+    }
+    for (const entry of entries) {
+      const rect = entry.card.getBoundingClientRect();
+      if (!rect.width || !rect.height) continue;
+      const item = entry.card.closest("li.ui-search-layout__item") || entry.card;
+      const parent = item.parentElement;
+      if (!groups.has(parent)) groups.set(parent, []);
+      const rows = groups.get(parent);
+      const top = item.getBoundingClientRect().top;
+      let row = rows.find(row => Math.abs(row.top - top) < 2);
+      if (!row) { row = {top, entries: []}; rows.push(row); }
+      row.entries.push(entry);
+    }
+    for (const rows of groups.values()) for (const {entries: row} of rows) {
+      if (row.length < 2) continue;
+      // Match corresponding fields even when one seller/brand/size wraps.
+      const fields = new Map();
+      for (const {panel} of row) {
+        const counts = new Map();
+        for (const child of panel.children) {
+          const cls = child.className;
+          const index = counts.get(cls) || 0;
+          counts.set(cls, index + 1);
+          const key = `${cls}:${index}`;
+          if (!fields.has(key)) fields.set(key, []);
+          fields.get(key).push(child);
+        }
+      }
+      for (const cells of fields.values()) {
+        const height = Math.max(...cells.map(cell => cell.getBoundingClientRect().height));
+        for (const cell of cells) cell.style.setProperty("--zs-aligned-row-height", `${height}px`);
+      }
+      const offsets = row.map(({card, panel}) => panel.getBoundingClientRect().top - card.getBoundingClientRect().top);
+      const offset = Math.max(...offsets);
+      row.forEach(({panel}, index) => panel.style.setProperty("--zs-aligned-panel-gap", `${offset - offsets[index]}px`));
+      const panelHeight = Math.max(...row.map(({panel}) => panel.getBoundingClientRect().height));
+      for (const {panel} of row) panel.style.setProperty("--zs-aligned-panel-height", `${panelHeight}px`);
+      const cardHeight = Math.max(...row.map(({card}) => card.getBoundingClientRect().height));
+      for (const {card} of row) card.style.setProperty("--zs-aligned-card-height", `${cardHeight}px`);
+    }
+  }
+  window.addEventListener("resize", scheduleAlignment);
+  document.addEventListener("load", scheduleAlignment, true);
+
+  function queryProduct(sku, price, immediate = false) {
     const key = `${sku}:${price ?? ""}`;
     const cached = dataCache.get(key);
     if (cached && cached.until > Date.now()) return Promise.resolve(cached.value);
+    // Collection must not wait behind unrelated card batches or a throttled
+    // background-tab timer. A request already sent for this exact key is safe
+    // to share; an unsent card request must not hold up collection.
+    if (immediate && !pendingData.get(key)?.sent) return fetchProductRecords([{sku, price}]).then(records => {
+      const record = records[0];
+      if (!record?.product) throw Object.assign(Error("数据源暂无该商品记录"), {errorSource: "data_service"});
+      dataCache.set(key, {value: record, until: Date.now() + 60000});
+      return record;
+    });
     if (pendingData.has(key)) return pendingData.get(key).promise;
     let resolve, reject;
     const promise = new Promise((a, b) => { resolve = a; reject = b; });
@@ -90,6 +185,24 @@
     dataTimer = setTimeout(flushData, 80);
     return promise;
   }
+  async function fetchProductRecords(items) {
+    try {
+      const response = await sendMessage({type:"GET_MERCADO_PRODUCT_INFO", items:items.map(({sku, price}) => ({sku, price}))});
+      if (!response.ok) throw Object.assign(Error(response.error || "商品查询失败"), {
+        status: response.status, authRequired: response.authRequired
+      });
+      return items.map(item => {
+        const record = (response.items || []).find(v => v.sku === item.sku &&
+          (v.requested_price ?? null) === (item.price > 0 ? item.price : null));
+        if (record) record.warnings = response.warnings || [];
+        return record;
+      });
+    } catch (error) {
+      error.errorSource = "data_service";
+      throw error;
+    }
+  }
+
   async function flushData() {
     if (dataRunning) return;
     const batch = [...pendingData.values()].filter(v => !v.sent).slice(0, 50);
@@ -97,12 +210,10 @@
     dataRunning = true;
     batch.forEach(v => {v.sent = true;});
     try {
-      const response = await sendMessage({type:"GET_MERCADO_PRODUCT_INFO", items:batch.map(v => ({sku:v.sku, price:v.price}))});
-      if (!response.ok) throw Object.assign(Error(response.error || "商品查询失败"), {status: response.status});
-      for (const item of batch) {
-        const record = response.items.find(v => v.sku === item.sku && (v.requested_price ?? null) === (item.price > 0 ? item.price : null));
+      const records = await fetchProductRecords(batch);
+      for (const [index, item] of batch.entries()) {
+        const record = records[index];
         if (!record?.product) {item.reject(Error("数据源暂无该商品记录")); continue;}
-        record.warnings = response.warnings || [];
         dataCache.set(item.key, {value:record, until:Date.now()+60000});
         item.resolve(record);
       }
@@ -126,7 +237,7 @@
     const product = nativeProduct();
     let record;
     try {
-      record = await queryProduct(product.source_item_id, currentPrice(document) ?? product.price);
+      record = await queryProduct(product.source_item_id, currentPrice(document) ?? product.price, true);
       dataCore.apply(product, record);
     } catch (error) {
       error.retryable = false;
@@ -168,6 +279,7 @@
         state.appendChild(button);
       }
       panel.replaceChildren(state);
+      scheduleAlignment();
     };
     const load = async (refresh = false) => {
       if (loading || !panel.isConnected) return;
@@ -179,6 +291,7 @@
         const record = await queryProduct(sku, price);
         if (!panel.isConnected) return;
         dataCore.render(document, panel, record, {onRefresh: () => load(true)});
+        scheduleAlignment();
       } catch (error) {
         if (panel.isConnected) showState(`泽顺 · ${error.message}`, true);
       } finally {
@@ -186,6 +299,7 @@
         panel.setAttribute("aria-busy", "false");
       }
     };
+    showState("泽顺 · 正在读取商品数据…");
     if (typeof IntersectionObserver === "function") {
       const observer = new IntersectionObserver(entries => {
         if (entries.some(v => v.isIntersecting)) {observer.disconnect(); load();}
@@ -212,7 +326,19 @@
     // beneath that information rather than adding another horizontal column.
     const horizontal = card.matches(".poly-card--list, .poly-card--horizontal, .ui-search-result") ||
       card.closest(".ui-search-layout--list");
-    return horizontal && card.querySelector(".poly-card__content, .ui-search-result__content, .ui-search-result__content-wrapper") || card;
+    card.classList.toggle("zeshun-collector-product-card--horizontal", Boolean(horizontal));
+    const host = horizontal && (card.querySelector(".poly-card__content") ||
+      card.querySelector(".ui-search-result__content") ||
+      card.querySelector(".ui-search-result__content-wrapper")) || card;
+    if (host !== card) host.classList.add("zeshun-collector-data-content");
+    // Native cards and their intermediate wrappers can have a fixed height or
+    // clip extra content. Let the whole path grow with the always-visible data.
+    for (let container = host; container; container = container.parentElement) {
+      container.classList.add("zeshun-collector-data-host");
+      if (container === card) break;
+    }
+    card.closest("li.ui-search-layout__item")?.classList.add("zeshun-collector-list-item");
+    return host;
   }
   function currentPrice(root) {
     const amounts = [...root.querySelectorAll(".poly-price__current .andes-money-amount, .ui-search-price__second-line .andes-money-amount, .ui-pdp-price__second-line .andes-money-amount")];
@@ -234,9 +360,18 @@
     }
     for (const candidate of listingCards()) {
       const sku = dataCore.listingId(candidate.url);
+      if (!sku) continue;
       candidate.card.classList.add("zeshun-collector-product-card");
       attachDataCard(listingDataHost(candidate.card), sku, currentPrice(candidate.card));
+      if (alignmentObserver && !observedCards.has(candidate.card)) {
+        observedCards.add(candidate.card);
+        alignmentObserver.observe(candidate.card);
+        for (const child of candidate.card.children) {
+          if (!child.matches(".zeshun-product-info, .zeshun-card-collect")) alignmentObserver.observe(child);
+        }
+      }
     }
+    scheduleAlignment();
   }
 
   async function extractEligibleProduct() {
@@ -292,10 +427,11 @@
         button.disabled = true;
         button.textContent = "采集中…";
         try {
-          const detailTab = window.open(button.dataset.collectionUrl, "_blank", "noopener");
-          if (!detailTab) throw new Error("浏览器拦截了详情页，请允许弹出窗口后重试");
-          button.textContent = "已打开";
-          showToast("正在打开详情页，采集时将以泽顺后台发货方式为准", "info");
+          const response = await sendMessage({type: "COLLECT_MERCADO_URL", url: button.dataset.collectionUrl}, 300000);
+          if (!response.ok) throw new Error(response.error || "采集失败");
+          button.textContent = response.queued ? "已待传" : "已采集";
+          showToast(response.queued ? "控制台暂不可用，已加入待传队列" : "已采集到泽顺控制台",
+            response.queued ? "warning" : "success");
         } catch (error) {
           button.textContent = "重试";
           showToast(error.message || String(error), "error");
@@ -345,7 +481,8 @@
           }
           Promise.resolve(extractServerProduct()).then(
             product => sendResponse({ok: true, product}),
-            error => sendResponse({ok: false, error: error.message || String(error), retryable: error.retryable, status: error.status})
+            error => sendResponse({ok: false, error: error.message || String(error), retryable: error.retryable, status: error.status,
+              authRequired: error.authRequired, errorSource: error.errorSource})
           );
           return true;
         } else {
@@ -361,7 +498,8 @@
     if (message && message.type === "EXTRACT_PRODUCT") {
       Promise.resolve().then(() => extractEligibleProduct()).then(
         product => sendResponse({ok: true, product}),
-        error => sendResponse({ok: false, error: error.message || String(error), retryable: error.retryable, status: error.status})
+        error => sendResponse({ok: false, error: error.message || String(error), retryable: error.retryable, status: error.status,
+          authRequired: error.authRequired, errorSource: error.errorSource})
       );
       return true;
     }

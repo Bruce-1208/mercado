@@ -47,7 +47,7 @@ def test_discovery_uses_product_identity_and_maps_only_live_schema():
 
 
 def test_empty_recommendation_does_not_keep_old_category():
-    with pytest.raises(ValueError, match='无法从平台候选'):
+    with pytest.raises(ValueError, match='有效分类编号'):
         complete_marketplace_category(
             {}, {'product_type_en': 'Bottle'}, Client([]),
             chat=lambda *a, **k: json.dumps({'category_id': '', 'search_query': 'Bottle'}),
@@ -224,11 +224,12 @@ def test_category_search_includes_history_and_does_not_repeat_query():
     def chat(messages, **kwargs):
         prompts.append(messages[0]['content'])
         return json.dumps({'category_id': '', 'search_query': 'pumpkin lantern'})
-    with pytest.raises(ValueError, match='无法从平台候选'):
+    with pytest.raises(ValueError, match='有效分类编号'):
         _select_marketplace_category({}, 'pumpkin lantern', [
             {'category_id': 'CBT1'}, {'category_id': 'CBT2'}], Discovery(), chat=chat)
-    assert len(prompts) == 5
-    assert 'searched_queries' in prompts[-1]
+    assert len(prompts) == 7
+    assert 'searched_queries' in prompts[4]
+    assert '已知的跨境 CBT' in prompts[-1]
 
 
 def test_invalid_optional_enum_cannot_satisfy_required_completion():
@@ -321,7 +322,7 @@ def test_required_completion_leaves_package_dimensions_for_manual_review():
     assert missing == []
 
 
-def test_category_generates_unmapped_required_values_and_ignores_package_dimensions():
+def test_category_maps_required_facts_and_ignores_package_dimensions():
     class PackagingClient(Client):
         def request(self, method, path, **kwargs):
             result = super().request(method, path, **kwargs)
@@ -331,7 +332,7 @@ def test_category_generates_unmapped_required_values_and_ignores_package_dimensi
 
     def chat(messages, **kwargs):
         prompt = messages[0]['content']
-        assert '允许自行编造' in prompt
+        assert '不得编造' in prompt
         assert 'PACKAGE_HEIGHT' not in prompt
         return json.dumps({'attributes': [
             {'id': 'MATERIAL', 'value_id': '12'},
@@ -340,6 +341,6 @@ def test_category_generates_unmapped_required_values_and_ignores_package_dimensi
         ]})
 
     result = complete_marketplace_category(
-        {'title': '水瓶'}, {'product_type_en': 'Water bottle'}, PackagingClient(), chat=chat)
+        {'title': '500 ml 钢制水瓶'}, {'product_type_en': 'Water bottle'}, PackagingClient(), chat=chat)
     assert result['missing_required_attributes'] == []
     assert {a['id'] for a in result['attributes']} == {'MATERIAL', 'CAPACITY'}

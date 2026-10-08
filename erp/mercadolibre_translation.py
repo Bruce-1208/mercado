@@ -8,6 +8,7 @@ import json
 import re
 import threading
 import time
+from functools import lru_cache
 from typing import Any, Callable, Iterable, Mapping
 
 
@@ -145,6 +146,10 @@ def _argos_batch_translate(
                     str(second_leg.translate(first_leg.translate(text)) or "").strip()
                     for text in texts
                 ]
+            if source_code == "zh" and target_code in {"es", "pt"}:
+                first_leg = _get_argos_translation("zh", "en")
+                second_leg = _get_argos_translation("en", target_code)
+                return [str(second_leg.translate(first_leg.translate(text)) or "").strip() for text in texts]
             translation = _get_argos_translation(source_code, target_code)
             return [str(translation.translate(text) or "").strip() for text in texts]
         except ListingTranslationError:
@@ -153,9 +158,30 @@ def _argos_batch_translate(
             raise ListingTranslationError(f"本地翻译失败: {exc}") from exc
 
 
+@lru_cache(maxsize=4096)
+def detect_text_language(text: str, local_language: str = "") -> str:
+    try:
+        import langid
+    except ImportError as exc:
+        raise ListingTranslationError("服务器缺少语言识别组件，请安装 requirements-server.txt") from exc
+    code, _ = langid.classify(text)
+    language = {"zh": "zh-CN", "pt": "pt-BR"}.get(code, code)
+    if language in {"es", "pt-BR"} and local_language in {"es", "pt-BR"}:
+        language = local_language
+    if language not in _ARGOS_LANGUAGE_CODES:
+        raise ListingTranslationError(f"暂不支持识别到的消息语言 {language}")
+    return language
+
+
 def _cached_default_translate(
     texts: list[str], source_language: str, target_language: str
 ) -> list[str]:
+    if source_language == "auto":
+        results = []
+        for value in texts:
+            source = detect_text_language(value)
+            results.append(value if source == target_language else _cached_default_translate([value], source, target_language)[0])
+        return results
     encoded = json.dumps(
         [source_language, target_language, texts],
         ensure_ascii=False,

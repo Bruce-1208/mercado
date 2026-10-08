@@ -1,0 +1,86 @@
+1517090: 2026-10-06 12:22:17,500 - ERROR - Exception on /api/store-links [GET]
+1517104: File "/Users/a11/mercado/bit/bit_interface.py", line 3416, in enforce_server_execution_permission
+1517107: File "/Users/a11/mercado/bit/bit_interface.py", line 2237, in get_current_workbench_user
+1517110: File "/Users/a11/mercado/bit/bit_interface.py", line 1472, in get_workbench_user
+1517113: File "/Users/a11/mercado/bit/bit_mysql.py", line 47, in connect
+1517116: File "/Users/a11/mercado/bit/db_pool.py", line 254, in get_db_connection
+1517118: bit.db_pool.PoolAcquireTimeout: MySQL 连接池繁忙，等待 10 秒后超时（进程总上限 6）；请检查慢查询、嵌套取连接或未归还连接
+1517120: 2026-10-06 12:22:18,561 - ERROR - Exception on /api/store-links [GET]
+1517134: File "/Users/a11/mercado/bit/bit_interface.py", line 3416, in enforce_server_execution_permission
+1517137: File "/Users/a11/mercado/bit/bit_interface.py", line 2237, in get_current_workbench_user
+1517140: File "/Users/a11/mercado/bit/bit_interface.py", line 1472, in get_workbench_user
+1517143: File "/Users/a11/mercado/bit/bit_mysql.py", line 47, in connect
+1517146: File "/Users/a11/mercado/bit/db_pool.py", line 254, in get_db_connection
+1517148: bit.db_pool.PoolAcquireTimeout: MySQL 连接池繁忙，等待 10 秒后超时（进程总上限 6）；请检查慢查询、嵌套取连接或未归还连接
+1517150: 2026-10-06 12:22:19,962 - ERROR - Exception on /api/store-links [GET]
+1517164: File "/Users/a11/mercado/bit/bit_interface.py", line 3416, in enforce_server_execution_permission
+1517167: File "/Users/a11/mercado/bit/bit_interface.py", line 2237, in get_current_workbench_user
+1517170: File "/Users/a11/mercado/bit/bit_interface.py", line 1472, in get_workbench_user
+1517173: File "/Users/a11/mercado/bit/bit_mysql.py", line 47, in connect
+1517176: File "/Users/a11/mercado/bit/db_pool.py", line 254, in get_db_connection
+1517178: bit.db_pool.PoolAcquireTimeout: MySQL 连接池繁忙，等待 10 秒后超时（进程总上限 6）；请检查慢查询、嵌套取连接或未归还连接
+1517180: 2026-10-06 12:22:24,461 - ERROR - Exception on /api/store-links [GET]
+1517194: File "/Users/a11/mercado/bit/bit_interface.py", line 3416, in enforce_server_execution_permission
+1517197: File "/Users/a11/mercado/bit/bit_interface.py", line 2237, in get_current_workbench_user
+1517200: File "/Users/a11/mercado/bit/bit_interface.py", line 1472, in get_workbench_user
+1517203: File "/Users/a11/mercado/bit/bit_mysql.py", line 47, in connect
+1517206: File "/Users/a11/mercado/bit/db_pool.py", line 254, in get_db_connection
+1517208: bit.db_pool.PoolAcquireTimeout: MySQL 连接池繁忙，等待 10 秒后超时（进程总上限 6）；请检查慢查询、嵌套取连接或未归还连接
+1517301: 2026-10-06 12:22:30,694 - ERROR - Exception on /api/store-links [GET]
+1517315: File "/Users/a11/mercado/bit/bit_interface.py", line 3416, in enforce_server_execution_permission
+1517318: File "/Users/a11/mercado/bit/bit_interface.py", line 2237, in get_current_workbench_user
+1517321: File "/Users/a11/mercado/bit/bit_interface.py", line 1472, in get_workbench_user
+1517324: File "/Users/a11/mercado/bit/bit_mysql.py", line 47, in connect
+1517327: File "/Users/a11/mercado/bit/db_pool.py", line 254, in get_db_connection
+1517329: bit.db_pool.PoolAcquireTimeout: MySQL 连接池繁忙，等待 10 秒后超时（进程总上限 6）；请检查慢查询、嵌套取连接或未归还连接
+1517398: 2026-10-06 12:22:32,898 - ERROR - Exception on /api/store-links [GET]
+1517412: File "/Users/a11/mercado/bit/bit_interface.py", line 3416, in enforce_server_execution_permission
+1517415: File "/Users/a11/mercado/bit/bit_interface.py", line 2237, in get_current_workbench_user
+1517418: File "/Users/a11/mercado/bit/bit_interface.py", line 1472, in get_workbench_user
+1517421: File "/Users/a11/mercado/bit/bit_mysql.py", line 47, in connect
+1517424: File "/Users/a11/mercado/bit/db_pool.py", line 254, in get_db_connection
+1517426: bit.db_pool.PoolAcquireTimeout: MySQL 连接池繁忙，等待 10 秒后超时（进程总上限 6）；请检查慢查询、嵌套取连接或未归还连接
+1517428: 2026-10-06 12:22:38,423 - ERROR - Exception on /api/store-links [GET]
+1517442: File "/Users/a11/mercado/bit/bit_interface.py", line 3416, in enforce_server_execution_permission
+1517445: File "/Users/a11/mercado/bit/bit_interface.py", line 2237, in get_current_workbench_user
+1517448: File "/Users/a11/mercado/bit/bit_interface.py", line 1472, in get_workbench_user
+1517451: File "/Users/a11/mercado/bit/bit_mysql.py", line 47, in connect
+1517454: File "/Users/a11/mercado/bit/db_pool.py", line 254, in get_db_connection
+1517456: bit.db_pool.PoolAcquireTimeout: MySQL 连接池繁忙，等待 10 秒后超时（进程总上限 6）；请检查慢查询、嵌套取连接或未归还连接
+1523160: 2026-10-06 17:34:49,183 - WARNING - MySQL 连接池容量已达 75.0%：活跃 6，上限 8，空闲缓存 0；请检查慢查询、未归还连接或过高的后台并发
+1523171: 2026-10-06 17:35:17,322 - WARNING - MySQL 连接池容量已达 83.3%：活跃 5，上限 6，空闲缓存 0；请检查慢查询、未归还连接或过高的后台并发
+1523172: 2026-10-06 17:35:23,711 - WARNING - mercado_list_query table=erp_mercadolibre_products limit=500 offset=0 elapsed_ms=24229.2 stages_ms={'connect': 0.6, 'schema': 0.0, 'count': 24228.6}
+1523175: File "/Users/a11/mercado/bit/bit_interface.py", line 14740, in api_mercado_products
+1523178: File "/Users/a11/mercado/erp/mercadolibre_collection_store.py", line 2009, in list_product_items
+1523181: File "/Users/a11/mercado/erp/mercadolibre_collection_store.py", line 1743, in _list_rows
+1523212: pymysql.err.OperationalError: (3024, 'Query execution was interrupted, maximum statement execution time exceeded')
+1523214: 2026-10-06 17:35:29,036 - ERROR - MySQL 连接获取超时：等待 10 秒，进程总上限 6
+1523215: 2026-10-06 17:35:29,036 - ERROR - Exception on /api/ai-weight-price/status [GET]
+1523229: File "/Users/a11/mercado/bit/bit_interface.py", line 3342, in enforce_workbench_permissions
+1523232: File "/Users/a11/mercado/bit/bit_interface.py", line 2237, in get_current_workbench_user
+1523235: File "/Users/a11/mercado/bit/bit_interface.py", line 1472, in get_workbench_user
+1523238: File "/Users/a11/mercado/bit/bit_mysql.py", line 47, in connect
+1523241: File "/Users/a11/mercado/bit/db_pool.py", line 254, in get_db_connection
+1523244: 2026-10-06 17:35:31,017 - ERROR - MySQL 连接获取超时：等待 10 秒，进程总上限 6
+1523245: 2026-10-06 17:35:31,017 - ERROR - Exception on /api/tasks/daily/status [GET]
+1523259: File "/Users/a11/mercado/bit/bit_interface.py", line 2307, in hide_task_capacity_from_non_admin
+1523262: File "/Users/a11/mercado/bit/bit_interface.py", line 2262, in workbench_user_can_change_task_workers
+1523265: File "/Users/a11/mercado/bit/bit_interface.py", line 2237, in get_current_workbench_user
+1523268: File "/Users/a11/mercado/bit/bit_interface.py", line 1472, in get_workbench_user
+1523271: File "/Users/a11/mercado/bit/bit_mysql.py", line 47, in connect
+1523274: File "/Users/a11/mercado/bit/db_pool.py", line 254, in get_db_connection
+1523277: 2026-10-06 17:35:32,328 - ERROR - MySQL 连接获取超时：等待 10 秒，进程总上限 6
+1523278: 2026-10-06 17:35:32,328 - ERROR - Exception on /api/tasks/daily/status [GET]
+1523292: File "/Users/a11/mercado/bit/bit_interface.py", line 2307, in hide_task_capacity_from_non_admin
+1523295: File "/Users/a11/mercado/bit/bit_interface.py", line 2262, in workbench_user_can_change_task_workers
+1523298: File "/Users/a11/mercado/bit/bit_interface.py", line 2237, in get_current_workbench_user
+1523301: File "/Users/a11/mercado/bit/bit_interface.py", line 1472, in get_workbench_user
+1523304: File "/Users/a11/mercado/bit/bit_mysql.py", line 47, in connect
+1523307: File "/Users/a11/mercado/bit/db_pool.py", line 254, in get_db_connection
+1523310: 2026-10-06 17:35:33,901 - ERROR - MySQL 连接获取超时：等待 10 秒，进程总上限 6
+1523311: 2026-10-06 17:35:33,902 - WARNING - 读取各 Agent 店铺退出登录情况失败：MySQL 连接池繁忙，等待 10 秒后超时（进程总上限 6）；请检查慢查询、嵌套取连接或未归还连接
+1523312: 2026-10-06 17:35:34,351 - WARNING - mercado_list_query table=erp_mercadolibre_products limit=500 offset=0 elapsed_ms=24372.5 stages_ms={'connect': 0.4, 'schema': 0.0, 'count': 24372.1}
+1523315: File "/Users/a11/mercado/bit/bit_interface.py", line 14740, in api_mercado_products
+1523318: File "/Users/a11/mercado/erp/mercadolibre_collection_store.py", line 2009, in list_product_items
+1523321: File "/Users/a11/mercado/erp/mercadolibre_collection_store.py", line 1743, in _list_rows
+1523352: pymysql.err.OperationalError: (3024, 'Query execution was interrupted, maximum statement execution time exceeded')

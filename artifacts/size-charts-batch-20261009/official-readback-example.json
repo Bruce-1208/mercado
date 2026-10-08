@@ -1,0 +1,814 @@
+{
+  "id": "9629871",
+  "names": {
+    "CBT": "Woman SHORTS Reference"
+  },
+  "domain_id": "SHORTS",
+  "site_id": "CBT",
+  "type": "SPECIFIC",
+  "seller_id": 3500826362,
+  "measure_type": "BODY_MEASURE",
+  "main_attribute_id": "SIZE",
+  "attributes": [
+    {
+      "id": "GENDER",
+      "name": "Gender",
+      "values": [
+        {
+          "id": "339665",
+          "name": "Woman"
+        }
+      ]
+    },
+    {
+      "id": "BRAND",
+      "name": "Brand",
+      "values": [
+        {
+          "name": "Generic"
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "id": "9629871:1",
+      "attributes": [
+        {
+          "id": "SIZE",
+          "name": "Size",
+          "label": "Manufacturer size",
+          "values": [
+            {
+              "name": "XS"
+            }
+          ]
+        },
+        {
+          "id": "FILTRABLE_SIZE",
+          "name": "Equivalencies",
+          "label": "Equivalencies",
+          "values": [
+            {
+              "id": "12917776",
+              "name": "XS"
+            }
+          ]
+        },
+        {
+          "id": "WAIST_CIRCUMFERENCE_FROM",
+          "name": "Circunferencia de cintura desde",
+          "label": "Waist circumference",
+          "values": [
+            {
+              "name": "58 cm",
+              "struct": {
+                "number": 58.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "WAIST_CIRCUMFERENCE_TO",
+          "name": "Circunferencia de cintura hasta",
+          "label": "Waist circumference",
+          "values": [
+            {
+              "name": "64 cm",
+              "struct": {
+                "number": 64.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIP_CIRCUMFERENCE_FROM",
+          "name": "Circunferencia de cadera desde",
+          "label": "Hip circumference",
+          "values": [
+            {
+              "name": "82 cm",
+              "struct": {
+                "number": 82.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIP_CIRCUMFERENCE_TO",
+          "name": "Circunferencia de cadera hasta",
+          "label": "Hip circumference",
+          "values": [
+            {
+              "name": "88 cm",
+              "struct": {
+                "number": 88.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "PERSON_HEIGHT_FROM",
+          "name": "Altura de la persona desde",
+          "label": "Person height",
+          "values": [
+            {
+              "name": "150 cm",
+              "struct": {
+                "number": 150.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "PERSON_HEIGHT_TO",
+          "name": "Altura de la persona hasta",
+          "label": "Person height",
+          "values": [
+            {
+              "name": "160 cm",
+              "struct": {
+                "number": 160.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        }
+      ],
+      "validate_row": true
+    },
+    {
+      "id": "9629871:2",
+      "attributes": [
+        {
+          "id": "SIZE",
+          "name": "Size",
+          "label": "Manufacturer size",
+          "values": [
+            {
+              "name": "S"
+            }
+          ]
+        },
+        {
+          "id": "FILTRABLE_SIZE",
+          "name": "Equivalencies",
+          "label": "Equivalencies",
+          "values": [
+            {
+              "id": "12917796",
+              "name": "S"
+            }
+          ]
+        },
+        {
+          "id": "WAIST_CIRCUMFERENCE_FROM",
+          "name": "Circunferencia de cintura desde",
+          "label": "Waist circumference",
+          "values": [
+            {
+              "name": "64 cm",
+              "struct": {
+                "number": 64.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "WAIST_CIRCUMFERENCE_TO",
+          "name": "Circunferencia de cintura hasta",
+          "label": "Waist circumference",
+          "values": [
+            {
+              "name": "70 cm",
+              "struct": {
+                "number": 70.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIP_CIRCUMFERENCE_FROM",
+          "name": "Circunferencia de cadera desde",
+          "label": "Hip circumference",
+          "values": [
+            {
+              "name": "88 cm",
+              "struct": {
+                "number": 88.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIP_CIRCUMFERENCE_TO",
+          "name": "Circunferencia de cadera hasta",
+          "label": "Hip circumference",
+          "values": [
+            {
+              "name": "94 cm",
+              "struct": {
+                "number": 94.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "PERSON_HEIGHT_FROM",
+          "name": "Altura de la persona desde",
+          "label": "Person height",
+          "values": [
+            {
+              "name": "155 cm",
+              "struct": {
+                "number": 155.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "PERSON_HEIGHT_TO",
+          "name": "Altura de la persona hasta",
+          "label": "Person height",
+          "values": [
+            {
+              "name": "165 cm",
+              "struct": {
+                "number": 165.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        }
+      ],
+      "validate_row": true
+    },
+    {
+      "id": "9629871:3",
+      "attributes": [
+        {
+          "id": "SIZE",
+          "name": "Size",
+          "label": "Manufacturer size",
+          "values": [
+            {
+              "name": "M"
+            }
+          ]
+        },
+        {
+          "id": "FILTRABLE_SIZE",
+          "name": "Equivalencies",
+          "label": "Equivalencies",
+          "values": [
+            {
+              "id": "12917795",
+              "name": "M"
+            }
+          ]
+        },
+        {
+          "id": "WAIST_CIRCUMFERENCE_FROM",
+          "name": "Circunferencia de cintura desde",
+          "label": "Waist circumference",
+          "values": [
+            {
+              "name": "70 cm",
+              "struct": {
+                "number": 70.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "WAIST_CIRCUMFERENCE_TO",
+          "name": "Circunferencia de cintura hasta",
+          "label": "Waist circumference",
+          "values": [
+            {
+              "name": "76 cm",
+              "struct": {
+                "number": 76.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIP_CIRCUMFERENCE_FROM",
+          "name": "Circunferencia de cadera desde",
+          "label": "Hip circumference",
+          "values": [
+            {
+              "name": "94 cm",
+              "struct": {
+                "number": 94.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIP_CIRCUMFERENCE_TO",
+          "name": "Circunferencia de cadera hasta",
+          "label": "Hip circumference",
+          "values": [
+            {
+              "name": "100 cm",
+              "struct": {
+                "number": 100.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "PERSON_HEIGHT_FROM",
+          "name": "Altura de la persona desde",
+          "label": "Person height",
+          "values": [
+            {
+              "name": "160 cm",
+              "struct": {
+                "number": 160.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "PERSON_HEIGHT_TO",
+          "name": "Altura de la persona hasta",
+          "label": "Person height",
+          "values": [
+            {
+              "name": "170 cm",
+              "struct": {
+                "number": 170.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        }
+      ],
+      "validate_row": true
+    },
+    {
+      "id": "9629871:4",
+      "attributes": [
+        {
+          "id": "SIZE",
+          "name": "Size",
+          "label": "Manufacturer size",
+          "values": [
+            {
+              "name": "L"
+            }
+          ]
+        },
+        {
+          "id": "FILTRABLE_SIZE",
+          "name": "Equivalencies",
+          "label": "Equivalencies",
+          "values": [
+            {
+              "id": "12917802",
+              "name": "L"
+            }
+          ]
+        },
+        {
+          "id": "WAIST_CIRCUMFERENCE_FROM",
+          "name": "Circunferencia de cintura desde",
+          "label": "Waist circumference",
+          "values": [
+            {
+              "name": "76 cm",
+              "struct": {
+                "number": 76.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "WAIST_CIRCUMFERENCE_TO",
+          "name": "Circunferencia de cintura hasta",
+          "label": "Waist circumference",
+          "values": [
+            {
+              "name": "82 cm",
+              "struct": {
+                "number": 82.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIP_CIRCUMFERENCE_FROM",
+          "name": "Circunferencia de cadera desde",
+          "label": "Hip circumference",
+          "values": [
+            {
+              "name": "100 cm",
+              "struct": {
+                "number": 100.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIP_CIRCUMFERENCE_TO",
+          "name": "Circunferencia de cadera hasta",
+          "label": "Hip circumference",
+          "values": [
+            {
+              "name": "106 cm",
+              "struct": {
+                "number": 106.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "PERSON_HEIGHT_FROM",
+          "name": "Altura de la persona desde",
+          "label": "Person height",
+          "values": [
+            {
+              "name": "165 cm",
+              "struct": {
+                "number": 165.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "PERSON_HEIGHT_TO",
+          "name": "Altura de la persona hasta",
+          "label": "Person height",
+          "values": [
+            {
+              "name": "175 cm",
+              "struct": {
+                "number": 175.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        }
+      ],
+      "validate_row": true
+    },
+    {
+      "id": "9629871:5",
+      "attributes": [
+        {
+          "id": "SIZE",
+          "name": "Size",
+          "label": "Manufacturer size",
+          "values": [
+            {
+              "name": "XL"
+            }
+          ]
+        },
+        {
+          "id": "FILTRABLE_SIZE",
+          "name": "Equivalencies",
+          "label": "Equivalencies",
+          "values": [
+            {
+              "id": "12917787",
+              "name": "XL"
+            }
+          ]
+        },
+        {
+          "id": "WAIST_CIRCUMFERENCE_FROM",
+          "name": "Circunferencia de cintura desde",
+          "label": "Waist circumference",
+          "values": [
+            {
+              "name": "82 cm",
+              "struct": {
+                "number": 82.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "WAIST_CIRCUMFERENCE_TO",
+          "name": "Circunferencia de cintura hasta",
+          "label": "Waist circumference",
+          "values": [
+            {
+              "name": "90 cm",
+              "struct": {
+                "number": 90.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIP_CIRCUMFERENCE_FROM",
+          "name": "Circunferencia de cadera desde",
+          "label": "Hip circumference",
+          "values": [
+            {
+              "name": "106 cm",
+              "struct": {
+                "number": 106.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIP_CIRCUMFERENCE_TO",
+          "name": "Circunferencia de cadera hasta",
+          "label": "Hip circumference",
+          "values": [
+            {
+              "name": "114 cm",
+              "struct": {
+                "number": 114.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "PERSON_HEIGHT_FROM",
+          "name": "Altura de la persona desde",
+          "label": "Person height",
+          "values": [
+            {
+              "name": "165 cm",
+              "struct": {
+                "number": 165.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "PERSON_HEIGHT_TO",
+          "name": "Altura de la persona hasta",
+          "label": "Person height",
+          "values": [
+            {
+              "name": "180 cm",
+              "struct": {
+                "number": 180.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        }
+      ],
+      "validate_row": true
+    },
+    {
+      "id": "9629871:6",
+      "attributes": [
+        {
+          "id": "SIZE",
+          "name": "Size",
+          "label": "Manufacturer size",
+          "values": [
+            {
+              "name": "2XL"
+            }
+          ]
+        },
+        {
+          "id": "FILTRABLE_SIZE",
+          "name": "Equivalencies",
+          "label": "Equivalencies",
+          "values": [
+            {
+              "id": "12917846",
+              "name": "2XL"
+            }
+          ]
+        },
+        {
+          "id": "WAIST_CIRCUMFERENCE_FROM",
+          "name": "Circunferencia de cintura desde",
+          "label": "Waist circumference",
+          "values": [
+            {
+              "name": "90 cm",
+              "struct": {
+                "number": 90.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "WAIST_CIRCUMFERENCE_TO",
+          "name": "Circunferencia de cintura hasta",
+          "label": "Waist circumference",
+          "values": [
+            {
+              "name": "98 cm",
+              "struct": {
+                "number": 98.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIP_CIRCUMFERENCE_FROM",
+          "name": "Circunferencia de cadera desde",
+          "label": "Hip circumference",
+          "values": [
+            {
+              "name": "114 cm",
+              "struct": {
+                "number": 114.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIP_CIRCUMFERENCE_TO",
+          "name": "Circunferencia de cadera hasta",
+          "label": "Hip circumference",
+          "values": [
+            {
+              "name": "122 cm",
+              "struct": {
+                "number": 122.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "PERSON_HEIGHT_FROM",
+          "name": "Altura de la persona desde",
+          "label": "Person height",
+          "values": [
+            {
+              "name": "165 cm",
+              "struct": {
+                "number": 165.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "PERSON_HEIGHT_TO",
+          "name": "Altura de la persona hasta",
+          "label": "Person height",
+          "values": [
+            {
+              "name": "180 cm",
+              "struct": {
+                "number": 180.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        }
+      ],
+      "validate_row": true
+    },
+    {
+      "id": "9629871:7",
+      "attributes": [
+        {
+          "id": "SIZE",
+          "name": "Size",
+          "label": "Manufacturer size",
+          "values": [
+            {
+              "name": "3XL"
+            }
+          ]
+        },
+        {
+          "id": "FILTRABLE_SIZE",
+          "name": "Equivalencies",
+          "label": "Equivalencies",
+          "values": [
+            {
+              "id": "12917837",
+              "name": "3XL"
+            }
+          ]
+        },
+        {
+          "id": "WAIST_CIRCUMFERENCE_FROM",
+          "name": "Circunferencia de cintura desde",
+          "label": "Waist circumference",
+          "values": [
+            {
+              "name": "98 cm",
+              "struct": {
+                "number": 98.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "WAIST_CIRCUMFERENCE_TO",
+          "name": "Circunferencia de cintura hasta",
+          "label": "Waist circumference",
+          "values": [
+            {
+              "name": "106 cm",
+              "struct": {
+                "number": 106.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIP_CIRCUMFERENCE_FROM",
+          "name": "Circunferencia de cadera desde",
+          "label": "Hip circumference",
+          "values": [
+            {
+              "name": "122 cm",
+              "struct": {
+                "number": 122.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIP_CIRCUMFERENCE_TO",
+          "name": "Circunferencia de cadera hasta",
+          "label": "Hip circumference",
+          "values": [
+            {
+              "name": "130 cm",
+              "struct": {
+                "number": 130.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "PERSON_HEIGHT_FROM",
+          "name": "Altura de la persona desde",
+          "label": "Person height",
+          "values": [
+            {
+              "name": "165 cm",
+              "struct": {
+                "number": 165.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        },
+        {
+          "id": "PERSON_HEIGHT_TO",
+          "name": "Altura de la persona hasta",
+          "label": "Person height",
+          "values": [
+            {
+              "name": "180 cm",
+              "struct": {
+                "number": 180.0,
+                "unit": "cm"
+              }
+            }
+          ]
+        }
+      ],
+      "validate_row": true
+    }
+  ],
+  "template_id": "SITE:CBT-DOMAIN:SHORTS-GENDER:339665-MEASURE_TYPE:BODY_MEASURE",
+  "conversion_type": "manual"
+}

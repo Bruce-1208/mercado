@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <script src="{{ url_for('static', filename='console-performance.js') }}?v=20261007-json-fix"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ '打印充值管理' if wallet_admin else '打印余额' }} · 泽顺运营中心</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='print-wallet.css') }}">
+</head>
+<body data-admin="{{ 'true' if wallet_admin else 'false' }}" data-user-id="{{ current_user.id }}">
+  <header><strong>ZS · 泽顺运营中心</strong><nav aria-label="页面导航"><a href="/">返回工作台</a><a href="/billing">账户订阅</a></nav></header>
+  <main>
+    <div class="heading">
+      <div><p class="eyebrow">PRINT WALLET</p><h1>{{ '打印充值管理' if wallet_admin else '打印余额' }}</h1><p>业务员预存打印费用，仓库打印时从订单所属业务员的余额扣除。</p></div>
+      <button id="refresh" type="button">刷新数据</button>
+    </div>
+
+    <section class="pricing" aria-label="打印计费规则">
+      <div class="price"><span>每个订单 · 每次打印</span><strong id="unit-price">¥3.00</strong></div>
+      <div class="rules"><p><strong>余额不足，无法打印。</strong>重复打印按次扣费；批量打印按订单数量计费。</p><p>面单生成失败自动退回对应费用。浏览器或打印机是否实际打印成功，系统无法自动确认。</p></div>
+    </section>
+
+    <p id="message" class="message" role="status" aria-live="polite"></p>
+    <div class="selection"><div><span>当前查看账户</span><h2 id="selected-name">正在加载…</h2><p id="selected-detail"></p></div><span id="selected-status" class="badge" hidden></span></div>
+    <div class="metrics" aria-label="账户余额统计">
+      <section class="metric featured"><span>可用余额</span><strong id="balance">—</strong><p id="balance-hint">每次打印前校验账户余额</p></section>
+      <section class="metric"><span>可打印订单次数</span><strong id="print-count">—</strong><p>按当前余额计算，每次打印扣费</p></section>
+      <section class="metric"><span>累计充值</span><strong id="total-recharge">—</strong><p>管理员登记的已收款金额</p></section>
+      <section class="metric"><span>打印净支出</span><strong id="total-charge">—</strong><p>已扣除面单生成失败的退款</p></section>
+    </div>
+
+    <section class="panel" id="accounts-panel">
+      <div class="toolbar"><h2>业务员账户</h2><input id="search" type="search" placeholder="搜索姓名、账号或企业" aria-label="搜索业务员账户"><label class="filter"><input id="insufficient-only" type="checkbox">只看余额不足</label></div>
+      <p class="hint">选择账户查看余额与明细。{{ '充值用于登记已收到的款项，提交后立即增加该业务员的打印余额。' if wallet_admin else '仅展示当前账号有权查看的业务员账户。' }}</p>
+      <div class="scroll"><table class="accounts-table"><thead><tr><th>业务员 / 企业</th><th>可用余额</th><th>可打印次数</th><th>状态</th><th>操作</th></tr></thead><tbody id="accounts"><tr><td colspan="5">正在加载…</td></tr></tbody></table></div>
+      <p id="account-count" class="hint table-footer"></p>
+    </section>
+
+    <section class="panel" id="records-panel">
+      <div class="toolbar"><div><h2 id="records-title">余额流水</h2><p class="hint" id="records-meta">充值、打印扣费和失败退款均保留记录 · 北京时间</p></div><button id="refresh-records" type="button" disabled>刷新流水</button></div>
+      <div class="scroll"><table class="records-table"><thead><tr><th>时间（北京时间）</th><th>类型</th><th>金额变动</th><th>变动后余额</th><th>订单</th><th>操作人 / 备注{{ ' / 操作' if wallet_admin else '' }}</th></tr></thead><tbody id="records"><tr><td colspan="6">正在加载…</td></tr></tbody></table></div>
+    </section>
+  </main>
+
+  {% if wallet_admin %}
+  <dialog id="recharge-dialog" aria-labelledby="recharge-title">
+    <form id="recharge-form">
+      <div class="toolbar"><h2 id="recharge-title">登记已收款充值</h2><button id="close-recharge" class="close-button" type="button" aria-label="关闭充值窗口">×</button></div>
+      <p id="recharge-account" class="dialog-account"></p>
+      <p class="recharge-notice">确认款项已到账后登记。此操作增加打印余额，不会在线收款。</p>
+      <div class="form-grid">
+        <label>实收金额（元）<input name="amount" type="text" inputmode="decimal" autocomplete="off" required maxlength="16" placeholder="例如：300.00" aria-describedby="amount-hint"></label>
+        <p id="amount-hint" class="hint">最低 ¥0.01，最高 ¥1,000,000.00，最多两位小数。</p>
+        <label>收款备注 / 凭证编号<textarea name="note" required maxlength="1000" rows="3" placeholder="例如：银行转账流水号、微信收款单号"></textarea></label>
+      </div>
+      <p id="recharge-preview" class="quote">输入金额后查看充值结果。</p>
+      <p id="retry-notice" class="retry-notice" hidden>上次提交结果未确认。金额和备注已锁定，重试会使用同一笔充值编号，避免重复入账。</p>
+      <p id="recharge-error" class="message" role="alert"></p>
+      <div class="actions"><button id="cancel-recharge" type="button">取消</button><button id="submit-recharge" class="primary" type="submit">确认已收款并充值</button></div>
+    </form>
+  </dialog>
+  <dialog id="refund-dialog" aria-labelledby="refund-title">
+    <form id="refund-form">
+      <div class="toolbar"><h2 id="refund-title">退回未完成的打印扣费</h2><button id="close-refund" class="close-button" type="button" aria-label="关闭退款窗口">×</button></div>
+      <p id="refund-account" class="dialog-account"></p>
+      <p class="recharge-notice">此操作会取消整笔未完成的打印请求，并退回该请求的全部扣费；批量请求包含多个订单。已完成的打印请求无法在此退款。</p>
+      <label class="refund-label">退款原因<textarea id="refund-note" required maxlength="1000" rows="3" placeholder="例如：仓库页面关闭，面单生成未完成"></textarea></label>
+      <p id="refund-error" class="message" role="alert"></p>
+      <div class="actions"><button id="cancel-refund" type="button">取消</button><button id="submit-refund" class="primary" type="submit">取消请求并退回余额</button></div>
+    </form>
+  </dialog>
+  {% endif %}
+  <script src="{{ url_for('static', filename='print-wallet.js') }}" defer></script>
+</body>
+</html>

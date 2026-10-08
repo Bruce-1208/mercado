@@ -1,0 +1,1 @@
+[{"index": "idx_product_search_cover", "before": "idx_product_search_cover", "after": "idx_product_search_cover", "elapsed_seconds": 0.001}, {"index": "idx_product_scope_search", "before": "idx_product_scope_search", "after": "idx_product_scope_search", "elapsed_seconds": 0.001}]

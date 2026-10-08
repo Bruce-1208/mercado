@@ -1,0 +1,967 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="18" failures="33" skipped="0" tests="298" time="271.974" timestamp="2026-10-08T20:16:05.058226+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_chinese_metric_aliases" time="0.001" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_collection_parent_check_detects_orphaned_worker" time="0.001" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_collection_parent_check_is_noop_for_in_process_calls" time="0.001" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_color_and_gradient_localization" time="0.001" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_country_list_rejects_the_other_mexico_logistic_mode" time="0.000" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_country_list_selection_wins_over_language_selector_state" time="0.000" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_country_switch_skips_click_when_site_is_already_selected" time="0.001" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_country_switch_uses_header_state_instead_of_removed_page_title" time="1.011" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_current_header_state_accepts_new_sales_summary_markup" time="0.001" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_invalid_bitbrowser_id_is_not_retried" time="0.001" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_listing_identifier_containing_429_is_not_rate_limit" time="0.001" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_login_and_window_failures_are_classified" time="0.001" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_login_url_takes_priority_over_generic_spanish_error" time="0.001" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_missing_shipment_card_is_not_silently_mislabeled" time="0.001" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_site_list_accepts_chinese_and_ascii_separators" time="0.001" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_spanish_async_country_switcher_is_supported" time="0.001" /><testcase classname="tests.test_bit_collection_localization.ReputationLocalizationTests" name="test_unknown_translations_use_stable_card_order" time="0.001" /><testcase classname="tests.test_bit_collection_localization.InfractionLocalizationTests" name="test_bitbrowser_open_retries_transient_timeout" time="0.001" /><testcase classname="tests.test_bit_collection_localization.InfractionLocalizationTests" name="test_chinese_infraction_page_is_valid" time="0.000" /><testcase classname="tests.test_bit_collection_localization.InfractionLocalizationTests" name="test_chinese_pagination_offset_preserves_query" time="0.000" /><testcase classname="tests.test_bit_collection_localization.InfractionLocalizationTests" name="test_incomplete_infraction_total_is_not_reported_as_success" time="0.001" /><testcase classname="tests.test_bit_collection_localization.InfractionLocalizationTests" name="test_infraction_failure_reason" time="0.000" /><testcase classname="tests.test_bit_collection_localization.InfractionLocalizationTests" name="test_listing_identifier_containing_429_does_not_trip_batch_pause" time="0.001" /><testcase classname="tests.test_bit_collection_localization.InfractionLocalizationTests" name="test_login_redirect_is_detected" time="0.000" /><testcase classname="tests.test_bit_collection_localization.InfractionLocalizationTests" name="test_login_url_takes_priority_over_generic_spanish_error" time="0.000" /><testcase classname="tests.test_bit_collection_localization.InfractionLocalizationTests" name="test_mismatched_infraction_tab_is_not_silently_successful" time="0.000" /><testcase classname="tests.test_bit_collection_localization.InfractionLocalizationTests" name="test_selected_tab_and_zero_rights_holder_total_use_page_state" time="0.000" /><testcase classname="tests.test_bit_collection_orchestration.CollectionControlTests" name="test_active_rate_limit_pause_is_shared_without_repeated_extension" time="0.002" /><testcase classname="tests.test_bit_collection_orchestration.CollectionControlTests" name="test_filter_config_rows_accepts_single_string_selection" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionControlTests" name="test_filter_config_rows_limits_shops_and_site_intersection" time="0.000" /><testcase classname="tests.test_bit_collection_orchestration.CollectionControlTests" name="test_only_non_success_outcomes_are_failed" time="0.000" /><testcase classname="tests.test_bit_collection_orchestration.CollectionControlTests" name="test_site_retry_merge_preserves_other_successful_sites" time="0.000" /><testcase classname="tests.test_bit_collection_orchestration.CollectionControlTests" name="test_unreadable_site_report_contains_only_final_failures" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_ai_appeal_round_limit_stops_after_twenty_without_final_sleep" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_concurrent_reputation_page_does_not_switch_global_clash" time="0.001"><failure message="TypeError: int() argument must be a string, a bytes-like object or a real number, not 'Mock'">tests/test_bit_collection_orchestration.py:794: in test_concurrent_reputation_page_does_not_switch_global_clash
+    reputation._open_reputation_page_with_validation(
+bit/bit_reputation_info.py:444: in _open_reputation_page_with_validation
+    state = _open_collection_backend_page(
+bit/bit_reputation_info.py:406: in _open_collection_backend_page
+    result = open_mercado_backend_page(
+bit/bit_mercado_login.py:2437: in open_mercado_backend_page
+    appeal_login_attempts = int(
+E   TypeError: int() argument must be a string, a bytes-like object or a real number, not 'Mock'</failure></testcase><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_final_infraction_rate_limit_attempt_trips_whole_batch" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_infraction_batch_opens_browser_once_per_shop" time="0.002" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_infraction_collector_executes_only_selected_shop_site_rows" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_infraction_focused_appeal_sequence_runs_ten_rounds" time="0.003" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_infraction_login_repair_records_human_verification_source" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_infraction_scope_comes_from_explicit_authorization_switches" time="0.000" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_infraction_shop_site_scope_keeps_each_shop_pair_independent" time="0.000" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_infraction_still_runs_after_reputation_appeal_failure" time="0.003" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_live_infraction_collection_uses_appeal_scope_without_persisting" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_main_loop_waits_two_hours_after_complete_chain" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_only_deterministic_login_failure_is_not_retried" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_order_print_runs_at_most_once_per_24_hours_across_state_reloads" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_parallel_infraction_shop_failure_does_not_stop_other_shops" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_reputation_and_appeal_still_run_when_infraction_fails" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_reputation_retry_plan_contains_only_failed_site" time="0.000" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_retry_plan_contains_only_failed_repairable_shops" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_scheduler_caps_explicit_high_worker_settings" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_scheduler_never_exceeds_fifteen_workers" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_scheduler_updates_infraction_and_reputation_by_api_then_runs_appeal" time="0.001" /><testcase classname="tests.test_bit_collection_orchestration.CollectionOrchestrationTests" name="test_stop_request_terminates_infraction_pool_and_closes_windows" time="0.001" /><testcase classname="tests.test_bit_reputation_sorting.ReputationSortingTests" name="test_latest_collection_task_status_keeps_latest_site_result" time="0.000" /><testcase classname="tests.test_bit_reputation_sorting.ReputationSortingTests" name="test_latest_infraction_counts_are_grouped_by_shop_site_and_type" time="0.002" /><testcase classname="tests.test_bit_reputation_sorting.ReputationSortingTests" name="test_latest_reputation_is_sorted_by_site_seven_day_orders" time="0.001" /><testcase classname="tests.test_bit_reputation_sorting.ReputationSortingTests" name="test_parse_traffic_total_handles_empty_and_fallback_text" time="0.001" /><testcase classname="tests.test_mercado_api_listings.MercadoListingsTests" name="test_full_sync_creates_queryable_database" time="0.003" /><testcase classname="tests.test_mercado_api_listings.MercadoListingsTests" name="test_item_level_error_is_recorded_without_losing_other_items" time="0.003" /><testcase classname="tests.test_mercado_api_listings.MercadoListingsTests" name="test_scan_keeps_first_page_and_uses_scroll" time="0.001" /><testcase classname="tests.test_mercado_api_listings.MercadoListingsTests" name="test_second_sync_marks_missing_rows_not_current" time="0.005" /><testcase classname="tests.test_pdd_orders_browser.DetailBrowserTests" name="test_launch_and_reuse_dynamic_edge_port" time="0.001"><failure message="RuntimeError: 找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe">tests/test_pdd_orders_browser.py:21: in test_launch_and_reuse_dynamic_edge_port
+    process, endpoint = pdd.launch_edge_for_collection(pdd.find_edge_executable(), profile)
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+scripts/pdd_orders.py:314: in find_edge_executable
+    raise RuntimeError("找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe")
+E   RuntimeError: 找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe</failure></testcase><testcase classname="tests.test_pdd_orders_browser.DetailBrowserTests" name="test_two_orders_and_logistics_export" time="0.362"><failure message="RuntimeError: 找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe">tests/test_pdd_orders_browser.py:57: in test_two_orders_and_logistics_export
+    browser = runtime.chromium.launch(executable_path=str(pdd.find_edge_executable()), headless=True)
+                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+scripts/pdd_orders.py:314: in find_edge_executable
+    raise RuntimeError("找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe")
+E   RuntimeError: 找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe</failure></testcase><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_boundaries_and_merge" time="0.001" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_checkpoint_saves_json_each_round_and_excel_periodically" time="0.002" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_dates_do_not_use_shipping_date" time="0.001" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_default_unlimited_and_summary_counts" time="0.001" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_detail_identity_and_multiple_packages" time="0.001" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_exit_zero_waits_for_available_browser" time="0.001" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_explicit_limit_reads_final_loaded_dom_and_marks_partial" time="0.001" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_export_preserves_ids_and_unknown_dates" time="0.009" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_fast_scroll_keeps_slow_loading_boundary" time="0.001" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_only_verified_detail_route_is_used" time="0.001" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_original_error_and_json_survive_excel_lock" time="0.001" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_paid_amount_is_not_goods_price_or_due" time="0.001" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_plain_existing_window_has_actionable_error" time="0.001" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_response_shipping_does_not_cross_orders" time="0.000" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_reuse_old_profile_without_launching_another_process" time="0.001" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_scrolling_long_page_is_not_stalled" time="0.000" /><testcase classname="tests.test_pdd_orders_export.PddExportTests" name="test_unlimited_continues_past_240_rounds_and_pauses_on_stall" time="0.016" /><testcase classname="tests.test_product_list_scoped_page" name="test_absent_keyword_returns_exact_empty_result_without_second_catalog_scan" time="0.001" /><testcase classname="tests.test_product_list_scoped_page" name="test_matching_keyword_still_loads_authorized_product_page" time="0.001" /><testcase classname="tests.test_yandex_workbench_integration.YandexWorkbenchIntegrationTests" name="test_workbench_contains_yandex_tab" time="0.008"><failure message="AssertionError: 503 != 200">tests/test_yandex_workbench_integration.py:25: in test_workbench_contains_yandex_tab
+    self.assertEqual(response.status_code, 200)
+E   AssertionError: 503 != 200</failure></testcase><testcase classname="tests.test_yandex_workbench_integration.YandexWorkbenchIntegrationTests" name="test_yandex_proxy_forwards_to_local_service" time="0.002"><failure message="AssertionError: 503 != 200">tests/test_yandex_workbench_integration.py:61: in test_yandex_proxy_forwards_to_local_service
+    self.assertEqual(response.status_code, 200)
+E   AssertionError: 503 != 200</failure></testcase><testcase classname="tests.test_yandex_workbench_integration.YandexWorkbenchIntegrationTests" name="test_yandex_proxy_requires_login_for_api" time="0.001" /><testcase classname="tests.test_yandex_workbench_integration.YandexWorkbenchIntegrationTests" name="test_yandex_proxy_rewrites_assets_for_an_existing_process" time="0.002"><failure message="AssertionError: 'href=&quot;/yandex-console/static/styles.css&quot;' not found in '{&quot;message&quot;:&quot;\\u6682\\u65f6\\u65e0\\u6cd5\\u9a8c\\u8bc1\\u8d26\\u6237\\u8ba2\\u9605\\uff0c\\u8bf7\\u7a0d\\u540e\\u91cd\\u8bd5&quot;,&quot;status&quot;:&quot;error&quot;}\n'">tests/test_yandex_workbench_integration.py:89: in test_yandex_proxy_rewrites_assets_for_an_existing_process
+    self.assertIn('href="/yandex-console/static/styles.css"', html)
+E   AssertionError: 'href="/yandex-console/static/styles.css"' not found in '{"message":"\\u6682\\u65f6\\u65e0\\u6cd5\\u9a8c\\u8bc1\\u8d26\\u6237\\u8ba2\\u9605\\uff0c\\u8bf7\\u7a0d\\u540e\\u91cd\\u8bd5","status":"error"}\n'</failure></testcase><testcase classname="tests.test_yandex_workbench_integration.YandexWorkbenchIntegrationTests" name="test_yandex_setup_command_matches_platform" time="0.001" /><testcase classname="tests.test_yandex_workbench_integration.YandexWorkbenchIntegrationTests" name="test_yandex_start_requires_login" time="0.001" /><testcase classname="tests.test_yandex_workbench_integration.YandexWorkbenchIntegrationTests" name="test_yandex_start_returns_embedded_url" time="0.002"><failure message="AssertionError: 503 != 200">tests/test_yandex_workbench_integration.py:42: in test_yandex_start_returns_embedded_url
+    self.assertEqual(response.status_code, 200)
+E   AssertionError: 503 != 200</failure></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_start_and_busy_controls" time="6.606"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    9 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       9 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 500ms
+E       - waiting for element to be visible, enabled and stable</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_yandex_collection_starts_and_reopens_results" time="5.147"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible, enabled and stable&#10;       - element is not visible&#10;     - retrying click action&#10;       - waiting 500ms&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       10 × waiting for element to be visible, enabled and stable
+E          - element is not visible
+E        - retrying click action
+E          - waiting 500ms</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_resume_requires_acknowledgement_and_keeps_range" time="5.287"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    9 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       9 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 500ms
+E       - waiting for element to be visible, enabled and stable</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_start_hint_explains_login_permission_and_cursor" time="5.130"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    9 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       9 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 500ms
+E       - waiting for element to be visible, enabled and stable</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_weight_price_can_run_in_test_mode_when_erp_writeback_is_disabled" time="5.138"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible, enabled and stable&#10;       - element is not visible&#10;     - retrying click action&#10;       - waiting 500ms&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       10 × waiting for element to be visible, enabled and stable
+E          - element is not visible
+E        - retrying click action
+E          - waiting 500ms</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_supplier_login_keeps_state_without_reloading_status" time="5.146"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible, enabled and stable&#10;       - element is not visible&#10;     - retrying click action&#10;       - waiting 500ms&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       10 × waiting for element to be visible, enabled and stable
+E          - element is not visible
+E        - retrying click action
+E          - waiting 500ms</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_weight_price_shows_current_category_and_execution_terminal" time="5.151"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    9 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       9 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 500ms
+E       - waiting for element to be visible, enabled and stable</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_categories_use_names_and_keep_ids_in_values" time="5.255"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible, enabled and stable&#10;       - element is not visible&#10;     - retrying click action&#10;       - waiting 500ms&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       10 × waiting for element to be visible, enabled and stable
+E          - element is not visible
+E        - retrying click action
+E          - waiting 500ms</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_weight_price_categories_use_zying_fields" time="5.180"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    9 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       9 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 500ms
+E       - waiting for element to be visible, enabled and stable</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_weight_price_can_select_product_developer" time="5.156"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    9 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       9 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 500ms
+E       - waiting for element to be visible, enabled and stable</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_page_extractor_handles_custom_fields_react_labels_and_empty_inner_options" time="5.148"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    9 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       9 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 500ms
+E       - waiting for element to be visible, enabled and stable</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_page_extractor_reads_developers_from_loaded_zying_bridge" time="5.140"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    9 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       9 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 500ms
+E       - waiting for element to be visible, enabled and stable</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_zying_modes_reuse_logged_in_tab_and_forward_page_developers" time="5.190"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    9 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 500ms&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       9 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 500ms</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_auth_state_does_not_wait_for_purchase_network" time="0.186"><failure message="playwright._impl._errors.Error: Page.evaluate: TypeError: chrome.storage[area].set is not a function&#10;    at /Users/a11/mercado/browser_extension/zeshun_collector/background.js:110:54&#10;    at new Promise (&lt;anonymous&gt;)&#10;    at storageSet (/Users/a11/mercado/browser_extension/zeshun_collector/background.js:110:10)&#10;    at migrateConsoleUrlDefault (/Users/a11/mercado/browser_extension/zeshun_collector/background.js:146:9)&#10;    at settings (/Users/a11/mercado/browser_extension/zeshun_collector/background.js:128:18)&#10;    at async state (/Users/a11/mercado/browser_extension/zeshun_collector/background.js:1698:18)&#10;    at async &lt;anonymous&gt;:317:30">tests/test_zeshun_popup_browser.py:316: in test_auth_state_does_not_wait_for_purchase_network
+    assert page.evaluate("state().then(result =&gt; result.authenticated)") is True
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/mercado_click_delay.py:152: in delayed
+    result = original(target, expression, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:8531: in evaluate
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:468: in evaluate
+    return await self._main_frame.evaluate(expression, arg)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:320: in evaluate
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.Error: Page.evaluate: TypeError: chrome.storage[area].set is not a function
+E       at /Users/a11/mercado/browser_extension/zeshun_collector/background.js:110:54
+E       at new Promise (&lt;anonymous&gt;)
+E       at storageSet (/Users/a11/mercado/browser_extension/zeshun_collector/background.js:110:10)
+E       at migrateConsoleUrlDefault (/Users/a11/mercado/browser_extension/zeshun_collector/background.js:146:9)
+E       at settings (/Users/a11/mercado/browser_extension/zeshun_collector/background.js:128:18)
+E       at async state (/Users/a11/mercado/browser_extension/zeshun_collector/background.js:1698:18)
+E       at async &lt;anonymous&gt;:317:30</failure></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_yandex_background_uses_bridge_and_opens_the_matching_run" time="0.363"><failure message="playwright._impl._errors.Error: Page.evaluate: Error: 仅超级管理员可以使用 Yandex 采集&#10;    at requireYandexAdmin (/Users/a11/mercado/browser_extension/zeshun_collector/background.js:492:53)&#10;    at async startYandexSearch (/Users/a11/mercado/browser_extension/zeshun_collector/background.js:496:3)&#10;    at async eval (eval at evaluate (:291:30), &lt;anonymous&gt;:13:23)&#10;    at async &lt;anonymous&gt;:317:30">tests/test_zeshun_popup_browser.py:335: in test_yandex_background_uses_bridge_and_opens_the_matching_run
+    result = page.evaluate("""async () =&gt; {
+bit/mercado_click_delay.py:152: in delayed
+    result = original(target, expression, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:8531: in evaluate
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:468: in evaluate
+    return await self._main_frame.evaluate(expression, arg)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:320: in evaluate
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.Error: Page.evaluate: Error: 仅超级管理员可以使用 Yandex 采集
+E       at requireYandexAdmin (/Users/a11/mercado/browser_extension/zeshun_collector/background.js:492:53)
+E       at async startYandexSearch (/Users/a11/mercado/browser_extension/zeshun_collector/background.js:496:3)
+E       at async eval (eval at evaluate (:291:30), &lt;anonymous&gt;:13:23)
+E       at async &lt;anonymous&gt;:317:30</failure></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_ai_weight_price_tab_wait_polls_after_missed_complete_event_and_stays_background" time="0.587" /><testcase classname="tests.test_zeshun_popup_browser" name="test_ai_weight_price_writeback_requires_real_save_then_supports_persisted_readback" time="0.574" /><testcase classname="tests.test_zeshun_popup_browser" name="test_ai_weight_price_product_extraction_filters_selected_developer" time="0.420" /><testcase classname="tests.test_zeshun_popup_browser" name="test_product_batch_inputs_search_and_start" time="0.516" /><testcase classname="tests.test_zeshun_popup_browser" name="test_product_list_reads_actual_pagination_international_and_shipping_profile" time="0.184" /><testcase classname="tests.test_zeshun_popup_browser" name="test_mercado_collection_requires_logged_in_zying_plugin" time="0.154" /><testcase classname="tests.test_zeshun_popup_browser" name="test_mercado_native_extraction_ignores_zying_shadow_root" time="0.157" /><testcase classname="tests.test_zeshun_popup_browser" name="test_batch_collection_reads_zying_511_closed_shadow_root" time="0.168"><failure message="AssertionError: {'ok': False, 'error': &quot;Cannot read properties of undefined (reading 'listingId')&quot;, 'retryable': None, 'status': None, ...}&#10;assert False is True">tests/test_zeshun_popup_browser.py:660: in test_batch_collection_reads_zying_511_closed_shadow_root
+    assert result["ok"] is True, result
+E   AssertionError: {'ok': False, 'error': "Cannot read properties of undefined (reading 'listingId')", 'retryable': None, 'status': None, ...}
+E   assert False is True</failure></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_real_chromium_extension_api_reads_closed_shadow_root" time="3.124"><failure message="AssertionError: {'ok': False, 'error': '请先登录泽顺控制台账号', 'retryable': False, 'status': 401, ...}&#10;assert False is True">tests/test_zeshun_popup_browser.py:717: in test_real_chromium_extension_api_reads_closed_shadow_root
+    assert result["ok"] is True, result
+E   AssertionError: {'ok': False, 'error': '请先登录泽顺控制台账号', 'retryable': False, 'status': 401, ...}
+E   assert False is True</failure></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_real_extension_decodes_zying_protected_svg_metrics_across_isolated_worlds" time="1.484"><failure message="AssertionError: {'ok': False, 'error': '请先登录泽顺控制台账号', 'retryable': False, 'status': 401, ...}&#10;assert False is True">tests/test_zeshun_popup_browser.py:815: in test_real_extension_decodes_zying_protected_svg_metrics_across_isolated_worlds
+    assert result["ok"] is True, result
+E   AssertionError: {'ok': False, 'error': '请先登录泽顺控制台账号', 'retryable': False, 'status': 401, ...}
+E   assert False is True</failure></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_extension_collection_reuses_weight_price_package_facts" time="0.564" /><testcase classname="tests.test_zeshun_popup_browser" name="test_zying_sales_and_fulfillment_are_the_final_collection_filter" time="0.183" /><testcase classname="tests.test_zeshun_popup_browser" name="test_zying_collection_opens_web_login_and_validates_cursor_limit" time="5.163"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible, enabled and stable&#10;       - element is not visible&#10;     - retrying click action&#10;       - waiting 500ms&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       10 × waiting for element to be visible, enabled and stable
+E          - element is not visible
+E        - retrying click action
+E          - waiting 500ms</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_background_open_zying_login_navigates_existing_tab_to_login_route" time="0.146"><failure message="AssertionError: assert [7, {'active': True}] == [7, {'url': '...ctive': True}]&#10;  &#10;  At index 1 diff: {'active': True} != {'url': 'https://meli.zying.net/#/login', 'active': True}&#10;  Use -v to get more diff">tests/test_zeshun_popup_browser.py:931: in test_background_open_zying_login_navigates_existing_tab_to_login_route
+    assert page.evaluate("updates[0]") == [7, {"url": "https://meli.zying.net/#/login", "active": True}]
+E   AssertionError: assert [7, {'active': True}] == [7, {'url': '...ctive': True}]
+E     
+E     At index 1 diff: {'active': True} != {'url': 'https://meli.zying.net/#/login', 'active': True}
+E     Use -v to get more diff</failure></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_ai_weight_price_open_login_returns_before_slow_status_request" time="0.359"><failure message="AssertionError: assert {'timeout': True} == {'ok': True, ...isting': True}&#10;  &#10;  Left contains 1 more item:&#10;  {'timeout': True}&#10;  Right contains 3 more items:&#10;  {'existing': True, 'ok': True, 'tab_id': 7}&#10;  Use -v to get more diff">tests/test_zeshun_popup_browser.py:971: in test_ai_weight_price_open_login_returns_before_slow_status_request
+    assert result["response"] == {"ok": True, "tab_id": 7, "existing": True}
+E   AssertionError: assert {'timeout': True} == {'ok': True, ...isting': True}
+E     
+E     Left contains 1 more item:
+E     {'timeout': True}
+E     Right contains 3 more items:
+E     {'existing': True, 'ok': True, 'tab_id': 7}
+E     Use -v to get more diff</failure></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_zying_infringement_starts_with_product_cursor_and_pending_only_copy" time="5.154"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    9 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       9 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 500ms
+E       - waiting for element to be visible, enabled and stable</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_zying_developers_refresh_live_selector_without_webpack" time="5.183"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    9 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 500ms&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       9 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 500ms</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_zying_developers_read_current_vite_localforage_cache" time="0.178" /><testcase classname="tests.test_zeshun_popup_browser" name="test_ai_weight_price_image_uses_server_proxy_after_browser_fetch_failure" time="0.166" /><testcase classname="tests.test_zeshun_popup_browser" name="test_ai_weight_price_reads_exactly_one_zying_product_per_step" time="0.155" /><testcase classname="tests.test_zeshun_popup_browser" name="test_ai_weight_price_applies_selected_zying_filters_before_first_read" time="0.858" /><testcase classname="tests.test_zeshun_popup_browser" name="test_ai_weight_price_reinjects_missing_1688_receiver" time="0.178" /><testcase classname="tests.test_zeshun_popup_browser" name="test_zying_product_extractor_honors_single_item_cursor" time="0.388" /><testcase classname="tests.test_zeshun_popup_browser" name="test_purchase_tracking_listener_ignores_weight_price_messages" time="0.184" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_image_search_repeats_twenty_upload_submit_result_cycles" time="0.197" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_image_search_clicks_portal_submit_button_after_upload" time="0.198" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_uploaded_count_popup_submits_remote_preview[cleared]" time="2.475" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_uploaded_count_popup_submits_remote_preview[replaced]" time="7.353" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_uploaded_count_popup_submits_remote_preview[removed]" time="2.469" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_image_search_clicks_non_button_image_action_after_upload" time="0.257" /><testcase classname="tests.test_zeshun_popup_browser" name="test_zying_product_collection_forwards_selected_category_and_developer" time="5.169"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    9 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       9 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 500ms
+E       - waiting for element to be visible, enabled and stable</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_background_image_search_follows_new_1688_result_tab" time="0.164" /><testcase classname="tests.test_zeshun_popup_browser" name="test_background_image_search_does_not_reload_new_result_tab_while_injecting_listener" time="0.362" /><testcase classname="tests.test_zeshun_popup_browser" name="test_image_search_recovers_document_replacement_without_all_frame_injection" time="0.769" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_reinjection_restores_receiver_when_version_marker_survives" time="0.198" /><testcase classname="tests.test_zeshun_popup_browser" name="test_image_search_missing_receiver_obeys_deadline" time="0.776" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_lazy_image_search_opener_uses_live_homepage_label" time="1.008" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_opens_widget_before_using_preexisting_hidden_input[True-True]" time="0.719" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_opens_widget_before_using_preexisting_hidden_input[True-False]" time="0.717" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_opens_widget_before_using_preexisting_hidden_input[False-True]" time="0.301" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_opens_widget_before_using_preexisting_hidden_input[False-False]" time="0.298" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_rendered_image_results_keep_click_path" time="0.468" /><testcase classname="tests.test_zeshun_popup_browser" name="test_zying_filter_bridge_applies_selected_category_and_developer" time="0.196" /><testcase classname="tests.test_zeshun_popup_browser" name="test_zying_product_tab_preferred_over_active_login" time="5.163"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#weight-price-mode&quot;)&#10;    - locator resolved to &lt;button hidden=&quot;&quot; type=&quot;button&quot; class=&quot;mode-tab&quot; id=&quot;weight-price-mode&quot;&gt;核重核价&lt;/button&gt;&#10;  - attempting click action&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is not visible&#10;    - retrying click action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible, enabled and stable&#10;       - element is not visible&#10;     - retrying click action&#10;       - waiting 500ms&quot;">tests/test_zeshun_popup_browser.py:45: in popup
+    page.locator("#weight-price-mode").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#weight-price-mode")
+E       - locator resolved to &lt;button hidden="" type="button" class="mode-tab" id="weight-price-mode"&gt;核重核价&lt;/button&gt;
+E     - attempting click action
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and stable
+E         - element is not visible
+E       - retrying click action
+E         - waiting 100ms
+E       10 × waiting for element to be visible, enabled and stable
+E          - element is not visible
+E        - retrying click action
+E          - waiting 500ms</error></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_zying_cards_without_ids_read_fresh_matching_detail" time="0.876" /><testcase classname="tests.test_zeshun_popup_browser" name="test_zying_products_wait_for_delayed_spa_cards" time="0.588" /><testcase classname="tests.test_zeshun_popup_browser" name="test_shared_zying_read_waits_for_categories_before_developers" time="0.570"><failure message="AssertionError: assert [] == [{'id': '18', 'name': '开发甲'}]&#10;  &#10;  Right contains one more item: {'id': '18', 'name': '开发甲'}&#10;  Use -v to get more diff">tests/test_zeshun_popup_browser.py:1804: in test_shared_zying_read_waits_for_categories_before_developers
+    assert result["context"]["developers"] == [{"id": "18", "name": "开发甲"}]
+E   AssertionError: assert [] == [{'id': '18', 'name': '开发甲'}]
+E     
+E     Right contains one more item: {'id': '18', 'name': '开发甲'}
+E     Use -v to get more diff</failure></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_zying_mismatched_detail_is_rejected" time="1.002" /><testcase classname="tests.test_zeshun_popup_browser" name="test_live_developers_win_over_older_server_cache" time="0.265" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_ignores_company_icons_recommendations_and_unlabelled_numbers" time="0.382" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_package_units_and_per_sku_identity" time="0.367" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_main_reader_does_not_take_ancestor_recommendation_skus" time="0.249" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_isolated_content_world_uses_main_world_bridge" time="0.236" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_delayed_skus_are_waited_for" time="1.054" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_page_identity_mismatch_does_not_return_product" time="10.290" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_list_does_not_restore_known_wrong_stale_metrics" time="0.163"><failure message="AssertionError: assert ['8 g', '长：5 ... 高：7 cm', '—'] == ['—', '—', '—']&#10;  &#10;  At index 0 diff: '8 g' != '—'&#10;  Use -v to get more diff">tests/test_zeshun_popup_browser.py:1973: in test_1688_list_does_not_restore_known_wrong_stale_metrics
+    assert result == ["—", "—", "—"]
+E   AssertionError: assert ['8 g', '长：5 ... 高：7 cm', '—'] == ['—', '—', '—']
+E     
+E     At index 0 diff: '8 g' != '—'
+E     Use -v to get more diff</failure></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_legacy_sku_table_uses_named_columns" time="0.199" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_variant_detail_displays_actual_weight_and_package" time="0.146"><failure message="assert '10 × 8 × 4 cm' in '&lt;div class=&quot;p1688-variant-wrap&quot;&gt;&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;变体&lt;/th&gt;&lt;th&gt;SKU（选填）&lt;/th&gt;&lt;th&gt;库存&lt;/th&gt;&lt;th&gt;采购价&lt;/th&gt;&lt;th&gt;重量&lt;/th&gt;&lt;th&gt;包装... 宽：8 cm · 高：4 cm&lt;/td&gt;&lt;td&gt;—&lt;/td&gt;&lt;td&gt;—&lt;/td&gt;&lt;td&gt;&lt;div class=&quot;p1688-variant-images&quot;&gt;—&lt;/div&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/div&gt;'">tests/test_zeshun_popup_browser.py:1994: in test_1688_variant_detail_displays_actual_weight_and_package
+    assert "10 × 8 × 4 cm" in markup
+E   assert '10 × 8 × 4 cm' in '&lt;div class="p1688-variant-wrap"&gt;&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;变体&lt;/th&gt;&lt;th&gt;SKU（选填）&lt;/th&gt;&lt;th&gt;库存&lt;/th&gt;&lt;th&gt;采购价&lt;/th&gt;&lt;th&gt;重量&lt;/th&gt;&lt;th&gt;包装... 宽：8 cm · 高：4 cm&lt;/td&gt;&lt;td&gt;—&lt;/td&gt;&lt;td&gt;—&lt;/td&gt;&lt;td&gt;&lt;div class="p1688-variant-images"&gt;—&lt;/div&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/div&gt;'</failure></testcase><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_background_reads_only_sender_detail_tab_in_main_world" time="0.170" /><testcase classname="tests.test_zeshun_popup_browser" name="test_1688_list_redirect_cannot_submit_another_product" time="0.366" /><testcase classname="tests.test_zeshun_popup_browser" name="test_purchase_tracking_direct_start_and_waiting_login_controls" time="0.384" /><testcase classname="tests.test_zeshun_popup_browser" name="test_purchase_tracking_does_not_read_another_orders_number" time="2.634" /><testcase classname="tests.test_zeshun_popup_browser" name="test_purchase_tracking_recognizes_unshipped_1688_order_without_logistics_controls[&lt;p&gt;\u8ba2\u5355\u53f7\uff1a5127480146121008319&lt;/p&gt;&lt;p&gt;\u7b49\u5f85\u5356\u5bb6\u53d1\u8d27&lt;/p&gt;]" time="2.007" /><testcase classname="tests.test_zeshun_popup_browser" name="test_purchase_tracking_recognizes_unshipped_1688_order_without_logistics_controls[&lt;header&gt;&lt;span&gt;\u8ba2\u5355\u7f16\u53f7\uff1a&lt;/span&gt;&lt;span&gt;5127480146121008319&lt;/span&gt;&lt;/header&gt;&lt;p&gt;\u5f85\u53d1\u8d27&lt;/p&gt;]" time="2.035" /><testcase classname="tests.test_zeshun_popup_browser" name="test_purchase_tracking_recognizes_unshipped_1688_order_without_logistics_controls[&lt;p&gt;\u8ba2\u5355\u53f7\u7801\uff1a5127480146121008319&lt;/p&gt;]" time="2.018" /><testcase classname="tests.test_zeshun_popup_browser" name="test_purchase_tracking_search_input_alone_does_not_prove_order_exists" time="3.068" /><testcase classname="tests.test_zeshun_popup_roles_browser" name="test_role_visibility_and_layout[320-super_admin]" time="1.715" /><testcase classname="tests.test_zeshun_popup_roles_browser" name="test_role_visibility_and_layout[320-enterprise_admin]" time="0.213" /><testcase classname="tests.test_zeshun_popup_roles_browser" name="test_role_visibility_and_layout[320-operator]" time="0.223" /><testcase classname="tests.test_zeshun_popup_roles_browser" name="test_role_visibility_and_layout[320-None]" time="0.275" /><testcase classname="tests.test_zeshun_popup_roles_browser" name="test_role_visibility_and_layout[420-super_admin]" time="0.217" /><testcase classname="tests.test_zeshun_popup_roles_browser" name="test_role_visibility_and_layout[420-enterprise_admin]" time="0.207" /><testcase classname="tests.test_zeshun_popup_roles_browser" name="test_role_visibility_and_layout[420-operator]" time="0.210" /><testcase classname="tests.test_zeshun_popup_roles_browser" name="test_role_visibility_and_layout[420-None]" time="0.217" /><testcase classname="tests.test_zeshun_popup_roles_browser" name="test_role_visibility_and_layout[600-super_admin]" time="0.224" /><testcase classname="tests.test_zeshun_popup_roles_browser" name="test_role_visibility_and_layout[600-enterprise_admin]" time="0.215" /><testcase classname="tests.test_zeshun_popup_roles_browser" name="test_role_visibility_and_layout[600-operator]" time="0.214" /><testcase classname="tests.test_zeshun_popup_roles_browser" name="test_role_visibility_and_layout[600-None]" time="0.217" /><testcase classname="tests.test_zeshun_popup_roles_browser" name="test_focus_recovers_account_display_and_old_login_error" time="7.406" /><testcase classname="tests.test_zeshun_product_batch" name="test_batch_limits_pagination_concurrency_stop_and_recovery" time="25.309" /><testcase classname="tests.test_zeshun_runtime_recovery_browser" name="test_preferences_explain_lost_runtime_and_can_retry[missing]" time="1.033" /><testcase classname="tests.test_zeshun_runtime_recovery_browser" name="test_preferences_explain_lost_runtime_and_can_retry[invalidated]" time="0.205" /><testcase classname="tests.test_zeshun_runtime_recovery_browser" name="test_real_extension_reload_reinjects_and_refreshes_old_page" time="12.446"><failure message="playwright._impl._errors.TimeoutError: Locator.evaluate: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;extensions-toolbar #devMode&quot;)">tests/test_zeshun_runtime_recovery_browser.py:93: in test_real_extension_reload_reinjects_and_refreshes_old_page
+    if not developer_mode.evaluate("element =&gt; element.checked"):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/mercado_click_delay.py:152: in delayed
+    result = original(target, expression, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15724: in evaluate
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:188: in evaluate
+    return await self._with_element(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:112: in _with_element
+    handle = await self.element_handle(timeout=timeout)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:316: in element_handle
+    handle = await self._frame.wait_for_selector(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:369: in wait_for_selector
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.evaluate: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("extensions-toolbar #devMode")</failure></testcase><testcase classname="tests.test_zeshun_yandex_extension" name="test_yandex_bridge_requires_plugin_login" time="0.003" /><testcase classname="tests.test_zeshun_yandex_extension" name="test_yandex_bridge_validates_inputs_before_starting_worker" time="0.001" /><testcase classname="tests.test_zeshun_yandex_extension" name="test_yandex_bridge_starts_and_reads_only_the_search_status" time="0.001" /><testcase classname="tests.test_zeshun_yandex_extension" name="test_yandex_bridge_reports_unavailable_worker" time="0.001" /><testcase classname="tests.test_zeshun_yandex_extension" name="test_yandex_bridge_rejects_non_super_admin[enterprise_admin]" time="0.001" /><testcase classname="tests.test_zeshun_yandex_extension" name="test_yandex_bridge_rejects_non_super_admin[operator]" time="0.001" /><testcase classname="tests.test_zeshun_yandex_extension" name="test_yandex_bridge_rejects_non_super_admin[viewer]" time="0.001" /><testcase classname="tests.test_zeshun_yandex_extension" name="test_yandex_bridge_rejects_non_super_admin[member]" time="0.001" /><testcase classname="tests.test_zeshun_yandex_extension" name="test_yandex_bridge_rejects_non_super_admin[None]" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_collection_accepts_large_positive_count_without_default_page_cutoff[10001]" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_collection_accepts_large_positive_count_without_default_page_cutoff[1000000]" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_collection_rejects_nonpositive_or_noninteger_count[0]" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_collection_rejects_nonpositive_or_noninteger_count[-1]" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_collection_rejects_nonpositive_or_noninteger_count[True]" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_collection_rejects_nonpositive_or_noninteger_count[1.5]" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_collection_rejects_nonpositive_or_noninteger_count[10001]" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_collection_rejects_nonpositive_or_noninteger_count[None]" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_count_collection_can_start_beyond_old_page_cutoff" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_collection_retains_explicit_page_range" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_infringement_retains_item_and_page_limits" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_authenticated_extension_endpoint_accepts_more_than_10000_products" time="0.002" /><testcase classname="tests.test_zying_collection_item_limit" name="test_extension_package_contains_current_count_limit_sources" time="0.014" /><testcase classname="tests.test_zying_collection_item_limit" name="test_api_collection_crosses_10000_products_and_obeys_requested_count" time="0.065" /><testcase classname="tests.test_zying_collection_item_limit" name="test_api_count_collection_scans_beyond_old_cutoff_for_cursor" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_api_count_collection_stops_when_products_are_exhausted" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_api_count_collection_stops_at_reported_end_when_cursor_is_missing" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_api_count_collection_ignores_zero_total_with_nonempty_products" time="0.001" /><testcase classname="tests.test_zying_collection_item_limit" name="test_api_count_collection_rejects_repeated_pages_with_missing_cursor" time="0.001" /><testcase classname="tests.test_zying_extension_options_fast" name="test_web_selector_refresh_preserves_page_developer_sync" time="0.003"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_zying_extension_options_fast.py:53: in test_web_selector_refresh_preserves_page_developer_sync
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_zying_extension_options_fast" name="test_page_only_refresh_uses_history_without_api_or_redundant_sync" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_zying_extension_options_fast.py:69: in test_page_only_refresh_uses_history_without_api_or_redundant_sync
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_zying_extension_options_fast" name="test_page_only_refresh_uses_cached_directory_without_history" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_zying_extension_options_fast.py:82: in test_page_only_refresh_uses_cached_directory_without_history
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_zying_extension_options_fast" name="test_history_failure_keeps_current_categories_available" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_zying_extension_options_fast.py:95: in test_history_failure_keeps_current_categories_available
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_zying_extension_options_fast" name="test_page_only_cache_does_not_suppress_legacy_directory_lookup" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_zying_extension_options_fast.py:107: in test_page_only_cache_does_not_suppress_legacy_directory_lookup
+    assert first.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_zying_extension_options_fast" name="test_web_options_still_require_extension_login_and_view_permission" time="0.002"><failure message="assert 503 == 403&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_zying_extension_options_fast.py:131: in test_web_options_still_require_extension_login_and_view_permission
+    assert response.status_code == 403
+E   assert 503 == 403
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_zying_extension_options_fast" name="test_cached_directory_is_token_scoped_copied_and_expires" time="0.001" /><testcase classname="tests.test_zying_extension_options_fast" name="test_web_options_remain_local_while_task_endpoints_keep_worker_owner" time="0.003" /><testcase classname="tests.test_zying_extension_options_fast" name="test_worker_start_seeds_page_developers_before_starting_collection" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_zying_extension_options_fast.py:204: in test_worker_start_seeds_page_developers_before_starting_collection
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_zying_order_sync" name="test_purchase_identifiers_and_cny_cost" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_unreadable_cost_is_not_written[None]" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_unreadable_cost_is_not_written[***]" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_unreadable_cost_is_not_written[NaN]" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_unreadable_cost_is_not_written[Infinity]" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_unreadable_cost_is_not_written[-1]" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_pack_only_match_does_not_duplicate_cost" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_empty_purchase_fields_do_not_erase_local_values" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_filtered_snapshot_reads_all_pages_before_writing" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_agent_sync_preparation_returns_before_order_snapshot_finishes" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_stopping_agent_sync_during_order_snapshot_prevents_enqueue" time="0.016" /><testcase classname="tests.test_zying_order_sync" name="test_partial_failure_and_user_isolation" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_route_scopes_filters_and_status" time="0.006" /><testcase classname="tests.test_zying_order_sync" name="test_playwright_search_and_detail_flow[None]" time="0.779" /><testcase classname="tests.test_zying_order_sync" name="test_playwright_search_and_detail_flow[/home]" time="0.487" /><testcase classname="tests.test_zying_order_sync" name="test_playwright_search_and_detail_flow[/product]" time="0.506" /><testcase classname="tests.test_zying_order_sync" name="test_playwright_search_and_detail_flow[/login]" time="0.480" /><testcase classname="tests.test_zying_order_sync" name="test_playwright_search_and_detail_flow[/order-detail]" time="0.486" /><testcase classname="tests.test_zying_order_sync" name="test_login_confirmation_gates_writes_and_is_owner_scoped" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_start_failure_returns_json_and_edge_is_mandatory" time="0.004" /><testcase classname="tests.test_zying_order_sync" name="test_default_agent_permission_and_filtered_payload" time="0.028" /><testcase classname="tests.test_zying_order_sync" name="test_agent_login_owner_scope_persistence_and_stop_blocks_writes" time="0.042" /><testcase classname="tests.test_zying_order_sync" name="test_server_stop_unblocks_login_and_prevents_late_write[False]" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_server_stop_unblocks_login_and_prevents_late_write[True]" time="0.002" /><testcase classname="tests.test_zying_order_sync" name="test_agent_worker_executes_browser_and_reports_rows" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_server_option_only_rendered_for_super_admin" time="0.005" /><testcase classname="tests.test_zying_order_sync" name="test_detail_timeout_preserves_batch_results_and_continues" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_search_timeout_skips_batch_and_searches_next_batch" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_server_timeout_skipped_and_next_order_written" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_stopped_server_cleanup_cannot_unlock_new_job[stop]" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_stopped_server_cleanup_cannot_unlock_new_job[stale]" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_agent_timeout_roundtrip_is_skipped_once" time="1.040" /><testcase classname="tests.test_zying_order_sync" name="test_stale_progress_releases_agent_despite_fresh_heartbeat" time="0.029" /><testcase classname="tests.test_zying_order_sync" name="test_agent_batches_ten_orders_and_stops_on_result_response" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_larger_search_batch_splits_overflow_without_losing_orders" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_compact_agent_response_preserves_server_result_history" time="0.014" /><testcase classname="tests.test_zying_order_sync" name="test_agent_rechecks_login_without_losing_job" time="1.011" /><testcase classname="tests.test_zying_order_sync" name="test_agent_recovers_control_transport_failure_but_does_not_replay_write" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_agent_login_required_restores_confirmation_and_preserves_progress" time="0.026" /><testcase classname="tests.test_zying_order_sync" name="test_agent_error_displays_worker_reason_instead_of_exit_code" time="0.001" /><testcase classname="tests.test_zying_order_sync" name="test_login_confirmation_reloads_authentication_from_other_tab" time="0.326" /><testcase classname="tests.test_zying_order_sync_browser" name="test_active_task_does_not_lock_next_execution_selection[None-1440]" time="6.409"><failure message="playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#order-zying-target&quot;)&#10;    - locator resolved to &lt;select title=&quot;双击复制数据&quot; id=&quot;order-zying-target&quot; data-copy-hint=&quot;双击复制数据&quot; class=&quot;copy-anywhere-target&quot; aria-describedby=&quot;order-zying-target-note&quot; onchange=&quot;document.getElementById('order-zying-agent').hidden = this.value === 'server'&quot;&gt;…&lt;/select&gt;&#10;  - attempting select option action&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible and enabled&#10;       - element is not visible&#10;     - retrying select option action&#10;       - waiting 500ms">tests/test_zying_order_sync_browser.py:78: in test_active_task_does_not_lock_next_execution_selection
+    target.select_option("server")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:17512: in select_option
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:579: in select_option
+    return await self._frame.select_option(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:763: in select_option
+    return await self._channel.send("selectOption", self._timeout, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#order-zying-target")
+E       - locator resolved to &lt;select title="双击复制数据" id="order-zying-target" data-copy-hint="双击复制数据" class="copy-anywhere-target" aria-describedby="order-zying-target-note" onchange="document.getElementById('order-zying-agent').hidden = this.value === 'server'"&gt;…&lt;/select&gt;
+E     - attempting select option action
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E       - waiting 20ms
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E         - waiting 100ms
+E       10 × waiting for element to be visible and enabled
+E          - element is not visible
+E        - retrying select option action
+E          - waiting 500ms</failure></testcase><testcase classname="tests.test_zying_order_sync_browser" name="test_active_task_does_not_lock_next_execution_selection[None-390]" time="5.638"><failure message="playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#order-zying-target&quot;)&#10;    - locator resolved to &lt;select title=&quot;双击复制数据&quot; id=&quot;order-zying-target&quot; data-copy-hint=&quot;双击复制数据&quot; class=&quot;copy-anywhere-target&quot; aria-describedby=&quot;order-zying-target-note&quot; onchange=&quot;document.getElementById('order-zying-agent').hidden = this.value === 'server'&quot;&gt;…&lt;/select&gt;&#10;  - attempting select option action&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible and enabled&#10;       - element is not visible&#10;     - retrying select option action&#10;       - waiting 500ms">tests/test_zying_order_sync_browser.py:78: in test_active_task_does_not_lock_next_execution_selection
+    target.select_option("server")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:17512: in select_option
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:579: in select_option
+    return await self._frame.select_option(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:763: in select_option
+    return await self._channel.send("selectOption", self._timeout, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#order-zying-target")
+E       - locator resolved to &lt;select title="双击复制数据" id="order-zying-target" data-copy-hint="双击复制数据" class="copy-anywhere-target" aria-describedby="order-zying-target-note" onchange="document.getElementById('order-zying-agent').hidden = this.value === 'server'"&gt;…&lt;/select&gt;
+E     - attempting select option action
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E       - waiting 20ms
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E         - waiting 100ms
+E       10 × waiting for element to be visible and enabled
+E          - element is not visible
+E        - retrying select option action
+E          - waiting 500ms</failure></testcase><testcase classname="tests.test_zying_order_sync_browser" name="test_active_task_does_not_lock_next_execution_selection[waiting_login-1440]" time="5.605"><failure message="playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#order-zying-target&quot;)&#10;    - locator resolved to &lt;select title=&quot;双击复制数据&quot; id=&quot;order-zying-target&quot; data-copy-hint=&quot;双击复制数据&quot; class=&quot;copy-anywhere-target&quot; aria-describedby=&quot;order-zying-target-note&quot; onchange=&quot;document.getElementById('order-zying-agent').hidden = this.value === 'server'&quot;&gt;…&lt;/select&gt;&#10;  - attempting select option action&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible and enabled&#10;       - element is not visible&#10;     - retrying select option action&#10;       - waiting 500ms">tests/test_zying_order_sync_browser.py:78: in test_active_task_does_not_lock_next_execution_selection
+    target.select_option("server")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:17512: in select_option
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:579: in select_option
+    return await self._frame.select_option(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:763: in select_option
+    return await self._channel.send("selectOption", self._timeout, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#order-zying-target")
+E       - locator resolved to &lt;select title="双击复制数据" id="order-zying-target" data-copy-hint="双击复制数据" class="copy-anywhere-target" aria-describedby="order-zying-target-note" onchange="document.getElementById('order-zying-agent').hidden = this.value === 'server'"&gt;…&lt;/select&gt;
+E     - attempting select option action
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E       - waiting 20ms
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E         - waiting 100ms
+E       10 × waiting for element to be visible and enabled
+E          - element is not visible
+E        - retrying select option action
+E          - waiting 500ms</failure></testcase><testcase classname="tests.test_zying_order_sync_browser" name="test_active_task_does_not_lock_next_execution_selection[waiting_login-390]" time="5.735"><failure message="playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#order-zying-target&quot;)&#10;    - locator resolved to &lt;select title=&quot;双击复制数据&quot; id=&quot;order-zying-target&quot; data-copy-hint=&quot;双击复制数据&quot; class=&quot;copy-anywhere-target&quot; aria-describedby=&quot;order-zying-target-note&quot; onchange=&quot;document.getElementById('order-zying-agent').hidden = this.value === 'server'&quot;&gt;…&lt;/select&gt;&#10;  - attempting select option action&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible and enabled&#10;       - element is not visible&#10;     - retrying select option action&#10;       - waiting 500ms">tests/test_zying_order_sync_browser.py:78: in test_active_task_does_not_lock_next_execution_selection
+    target.select_option("server")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:17512: in select_option
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:579: in select_option
+    return await self._frame.select_option(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:763: in select_option
+    return await self._channel.send("selectOption", self._timeout, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#order-zying-target")
+E       - locator resolved to &lt;select title="双击复制数据" id="order-zying-target" data-copy-hint="双击复制数据" class="copy-anywhere-target" aria-describedby="order-zying-target-note" onchange="document.getElementById('order-zying-agent').hidden = this.value === 'server'"&gt;…&lt;/select&gt;
+E     - attempting select option action
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E       - waiting 20ms
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E         - waiting 100ms
+E       10 × waiting for element to be visible and enabled
+E          - element is not visible
+E        - retrying select option action
+E          - waiting 500ms</failure></testcase><testcase classname="tests.test_zying_order_sync_browser" name="test_active_task_does_not_lock_next_execution_selection[syncing-1440]" time="5.691"><failure message="playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#order-zying-target&quot;)&#10;    - locator resolved to &lt;select title=&quot;双击复制数据&quot; id=&quot;order-zying-target&quot; data-copy-hint=&quot;双击复制数据&quot; class=&quot;copy-anywhere-target&quot; aria-describedby=&quot;order-zying-target-note&quot; onchange=&quot;document.getElementById('order-zying-agent').hidden = this.value === 'server'&quot;&gt;…&lt;/select&gt;&#10;  - attempting select option action&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible and enabled&#10;       - element is not visible&#10;     - retrying select option action&#10;       - waiting 500ms">tests/test_zying_order_sync_browser.py:78: in test_active_task_does_not_lock_next_execution_selection
+    target.select_option("server")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:17512: in select_option
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:579: in select_option
+    return await self._frame.select_option(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:763: in select_option
+    return await self._channel.send("selectOption", self._timeout, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#order-zying-target")
+E       - locator resolved to &lt;select title="双击复制数据" id="order-zying-target" data-copy-hint="双击复制数据" class="copy-anywhere-target" aria-describedby="order-zying-target-note" onchange="document.getElementById('order-zying-agent').hidden = this.value === 'server'"&gt;…&lt;/select&gt;
+E     - attempting select option action
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E       - waiting 20ms
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E         - waiting 100ms
+E       10 × waiting for element to be visible and enabled
+E          - element is not visible
+E        - retrying select option action
+E          - waiting 500ms</failure></testcase><testcase classname="tests.test_zying_order_sync_browser" name="test_active_task_does_not_lock_next_execution_selection[syncing-390]" time="5.664"><failure message="playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#order-zying-target&quot;)&#10;    - locator resolved to &lt;select title=&quot;双击复制数据&quot; id=&quot;order-zying-target&quot; data-copy-hint=&quot;双击复制数据&quot; class=&quot;copy-anywhere-target&quot; aria-describedby=&quot;order-zying-target-note&quot; onchange=&quot;document.getElementById('order-zying-agent').hidden = this.value === 'server'&quot;&gt;…&lt;/select&gt;&#10;  - attempting select option action&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible and enabled&#10;       - element is not visible&#10;     - retrying select option action&#10;       - waiting 500ms">tests/test_zying_order_sync_browser.py:78: in test_active_task_does_not_lock_next_execution_selection
+    target.select_option("server")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:17512: in select_option
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:579: in select_option
+    return await self._frame.select_option(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:763: in select_option
+    return await self._channel.send("selectOption", self._timeout, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#order-zying-target")
+E       - locator resolved to &lt;select title="双击复制数据" id="order-zying-target" data-copy-hint="双击复制数据" class="copy-anywhere-target" aria-describedby="order-zying-target-note" onchange="document.getElementById('order-zying-agent').hidden = this.value === 'server'"&gt;…&lt;/select&gt;
+E     - attempting select option action
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E       - waiting 20ms
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E         - waiting 100ms
+E       10 × waiting for element to be visible and enabled
+E          - element is not visible
+E        - retrying select option action
+E          - waiting 500ms</failure></testcase><testcase classname="tests.test_zying_order_sync_browser" name="test_active_task_does_not_lock_next_execution_selection[stopping-1440]" time="5.943"><failure message="playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#order-zying-target&quot;)&#10;    - locator resolved to &lt;select title=&quot;双击复制数据&quot; id=&quot;order-zying-target&quot; data-copy-hint=&quot;双击复制数据&quot; class=&quot;copy-anywhere-target&quot; aria-describedby=&quot;order-zying-target-note&quot; onchange=&quot;document.getElementById('order-zying-agent').hidden = this.value === 'server'&quot;&gt;…&lt;/select&gt;&#10;  - attempting select option action&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible and enabled&#10;       - element is not visible&#10;     - retrying select option action&#10;       - waiting 500ms">tests/test_zying_order_sync_browser.py:78: in test_active_task_does_not_lock_next_execution_selection
+    target.select_option("server")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:17512: in select_option
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:579: in select_option
+    return await self._frame.select_option(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:763: in select_option
+    return await self._channel.send("selectOption", self._timeout, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#order-zying-target")
+E       - locator resolved to &lt;select title="双击复制数据" id="order-zying-target" data-copy-hint="双击复制数据" class="copy-anywhere-target" aria-describedby="order-zying-target-note" onchange="document.getElementById('order-zying-agent').hidden = this.value === 'server'"&gt;…&lt;/select&gt;
+E     - attempting select option action
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E       - waiting 20ms
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E         - waiting 100ms
+E       10 × waiting for element to be visible and enabled
+E          - element is not visible
+E        - retrying select option action
+E          - waiting 500ms</failure></testcase><testcase classname="tests.test_zying_order_sync_browser" name="test_active_task_does_not_lock_next_execution_selection[stopping-390]" time="5.624"><failure message="playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#order-zying-target&quot;)&#10;    - locator resolved to &lt;select title=&quot;双击复制数据&quot; id=&quot;order-zying-target&quot; data-copy-hint=&quot;双击复制数据&quot; class=&quot;copy-anywhere-target&quot; aria-describedby=&quot;order-zying-target-note&quot; onchange=&quot;document.getElementById('order-zying-agent').hidden = this.value === 'server'&quot;&gt;…&lt;/select&gt;&#10;  - attempting select option action&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible and enabled&#10;       - element is not visible&#10;     - retrying select option action&#10;       - waiting 500ms">tests/test_zying_order_sync_browser.py:78: in test_active_task_does_not_lock_next_execution_selection
+    target.select_option("server")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:17512: in select_option
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:579: in select_option
+    return await self._frame.select_option(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:763: in select_option
+    return await self._channel.send("selectOption", self._timeout, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#order-zying-target")
+E       - locator resolved to &lt;select title="双击复制数据" id="order-zying-target" data-copy-hint="双击复制数据" class="copy-anywhere-target" aria-describedby="order-zying-target-note" onchange="document.getElementById('order-zying-agent').hidden = this.value === 'server'"&gt;…&lt;/select&gt;
+E     - attempting select option action
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E       - waiting 20ms
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E         - waiting 100ms
+E       10 × waiting for element to be visible and enabled
+E          - element is not visible
+E        - retrying select option action
+E          - waiting 500ms</failure></testcase><testcase classname="tests.test_zying_order_sync_browser" name="test_stop_then_start_uses_new_selection[agent]" time="0.838" /><testcase classname="tests.test_zying_order_sync_browser" name="test_stop_then_start_uses_new_selection[server]" time="0.611" /><testcase classname="tests.test_zying_order_sync_browser" name="test_non_super_admin_can_choose_computer_but_not_server[operator]" time="0.510" /><testcase classname="tests.test_zying_order_sync_browser" name="test_non_super_admin_can_choose_computer_but_not_server[enterprise_admin]" time="0.763" /><testcase classname="tests.test_zying_order_sync_speed" name="test_bounded_concurrency_keeps_out_of_order_details_and_compacts_payload" time="1.671" /><testcase classname="tests.test_zying_order_sync_speed" name="test_fast_path_rejects_mismatched_internal_id_without_losing_other_orders" time="0.977" /><testcase classname="tests.test_zying_order_sync_speed" name="test_fast_path_timeout_aborts_request_and_continues" time="1.205" /><testcase classname="tests.test_zying_order_sync_speed" name="test_fast_path_authentication_failure_stops_sync" time="0.980" /><testcase classname="tests.test_zying_order_sync_speed" name="test_fast_path_is_faster_than_serial_ui_with_equal_response_delays" time="3.533" /><testcase classname="tests.test_zying_signer_startup" name="test_start_retries_browser_failure_and_cleans_failed_service" time="0.005" /><testcase classname="tests.test_zying_signer_startup" name="test_start_reports_driver_failure_with_original_cause" time="0.001" /><testcase classname="tests.test_zying_signer_startup" name="test_start_retries_page_timeout_without_restarting_browser" time="0.001" /><testcase classname="tests.test_zying_signer_startup" name="test_start_reports_page_failure_separately_and_closes_browser" time="0.001" /><testcase classname="tests.test_zying_signer_startup" name="test_start_uses_explicit_edge_driver" time="0.001" /><testcase classname="tests.test_zying_snapshot_lock_retry" name="test_lock_conflict_rolls_back_and_releases_before_retry[1205]" time="0.001" /><testcase classname="tests.test_zying_snapshot_lock_retry" name="test_lock_conflict_rolls_back_and_releases_before_retry[1213]" time="0.001" /><testcase classname="tests.test_zying_snapshot_lock_retry" name="test_retry_is_bounded_and_does_not_replay_uncertain_writes[1205-3]" time="0.001" /><testcase classname="tests.test_zying_snapshot_lock_retry" name="test_retry_is_bounded_and_does_not_replay_uncertain_writes[1213-3]" time="0.001" /><testcase classname="tests.test_zying_snapshot_lock_retry" name="test_retry_is_bounded_and_does_not_replay_uncertain_writes[2013-1]" time="0.001" /><testcase classname="tests.test_zying_snapshot_lock_retry" name="test_retry_is_bounded_and_does_not_replay_uncertain_writes[2006-1]" time="0.001" /><testcase classname="tests.test_zying_snapshot_lock_retry" name="test_retry_is_bounded_and_does_not_replay_uncertain_writes[1062-1]" time="0.003" /></testsuite></testsuites>

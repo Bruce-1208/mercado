@@ -1,0 +1,165 @@
+{
+  "table": {
+    "TABLE_ROWS": 957489,
+    "DATA_LENGTH": 17445781504,
+    "INDEX_LENGTH": 614580224
+  },
+  "indexes": [
+    {
+      "Key_name": "PRIMARY",
+      "Seq_in_index": 1,
+      "Column_name": "id",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "uniq_erp_meli_product_item",
+      "Seq_in_index": 1,
+      "Column_name": "organization_key",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "uniq_erp_meli_product_item",
+      "Seq_in_index": 2,
+      "Column_name": "source_item_id",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_product_added",
+      "Seq_in_index": 1,
+      "Column_name": "added_at",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_product_source",
+      "Seq_in_index": 1,
+      "Column_name": "source_type",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_product_source",
+      "Seq_in_index": 2,
+      "Column_name": "id",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_product_review",
+      "Seq_in_index": 1,
+      "Column_name": "review_status",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_product_review",
+      "Seq_in_index": 2,
+      "Column_name": "id",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_product_publish",
+      "Seq_in_index": 1,
+      "Column_name": "last_publish_status",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_product_publish",
+      "Seq_in_index": 2,
+      "Column_name": "id",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_product_weight",
+      "Seq_in_index": 1,
+      "Column_name": "weight_g",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_product_price",
+      "Seq_in_index": 1,
+      "Column_name": "price",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_product_net",
+      "Seq_in_index": 1,
+      "Column_name": "net_proceeds_usd",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_profit_refresh",
+      "Seq_in_index": 1,
+      "Column_name": "profitability_updated_at",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_profit_refresh",
+      "Seq_in_index": 2,
+      "Column_name": "id",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_product_management_category",
+      "Seq_in_index": 1,
+      "Column_name": "management_category_id",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_product_management_category",
+      "Seq_in_index": 2,
+      "Column_name": "id",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_erp_meli_product_owner",
+      "Seq_in_index": 1,
+      "Column_name": "last_publish_token_id",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_product_source_enterprise",
+      "Seq_in_index": 1,
+      "Column_name": "source_item_id",
+      "Sub_part": null,
+      "Visible": "YES"
+    },
+    {
+      "Key_name": "idx_product_source_enterprise",
+      "Seq_in_index": 2,
+      "Column_name": "organization_key",
+      "Sub_part": null,
+      "Visible": "YES"
+    }
+  ],
+  "keyword_count_plan": [
+    {
+      "id": 1,
+      "select_type": "SIMPLE",
+      "table": "erp_mercadolibre_products",
+      "partitions": null,
+      "type": "ALL",
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": 957489,
+      "filtered": 20.99,
+      "Extra": "Using where"
+    }
+  ]
+}

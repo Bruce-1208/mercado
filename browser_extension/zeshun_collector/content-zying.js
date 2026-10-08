@@ -175,6 +175,23 @@ function aiWeightPriceSelectPage(data = {}) {
   return {ok: true, page: wanted, changed};
 }
 
+function aiWeightPriceDimensionControls(root, selectors = {}) {
+  const visible = node => {
+    const style = getComputedStyle(node);
+    return style.display !== "none" && style.visibility !== "hidden" && node.getClientRects().length > 0;
+  };
+  const groups = ["sizeLength", "sizeWidth", "sizeHeight"].map(name =>
+    [...root.querySelectorAll(`input[id="${name}"], input[name="${name}"], input[id$="_${name}"]`)].filter(visible));
+  if (groups.some(group => group.length)) {
+    if (!groups.every(group => group.length === 1)) throw new Error("智赢长宽高输入框未能分别唯一定位");
+    return groups.map(group => group[0]);
+  }
+  const configured = selectors.erp_dimensions_input
+    ? [...root.querySelectorAll(selectors.erp_dimensions_input)].filter(visible) : [];
+  if (configured.length && ![1, 3].includes(configured.length)) throw new Error("智赢尺寸字段配置不唯一");
+  return configured;
+}
+
 function aiWeightPriceDetailSnapshot(data = {}) {
   const selectors = data.selectors || {};
   const root = document.querySelector(selectors.erp_detail || ".curd-detail-wrap");
@@ -189,7 +206,9 @@ function aiWeightPriceDetailSnapshot(data = {}) {
     || root.querySelector("input[name*='weight' i], input[placeholder*='重量'], [data-weight]");
   const incomeNode = aiWeightPriceQuery(root, selectors.erp_net_income)
     || root.querySelector("input[name*='income' i], input[name*='profit' i], input[placeholder*='净收入'], input[placeholder*='利润']");
+  const dimensions = aiWeightPriceDimensionControls(root, selectors);
   return {
+    ...(dimensions.length ? {dimensions_cm: dimensions.map(node => node.value.trim()).join("x")} : {}),
     erp_goods_id: id,
     review_status: aiWeightPriceText(checked?.closest?.("label")) || String(checked?.value || "").trim(),
     weight_g: aiWeightPriceValue(weightNode),
@@ -205,6 +224,11 @@ function aiWeightPriceDelay(ms) {
 }
 
 function aiWeightPriceSame(field, actual, expected) {
+  if (field === "dimensions_cm") {
+    const sides = value => String(value ?? "").split(/\s*[x×*＊]\s*/).map(Number);
+    const a = sides(actual), b = sides(expected);
+    return a.length === 3 && b.length === 3 && a.every((side, i) => Number.isFinite(side) && side > 0 && side === b[i]);
+  }
   if (field === "review_status") {
     return String(actual || "").replace(/\s+/g, "") === String(expected || "").replace(/\s+/g, "");
   }
@@ -330,7 +354,7 @@ function aiWeightPriceSaveButton(root, selector) {
 async function aiWeightPriceWriteback(data = {}) {
   const selectors = data.selectors || {};
   const changes = data.changes || {};
-  if (!changes || Object.keys(changes).some(field => !["weight_g", "net_income_usd", "review_status"].includes(field))) {
+  if (!changes || Object.keys(changes).some(field => !["weight_g", "net_income_usd", "review_status", "dimensions_cm"].includes(field))) {
     throw new Error("智赢回填字段无效");
   }
   await aiWeightPriceOpenTarget(data);
@@ -350,6 +374,21 @@ async function aiWeightPriceWriteback(data = {}) {
     root, selectors.erp_net_income || "input[name*='income' i], input[name*='profit' i], input[placeholder*='净收入'], input[placeholder*='利润']",
     changes.net_income_usd, "净收益"
   );
+  if (changes.dimensions_cm !== undefined) {
+    const sides = String(changes.dimensions_cm).split(/\s*[x×*＊]\s*/).map(Number);
+    if (sides.length !== 3 || sides.some(side => !Number.isFinite(side) || side <= 0 || side > 60)) {
+      throw new Error("包装尺寸必须为完整长宽高，且单边不能超过60 cm");
+    }
+    const controls = aiWeightPriceDimensionControls(root, selectors);
+    if (![1, 3].includes(controls.length)) throw new Error("无法唯一定位智赢包装尺寸输入框");
+    controls.forEach((node, index) => {
+      const value = controls.length === 1 ? sides.join("x") : String(sides[index]);
+      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(node), "value")?.set;
+      if (setter) setter.call(node, value); else node.value = value;
+      node.dispatchEvent(new Event("input", {bubbles: true}));
+      node.dispatchEvent(new Event("change", {bubbles: true}));
+    });
+  }
   if (changes.review_status) {
     const matches = [...root.querySelectorAll("input[name='stat']")].filter(node => {
       const label = aiWeightPriceText(node.closest("label"));

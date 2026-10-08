@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-06T17:39:39.718043+08:00",
+  "scope": "Root-cause diagnosis of intermittent store-link listing loads; production code and schema unchanged.",
+  "confirmed": [
+    {
+      "cause": "Authorization-scoped metadata aggregation reads non-covering indexes",
+      "evidence": {
+        "three_store_site_count_seconds": 8.586,
+        "three_store_last_sync_seconds": 7.425,
+        "historical_site_count_max_seconds": 29.363,
+        "historical_current_count_max_seconds": 20.986,
+        "historical_last_sync_max_seconds": 21.437
+      },
+      "code": "erp/mercadolibre_store_link_store.py:1314-1376"
+    },
+    {
+      "cause": "Global metadata lock covers SQL; waiting callers have already borrowed MySQL connections",
+      "evidence": "Web connection pool limit 6; 2026-10-06 17:35:29, 31, 32, 33 repeated 10-second acquire timeouts. A slow scope blocks cached scopes too. Today 12:22, seven /api/store-links failures occurred in pre-request user permission lookup while acquiring a pooled connection, before the listing query started.",
+      "code": "erp/mercadolibre_store_link_store.py:1403-1435,1587-1595"
+    },
+    {
+      "cause": "Synchronization status refresh duplicates and aborts initial list requests; overlapping status requests leave duplicate polling timers",
+      "evidence_file": "frontend-request-reproduction.json",
+      "code": "bit/templates/index.html:16703-16707,28180,28570-28587"
+    },
+    {
+      "cause": "DBUtils retries query-timeout OperationalError 3024 twice while holding the logical pooled connection",
+      "evidence": "Offline fake-driver assertion verifies 3 executions for one execute call. Production Mercado product-list COUNT stages recorded approximately 24.2 seconds against MAX_EXECUTION_TIME(8000); same Web pool reported 10-second acquisition timeouts.",
+      "evidence_file": "dbutils-3024-evidence.json",
+      "code": "bit/db_pool.py:144-167; erp/mercadolibre_collection_store.py:1744"
+    }
+  ],
+  "validation": {
+    "read_only_scoped_queries": "Each query bounded at 15 seconds; all-store three slow queries reached limit. No schema changes.",
+    "query_alternatives": {
+      "equivalence_check": "passed in same read-only transaction",
+      "scope_size": 133
+    },
+    "frontend_reproduction": {
+      "tested_at": "2026-10-06T09:38:23.378Z",
+      "template": "bit/templates/index.html",
+      "method": "Real function source executed in a Node VM with mocked DOM, fetch, and timers; zero API access",
+      "results": [
+        {
+          "scenario": "Open store-links while the background sync is running",
+          "list_requests_before_first_result": 2,
+          "first_request_aborted": true,
+          "queries_identical": true
+        },
+        {
+          "scenario": "The store-links tab is inactive when the sync status responds",
+          "next_status_poll_ms": 1500,
+          "background_poll_scheduled": true
+        },
+        {
+          "scenario": "Two activations overlap before either sync status request returns",
+          "simultaneous_status_requests": 2,
+          "active_poll_timers_after_both_responses": 2,
+          "referenced_poll_timer_id": 2
+        }
+      ]
+    },
+    "dbutils_retry": "Offline fake-driver assertions passed; no network or database access.",
+    "production_log_evidence": "pool-pressure-log-evidence.txt"
+  },
+  "alternatives_tested": {
+    "scoped_count_using_existing_covering_index_seconds": 0.602,
+    "ordered_last_sync_seconds": 0.0
+  },
+  "fix_priorities": [
+    "Use covering index/efficient scoped aggregations.",
+    "Perform SQL outside the global cache lock, coordinate per scope, and check cached metadata before borrowing a MySQL connection.",
+    "Avoid duplicate automatic list refreshes and duplicate status polling.",
+    "Restrict DBUtils retries to actual connection failures; SQL execution timeouts must not execute three times. Optimize scoped product-list counts that contend for the same Web pool."
+  ],
+  "limits": [
+    "Timing samples represent local SQL execution, not complete browser/network load times. Listing measurements omit workflow marker decoration.",
+    "Workflow SQLite sample was fast; no evidence it is the main bottleneck.",
+    "No production application patch, index creation or service restart performed."
+  ]
+}

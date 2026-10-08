@@ -1,0 +1,28 @@
+{
+  "order_number": "2000015337883005",
+  "zeshun_status": "成功",
+  "execution_status": "完成",
+  "execution_error": "",
+  "current_net_proceeds_usd": "14.15",
+  "last_execution_id": "3ce97dd4e6004a5cb89565e3c9ee4be2",
+  "package_success": 7,
+  "net_success": 7,
+  "final_log": {
+    "time": "2026-10-07T21:46:45",
+    "stage": "同名链接",
+    "status": "成功",
+    "message": "同名链接更新成功 7/7 条",
+    "order_number": "2000015337883005",
+    "execution_id": "3ce97dd4e6004a5cb89565e3c9ee4be2",
+    "action": "zeshun",
+    "operator": "repair:20261007",
+    "site_id": "MLB",
+    "site_name": "巴西",
+    "link_name": "Fantasia De Cosplay Da Professora Minerva Mcgonagall P",
+    "salesperson": "张泽文",
+    "store_group": "八月新号",
+    "store_name": "蒋学斌3",
+    "product_id": "",
+    "marketplace_item_id": "MLB7581821358"
+  }
+}

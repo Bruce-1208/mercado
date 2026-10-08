@@ -1,0 +1,197 @@
+[
+  {
+    "path": "/mercado/today",
+    "metrics": {
+      "action": "document open",
+      "busy": true,
+      "dataMs": 12876.099999997765,
+      "done": true,
+      "elapsedMs": 15008.79999999702,
+      "errors": true,
+      "lastChange": 12876.099999997765,
+      "module": "/mercado/today",
+      "pending": 0,
+      "requests": [
+        {
+          "method": "GET",
+          "ms": 128.39999999850988,
+          "path": "/api/mercado/today/post-sale",
+          "start": 3282.199999999255,
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "ms": 122.60000000149012,
+          "path": "/api/mercado/today/post-sale",
+          "start": 6419.79999999702,
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "ms": 199.69999999925497,
+          "path": "/api/mercado/today/post-sale",
+          "start": 9552.89999999851,
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "ms": 99,
+          "path": "/api/mercado/today/post-sale",
+          "start": 12767.5,
+          "status": 200
+        }
+      ],
+      "rows": 0,
+      "start": 0,
+      "timedOut": true
+    },
+    "nav": [
+      {
+        "loadMs": 146.29999999701977,
+        "domMs": 142.29999999701977,
+        "ttfbMs": 6.599999997764826
+      }
+    ],
+    "state": {
+      "errors": [
+        "加载失败：MySQL 连接池繁忙，等待 5 秒后超时（进程总上限 4）；请检查慢查询、嵌套取连接或未归还连接"
+      ],
+      "feedback": [],
+      "heading": "今日必须处理"
+    }
+  },
+  {
+    "path": "/employee-tasks",
+    "metrics": {
+      "action": "document open",
+      "busy": false,
+      "dataMs": 75.30000000074506,
+      "done": true,
+      "elapsedMs": 442.9000000022352,
+      "errors": false,
+      "lastChange": 75.30000000074506,
+      "module": "/employee-tasks",
+      "pending": 0,
+      "requests": [],
+      "rows": 0,
+      "start": 0,
+      "timedOut": false
+    },
+    "nav": [
+      {
+        "loadMs": 55.100000001490116,
+        "domMs": 54,
+        "ttfbMs": 15.599999997764826
+      }
+    ],
+    "state": {
+      "errors": [],
+      "feedback": [
+        ""
+      ],
+      "heading": "员工任务"
+    }
+  },
+  {
+    "path": "/billing",
+    "metrics": {
+      "action": "document open",
+      "busy": false,
+      "dataMs": 129.19999999925494,
+      "done": true,
+      "elapsedMs": 526.8000000007451,
+      "errors": false,
+      "lastChange": 129.19999999925494,
+      "module": "/billing",
+      "pending": 0,
+      "requests": [
+        {
+          "method": "GET",
+          "ms": 14.100000001490116,
+          "path": "/api/print-wallet/accounts/1/records",
+          "start": 113.69999999925494,
+          "status": 200
+        }
+      ],
+      "rows": 41,
+      "start": 0,
+      "timedOut": false
+    },
+    "nav": [
+      {
+        "loadMs": 77.69999999925494,
+        "domMs": 76.09999999776483,
+        "ttfbMs": 20.800000000745058
+      }
+    ],
+    "state": {
+      "errors": [],
+      "feedback": [
+        ""
+      ],
+      "heading": "支付管理"
+    }
+  },
+  {
+    "path": "/ai-billing",
+    "metrics": {
+      "action": "document open",
+      "busy": false,
+      "dataMs": 57.5,
+      "done": true,
+      "elapsedMs": 430.5999999977648,
+      "errors": false,
+      "lastChange": 57.5,
+      "module": "/ai-billing",
+      "pending": 0,
+      "requests": [],
+      "rows": 20,
+      "start": 0,
+      "timedOut": false
+    },
+    "nav": [
+      {
+        "loadMs": 37.69999999925494,
+        "domMs": 36,
+        "ttfbMs": 10.100000001490116
+      }
+    ],
+    "state": {
+      "errors": [],
+      "feedback": [],
+      "heading": "AI 账单"
+    }
+  },
+  {
+    "path": "/settings/integrations",
+    "metrics": {
+      "action": "document open",
+      "busy": false,
+      "dataMs": 95.89999999850988,
+      "done": true,
+      "elapsedMs": 459.0999999977648,
+      "errors": true,
+      "lastChange": 95.89999999850988,
+      "module": "/settings/integrations",
+      "pending": 0,
+      "requests": [],
+      "rows": 8,
+      "start": 0,
+      "timedOut": false
+    },
+    "nav": [
+      {
+        "loadMs": 52.5,
+        "domMs": 48.29999999701977,
+        "ttfbMs": 14.300000000745058
+      }
+    ],
+    "state": {
+      "errors": [],
+      "feedback": [
+        "已配置 2 项模型服务。"
+      ],
+      "heading": "所有外部服务，在这里集中配置"
+    }
+  }
+]

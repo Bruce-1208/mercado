@@ -1,0 +1,47 @@
+{
+  "authorization_api": {
+    "status": 200,
+    "visible_store_ids": [
+      154
+    ]
+  },
+  "settings": [
+    {
+      "site_id": "MCO",
+      "salesperson": "周乐"
+    },
+    {
+      "site_id": "MLA",
+      "salesperson": "周乐"
+    },
+    {
+      "site_id": "MLB",
+      "salesperson": "周乐"
+    },
+    {
+      "site_id": "MLC",
+      "salesperson": "周乐"
+    },
+    {
+      "site_id": "MLM",
+      "salesperson": "周乐"
+    },
+    {
+      "site_id": "MLU",
+      "salesperson": "周乐"
+    }
+  ],
+  "links": [
+    {
+      "site_id": "MCO",
+      "is_current": 1,
+      "count": 9210
+    },
+    {
+      "site_id": "MLA",
+      "is_current": 1,
+      "count": 190
+    }
+  ],
+  "link_endpoint_verification": "Blocked by concurrent product table metadata migration; authorization filter fixed, full response not verified."
+}

@@ -69,49 +69,7 @@ def collect_site(session, name, site):
 
 
 def collect(configs, stop_event=None):
-    rows = []
-    for config in configs:
-        if stop_event and stop_event.is_set():
-            break
-        window_id, name = config[:2]
-        sites = split_config_sites(config[3])
-        if not window_id:
-            from bit.bit_api import getBrowserIdByName, listBrowsers
-            try:
-                browsers = listBrowsers()
-                for alias in (config[4] if len(config) > 4 else [name]):
-                    try:
-                        window_id = getBrowserIdByName(alias, browsers=browsers)
-                        break
-                    except RuntimeError:
-                        continue
-                if not window_id:
-                    raise RuntimeError(f"执行电脑未找到店铺浏览器：{name}")
-            except Exception as exc:
-                rows.extend({"store_name": name, "site": site, "error": str(exc)} for site in sites)
-                continue
-        lease = create_window_lease(window_id, owner=f"reputation_browser:{name}",
-                                    shop_name=name, task_type="reputation_collection")
-        acquired = lease.acquire(timeout=0)
-        try:
-            if not acquired:
-                raise RuntimeError("窗口被其他任务占用")
-            with BitPlaywrightSession(window_id, close_on_exit=True) as session:
-                for site in sites:
-                    if stop_event and stop_event.is_set():
-                        break
-                    rows.append(collect_site(session, name, site))
-        except Exception as exc:
-            rows.extend({"store_name": name, "site": site, "error": str(exc)} for site in sites)
-        finally:
-            if acquired:
-                lease.release()
-    failures = sum(bool(row.get("error")) for row in rows)
-    message = f"浏览器同步完成，异常站点 {failures} 个"
-    if failures:
-        message += "；" + "；".join(f"{row['store_name']}/{row['site']}：{row['error']}"
-                                   for row in rows if row.get("error"))[:1500]
-    return {"rows": rows, "status": "partial" if failures else "success", "message": message}
+    raise RuntimeError("声誉浏览器同步已停用，请通过 API 更新声誉")
 
 
 def persist(result, configs):

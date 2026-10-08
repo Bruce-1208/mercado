@@ -9,11 +9,12 @@ from __future__ import annotations
 import ftplib
 import io
 import json
+import os
 import re
 import time
 import zipfile
 from datetime import date, datetime, timedelta, timezone
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from xml.etree import ElementTree
 
 FTP_HOST = "ftpird.wipo.int"
@@ -29,6 +30,87 @@ MAX_PACKAGES = 31
 MAX_RECORDS = 250_000
 LOCAL = timezone(timedelta(hours=8))
 DATE_FILE = re.compile(r"^(\d{8})\.zip$")
+
+
+class MadridDownloadPending(ValueError):
+    """A bounded download paused with its bytes saved for the next run."""
+
+    def __init__(self, received, cached, expected):
+        super().__init__("Madrid 日期包下载进度已保存，自动同步将继续断点下载")
+        self.summary = {"download_bytes": received, "cached_download_bytes": cached,
+                        "archive_bytes": expected, "resume_pending": True,
+                        "source_mode": "madrid"}
+
+
+def _download_cache(settings, directory, first_date):
+    root = settings.get("madrid_cache_dir")
+    if not root:
+        return None
+    # Keep the official source directories separate in case WIPO falls back
+    # from Monitor to ROMARIN. Filenames always come from DATE_FILE matches.
+    cache = Path(root) / (PurePosixPath(directory).parts[-2] + "-ST66")
+    cache.mkdir(parents=True, exist_ok=True, mode=0o700)
+    for path in cache.iterdir():
+        name = path.name.removesuffix(".part")
+        match = DATE_FILE.fullmatch(name)
+        if match and match[1] < first_date.strftime("%Y%m%d") and path.is_file():
+            path.unlink()
+    return cache
+
+
+def _fetch_cached_archive(ftp, name, expected_size, cache, deadline, remaining_bytes, progress=None):
+    """Resume public FTP bytes from disk; publish only a complete archive."""
+    complete, partial = cache / name, cache / (name + ".part")
+    if complete.exists():
+        size = complete.stat().st_size
+        if size <= MAX_ARCHIVE_BYTES and (expected_size is None or size == expected_size):
+            if callable(progress):
+                progress(size, expected_size)
+            return complete.read_bytes(), 0
+        complete.unlink()
+    offset = partial.stat().st_size if partial.exists() else 0
+    if offset > MAX_ARCHIVE_BYTES or (expected_size is not None and offset > expected_size):
+        partial.unlink()
+        offset = 0
+    received = 0
+    # No buffered bytes can be lost if a service process is killed between
+    # callbacks: the next FTP REST starts at the actual file size on disk.
+    with partial.open("ab", buffering=0) as stream:
+        os.chmod(partial, 0o600)
+        def append(chunk):
+            nonlocal received
+            if stream.tell() + len(chunk) > MAX_ARCHIVE_BYTES or received + len(chunk) > remaining_bytes:
+                raise ValueError("Madrid 更新包超过本次下载上限，请缩短同步日期范围")
+            stream.write(chunk)
+            received += len(chunk)
+            if callable(progress):
+                progress(stream.tell(), expected_size)
+            if time.monotonic() > deadline:
+                os.fsync(stream.fileno())
+                raise MadridDownloadPending(received, stream.tell(), expected_size)
+        if expected_size is None or offset < expected_size:
+            try:
+                if offset:
+                    ftp.retrbinary("RETR " + name, append, blocksize=64 * 1024, rest=offset)
+                else:
+                    ftp.retrbinary("RETR " + name, append, blocksize=64 * 1024)
+            except ftplib.error_perm:
+                # Older FTP servers may reject REST. If no resumed bytes were
+                # received, restart this archive without poisoning its prefix.
+                if not offset or received:
+                    raise
+                stream.seek(0)
+                stream.truncate()
+                ftp.retrbinary("RETR " + name, append, blocksize=64 * 1024)
+        actual = stream.tell()
+        if expected_size is not None and actual != expected_size:
+            if actual > expected_size:
+                stream.seek(0)
+                stream.truncate()
+            raise ValueError("Madrid 日期包下载不完整，已保留进度待重试")
+        os.fsync(stream.fileno())
+    partial.replace(complete)
+    return complete.read_bytes(), received
 
 
 def _today():
@@ -169,7 +251,7 @@ def _select_directory(ftp):
 
 
 def fetch_madrid_updates(settings, token="", session=None):
-    """Return normalized review candidates and a success-only date cursor.
+    """Return normalized blacklist brands and a success-only date cursor.
 
     ``session`` may be an already logged-in ftplib-compatible object for tests.
     The available FTP file list is authoritative: weekends and holidays need
@@ -214,15 +296,18 @@ def fetch_madrid_updates(settings, token="", session=None):
             raise ValueError("WIPO 官方 Madrid 目录没有可用日期包")
         if first_date < min(available):
             raise ValueError("Madrid 起始日期早于官方保留范围，请先导入历史授权数据或调整起始日期")
+        cache = _download_cache(settings, directory, first_date)
         pending = sorted(d for d in available if d >= first_date)
         pending_count = len(pending)
-        if len(pending) > MAX_PACKAGES:
+        package_limit = max(1, min(int(settings.get("madrid_batch_packages", MAX_PACKAGES)), MAX_PACKAGES))
+        if len(pending) > package_limit:
             # Process a bounded chronological batch. The caller continues
             # from this batch's cursor in the following scheduled run.
-            pending = pending[:MAX_PACKAGES]
+            pending = pending[:package_limit]
         processed = 0
         for file_date in pending:
             name = available[file_date]
+            size = None
             # A retained backlog can exceed a single bounded run. Stop at a
             # completed package boundary; the caller resumes after its cursor.
             if callable(getattr(ftp, "size", None)):
@@ -233,17 +318,31 @@ def fetch_madrid_updates(settings, token="", session=None):
                         raise ValueError("Madrid 日期包超过 100 MB")
                     if downloaded + size > MAX_DOWNLOAD_BYTES and processed:
                         break
-            buffer = io.BytesIO()
-            def append(chunk):
-                nonlocal downloaded
-                downloaded += len(chunk)
-                if buffer.tell() + len(chunk) > MAX_ARCHIVE_BYTES or downloaded > MAX_DOWNLOAD_BYTES:
-                    raise ValueError("Madrid 更新包超过本次下载上限，请缩短同步日期范围")
-                if time.monotonic() > deadline:
-                    raise ValueError("Madrid 更新下载超时，请稍后重试")
-                buffer.write(chunk)
-            ftp.retrbinary("RETR " + name, append, blocksize=64 * 1024)
-            snapshot_rows = parse_madrid_archive(buffer.getvalue())
+            if cache is None:
+                buffer = io.BytesIO()
+                def append(chunk):
+                    nonlocal downloaded
+                    downloaded += len(chunk)
+                    if buffer.tell() + len(chunk) > MAX_ARCHIVE_BYTES or downloaded > MAX_DOWNLOAD_BYTES:
+                        raise ValueError("Madrid 更新包超过本次下载上限，请缩短同步日期范围")
+                    if time.monotonic() > deadline:
+                        raise ValueError("Madrid 更新下载超时，请稍后重试")
+                    buffer.write(chunk)
+                ftp.retrbinary("RETR " + name, append, blocksize=64 * 1024)
+                content = buffer.getvalue()
+            else:
+                content, received = _fetch_cached_archive(
+                    ftp, name, size, cache, deadline, MAX_DOWNLOAD_BYTES - downloaded,
+                    progress=settings.get("madrid_download_progress"))
+                downloaded += received
+            try:
+                snapshot_rows = parse_madrid_archive(content)
+            except ValueError:
+                if cache is not None:
+                    # A corrupt package must be fetched again on retry rather
+                    # than becoming a permanent failure from the local cache.
+                    (cache / name).unlink(missing_ok=True)
+                raise
             for row in snapshot_rows:
                 fetched += 1
                 if fetched > MAX_RECORDS:
@@ -265,7 +364,7 @@ def fetch_madrid_updates(settings, token="", session=None):
             detail.update(source=SOURCE, source_mode="madrid", update_date=update_dates[-1],
                           update_date_from=update_dates[0],
                           source_url=DOWNLOAD_DOCUMENTATION)
-            row.update(notes="WIPO Madrid 国际商标每日更新，仅作为待复核线索，需人工确认处置。",
+            row.update(notes="WIPO Madrid 国际商标每日更新，自动导入品牌风险黑名单。",
                        source_detail=json.dumps(detail, ensure_ascii=False), evidence_count=0)
         return normalized, {"fetched": fetched, "unique": len(normalized),
                             "skipped": len(latest_rows) - len(usable), "registrations": len(latest_rows),

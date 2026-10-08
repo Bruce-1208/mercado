@@ -945,9 +945,24 @@ class MercadoProfitabilityClient:
         site_id = _site_id(row)
         currency_id = str(row.get("currency_id") or "USD").upper()
         listing_type_id = DEFAULT_LISTING_TYPE_ID
-        use_fixed_collection_commission = str(
-            row.get("profitability_source") or ""
-        ).strip().lower().startswith(FIXED_COLLECTION_PROFITABILITY_SOURCE)
+        use_fixed_collection_commission = (
+            str(row.get("source_type") or "").strip().lower() == "collected"
+            or str(row.get("profitability_source") or "")
+            .strip().lower().startswith(FIXED_COLLECTION_PROFITABILITY_SOURCE)
+        )
+        if use_fixed_collection_commission and self.shipping_rate_store is not None:
+            # A complete fixed-card snapshot already includes the daily FX.
+            # Do not make collection backfill depend on OAuth or a separate
+            # conversion cache when the official table is sufficient.
+            immediate = estimate_collection_profitability_from_rate_card(
+                row, shipping_rate_store=self.shipping_rate_store,
+            )
+            if immediate.get("net_proceeds_usd") is not None:
+                return {
+                    **immediate,
+                    "category_id": row.get("category_id") or None,
+                    "category_name": row.get("category_name") or None,
+                }
         snapshot: dict[str, Any] = {
             "listing_type_id": listing_type_id,
             "listing_type_name": "Classic",

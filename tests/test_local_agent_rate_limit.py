@@ -7,7 +7,10 @@ import pytest
 import requests
 
 import local_agent
-from local_agent import AgentRateLimitError, LocalAgent
+from local_agent import (
+    AgentAuthorizationError, AgentRateLimitError,
+    AgentServiceUnavailableError, LocalAgent,
+)
 
 
 def response(status=200, payload=None, *, text=None, retry_after=None):
@@ -112,6 +115,111 @@ def test_other_http_errors_are_not_mislabeled_as_limits(runtime, status, body):
         agent.heartbeat()
     assert not isinstance(caught.value, AgentRateLimitError)
     assert agent._cooldown_remaining() == 0
+
+
+@pytest.mark.parametrize("status,error_type", [
+    (401, AgentAuthorizationError), (403, AgentAuthorizationError),
+    (500, AgentServiceUnavailableError), (502, AgentServiceUnavailableError),
+    (503, AgentServiceUnavailableError), (504, AgentServiceUnavailableError),
+])
+def test_auth_rejection_is_distinct_from_restart_outage(runtime, status, error_type):
+    agent, _clock = runtime
+    agent.session.request.return_value = response(status)
+    with pytest.raises(error_type):
+        agent.heartbeat(current_job_id="active-job")
+
+
+def test_rejected_result_upload_keeps_agent_responsive(runtime):
+    agent, clock = runtime
+    agent.session.request.return_value = response(403)
+
+    assert agent.send_event_until_success("active-job", status="stopped") is None
+    assert agent.session.request.call_count == 1
+    assert clock.sleeps == []
+
+
+@pytest.mark.parametrize("failure", [
+    requests.ConnectionError("offline"), requests.Timeout("restart timeout"),
+    AgentServiceUnavailableError("HTTP 503"), AgentRateLimitError("HTTP 429", 60),
+])
+@pytest.mark.parametrize("stop_after_reconnect", [False, True])
+def test_worker_survives_transient_control_outage_and_obeys_reconnected_stop(
+    runtime, monkeypatch, failure, stop_after_reconnect
+):
+    agent, clock = runtime
+    agent.current_release = "outage-test"
+    terminated = []
+    events = []
+    output = iter(["first progress\n", "second progress\n", None])
+
+    class WorkerOutput:
+        def get(self, timeout):
+            clock.now += 900
+            return next(output)
+
+    process = SimpleNamespace(
+        pid=123,
+        poll=lambda: -9 if terminated else 0 if clock.now >= 3700 else None,
+        wait=lambda **_kwargs: -9 if terminated else 0,
+    )
+    guard = SimpleNamespace(process=process, close=lambda: None,
+                            terminate=lambda: terminated.append(True))
+    monkeypatch.setattr(local_agent.subprocess, "Popen", lambda *_args, **_kwargs: process)
+    monkeypatch.setattr(local_agent, "WorkerProcessGuard", lambda _process: guard)
+    monkeypatch.setattr(local_agent, "terminate_worker_tree", lambda _pid: None)
+    monkeypatch.setattr(local_agent.threading, "Thread", lambda **_kwargs: Mock())
+    monkeypatch.setattr(local_agent.queue, "Queue", WorkerOutput)
+    monkeypatch.setattr(agent, "send_event", lambda _job_id, **data: events.append(data))
+
+    calls = []
+    alive_at_reconnect = []
+    def heartbeat(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise failure
+        if len(calls) == 2:
+            alive_at_reconnect.append(not terminated)
+        return {"cancel_job_ids": ["outage-job"] if stop_after_reconnect else []}
+
+    monkeypatch.setattr(agent, "heartbeat", heartbeat)
+    agent.run_job({"job_id": "outage-job", "job_type": "daily_task", "payload": {}})
+
+    assert len(calls) >= 2
+    assert alive_at_reconnect == [True], "A restart outage must not cancel the authorized worker"
+    assert all(call["current_job_id"] == "outage-job" for call in calls)
+    assert bool(terminated) == stop_after_reconnect
+    assert events[-1]["status"] == ("stopped" if stop_after_reconnect else "success")
+
+
+def test_auth_rejection_stops_active_worker_without_waiting_for_lease(runtime, monkeypatch):
+    agent, clock = runtime
+    agent.current_release = "auth-test"
+    terminated = []
+    events = []
+    output = iter(["running\n", None])
+
+    class WorkerOutput:
+        def get(self, timeout):
+            clock.now += 1
+            return next(output)
+
+    process = SimpleNamespace(pid=123, poll=lambda: -9 if terminated else None,
+                              wait=lambda **_kwargs: -9)
+    guard = SimpleNamespace(process=process, close=lambda: None,
+                            terminate=lambda: terminated.append(True))
+    monkeypatch.setattr(local_agent.subprocess, "Popen", lambda *_args, **_kwargs: process)
+    monkeypatch.setattr(local_agent, "WorkerProcessGuard", lambda _process: guard)
+    monkeypatch.setattr(local_agent, "terminate_worker_tree", lambda _pid: None)
+    monkeypatch.setattr(local_agent.threading, "Thread", lambda **_kwargs: Mock())
+    monkeypatch.setattr(local_agent.queue, "Queue", WorkerOutput)
+    monkeypatch.setattr(agent, "send_event", lambda _job_id, **data: events.append(data))
+    monkeypatch.setattr(agent, "heartbeat", Mock(side_effect=AgentAuthorizationError("HTTP 403")))
+
+    agent.run_job({"job_id": "rejected-job", "job_type": "daily_task", "payload": {}})
+
+    assert terminated
+    assert clock.now - 1000 < local_agent.JOB_CONTROL_LOSS_STOP_SECONDS
+    assert events[-1]["status"] == "stopped"
 
 
 def test_polling_backoff_survives_successful_heartbeat_and_resets_after_recovery(runtime, monkeypatch):

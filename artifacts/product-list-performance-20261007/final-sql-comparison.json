@@ -1,0 +1,98 @@
+[
+  {
+    "scope": "five_stores",
+    "tokens": 5,
+    "round": 0,
+    "limit": 100,
+    "baseline_count": {
+      "ms": 143.6,
+      "rows": 0,
+      "total": 99167,
+      "ids_hash": null
+    },
+    "baseline_page": {
+      "ms": 321.4,
+      "rows": 100,
+      "total": null,
+      "ids_hash": "a573146321af40a32508cbed220cbe24966fedea56da9bfd56ed06ca71e8eaa4"
+    },
+    "combined_count_page": {
+      "ms": 131.4,
+      "rows": 100,
+      "total": 99167,
+      "ids_hash": "a573146321af40a32508cbed220cbe24966fedea56da9bfd56ed06ca71e8eaa4"
+    }
+  },
+  {
+    "scope": "five_stores",
+    "tokens": 5,
+    "round": 1,
+    "limit": 100,
+    "baseline_count": {
+      "ms": 113.1,
+      "rows": 0,
+      "total": 99167,
+      "ids_hash": null
+    },
+    "baseline_page": {
+      "ms": 200.6,
+      "rows": 100,
+      "total": null,
+      "ids_hash": "a573146321af40a32508cbed220cbe24966fedea56da9bfd56ed06ca71e8eaa4"
+    },
+    "combined_count_page": {
+      "ms": 137.1,
+      "rows": 100,
+      "total": 99167,
+      "ids_hash": "a573146321af40a32508cbed220cbe24966fedea56da9bfd56ed06ca71e8eaa4"
+    }
+  },
+  {
+    "scope": "all_linked_stores",
+    "tokens": 141,
+    "round": 0,
+    "limit": 100,
+    "baseline_count": {
+      "ms": 3599.6,
+      "rows": 0,
+      "total": 1681732,
+      "ids_hash": null
+    },
+    "baseline_page": {
+      "ms": 3317.5,
+      "rows": 100,
+      "total": null,
+      "ids_hash": "00704ba6281a91f0d0965982ec41b644252b1ae28688808c82b51dc980989ecc"
+    },
+    "combined_count_page": {
+      "ms": 4463.6,
+      "rows": 100,
+      "total": 1681732,
+      "ids_hash": "00704ba6281a91f0d0965982ec41b644252b1ae28688808c82b51dc980989ecc"
+    }
+  },
+  {
+    "scope": "all_linked_stores",
+    "tokens": 141,
+    "round": 1,
+    "limit": 100,
+    "baseline_count": {
+      "ms": 4384.5,
+      "rows": 0,
+      "total": 1681732,
+      "ids_hash": null
+    },
+    "baseline_page": {
+      "ms": 2820.3,
+      "rows": 100,
+      "total": null,
+      "ids_hash": "00704ba6281a91f0d0965982ec41b644252b1ae28688808c82b51dc980989ecc"
+    },
+    "combined_count_page": {
+      "ms": 2947.1,
+      "rows": 100,
+      "total": 1681732,
+      "ids_hash": "00704ba6281a91f0d0965982ec41b644252b1ae28688808c82b51dc980989ecc"
+    }
+  }
+]

@@ -49,7 +49,7 @@ def test_ai_script_mode_groups_three_products_and_records_generated_copy(monkeyp
         "Bruce",
         infraction_ids=["MLM1", "MLM2", "MLM3", "MLM4"],
         ai_script_mode=True,
-        deepseek_api_key="manual-secret",
+        dashscope_api_key="manual-secret",
     )
 
     assert [group[1] for group in generated_groups] == [
@@ -545,7 +545,7 @@ def test_generation_failure_records_group_without_sending(monkeypatch):
         with pytest.raises(RuntimeError, match='商品描述读取失败'):
             handler('window', object(), '测试店铺', '墨西哥', '', 'seller',
                     **{id_key: ['MLM1'], 'ai_script_mode': True,
-                       'deepseek_api_key': 'manual-secret',
+                       'dashscope_api_key': 'manual-secret',
                        'appeal_copy_mode': 'AI话术模式'})
     assert len(records) == 2
     for args, kwargs in records:

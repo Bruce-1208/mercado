@@ -11,6 +11,7 @@ const context = vm.createContext({
   document: {getElementById: element}, clearTimeout() {}, setTimeout() {},
   orderQueryParams: () => new URLSearchParams('store_id=7&status=待采'),
   loadOrders() {}, orderPage: 1,
+  hasWorkbenchPermission: () => true,
   fetch: async (url, options) => {
     request = {url, options};
     return {ok: false, status: 404, text: async () => '<!doctype html><h1>Not Found</h1>'};
@@ -33,6 +34,9 @@ vm.runInContext(html.slice(start, end), context);
   assert.equal(element('order-zying-confirm').hidden, false);
   assert.equal(element('order-zying-start').disabled, true);
   assert.equal(element('order-zying-stop').disabled, false);
+  assert.equal(element('order-zying-target').disabled, false);
+  assert.equal(element('order-zying-agent').disabled, false);
+  assert.equal(element('order-zying-target-note').hidden, false);
   context.fetch = async (url, options) => {
     request = {url, options};
     return {ok: true, text: async () => JSON.stringify({status: 'success', data: {running:true,phase:'stopping',stop_requested:true}})};
@@ -41,5 +45,10 @@ vm.runInContext(html.slice(start, end), context);
   assert.equal(element('order-zying-stop').disabled, true);
   assert.equal(element('order-zying-confirm').hidden, true);
   assert.equal(element('order-zying-start').disabled, true);
+  assert.equal(element('order-zying-target').disabled, false);
+  context.fetch = async () => ({ok: true, text: async () => JSON.stringify({status:'success', data:{running:false,phase:'stopped'}})});
+  await vm.runInContext('pollZyingOrderSync()', context);
+  assert.equal(element('order-zying-start').disabled, false);
+  assert.equal(element('order-zying-target-note').hidden, true);
   console.log('智赢同步前端回归检查通过');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -1,4 +1,5 @@
 """Platform routing and snapshot isolation, without live database/model calls."""
+from contextlib import nullcontext
 import ast
 from copy import deepcopy
 import concurrent.futures
@@ -72,11 +73,14 @@ def test_worker_saves_only_target_platform_on_success_image_and_failure(monkeypa
             raise ValueError("生成失败")
         return {"ai_original": {"title": "Товар", "description": "Описание", "status": "completed"},
                 "source_snapshot_json": deepcopy(snapshot)}
+    from erp import ai_original_cost_control as scheduling
+    monkeypatch.setattr(scheduling, "product_generation_lock", lambda pid: nullcontext(lambda: None))
     monkeypatch.setattr(original, "prepare_ai_original_product", prepare)
     monkeypatch.setattr(original, "_listing_json_chat", lambda **kwargs: lambda *a, **kw: "{}")
     worker = load_route("_run_ai_original_task",
         ThreadPoolExecutor=concurrent.futures.ThreadPoolExecutor, as_completed=concurrent.futures.as_completed,
         _ai_original_task_lock=threading.Lock(), _ai_original_task_state=state,
+        db_get_mercado_product_items_by_ids=lambda ids: [{"id": ids[0], "source_type": "ai_original", "source_snapshot_json": snapshot}],
         db_update_ai_original_product=lambda pid, changes: saved.append(deepcopy(changes)) or {})
     worker([{"id": 1, "source_snapshot_json": snapshot}], workers=1,
            target_platform="yandex", generated_by="业务员")

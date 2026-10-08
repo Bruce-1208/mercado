@@ -10,7 +10,7 @@ def bridge(monkeypatch):
     import bit.bit_interface as workbench
 
     workbench.app.config.update(TESTING=True, SECRET_KEY="yandex-plugin-test")
-    user = {"id": 1, "username": "tester", "access_version": 1, "permissions": ["*"]}
+    user = {"id": 1, "username": "tester", "role_key": "super_admin", "access_version": 1, "permissions": ["*"]}
     monkeypatch.setattr(workbench, "_browser_extension_user_from_token", lambda token: user if token == "test-token" else None)
     ready = Mock(return_value=(True, "Yandex 控制台已启动"))
     proxy = Mock(side_effect=lambda path: workbench.jsonify({"run_id": 42, "status": "queued"}) if path == "api/search" else workbench.jsonify({
@@ -57,4 +57,19 @@ def test_yandex_bridge_reports_unavailable_worker(bridge):
     response = client.post("/api/browser-extension/yandex/search", json={"keyword": "phone", "count": 10}, headers={"Authorization": "Bearer test-token"})
     assert response.status_code == 503
     assert "请先安装" in response.get_json()["message"]
+    proxy.assert_not_called()
+
+
+@pytest.mark.parametrize("role", ["enterprise_admin", "operator", "viewer", "member", None])
+def test_yandex_bridge_rejects_non_super_admin(bridge, monkeypatch, role):
+    from bit import bit_interface as workbench
+    client, ready, proxy = bridge
+    monkeypatch.setattr(workbench, "_browser_extension_user_from_token", lambda token: {
+        "id": 2, "username": "regular", "role_key": role, "permissions": ["*"]
+    })
+    monkeypatch.setattr(workbench, "_workbench_billing_blocked", lambda user: None)
+    headers = {"Authorization": "Bearer test-token"}
+    assert client.post("/api/browser-extension/yandex/search", json={"keyword": "phone", "count": 10}, headers=headers).status_code == 403
+    assert client.get("/api/browser-extension/yandex/search/42", headers=headers).status_code == 403
+    ready.assert_not_called()
     proxy.assert_not_called()

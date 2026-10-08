@@ -54,6 +54,8 @@ def create_blueprint(service, authorize=None, agent_dispatch=None, server_execut
         g.awp_agent_request = bool(
             agent_dispatch and requested_target == "agent"
         )
+        if g.awp_agent_request and authorize and not can_view_all:
+            return jsonify(message="只有企业管理员可以使用 Agent"), 403
         browser_actions = {
             "/api/ai-weight-price/login/open",
             "/api/ai-weight-price/login/confirm",
@@ -136,7 +138,8 @@ def create_blueprint(service, authorize=None, agent_dispatch=None, server_execut
     def page():
         local_request = bool(getattr(g, "awp_local_request", False))
         has_execute_permission = not authorize or authorize("ai_weight_price.execute") is None
-        can_execute = has_execute_permission and (local_request or bool(agent_dispatch))
+        agent_available = bool(agent_dispatch) and bool(getattr(g, "awp_can_view_all", False))
+        can_execute = has_execute_permission and (local_request or agent_available)
         return render_template(
             "ai_weight_price.html",
             local_only=False,
@@ -144,7 +147,7 @@ def create_blueprint(service, authorize=None, agent_dispatch=None, server_execut
             can_configure=has_execute_permission,
             remote_read_only=not local_request and not (server_execution and bool(getattr(g, "awp_is_admin", False))),
             plugin_launch_only=bool(authorize),
-            agent_launch_available=bool(agent_dispatch),
+            agent_launch_available=agent_available,
             server_execution=server_execution,
             is_admin=bool(getattr(g, "awp_is_admin", False)),
             can_view_all=bool(getattr(g, "awp_can_view_all", False)),

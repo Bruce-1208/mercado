@@ -73,6 +73,21 @@ const tick = () => new Promise(setImmediate);
 const response = data => ({ok:true, status:200, json:async () => ({status:'success', data})});
 const sample = overrides => ({rows:[{link_id:17, token_id:2, site_id:'MLM', item_id:'MLM123', variation_id:41, sku_key:'MLM123:41', seller_sku:'SKU41', title:'规格商品', store_name:'半托管 A', available_quantity:3, sales_7d:0, sales_14d:2, visits_30d:null, visits_daily_avg:null, alert:{status:'pending_data', summary:'销量触发，豁免资料不完整', trigger_reasons:['过去 7 天销量为 0'], missing_fields:['visits_30d']}, facts:{}, workflow:{summary:'待录入平台通知日期'}}], total:1, page:1, page_size:25, counts:{risk:0,pending_data:1,exempt:0,normal:0}, stores:[{token_id:2,store_name:'半托管 A'}], checked_at:'2026-09-30T08:00:00+08:00', checking:false, ...overrides});
 
+test('hidden parent iframe cancels scan polling and duplicate boot keeps its initial data', async () => {
+  let requests = 0, active = true;
+  const h = harness(async () => { requests++; return response(sample({checking:true})); });
+  h.window.ZeshunPerformance = {isActive:() => active};
+  await tick();
+  assert.equal(ui.boot(h.document, h.window), h.app);
+  assert.equal(requests, 1);
+  assert.ok([...h.timers.values()].some(timer => timer.delay === 5000));
+  active = false; h.document.listeners['zeshun:visibility']();
+  assert.equal(h.document.hidden, false, 'The browser document can be visible while its parent module is hidden');
+  assert.ok(![...h.timers.values()].some(timer => timer.delay === 5000));
+  active = true; h.document.listeners['zeshun:visibility'](); await tick();
+  assert.equal(requests, 2);
+});
+
 test('renders per-variation evidence with DOM text, without treating missing metrics as zero', async () => {
   const data = sample(); data.rows[0].title = '<img src=x onerror=alert(1)>';
   const h = harness(async () => response(data)); await tick();

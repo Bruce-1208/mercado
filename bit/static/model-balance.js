@@ -77,7 +77,7 @@
     const warning = ['low', 'overdue', 'error', 'unknown'].includes(data.status);
     panel.hidden = !settingsPage && !expanded && !warning;
     panel.dataset.status = data.status;
-    title.textContent = data.status === 'overdue' ? 'DeepSeek 欠费提醒' : data.status === 'low' ? 'DeepSeek 低余额预警' : 'DeepSeek 余额';
+    title.textContent = '阿里云百炼余额';
     message.textContent = data.message || '余额状态未知';
     const time = checkedTime(data.checked_at);
     checked.textContent = `${time ? time + ' · ' : ''}预警线：10 元 / 1 美元；页面可见时每 5 分钟检查。`;
@@ -99,7 +99,7 @@
       if (!response.ok || payload.status !== 'success') throw new Error('查询失败');
       render(payload.data || {});
     } catch (_) {
-      render({status:'unknown', message:settingsPage ? '暂时无法查询已配置服务的余额，请检查网络后刷新；当前余额状态未知。' : '暂时无法查询 DeepSeek 余额，请检查网络后刷新；当前余额状态未知。'});
+      render({status:'unknown', message:settingsPage ? '暂时无法查询已配置服务的余额，请检查网络后刷新；当前余额状态未知。' : '暂时无法查询百炼余额，请检查网络后刷新；当前余额状态未知。'});
     } finally {
       running = false;
       refresh.disabled = false;

@@ -66,11 +66,23 @@ test('logs, history, errors, and messages render as text with no HTML execution'
     assert.equal(h.get('status').textContent, malicious);
     assert.equal(h.get('log').textContent, malicious);
     assert.match(h.get('history').textContent, /<img src=x onerror=alert\(1\)>/);
-    assert.match(h.get('summary').textContent, /拉取 2.*新增 1/);
+    assert.match(h.get('summary').textContent, /拉取 2.*新增黑名单 1/);
     assert.match(h.get('history').textContent, /同步已中断/);
     assert.equal(h.get('disclaimer').textContent, malicious);
     assert.equal(h.get('source').textContent, '数据来源：WIPO Global Brand Database');
     assert.equal(h.refreshes(), 0);
+});
+test('blacklist import displays persisted progress and historical promotions', () => {
+    assert.match(ui.summaryLabel({fetched:1200, unique:1100, processed:500, total:1100,
+        inserted:400, updated:100, historical_blacklisted:72}),
+        /拉取 1,200.*已处理 500.*本批品牌 1,100.*新增黑名单 400.*更新黑名单 100.*历史转黑名单 72/);
+});
+test('paused download shows cached bytes and continuation status', async () => {
+    const h = harness(async url => response(url.endsWith('/settings') ? settings : {
+        running:false, status:'continuing', summary:{cached_download_bytes:1024, archive_bytes:4096}}), true, true);
+    await tick();
+    assert.equal(h.get('status').textContent, '等待续传');
+    assert.match(h.get('summary').textContent, /已缓存字节 1,024.*文件总字节 4,096/);
 });
 test('save-and-sync saves feed config once, clears token, and refreshes the knowledge list once on completion', async () => {
     const calls = [];

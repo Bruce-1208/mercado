@@ -22,6 +22,7 @@
         return payload.data;
     }
     async function refreshAgents() {
+        if (globalThis.canAccessAgents === false) return;
         const select = byId('rights-agent'), previous = select.value;
         try {
             const data = await request('/api/execution-agents?capability=daily_task');
@@ -49,6 +50,7 @@
         }
     }
     async function openBrowser(prefix = '') {
+        if (globalThis.canAccessAgents === false) { message(`${prefix}\n请联系企业管理员打开对应店铺处理。`); return; }
         if (activeTask) return;
         const agentId = byId('rights-agent').value;
         if (!agentId) {

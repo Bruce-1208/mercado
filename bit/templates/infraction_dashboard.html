@@ -507,8 +507,12 @@
             .back-link { padding: 7px 9px; }
         }
     </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261004-responsive">
-    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261004-responsive"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261007-date-filters">
+<script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261007"></script>
+    <script src="{{ url_for('static', filename='console-performance.js') }}?v=20261007-json-fix"></script>
+    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261007-date-filters"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='date-filter-controls.css') }}?v=20261008">
+<script defer src="{{ url_for('static', filename='date-filter-controls.js') }}?v=20261008"></script>
 </head>
 <body class="zs-standalone{% if embedded %} embedded{% endif %}{% if ip_rights_mode %} ip-rights{% endif %}">
     <header class="topbar">
@@ -1010,7 +1014,22 @@
 
         let dashboardLoadSequence = 0;
         let dashboardLoadController = null;
-        async function loadData() {
+        let dashboardLoadPromise = null;
+        let dashboardLoadKey = "";
+        let dashboardLastLoadedAt = 0;
+        let dashboardLastSyncAt = 0;
+        const dashboardActive = () => window.ZeshunPerformance?.isActive() ?? !document.hidden;
+        function loadData() {
+            const key = dashboardParams().toString();
+            if (dashboardLoadPromise && dashboardLoadKey === key) return dashboardLoadPromise;
+            dashboardLoadKey = key;
+            const pending = performDashboardLoad(key).finally(() => {
+                if (dashboardLoadPromise === pending) dashboardLoadPromise = null;
+            });
+            dashboardLoadPromise = pending;
+            return pending;
+        }
+        async function performDashboardLoad(query) {
             const sequence = ++dashboardLoadSequence;
             dashboardLoadController?.abort();
             const controller = new AbortController();
@@ -1019,10 +1038,9 @@
             showStatus("正在加载，请稍候…");
             globalThis.WorkbenchUI?.feedback(elements.status, "loading");
             state.loading = true;
-            const params = dashboardParams();
             try {
                 const endpoint = ipRightsMode ? "/api/official-ip-rights/dashboard" : "/api/official-infractions/dashboard";
-                const response = await fetch(`${endpoint}?${params.toString()}`, {signal: controller.signal});
+                const response = await fetch(`${endpoint}?${query}`, {signal: controller.signal});
                 const payload = await response.json();
                 if (sequence !== dashboardLoadSequence) return;
                 if (!response.ok || payload.status !== "success") throw Object.assign(new Error(payload.message || "读取违规商品数据失败"), {status: response.status});
@@ -1051,6 +1069,7 @@
                 } else if (!lastRead && !state.wasSyncing) {
                     elements.syncTitle.textContent = "最近读取时间：尚未读取";
                 }
+                dashboardLastLoadedAt = Date.now();
                 showStatus("");
             } catch (error) {
                 if (sequence !== dashboardLoadSequence) return;
@@ -1067,12 +1086,22 @@
             }
         }
 
-        async function loadSyncStatus() {
+        let dashboardSyncPromise = null;
+        function loadSyncStatus() {
+            if (dashboardSyncPromise) return dashboardSyncPromise;
+            const pending = performLoadSyncStatus().finally(() => {
+                if (dashboardSyncPromise === pending) dashboardSyncPromise = null;
+            });
+            dashboardSyncPromise = pending;
+            return pending;
+        }
+        async function performLoadSyncStatus() {
             try {
                 const response = await fetch("/api/official-infractions/sync/status");
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") return;
                 const sync = payload.data || {};
+                dashboardLastSyncAt = Date.now();
                 const running = Boolean(sync.running);
                 const autoEnabled = sync.auto_sync_enabled !== false;
                 elements.autoSyncEnabled.checked = autoEnabled;
@@ -1276,8 +1305,20 @@
 
         loadData();
         loadSyncStatus();
-        setInterval(loadSyncStatus, 30000);
-        setInterval(() => { if (!state.wasSyncing) loadData(); }, 300000);
+        setInterval(() => { if (dashboardActive()) loadSyncStatus(); }, 30000);
+        setInterval(() => { if (dashboardActive() && !state.wasSyncing) loadData(); }, 300000);
+        function dashboardVisibilityChanged() {
+            if (!dashboardActive()) return;
+            if (Date.now() - dashboardLastSyncAt >= 30000) loadSyncStatus();
+            if (!state.wasSyncing && Date.now() - dashboardLastLoadedAt >= 300000) loadData();
+        }
+        document.addEventListener("visibilitychange", dashboardVisibilityChanged);
+        document.addEventListener("zeshun:visibility", dashboardVisibilityChanged);
+        window.addEventListener("pagehide", () => {
+            dashboardLoadSequence++;
+            dashboardLoadController?.abort();
+            clearTimeout(searchTimer);
+        });
     </script>
 </body>
 </html>

@@ -10,11 +10,13 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
 
 _context = contextvars.ContextVar("store_link_audit", default=None)
+_schema_lock = threading.Lock()
 _SECRET = {"authorization", "cookie", "password", "secret", "access_token", "refresh_token", "api_key", "client_secret"}
 
 
@@ -41,9 +43,19 @@ def connect():
     path = Path(os.environ.get("MERCADO_STORE_LINK_AUDIT_PATH") or Path(__file__).resolve().parents[1] / "runtime_logs" / "store_link_operations.sqlite3")
     path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path, timeout=30)
-    db.execute("PRAGMA journal_mode=WAL")
-    db.execute("CREATE TABLE IF NOT EXISTS operations (id INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL, trace_id TEXT NOT NULL, created_at TEXT NOT NULL, action TEXT NOT NULL, phase TEXT NOT NULL, details TEXT NOT NULL)")
-    db.execute("CREATE INDEX IF NOT EXISTS operation_trace ON operations(trace_id, id)")
+    try:
+        with _schema_lock:
+            # Concurrent first connections cannot both switch a new database to WAL.
+            # Once enabled, read the mode without attempting another mode change.
+            if db.execute("PRAGMA journal_mode").fetchone()[0] != "wal":
+                db.execute("PRAGMA journal_mode=WAL")
+            db.execute("CREATE TABLE IF NOT EXISTS operations (id INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL, trace_id TEXT NOT NULL, created_at TEXT NOT NULL, action TEXT NOT NULL, phase TEXT NOT NULL, details TEXT NOT NULL)")
+            db.execute("CREATE INDEX IF NOT EXISTS operation_trace ON operations(trace_id, id)")
+            db.execute("CREATE INDEX IF NOT EXISTS operation_time ON operations(created_at DESC, id DESC)")
+            db.execute("CREATE TABLE IF NOT EXISTS mirrored_sources (source_key TEXT PRIMARY KEY)")
+    except BaseException:
+        db.close()
+        raise
     return db
 
 
@@ -57,8 +69,38 @@ def record(action, phase, details, operation_id=None):
         db.close()
 
 
+def record_once(source_key, action, phase, details, *, created_at=None, actor=None):
+    """Atomically mirror a source event once, retaining its original timestamp."""
+    timestamp = datetime.now(timezone.utc)
+    if created_at:
+        try:
+            timestamp = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+            if timestamp.tzinfo is None:
+                from zoneinfo import ZoneInfo
+                timestamp = timestamp.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
+            timestamp = timestamp.astimezone(timezone.utc)
+        except (TypeError, ValueError):
+            pass
+    context = dict(_context.get() or {"trace_id": uuid.uuid4().hex, "actor": {"type": "system"}})
+    if actor and context["actor"].get("type") == "system":
+        context["actor"] = actor
+    db = connect()
+    try:
+        with db:
+            added = db.execute("INSERT OR IGNORE INTO mirrored_sources VALUES (?)", (source_key,)).rowcount
+            if added:
+                db.execute("INSERT INTO operations(operation_id,trace_id,created_at,action,phase,details) VALUES(?,?,?,?,?,?)",
+                           (uuid.uuid4().hex, context["trace_id"], timestamp.isoformat(), action, phase,
+                            json.dumps(safe({"context": context, **details}), ensure_ascii=False)))
+        return bool(added)
+    finally:
+        db.close()
+
+
 # Classify at query time so records written before the module existed remain searchable.
 _OPERATION_ACTIONS = {
+    "rights_holder": ("process_rights_holder_product", "rights_holder_link_result"),
+    "weight_dimensions": ("weight_dimensions_record", "weight_dimensions_execution"),
     "sync": ("replace_store_snapshot", "finalize_store_snapshot", "request_store_link_sync", "mark_store_link_sync_started", "mark_store_link_sync_finished", "_sync_store", "run_store_link_sync", "start_store_link_sync"),
     "update": ("bulk_update_store_links", "_update_one_link", "remote_update_item", "run_store_link_remote_update", "start_store_link_remote_update"),
     "delete": ("delete_store_links", "mark_store_links_deleted", "_delete_one_link"),
@@ -66,6 +108,7 @@ _OPERATION_ACTIONS = {
     "video": ("upload_store_link_video", "mark_video_uploaded"),
 }
 OPERATION_TYPES = {
+    "rights_holder": "权利人侵权处理", "weight_dimensions": "重量尺寸变更",
     "sync": "店铺同步", "update": "链接修改", "delete": "链接删除",
     "advertising": "广告操作", "video": "视频上传", "other": "其他操作",
 }
@@ -119,9 +162,10 @@ def history(before_id=None, limit=100, trace_id=None, operation_type=None,
     if salesperson:
         clauses.append(
             "(instr(lower(COALESCE(json_extract(details, '$.context.actor.display_name'), '')), lower(?)) > 0 "
-            "OR instr(lower(COALESCE(json_extract(details, '$.context.actor.username'), '')), lower(?)) > 0)"
+            "OR instr(lower(COALESCE(json_extract(details, '$.context.actor.username'), '')), lower(?)) > 0 "
+            "OR instr(lower(COALESCE(json_extract(details, '$.salesperson'), '')), lower(?)) > 0)"
         )
-        params.extend((salesperson, salesperson))
+        params.extend((salesperson, salesperson, salesperson))
     if created_after:
         clauses.append("created_at >= ?")
         params.append(created_after)
@@ -129,15 +173,16 @@ def history(before_id=None, limit=100, trace_id=None, operation_type=None,
         clauses.append("created_at < ?")
         params.append(created_before)
     if before_id:
-        clauses.append("id < ?")
-        params.append(int(before_id))
+        # Backfilled events keep their source time; IDs alone are not chronological.
+        clauses.append("(created_at, id) < ((SELECT created_at FROM operations WHERE id = ?), ?)")
+        params.extend((int(before_id), int(before_id)))
     if trace_id:
         clauses.append("trace_id = ?")
         params.append(trace_id)
     db = connect()
     db.row_factory = sqlite3.Row
     try:
-        rows = db.execute(f"SELECT *, ({category_sql}) AS operation_type FROM operations" + (" WHERE " + " AND ".join(clauses) if clauses else "") + " ORDER BY id DESC LIMIT ?", (*params, limit)).fetchall()
+        rows = db.execute(f"SELECT *, ({category_sql}) AS operation_type FROM operations" + (" WHERE " + " AND ".join(clauses) if clauses else "") + " ORDER BY created_at DESC, id DESC LIMIT ?", (*params, limit)).fetchall()
         return [{**dict(row), "details": json.loads(row["details"])} for row in rows]
     finally:
         db.close()

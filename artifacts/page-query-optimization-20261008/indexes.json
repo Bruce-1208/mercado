@@ -1,0 +1,105 @@
+{
+  "server": {
+    "db": "mercado",
+    "version": "8.0.42"
+  },
+  "before": {
+    "idx_orders_token_created": "idx_orders_token_created",
+    "idx_orders_token_shipping": "idx_orders_token_shipping",
+    "idx_orders_token_pack": null
+  },
+  "applied": [
+    "idx_orders_token_pack"
+  ],
+  "after": {
+    "idx_orders_token_created": "idx_orders_token_created",
+    "idx_orders_token_shipping": "idx_orders_token_shipping",
+    "idx_orders_token_pack": "idx_orders_token_pack"
+  },
+  "lookup_plan": [
+    {
+      "id": 1,
+      "select_type": "PRIMARY",
+      "table": "<derived2>",
+      "partitions": null,
+      "type": "ALL",
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": 5,
+      "filtered": 100.0,
+      "Extra": "Using temporary; Using filesort"
+    },
+    {
+      "id": 1,
+      "select_type": "PRIMARY",
+      "table": "orders",
+      "partitions": null,
+      "type": "eq_ref",
+      "possible_keys": "PRIMARY",
+      "key": "PRIMARY",
+      "key_len": "258",
+      "ref": "matched.order_id",
+      "rows": 1,
+      "filtered": 100.0,
+      "Extra": null
+    },
+    {
+      "id": 2,
+      "select_type": "DERIVED",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "no matching row in const table"
+    },
+    {
+      "id": 3,
+      "select_type": "UNION",
+      "table": "mercado_synced_orders",
+      "partitions": null,
+      "type": "ref",
+      "possible_keys": "idx_mercado_synced_orders_token_updated,idx_orders_token_created,idx_orders_token_shipping,idx_orders_token_pack",
+      "key": "idx_orders_token_shipping",
+      "key_len": "267",
+      "ref": "const,const",
+      "rows": 1,
+      "filtered": 100.0,
+      "Extra": "Using index"
+    },
+    {
+      "id": 4,
+      "select_type": "UNION",
+      "table": "mercado_synced_orders",
+      "partitions": null,
+      "type": "ref",
+      "possible_keys": "idx_mercado_synced_orders_token_updated,idx_orders_token_created,idx_orders_token_shipping,idx_orders_token_pack",
+      "key": "idx_orders_token_pack",
+      "key_len": "267",
+      "ref": "const,const",
+      "rows": 1,
+      "filtered": 100.0,
+      "Extra": null
+    },
+    {
+      "id": 5,
+      "select_type": "UNION RESULT",
+      "table": "<union2,3,4>",
+      "partitions": null,
+      "type": "ALL",
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "Using temporary"
+    }
+  ]
+}

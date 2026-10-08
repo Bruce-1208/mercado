@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-08",
+  "failure": {
+    "time": "13:49:50 +08:00",
+    "mysql_code": 1205,
+    "stage": "zying_product snapshot batch insert",
+    "evidence": "Product mirror committed 2 rows before snapshot executemany lock timeout; original blocker had already cleared at inspection."
+  },
+  "recovery": {
+    "time": "13:58:13 +08:00",
+    "scope": "精品区 / 500 products / 智赢精品区 destination",
+    "inserted": 2,
+    "skipped_existing": 498,
+    "status": "success",
+    "note": "Recovery run completed before deployment of automatic lock-conflict retries."
+  },
+  "fix": {
+    "retry_mysql_codes": [
+      1205,
+      1213
+    ],
+    "max_attempts": 3,
+    "rollback_and_close_before_retry": true,
+    "no_retry_on_uncertain_connection_errors": true
+  },
+  "deployment": {
+    "extension_version": "1.8.55",
+    "installed_extension_reloaded": true,
+    "web_worker_restarted": true,
+    "label": "智赢产品同步"
+  },
+  "validation": {
+    "targeted_python_passed": 79,
+    "javascript_tests_passed": 4,
+    "syntax_checks": "passed",
+    "broader_suite": "Initial broad run: 124 passed / 12 failed, including legacy route authentication, unrelated AI workflow tests, and a stale hardcoded package version. Package-version assertion updated; unrelated route tests left unchanged."
+  },
+  "remaining": "Current newly opened ZYing page displays login form; further post-deployment live run requires ZYing login."
+}

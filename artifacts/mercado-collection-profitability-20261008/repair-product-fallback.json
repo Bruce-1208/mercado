@@ -1,0 +1,2346 @@
+{
+  "apply": true,
+  "scanned": 230,
+  "saved": 22,
+  "ready": 22,
+  "items": [
+    {
+      "id": 2871,
+      "source_item_id": "MLM77319540",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2870,
+      "source_item_id": "MLM65200983",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2869,
+      "source_item_id": "MLM77327627",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2867,
+      "source_item_id": "MLM2045574142",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2811,
+      "source_item_id": "MLM2053750988",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2343,
+      "source_item_id": "MLM3385231733",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2282,
+      "source_item_id": "MLM3351955355",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2281,
+      "source_item_id": "MLM3244764859",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2280,
+      "source_item_id": "MLM5528459966",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2277,
+      "source_item_id": "MLM3030339543",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2273,
+      "source_item_id": "MLM6162678630",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2270,
+      "source_item_id": "MLM5365240048",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2264,
+      "source_item_id": "MLM6157755768",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2259,
+      "source_item_id": "MLM6148690926",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2253,
+      "source_item_id": "MLM4702264132",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2251,
+      "source_item_id": "MLM5931495950",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2237,
+      "source_item_id": "MLM5905212682",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2222,
+      "source_item_id": "MLM5601553614",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2214,
+      "source_item_id": "MLM6070978200",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2195,
+      "source_item_id": "MLM6012034014",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2178,
+      "source_item_id": "MLM6133416912",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2177,
+      "source_item_id": "MLM3424474013",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2175,
+      "source_item_id": "MLM6195678708",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2164,
+      "source_item_id": "MLM5725584358",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2158,
+      "source_item_id": "MLM5961730996",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 2147,
+      "source_item_id": "MLM5790897234",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 1170,
+      "source_item_id": "MLM5987553792",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 1167,
+      "source_item_id": "MLM3373460447",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 1158,
+      "source_item_id": "MLM3248285883",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "10.4900",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "15.5000",
+        "commission_amount_local": "29.2000",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "1.7200",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "200.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "15.0000",
+        "package_width_cm": "5.0000",
+        "package_height_cm": "3.0000",
+        "volumetric_weight_kg": "0.0375",
+        "shipping_fee_local": 2.25,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 2.25,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 200.0,
+        "shipping_api_billable_weight_g": 200.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 10.49,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 28.26,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 1.57,
+        "net_proceeds_usd": 6.67,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 1154,
+      "source_item_id": "MLM3365038141",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 1148,
+      "source_item_id": "MLM3276297091",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "21.0900",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "15.5000",
+        "commission_amount_local": "58.7200",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "3.4600",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "563.0000",
+        "weight_basis": "official_api",
+        "package_length_cm": "10.0000",
+        "package_width_cm": "20.0000",
+        "package_height_cm": "10.0000",
+        "volumetric_weight_kg": "0.3333",
+        "shipping_fee_local": 8.75,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 8.75,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 563.0,
+        "shipping_api_billable_weight_g": 563.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 21.09,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 56.83,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 3.16,
+        "net_proceeds_usd": 9.18,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 1138,
+      "source_item_id": "MLM5630345896",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 951,
+      "source_item_id": "MLM2034867526",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 854,
+      "source_item_id": "MLM2069259423",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "30.7200",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "69.0000",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "4.0700",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "251.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "12.0000",
+        "package_width_cm": "10.0000",
+        "package_height_cm": "7.0000",
+        "volumetric_weight_kg": "0.1400",
+        "shipping_fee_local": 7.0,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 7.0,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 251.0,
+        "shipping_api_billable_weight_g": 251.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 30.72,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 82.8,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 4.61,
+        "net_proceeds_usd": 19.11,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 823,
+      "source_item_id": "MLM2058485137",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "4.6200",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "10.3800",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "0.6100",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "141.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "13.0000",
+        "package_width_cm": "10.0000",
+        "package_height_cm": "4.0000",
+        "volumetric_weight_kg": "0.0867",
+        "shipping_fee_local": 2.25,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 2.25,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 141.0,
+        "shipping_api_billable_weight_g": 141.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 4.62,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 12.45,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 0.69,
+        "net_proceeds_usd": 1.68,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 817,
+      "source_item_id": "MLM69560275",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "12.1900",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "27.3800",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "1.6100",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "160.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "15.0000",
+        "package_width_cm": "11.0000",
+        "package_height_cm": "3.0000",
+        "volumetric_weight_kg": "0.0825",
+        "shipping_fee_local": 2.25,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 2.25,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 160.0,
+        "shipping_api_billable_weight_g": 160.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 12.19,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 32.85,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 1.83,
+        "net_proceeds_usd": 8.11,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 814,
+      "source_item_id": "MLM41823237",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "16.4800",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "37.0200",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "2.1800",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "220.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "13.0000",
+        "package_width_cm": "6.0000",
+        "package_height_cm": "10.0000",
+        "volumetric_weight_kg": "0.1300",
+        "shipping_fee_local": 3.15,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 3.15,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 220.0,
+        "shipping_api_billable_weight_g": 220.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 16.48,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 44.42,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 2.47,
+        "net_proceeds_usd": 10.86,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 811,
+      "source_item_id": "MLM69329631",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "12.3900",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "27.8300",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "1.6400",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "140.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "3.0000",
+        "package_width_cm": "11.0000",
+        "package_height_cm": "15.0000",
+        "volumetric_weight_kg": "0.0825",
+        "shipping_fee_local": 2.25,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 2.25,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 140.0,
+        "shipping_api_billable_weight_g": 140.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 12.39,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 33.39,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 1.86,
+        "net_proceeds_usd": 8.28,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 809,
+      "source_item_id": "MLM68342072",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "10.5000",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "23.5700",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "1.3900",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "140.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "13.0000",
+        "package_width_cm": "11.0000",
+        "package_height_cm": "5.0000",
+        "volumetric_weight_kg": "0.1192",
+        "shipping_fee_local": 2.25,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 2.25,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 140.0,
+        "shipping_api_billable_weight_g": 140.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 10.5,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 28.29,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 1.58,
+        "net_proceeds_usd": 6.67,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 806,
+      "source_item_id": "MLM2034867526",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 732,
+      "source_item_id": "MLM2050197802",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 731,
+      "source_item_id": "MLM2038216040",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 730,
+      "source_item_id": "MLM2061549673",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 729,
+      "source_item_id": "MLM2051800940",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 728,
+      "source_item_id": "MLM2091682348",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 726,
+      "source_item_id": "MLM2032939862",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 725,
+      "source_item_id": "MLM2087181885",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 724,
+      "source_item_id": "MLM2070485371",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 721,
+      "source_item_id": "MLM2099100398",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 717,
+      "source_item_id": "MLM2053905075",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 714,
+      "source_item_id": "MLM2029908608",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 713,
+      "source_item_id": "MLM2077882038",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 711,
+      "source_item_id": "MLM2058353349",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 710,
+      "source_item_id": "MLM2056404795",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 709,
+      "source_item_id": "MLM2026914777",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 702,
+      "source_item_id": "MLM2057413629",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 701,
+      "source_item_id": "MLM3328669851",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 699,
+      "source_item_id": "MLM2061463783",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 698,
+      "source_item_id": "MLM2025157023",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 697,
+      "source_item_id": "MLM5453260602",
+      "before": {
+        "weight_g": "154.0000",
+        "weight_basis": "plugin_volumetric_fallback",
+        "package_length_cm": "14.0000",
+        "package_width_cm": "11.0000",
+        "package_height_cm": "6.0000",
+        "volumetric_weight_kg": "0.1540",
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "15.0300",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "33.7600",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "1.9900",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "225.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "14.0000",
+        "package_width_cm": "11.0000",
+        "package_height_cm": "6.0000",
+        "volumetric_weight_kg": "0.1540",
+        "shipping_fee_local": 3.15,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 3.15,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 225.0,
+        "shipping_api_billable_weight_g": 225.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 15.03,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 40.52,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 2.25,
+        "net_proceeds_usd": 9.63,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 694,
+      "source_item_id": "MLM2071908094",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 692,
+      "source_item_id": "MLM2060340507",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 690,
+      "source_item_id": "MLM4540613762",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 689,
+      "source_item_id": "MLM2033046861",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 686,
+      "source_item_id": "MLM2037607912",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 685,
+      "source_item_id": "MLM2035466172",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 684,
+      "source_item_id": "MLM2061721011",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 683,
+      "source_item_id": "MLM2066161752",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 682,
+      "source_item_id": "MLM2022825128",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 681,
+      "source_item_id": "MLM2030869037",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 680,
+      "source_item_id": "MLM2058507015",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 679,
+      "source_item_id": "MLM2041114312",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 678,
+      "source_item_id": "MLM2058492885",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 675,
+      "source_item_id": "MLM2089047657",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 674,
+      "source_item_id": "MLM3134041607",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 668,
+      "source_item_id": "MLM2049383155",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 666,
+      "source_item_id": "MLM2068440937",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 665,
+      "source_item_id": "MLM2063575588",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 661,
+      "source_item_id": "MLM2064481974",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "28.1600",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "63.2500",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "3.7300",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "264.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "20.0000",
+        "package_width_cm": "20.0000",
+        "package_height_cm": "20.0000",
+        "volumetric_weight_kg": "1.3333",
+        "shipping_fee_local": 7.0,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 7.0,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 264.0,
+        "shipping_api_billable_weight_g": 264.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 28.16,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 75.9,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 4.22,
+        "net_proceeds_usd": 16.94,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 660,
+      "source_item_id": "MLM2061553904",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 659,
+      "source_item_id": "MLM2029997185",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 656,
+      "source_item_id": "MLM2077107328",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 655,
+      "source_item_id": "MLM2064781775",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 650,
+      "source_item_id": "MLM2063509516",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 646,
+      "source_item_id": "MLM2060461605",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 644,
+      "source_item_id": "MLM2030288482",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 643,
+      "source_item_id": "MLM6066662042",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "14.3400",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "32.2100",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "1.9000",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "160.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "14.0000",
+        "package_width_cm": "10.0000",
+        "package_height_cm": "5.0000",
+        "volumetric_weight_kg": "0.1167",
+        "shipping_fee_local": 2.25,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 2.25,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 160.0,
+        "shipping_api_billable_weight_g": 160.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 14.34,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 38.65,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 2.15,
+        "net_proceeds_usd": 9.94,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 642,
+      "source_item_id": "MLM2076780958",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 640,
+      "source_item_id": "MLM2031769259",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 639,
+      "source_item_id": "MLM2069259423",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "30.7200",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "69.0000",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "4.0700",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "251.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "12.0000",
+        "package_width_cm": "10.0000",
+        "package_height_cm": "7.0000",
+        "volumetric_weight_kg": "0.1400",
+        "shipping_fee_local": 7.0,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 7.0,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 251.0,
+        "shipping_api_billable_weight_g": 251.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 30.72,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 82.8,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 4.61,
+        "net_proceeds_usd": 19.11,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 636,
+      "source_item_id": "MLM5853984898",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "43.4200",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "97.5200",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "5.7500",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "350.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "10.0000",
+        "package_width_cm": "8.0000",
+        "package_height_cm": "3.0000",
+        "volumetric_weight_kg": "0.0400",
+        "shipping_fee_local": 7.7,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 7.7,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 350.0,
+        "shipping_api_billable_weight_g": 350.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 43.42,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 117.03,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 6.51,
+        "net_proceeds_usd": 29.21,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 634,
+      "source_item_id": "MLM2049137292",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 633,
+      "source_item_id": "MLM2029491448",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 631,
+      "source_item_id": "MLM2068184118",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 626,
+      "source_item_id": "MLM2064256238",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 622,
+      "source_item_id": "MLM2060420047",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 616,
+      "source_item_id": "MLM2086137537",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 615,
+      "source_item_id": "MLM2062376824",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 614,
+      "source_item_id": "MLM2052614536",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 611,
+      "source_item_id": "MLM2057233039",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 609,
+      "source_item_id": "MLM2058529027",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 604,
+      "source_item_id": "MLM58698117",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 601,
+      "source_item_id": "MLM54097548",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "21.7700",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "48.9000",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "2.8800",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "300.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "13.0000",
+        "package_width_cm": "11.0000",
+        "package_height_cm": "8.0000",
+        "volumetric_weight_kg": "0.1907",
+        "shipping_fee_local": 7.0,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 7.0,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 300.0,
+        "shipping_api_billable_weight_g": 300.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 21.77,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 58.68,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 3.27,
+        "net_proceeds_usd": 11.5,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 597,
+      "source_item_id": "MLM5463780132",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "31.6800",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "71.1400",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "4.1900",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "256.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "19.0000",
+        "package_width_cm": "10.0000",
+        "package_height_cm": "4.0000",
+        "volumetric_weight_kg": "0.1267",
+        "shipping_fee_local": 7.0,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 7.0,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 256.0,
+        "shipping_api_billable_weight_g": 256.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 31.68,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 85.37,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 4.75,
+        "net_proceeds_usd": 19.93,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 595,
+      "source_item_id": "MLM67645655",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 594,
+      "source_item_id": "MLM67986247",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 593,
+      "source_item_id": "MLM2063468594",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 592,
+      "source_item_id": "MLM2031855589",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 591,
+      "source_item_id": "MLM2054531607",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 590,
+      "source_item_id": "MLM2043664385",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 589,
+      "source_item_id": "MLM2091680694",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 587,
+      "source_item_id": "MLM2063671506",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 586,
+      "source_item_id": "MLM2096667141",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 585,
+      "source_item_id": "MLM2103026374",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 583,
+      "source_item_id": "MLM2045828204",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 581,
+      "source_item_id": "MLM2091977818",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 580,
+      "source_item_id": "MLM2064060834",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 579,
+      "source_item_id": "MLM2054004037",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 577,
+      "source_item_id": "MLM2091593630",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 576,
+      "source_item_id": "MLM2097528039",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 573,
+      "source_item_id": "MLM2066138850",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 572,
+      "source_item_id": "MLM6081155652",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 571,
+      "source_item_id": "MLM2058324855",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 570,
+      "source_item_id": "MLM2036723704",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 569,
+      "source_item_id": "MLM2069057319",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 567,
+      "source_item_id": "MLM2058439497",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 566,
+      "source_item_id": "MLM2062825993",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 564,
+      "source_item_id": "MLM2058391729",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 563,
+      "source_item_id": "MLM2075040508",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 562,
+      "source_item_id": "MLM6056297552",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "13.7600",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "30.9100",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "1.8200",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "200.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "13.0000",
+        "package_width_cm": "11.0000",
+        "package_height_cm": "9.0000",
+        "volumetric_weight_kg": "0.2145",
+        "shipping_fee_local": 2.25,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 2.25,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 200.0,
+        "shipping_api_billable_weight_g": 200.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 13.76,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 37.09,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 2.06,
+        "net_proceeds_usd": 9.45,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 560,
+      "source_item_id": "MLM2043077519",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 559,
+      "source_item_id": "MLM2051288913",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 558,
+      "source_item_id": "MLM2023123233",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 555,
+      "source_item_id": "MLM2060851324",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 553,
+      "source_item_id": "MLM2072455821",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 552,
+      "source_item_id": "MLM2072662371",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 549,
+      "source_item_id": "MLM2058485137",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "7.2000",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "16.1700",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "0.9500",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "141.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "13.0000",
+        "package_width_cm": "10.0000",
+        "package_height_cm": "4.0000",
+        "volumetric_weight_kg": "0.0867",
+        "shipping_fee_local": 2.25,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 2.25,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 141.0,
+        "shipping_api_billable_weight_g": 141.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 7.2,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 19.4,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 1.08,
+        "net_proceeds_usd": 3.87,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 548,
+      "source_item_id": "MLM2069279437",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 543,
+      "source_item_id": "MLM2069554635",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 542,
+      "source_item_id": "MLM2072250678",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 541,
+      "source_item_id": "MLM2050658014",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 540,
+      "source_item_id": "MLM2058748773",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 525,
+      "source_item_id": "MLM2029491448",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 524,
+      "source_item_id": "MLM2057294185",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 523,
+      "source_item_id": "MLM2068184118",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 522,
+      "source_item_id": "MLM2051181682",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 521,
+      "source_item_id": "MLM2052614536",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 520,
+      "source_item_id": "MLM2073514303",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 519,
+      "source_item_id": "MLM2057233039",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 517,
+      "source_item_id": "MLM2060420047",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 514,
+      "source_item_id": "MLM5335008190",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 513,
+      "source_item_id": "MLM2027446119",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 512,
+      "source_item_id": "MLM2058529027",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 511,
+      "source_item_id": "MLM2022734892",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 507,
+      "source_item_id": "MLM2086137537",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 506,
+      "source_item_id": "MLM2034215885",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 504,
+      "source_item_id": "MLM6039961794",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "14.9700",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "33.6200",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "1.9800",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "60.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "16.0000",
+        "package_width_cm": "11.0000",
+        "package_height_cm": "10.0000",
+        "volumetric_weight_kg": "0.2933",
+        "shipping_fee_local": 1.78,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 1.78,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 60.0,
+        "shipping_api_billable_weight_g": 60.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 14.97,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 40.34,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 2.25,
+        "net_proceeds_usd": 10.94,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 502,
+      "source_item_id": "MLM4540613762",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 500,
+      "source_item_id": "MLM2049137292",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 499,
+      "source_item_id": "MLM2062376824",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 492,
+      "source_item_id": "MLM2063468594",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 491,
+      "source_item_id": "MLM58698117",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 489,
+      "source_item_id": "MLM2064802363",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 488,
+      "source_item_id": "MLM54097548",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "21.7700",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "48.9000",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "2.8800",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "300.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "13.0000",
+        "package_width_cm": "11.0000",
+        "package_height_cm": "8.0000",
+        "volumetric_weight_kg": "0.1907",
+        "shipping_fee_local": 7.0,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 7.0,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 300.0,
+        "shipping_api_billable_weight_g": 300.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 21.77,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 58.68,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 3.27,
+        "net_proceeds_usd": 11.5,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 487,
+      "source_item_id": "MLM67645655",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 486,
+      "source_item_id": "MLM67986247",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 484,
+      "source_item_id": "MLM2073500361",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 483,
+      "source_item_id": "MLM2026542979",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 481,
+      "source_item_id": "MLM2096667141",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 480,
+      "source_item_id": "MLM2103026374",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 479,
+      "source_item_id": "MLM2084383163",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 477,
+      "source_item_id": "MLM2040096258",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 476,
+      "source_item_id": "MLM2045828204",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 475,
+      "source_item_id": "MLM3386117803",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "27.4000",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "61.5300",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "3.6300",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "220.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "14.0000",
+        "package_width_cm": "10.0000",
+        "package_height_cm": "8.0000",
+        "volumetric_weight_kg": "0.1867",
+        "shipping_fee_local": 7.0,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 7.0,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 220.0,
+        "shipping_api_billable_weight_g": 220.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 27.4,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 73.83,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 4.11,
+        "net_proceeds_usd": 16.29,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 473,
+      "source_item_id": "MLM2064060834",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 472,
+      "source_item_id": "MLM2091977818",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 471,
+      "source_item_id": "MLM6081155652",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 469,
+      "source_item_id": "MLM2091680694",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 468,
+      "source_item_id": "MLM2091593630",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 467,
+      "source_item_id": "MLM2054004037",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 466,
+      "source_item_id": "MLM2043664385",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 463,
+      "source_item_id": "MLM2063931632",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 462,
+      "source_item_id": "MLM2097528039",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 461,
+      "source_item_id": "MLM2069057319",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 460,
+      "source_item_id": "MLM2058324855",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 459,
+      "source_item_id": "MLM2062825993",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 458,
+      "source_item_id": "MLM2057279211",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 456,
+      "source_item_id": "MLM2076060206",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 455,
+      "source_item_id": "MLM2058439497",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 453,
+      "source_item_id": "MLM2043077519",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 450,
+      "source_item_id": "MLM2060851324",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 449,
+      "source_item_id": "MLM2058485137",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "7.2000",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "16.1700",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "0.9500",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "141.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "13.0000",
+        "package_width_cm": "10.0000",
+        "package_height_cm": "4.0000",
+        "volumetric_weight_kg": "0.0867",
+        "shipping_fee_local": 2.25,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 2.25,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 141.0,
+        "shipping_api_billable_weight_g": 141.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 7.2,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 19.4,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 1.08,
+        "net_proceeds_usd": 3.87,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 445,
+      "source_item_id": "MLM2075040508",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 444,
+      "source_item_id": "MLM6056297552",
+      "before": {
+        "weight_g": null,
+        "weight_basis": "plugin_actual",
+        "package_length_cm": null,
+        "package_width_cm": null,
+        "package_height_cm": null,
+        "volumetric_weight_kg": null,
+        "shipping_fee_local": null,
+        "shipping_currency_id": null,
+        "shipping_fee_usd": null,
+        "exchange_rate_to_usd": "0.05565759",
+        "billable_weight_g": null,
+        "shipping_api_billable_weight_g": null,
+        "shipping_weight_rule": null,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "Clásica",
+        "sale_price_usd": "13.7600",
+        "exchange_rate_updated_at": "2026-10-07T06:13:48.000+00:00",
+        "commission_rate": "12.5000",
+        "commission_amount_local": "30.9100",
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": "1.8200",
+        "net_proceeds_usd": null,
+        "profitability_updated_at": null,
+        "profitability_error": ""
+      },
+      "after": {
+        "weight_g": "200.0000",
+        "weight_basis": "plugin_actual",
+        "package_length_cm": "13.0000",
+        "package_width_cm": "11.0000",
+        "package_height_cm": "9.0000",
+        "volumetric_weight_kg": "0.2145",
+        "shipping_fee_local": 2.25,
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": 2.25,
+        "exchange_rate_to_usd": 0.05565759,
+        "billable_weight_g": 200.0,
+        "shipping_api_billable_weight_g": 200.0,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card",
+        "profitability_source": "fixed_commission_15_pct",
+        "listing_type_id": "gold_special",
+        "listing_type_name": "固定佣金",
+        "sale_price_usd": 13.76,
+        "exchange_rate_updated_at": "2026-10-08 14:46:10",
+        "commission_rate": 15.0,
+        "commission_amount_local": 37.09,
+        "commission_currency_id": "MXN",
+        "commission_amount_usd": 2.06,
+        "net_proceeds_usd": 9.45,
+        "profitability_updated_at": "2026-10-08 15:38:27",
+        "profitability_error": ""
+      },
+      "saved": true
+    },
+    {
+      "id": 441,
+      "source_item_id": "MLM2072250678",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 440,
+      "source_item_id": "MLM2066138850",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 435,
+      "source_item_id": "MLM2069279437",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 434,
+      "source_item_id": "MLM2069554635",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 433,
+      "source_item_id": "MLM2050658014",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 432,
+      "source_item_id": "MLM2058748773",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 350,
+      "source_item_id": "MLM5817317310",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 341,
+      "source_item_id": "MLM5668322120",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 337,
+      "source_item_id": "MLM2056699729",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 334,
+      "source_item_id": "MLM2069031405",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 331,
+      "source_item_id": "MLM3305389355",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 308,
+      "source_item_id": "MLM3284343099",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 306,
+      "source_item_id": "MLM3362057883",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 305,
+      "source_item_id": "MLM3305303375",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 304,
+      "source_item_id": "MLM3359128603",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 299,
+      "source_item_id": "MLM3304851607",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 297,
+      "source_item_id": "MLM3378170249",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 295,
+      "source_item_id": "MLM5736572392",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 286,
+      "source_item_id": "MLM3357651421",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 281,
+      "source_item_id": "MLM2077277536",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 279,
+      "source_item_id": "MLM2069641581",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 274,
+      "source_item_id": "MLM34965765",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 273,
+      "source_item_id": "MLM61227954",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 272,
+      "source_item_id": "MLM2089210887",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 267,
+      "source_item_id": "MLM3357565323",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 262,
+      "source_item_id": "MLM5756025958",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 261,
+      "source_item_id": "MLM5743409976",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 251,
+      "source_item_id": "MLM3137836957",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 237,
+      "source_item_id": "MLM3238950665",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 223,
+      "source_item_id": "MLM2040114198",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 221,
+      "source_item_id": "MLM2096935426",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 219,
+      "source_item_id": "MLM3199849819",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 217,
+      "source_item_id": "MLM2077284054",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 210,
+      "source_item_id": "MLM2056971767",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 209,
+      "source_item_id": "MLM5741581112",
+      "reason": "商品数据未返回可用实重"
+    },
+    {
+      "id": 188,
+      "source_item_id": "MLM3200157939",
+      "reason": "商品数据未返回可用实重"
+    }
+  ]
+}

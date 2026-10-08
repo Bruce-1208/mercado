@@ -62,14 +62,18 @@ def product_generation_lock(product_id, *, connection_factory=None):
 def generation_cost_summary():
     """All original-product ledgers, independent of list filters/pagination."""
     import json
-    from erp.mercadolibre_collection_store import _connect, PRODUCT_TABLE
+    from erp.mercadolibre_collection_store import _connect, PRODUCT_TABLE, ensure_collection_tables
+    from bit import product_access
 
     connection = _connect()
     try:
         with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            access_sql, access_params = product_access.predicate(PRODUCT_TABLE)
             cursor.execute(
                 f"SELECT JSON_EXTRACT(source_snapshot_json, '$.ai_original.generation_budget') AS ledger "
-                f"FROM `{PRODUCT_TABLE}` WHERE source_type = 'ai_original'")
+                f"FROM `{PRODUCT_TABLE}` WHERE source_type = 'ai_original'"
+                + (f" AND {access_sql}" if access_sql else ""), tuple(access_params))
             rows = cursor.fetchall()
     finally:
         connection.close()

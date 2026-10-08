@@ -545,9 +545,17 @@ def list_inventory_sku_store_sites(*, token_ids: list[int] | None = None) -> dic
                     return {"rows": []}
                 where.append(f"`token_id` IN ({', '.join(['%s'] * len(allowed))})")
                 params.extend(allowed)
+            from erp.mercadolibre_store_link_store import _metadata_index_exists, STORE_LINK_METADATA_INDEX
+            # Without a hint MySQL prefers the non-covering is_current index
+            # and reads every product payload merely to build this dropdown.
+            hint = f"FORCE INDEX (`{STORE_LINK_METADATA_INDEX}`)" if _metadata_index_exists(cursor) else ""
             cursor.execute(
-                f"SELECT DISTINCT `token_id`, `store_name`, `site_id` FROM `{STORE_LINK_TABLE}` "
-                f"WHERE {' AND '.join(where)} ORDER BY `store_name`, `site_id`",
+                f"SELECT sites.`token_id`, sample.`store_name`, sites.`site_id` "
+                f"FROM (SELECT `token_id`, `site_id`, MIN(`id`) AS `sample_id` "
+                f"FROM `{STORE_LINK_TABLE}` {hint} WHERE {' AND '.join(where)} "
+                f"GROUP BY `token_id`, `site_id`) AS sites "
+                f"INNER JOIN `{STORE_LINK_TABLE}` AS sample ON sample.`id` = sites.`sample_id` "
+                "ORDER BY sample.`store_name`, sites.`site_id`",
                 tuple(params),
             )
             rows = [_json_row(row) for row in cursor.fetchall() or []]
@@ -1476,6 +1484,14 @@ def list_inventory_matches(*, search: str = "", limit: int = 30) -> dict[str, An
                     pattern = f"%{search}%"
                     product_where = "WHERE (`source_item_id` LIKE %s OR `title` LIKE %s)"
                     product_params.extend((pattern, pattern))
+                from bit import product_access
+                from erp.mercadolibre_collection_store import ensure_collection_tables
+                if product_access.actor():
+                    ensure_collection_tables(cursor)
+                access_sql, access_params = product_access.predicate(PRODUCT_TABLE)
+                if access_sql:
+                    product_where += (" AND " if product_where else "WHERE ") + access_sql
+                    product_params.extend(access_params)
                 cursor.execute(
                     f"""
                     SELECT `id`, `source_item_id`, `title`, `main_image_url`, `price`,

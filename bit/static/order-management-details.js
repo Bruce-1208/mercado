@@ -51,12 +51,49 @@ function renderOrderStatusHierarchy(counts = orderStatusHierarchyCounts) {
     const secondary = !isAllStatuses && children.length ? `<div class="order-status-level order-status-secondary">${children.map(status => button(status, status.split('-').slice(1).join('-'), counts[status], orderStatus === status)).join('')}</div>` : '';
     orderStatusStrip.innerHTML = `<div class="order-status-level">${primary}</div>${secondary}`;
 }
+function orderActualFreightValue(row) {
+    const actual = row?.actual_freight_usd;
+    if (row?.freight_pending_shipment || row?.freight_missing || actual == null || String(actual).trim() === '') return null;
+    return Number.isFinite(Number(actual)) ? Number(actual) : null;
+}
 function orderFreightDifference(row) {
-    const actual = row.actual_freight_usd ?? row.freight;
-    const quoted = row.quoted_freight_usd;
-    if (row.freight_missing || actual == null || quoted == null || actual === '' || quoted === '') return null;
-    if (!Number.isFinite(Number(actual)) || !Number.isFinite(Number(quoted))) return null;
-    return Math.round((Number(actual) - Number(quoted)) * 100) / 100;
+    const actual = orderActualFreightValue(row);
+    const quoted = row?.quoted_freight_usd;
+    if (actual == null || quoted == null || String(quoted).trim() === '') return null;
+    if (!Number.isFinite(Number(quoted))) return null;
+    return Math.round((actual - Number(quoted)) * 100) / 100;
+}
+function orderBalanceFreightValue(row) {
+    if (row?.merged_rows?.length > 1) {
+        const values = row.merged_rows.map(orderBalanceFreightValue);
+        return values.some(value => value === null) ? null
+            : Math.round(values.reduce((sum, value) => sum + value, 0) * 100) / 100;
+    }
+    const actual = orderActualFreightValue(row);
+    if (actual !== null) return actual;
+    const quoted = row?.quoted_freight_usd;
+    if (quoted == null || String(quoted).trim() === '' || !Number.isFinite(Number(quoted))) return null;
+    return Number(quoted);
+}
+function orderBalanceUsesQuote(row) {
+    return (row?.merged_rows?.length > 1 ? row.merged_rows : [row])
+        .some(source => orderActualFreightValue(source) === null && orderBalanceFreightValue(source) !== null);
+}
+function orderBalanceValue(row) {
+    if (row?.data_origin === 'yandex') return null;
+    if (row?.merged_rows?.length > 1) {
+        const values = row.merged_rows.map(orderBalanceValue);
+        return values.some(value => value === null) ? null
+            : Math.round(values.reduce((sum, value) => sum + value, 0) * 100) / 100;
+    }
+    const freight = orderBalanceFreightValue(row);
+    if (freight === null) return null;
+    const balance = row?.balance;
+    if (balance != null && String(balance).trim() !== '' && Number.isFinite(Number(balance))) return Number(balance);
+    const amount = row?.amount;
+    const fee = row?.fee ?? 0;
+    if (amount == null || String(amount).trim() === '' || !Number.isFinite(Number(amount)) || !Number.isFinite(Number(fee))) return null;
+    return Math.round((Number(amount) - Number(fee) - freight) * 100) / 100;
 }
 function orderExtraDialog(id, title) {
     let dialog = document.getElementById(id);

@@ -1,10 +1,11 @@
 import os
-import sys
-from getpass import getpass
 from pathlib import Path
 from typing import Iterable
+from urllib.parse import urlsplit
 
-from openai import OpenAI
+from openai import APITimeoutError, OpenAI
+
+from erp.ai_usage_billing import record_usage
 
 
 def _load_local_env():
@@ -30,8 +31,11 @@ def _load_local_env():
 
 _load_local_env()
 
-DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro")
+# Legacy constant/function names remain import-compatible for existing callers.
+QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+QWEN_MODEL = "qwen3.7-flash"
+DEEPSEEK_BASE_URL = QWEN_BASE_URL
+DEEPSEEK_MODEL = QWEN_MODEL
 
 
 def _read_key_file(path: Path) -> str:
@@ -41,28 +45,8 @@ def _read_key_file(path: Path) -> str:
 
 
 def _get_deepseek_api_key() -> str:
-    api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
-    if api_key:
-        return api_key
-
-    current_dir = Path(__file__).resolve().parent
-    candidates = [
-        current_dir / "deepseek_key.txt",
-        current_dir.parent / "deepseek_key.txt",
-    ]
-    for key_path in candidates:
-        api_key = _read_key_file(key_path)
-        if api_key:
-            os.environ["DEEPSEEK_API_KEY"] = api_key
-            return api_key
-
-    if sys.stdin.isatty():
-        api_key = getpass("请输入 DeepSeek API Key：").strip()
-        if api_key:
-            os.environ["DEEPSEEK_API_KEY"] = api_key
-            return api_key
-
-    return ""
+    """Compatibility name: only read the current provider's credentials."""
+    return os.getenv("DASHSCOPE_API_KEY", "").strip()
 
 
 def _get_client(
@@ -72,11 +56,8 @@ def _get_client(
     api_key = str(api_key or "").strip() or _get_deepseek_api_key()
     if not api_key:
         raise RuntimeError(
-            "缺少 DeepSeek API Key。请任选一种方式配置："
-            "1）在泽顺控制台“集成与凭证设置”中填写 DeepSeek API Key；"
-            "2）在项目根目录创建 deepseek_key.txt；"
-            "3）在 AI_Agent/deepseek_key.txt 写入 key；"
-            "4）在 .env 写入 DEEPSEEK_API_KEY=你的key。"
+            "缺少阿里云百炼 API Key。请在集成与凭证设置中填写百炼 Key，"
+            "或在 .env 配置 DASHSCOPE_API_KEY。"
         )
 
     return OpenAI(
@@ -96,12 +77,19 @@ def chat_deepseek_with_usage(
     thinking: bool | None = None,
     timeout: float | None = None,
     max_retries: int | None = None,
+    thinking_budget: int | None = None,
 ) -> dict:
     """Return content and provider usage for callers that account for API costs.
 
     Unchanged callers can keep using ``chat_deepseek`` below.  Usage is left
     absent when the provider omits it; callers must not interpret that as zero.
     """
+    endpoint = urlsplit(base_url or QWEN_BASE_URL)
+    if (str(model or "").lower().startswith("deepseek")
+            or endpoint.hostname == "api.deepseek.com"):
+        raise ValueError("DeepSeek 生成已停用，请刷新页面使用 qwen3.7-flash 和百炼凭证。")
+    if endpoint.hostname == "dashscope.aliyuncs.com" and thinking is None:
+        thinking = False
     kwargs = {
         "model": model or DEEPSEEK_MODEL,
         "messages": list(messages),
@@ -113,7 +101,12 @@ def chat_deepseek_with_usage(
     if response_format is not None:
         kwargs["response_format"] = response_format
     if thinking is not None:
-        kwargs["extra_body"] = {"thinking": {"type": "enabled" if thinking else "disabled"}}
+        if urlsplit(base_url or DEEPSEEK_BASE_URL).hostname == "dashscope.aliyuncs.com":
+            kwargs["extra_body"] = {"enable_thinking": thinking}
+            if thinking and thinking_budget is not None:
+                kwargs["extra_body"]["thinking_budget"] = thinking_budget
+        else:
+            kwargs["extra_body"] = {"thinking": {"type": "enabled" if thinking else "disabled"}}
 
     client = _get_client(
         api_key=api_key,
@@ -126,7 +119,29 @@ def chat_deepseek_with_usage(
         options["max_retries"] = max_retries
     if options:
         client = client.with_options(**options)
-    response = client.chat.completions.create(**kwargs)
+    try:
+        response = client.chat.completions.create(**kwargs)
+    except Exception as exc:
+        # A gateway may reject the final result after reporting billable usage.
+        # Never infer consumed tokens from prompts or failed network requests.
+        payload = getattr(exc, "body", None)
+        if isinstance(payload, dict) and payload.get("usage"):
+            record_usage(payload, model=kwargs["model"],
+                         base_url=base_url or DEEPSEEK_BASE_URL,
+                         status="failed")
+        elif isinstance(exc, (TimeoutError, APITimeoutError)):
+            # The request may have reached the provider. Preserve a pending
+            # audit row without inventing a token count or monetary amount.
+            record_usage(usage=None, model=kwargs["model"],
+                         base_url=base_url or DEEPSEEK_BASE_URL,
+                         request_id=getattr(exc, "request_id", ""),
+                         status="usage_unknown")
+        raise
+    # Persist immediately, before interpreting choices or structured content.
+    # Malformed/truncated results can still have consumed paid model tokens.
+    record_usage(response, model=getattr(response, "model", None) or kwargs["model"],
+                 base_url=base_url or DEEPSEEK_BASE_URL,
+                 request_id=getattr(response, "id", ""))
     usage = getattr(response, "usage", None)
     if usage is not None and hasattr(usage, "model_dump"):
         usage = usage.model_dump()
@@ -154,12 +169,13 @@ def chat_deepseek(
     thinking: bool | None = None,
     timeout: float | None = None,
     max_retries: int | None = None,
+    thinking_budget: int | None = None,
 ) -> str:
     return chat_deepseek_with_usage(
         messages=messages, model=model, temperature=temperature,
         max_tokens=max_tokens, response_format=response_format,
         api_key=api_key, base_url=base_url, thinking=thinking,
-        timeout=timeout, max_retries=max_retries,
+        timeout=timeout, max_retries=max_retries, thinking_budget=thinking_budget,
     )["content"]
 
 
@@ -168,4 +184,4 @@ def get_ai_response(message: str) -> str:
 
 
 if __name__ == "__main__":
-    print(get_ai_response("请用中文回复：DeepSeek 接入测试成功。"))
+    print(get_ai_response("请用中文回复：千问接入测试成功。"))

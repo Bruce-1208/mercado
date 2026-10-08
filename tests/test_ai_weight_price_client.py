@@ -295,6 +295,48 @@ def test_extension_client_rejects_same_dom_false_positive_and_records_failure(tm
     assert "刷新后状态未保存" in service.store.get("1001")["exception_detail"]
 
 
+@pytest.mark.parametrize("requested_status", [None, "待审核"])
+@pytest.mark.parametrize("saved_status", ["待审核", "通过"])
+def test_extension_client_requires_passed_status_even_when_changes_omit_it(tmp_path, requested_status, saved_status):
+    service = _service(tmp_path)
+    start(service, {
+        "selection": {"category": "", "start_page": 1, "end_page": 1, "start_item": 1},
+        "max_items": 1,
+        "products": [{
+            "erp_goods_id": "1001", "title": "测试商品",
+            "main_image_url": "https://img.example.test/product.jpg",
+        }],
+    })
+    changes = {"weight_g": 540, "net_income_usd": 8}
+    if requested_status is not None:
+        changes["review_status"] = requested_status
+    payload = {
+        "task_id": "1001",
+        "before": {"erp_goods_id": "1001", "review_status": "待审核"},
+        "actual": {"erp_goods_id": "1001", "weight_g": 540,
+                   "net_income_usd": 8, "review_status": saved_status},
+        "changes": changes, "submitted": True, "persisted": True,
+    }
+
+    if saved_status == "待审核":
+        with pytest.raises(ValueError, match="审核状态保存回读不一致"):
+            writeback(service, payload)
+        task = service.store.get("1001")
+        assert task["write_verified"] is False
+        assert task["status"] != "success"
+        assert task["write_history"][-1]["verified"] is False
+        assert service.store.state("run")["processed_items"] == 0
+    else:
+        result = writeback(service, payload)
+        task = service.store.get("1001")
+        assert result["action"] == "done"
+        assert task["status"] == "success"
+        assert task["write_verified"] is True
+        assert task["write_history"][-1]["verified"] is True
+    assert task["write_intent"]["review_status"] == "通过"
+    assert task["write_history"][-1]["intent"]["review_status"] == "通过"
+
+
 @pytest.mark.parametrize('captcha', [False, True])
 def test_extension_item_failure_advances_or_resumes_captcha(tmp_path, captcha):
     from bit.ai_weight_price_client import continue_run
@@ -320,3 +362,33 @@ def test_extension_item_failure_advances_or_resumes_captcha(tmp_path, captcha):
         assert service.store.state('run')['skipped_items'] == 1
     assert result['action'] == 'search'
     assert service.store.state('circuit') is None
+
+
+@pytest.mark.parametrize('sku_size, offer_size, expected, notice', [
+    ({'raw_dimensions': '300x200x100mm'}, {}, '30x20x10', False),
+    ({}, {'package_length_cm': 60, 'package_width_cm': 20, 'package_height_cm': 10}, '60x20x10', False),
+    ({'raw_dimensions': '61x20x10cm'}, {}, None, True),
+    ({'package_length_cm': 30}, {'package_width_cm': 20, 'package_height_cm': 10}, None, True),
+    ({'raw_dimensions': 'unknown'}, {'raw_dimensions': '30x20x10cm'}, None, True),
+    ({}, {}, None, True),
+])
+def test_extension_dimensions_checked_before_writeback(tmp_path, sku_size, offer_size, expected, notice):
+    service = _service(tmp_path)
+    config = service.config.load()
+    config['writeback_enabled'] = True
+    service.config.save(config)
+    start(service, {'selection': {'start_product_id': ''}, 'products': [{'erp_goods_id': '1001', 'title': '商品',
+                                'main_image_url': 'https://example.test/1.jpg'}], 'max_items': 1})
+    result = detail(service, {'task_id': '1001', 'detail': {
+        **offer_size, 'skus': [{'id': 'a', 'label': '目标规格', 'price': '20',
+                               'raw_weight': '200g', **sku_size}]}})
+    assert result['action'] == 'writeback'
+    assert result['changes'].get('dimensions_cm') == expected
+    assert bool(service.store.get('1001')['dimensions_notice']) is notice
+    assert result['changes']['weight_g'] == '200'
+
+    before = {"erp_goods_id": "1001", "review_status": "待审核", "dimensions_cm": "12x12x12"}
+    actual = {**before, **result['changes'], "dimensions_cm": "99x99x99"}
+    with pytest.raises(ValueError, match="dimensions_cm"):
+        writeback(service, {"task_id": "1001", "before": before, "actual": actual,
+                            "changes": result['changes'], "submitted": True, "persisted": True})

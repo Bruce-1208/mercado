@@ -11,12 +11,14 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 
+from erp.ai_usage_billing import bind_usage
+
 from bit.bit_runtime_lock import InterProcessLock
 from .browser import Browser, CircuitOpen, Stopped, NoExactMatch, WritebackMismatch, ZyingLoginRequired
 from .config import Config, selection_key, selection_params
 from .credentials import api_key
 from .edge import debugger_identity, open_edge
-from .models import ModelServiceError, Models, erp_value_equal, number, parse_dimensions_evidence, validate_weight
+from .models import ModelServiceError, Models, erp_value_equal, number, parse_dimensions_evidence, supplier_dimensions_evidence, validate_weight
 from .pricing import exchange_rate, protect_net_income, usd_cost
 from .store import AgentStore, CHINA, RemoteStore, Store, COMPLETED
 from .supplier_adapter import SupplierAdaptationError
@@ -436,7 +438,14 @@ class Service:
                 if config.get("run_id"):
                     self.store.save_run(self.store.state("run"))
                 self.store.log(f"{label}已启动，正在连接本机Edge", task_id)
-                self.thread = threading.Thread(target=self.run, args=(config, mode, task_id, lock), daemon=True)
+                actor = config.get("_actor") or {}
+                usage_fields = {"task_type": "ai_weight_price", "task_name": "AI 核重核价",
+                                "task_id": config.get("run_id") or task_id or ""}
+                if actor.get("id"):
+                    usage_fields.update(actor_id=actor["id"],
+                                        actor_name=actor.get("display_name") or actor.get("username") or "")
+                self.thread = threading.Thread(target=bind_usage(self.run, **usage_fields),
+                                               args=(config, mode, task_id, lock), daemon=True)
                 self.thread.start()
             except Exception as exc:
                 lock.release()
@@ -907,8 +916,10 @@ class Service:
     @staticmethod
     def page_text(match):
         sku = match["selected_sku"]
+        dimensions = supplier_dimensions_evidence(sku, match)
         return "\n".join(str(value) for value in (
             "目标规格：" + sku["label"], sku.get("raw_text", ""), sku.get("raw_weight", ""),
+            "包装尺寸：" + dimensions + " cm" if dimensions else "",
             "页面单价：" + str(sku.get("raw_price", "")), "变体加价：" + str(sku.get("raw_surcharge", "")),
             match.get("raw_weight", ""), match.get("description", "")) if value)
 
@@ -964,6 +975,8 @@ class Service:
                                          merchant_id=match["merchant_id"], supplier_sku_id=sku["id"],
                                          supplier_sku=sku["label"], cost_price=sku.get("price"),
                                          supplier_page_text=self.page_text(match), page_info_checked=False,
+                                         supplier_dimensions_cm=supplier_dimensions_evidence(sku, match),
+                                         supplier_dimensions_checked=True,
                                          info_sources={"cost_price": "1688目标变体价格"} if sku.get("price") else {},
                                          supplier_price_evidence=sku, net_income_usd=None, pricing=None,
                                          match_confidence=match["confidence"], match_evidence=evidence)
@@ -1093,7 +1106,8 @@ class Service:
 
     def finish(self, task, browser, config):
         key = task["erp_goods_id"]
-        dimensions = parse_dimensions_evidence(task.get("supplier_page_text", ""))
+        dimensions = (task.get("supplier_dimensions_cm") if task.get("supplier_dimensions_checked") else
+                      parse_dimensions_evidence(task.get("supplier_page_text", "")))
         dimensions_notice = ("1688未读取到完整包装尺寸，保留智赢原尺寸" if not dimensions else
                              f"1688包装尺寸 {dimensions} cm 单边超过60 cm，保留智赢原尺寸；重量仍可保存"
                              if any(number(side) > 60 for side in dimensions.split("x")) else "")
@@ -1139,7 +1153,8 @@ class Service:
                     task = self.store.update(key, net_income_usd=task["net_income_usd"], pricing=pricing,
                                              decision_status="success", decision_reason=pricing["net_income_adjustment"])
                     self.store.log(pricing["net_income_adjustment"] + "；重量仍按新核验结果回填", key)
-                intent = {"pricing": pricing, "weight_g": task["weight_g"], "at": time.time()}
+                intent = {"pricing": pricing, "weight_g": task["weight_g"],
+                          "review_status": "通过", "at": time.time()}
                 if dimensions and not dimensions_notice:
                     intent["dimensions_cm"] = dimensions
                 if not pricing.get("net_income_retained_original"):
@@ -1150,10 +1165,12 @@ class Service:
                                   erp_after=None, write_verified=False,
                                   write_intent=intent, write_history=history)
                 self.store.log(f"回填前：重量 {old['weight_g']}g，净收益 ${old['net_income_usd']}；"
-                               f"计划修改为：重量 {task['weight_g']}g，净收益 ${task['net_income_usd']}", key)
+                               f"计划修改为：重量 {task['weight_g']}g，净收益 ${task['net_income_usd']}，审核状态通过", key)
             actual = browser.write(task, before_save)
             if not actual or number(actual.get("net_income_usd")) != number(task["net_income_usd"]) or number(actual.get("weight_g")) != number(task["weight_g"]):
                 raise ValueError("ERP未返回一致的保存后回读数据")
+            if not erp_value_equal("review_status", actual.get("review_status"), "通过"):
+                raise WritebackMismatch(actual)
             if dimensions and not dimensions_notice and not erp_value_equal(
                     "dimensions_cm", actual.get("dimensions_cm"), dimensions):
                 raise WritebackMismatch(actual)
@@ -1162,7 +1179,7 @@ class Service:
             history[-1].update(after=actual, saved_at=saved_at, verified=True)
             self.store.update(key, status="success", stage="done", exception_reason="", exception_detail="", saved_at=saved_at,
                               erp_after=actual, write_verified=True, write_history=history)
-            self.store.log(f"保存成功并回读确认：重量 {actual['weight_g']}g，美元净收益 ${actual['net_income_usd']}", key)
+            self.store.log(f"保存成功并回读确认：重量 {actual['weight_g']}g，美元净收益 ${actual['net_income_usd']}，审核状态通过", key)
         except CircuitOpen:
             self.store.exception(key, "ERP回写保存失败", "页面风控触发；请核对是否已保存")
             raise

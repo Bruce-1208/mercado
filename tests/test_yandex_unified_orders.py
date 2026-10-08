@@ -9,6 +9,22 @@ ORDER = {'orderId': 123, 'status': 'DELIVERED', 'creationDate': '2026-09-01T13:0
          'prices': {'payment': {'value': 20, 'currencyId': 'CNY'}}}
 
 
+def test_scheduler_syncs_recent_orders_every_15_minutes_and_survives_failure(monkeypatch):
+    monkeypatch.delenv('YANDEX_ORDER_SYNC_DISABLED', raising=False)
+    monkeypatch.setattr(sync, '_scheduler_started', False)
+    stop = MagicMock()
+    stop.wait.side_effect = [False, False, True]
+    monkeypatch.setattr(sync, '_scheduler_stop', stop)
+    with patch.object(sync.threading, 'Thread') as thread, patch.object(sync, 'start', side_effect=[RuntimeError('temporary failure'), True]) as start:
+        sync.ensure_scheduler()
+        sync.ensure_scheduler()
+        thread.assert_called_once()
+        thread.return_value.start.assert_called_once()
+        thread.call_args.kwargs['target']()
+    assert [call.args for call in stop.wait.call_args_list] == [(900,), (900,), (900,)]
+    assert [call.kwargs for call in start.call_args_list] == [{'full': False}, {'full': False}]
+
+
 def test_identity_currency_quantity_and_timezone():
     row = sync.normalize(STORE, ORDER)
     assert row['order_id'] == 'yandex:33:123'
@@ -127,3 +143,19 @@ def test_incremental_sync_refreshes_pending_orders_older_than_30_days():
     assert client.get_orders.call_args_list[0].kwargs['date_to'] == '2026-10-05'
     assert client.get_orders.call_args_list[-1].kwargs['date_from'] == '2026-07-01'
     assert client.get_orders.call_count == 4
+
+
+def test_native_prices_and_enriched_main_image():
+    order = dict(ORDER, items=[dict(ORDER['items'][0], image_url='https://example.com/main.jpg')],
+                 prices={'payment': {'value': 20, 'currencyId': 'CNY'},
+                         'cashback': {'value': 5, 'currencyId': 'CNY'}})
+    row = sync.normalize(STORE, order)
+    assert row['image_url'] == 'https://example.com/main.jpg'
+    assert json.loads(row['raw_json'])['order_items'][0]['item']['thumbnail'] == row['image_url']
+    prices = sync.display_prices(order)
+    assert prices['original']['value'] == 20
+    assert prices['points']['value'] == 5
+    assert prices['total'] == {'value': 25, 'currency': 'CNY'}
+    assert sync.display_prices(ORDER)['total'] is None
+    order['prices']['cashback']['currencyId'] = 'RUR'
+    assert sync.display_prices(order)['total'] is None

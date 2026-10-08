@@ -2,15 +2,19 @@ import pytest
 
 from bit import bit_interface
 from bit.local_agent_hub import LocalAgentStore
+from bit.workbench_runtime import RuntimeSettings
+
+pytestmark = pytest.mark.usefixtures("subscribed_workbench_account")
 
 
 @pytest.fixture
 def polling(monkeypatch, tmp_path):
     user = {"id": 7, "permissions": ["appeal.view", "appeal.execute"], "access_version": 1}
     store = LocalAgentStore(tmp_path / "hub.sqlite3")
-    store.heartbeat("polling-agent", name="测试执行电脑", capabilities=["appeal"])
+    store.heartbeat("polling-agent", name="测试执行电脑", capabilities=["appeal"], owner_user_id=7)
     monkeypatch.setattr(bit_interface.app, "testing", True)
     monkeypatch.setattr(bit_interface, "USE_DB_API", False)
+    monkeypatch.setattr(bit_interface, "RUNTIME_SETTINGS", RuntimeSettings("server", "test"))
     monkeypatch.setattr(bit_interface, "get_current_workbench_user", lambda: user)
     monkeypatch.setattr(bit_interface, "get_local_agent_store", lambda: store)
     monkeypatch.setattr(bit_interface, "current_local_agent_bundle", lambda: {"version": "test"})
@@ -63,9 +67,11 @@ def test_terminal_logs_drain_all_pages_and_do_not_expose_payload(polling):
     assert empty["done"]
 
 
-def test_poll_requires_permission_and_owner(polling):
+def test_poll_requires_permission_and_owner(polling, monkeypatch):
     user, store, client = polling
     submit(client)
+    # Isolate the task-owner check from the separate Agent ownership hook.
+    monkeypatch.setattr(bit_interface, "workbench_user_can_use_agent", lambda *args: True)
     user["id"] = 8
     assert client.get("/api/run_shensu/polling-job/events").status_code == 404
     user["is_platform_admin"] = True

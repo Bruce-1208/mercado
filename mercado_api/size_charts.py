@@ -66,7 +66,16 @@ def extract_fields(specs: Any) -> dict[str, Any]:
             field["name"] = str(raw.get("name") or raw["id"])
             # Filters in a grid component still describe the chart itself.
             target = template_fields if ("grid_template_required" in lowered_tags or "grid_filter" in lowered_tags) else row_fields if grid else template_fields
-            target[str(raw["id"])] = {**target.get(str(raw["id"]), {}), **field}
+            # Output sections repeat IDs without input validation metadata.
+            # Keep the input's tags/choices when traversing those mirrors.
+            previous = target.get(str(raw["id"]), {})
+            field["tags"] = list(dict.fromkeys([*previous.get("tags", []), *tags]))
+            field["required"] = bool(previous.get("required") or field["required"])
+            if not field["values"] and previous.get("values"):
+                field["values"] = previous["values"]
+            if not field["allowed_units"] and previous.get("allowed_units"):
+                field["allowed_units"] = previous["allowed_units"]
+            target[str(raw["id"])] = {**previous, **field}
         for key, value in node.items():
             if key not in {"attributes", "values", "allowed_units", "units", "tags"}:
                 walk(value, grid)
@@ -111,7 +120,19 @@ class MercadoSizeChartsClient:
         path = f"/domains/{quote(site_id + '-' + bare_domain(domain_id), safe='')}/technical_specs"
         if not grids:
             return self.client.request("GET", path)
-        filters = [dict(row) for row in attributes or []]
+        # technical_specs uses item-style values, unlike chart creation's
+        # values[] format. Sending values[] silently returns an empty object.
+        filters = []
+        for row in attributes or []:
+            if "values" not in row:
+                filters.append(dict(row))
+                continue
+            values = row.get("values") or []
+            if len(values) != 1:
+                raise ValueError(f"规格筛选属性 {row.get('id')} 必须包含一个值")
+            value = values[0]
+            filters.append({"id": row["id"], **({"value_id": str(value["id"])}
+                           if value.get("id") else {"value_name": value.get("name", "")})})
         return self.client.request("POST", path, params={"section": "grids"}, json_body={"attributes": filters})
 
     def get_chart(self, chart_id: str) -> dict:

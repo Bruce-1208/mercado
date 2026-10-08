@@ -1,0 +1,135 @@
+{
+  "viewport": 1024,
+  "documentWidth": 1024,
+  "documentClientWidth": 1024,
+  "listWidth": 738,
+  "listScrollWidth": 738,
+  "columns": 1,
+  "cards": [
+    {
+      "x": 251,
+      "y": 807.1875,
+      "width": 738,
+      "height": 227.046875
+    },
+    {
+      "x": 251,
+      "y": 1044.234375,
+      "width": 738,
+      "height": 243.015625
+    },
+    {
+      "x": 251,
+      "y": 1297.25,
+      "width": 738,
+      "height": 223.515625
+    },
+    {
+      "x": 251,
+      "y": 1530.765625,
+      "width": 738,
+      "height": 223.515625
+    },
+    {
+      "x": 251,
+      "y": 1764.28125,
+      "width": 738,
+      "height": 227.046875
+    },
+    {
+      "x": 251,
+      "y": 2001.328125,
+      "width": 738,
+      "height": 223.515625
+    }
+  ],
+  "cardOverflow": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "emptyState": {
+    "bodyWidth": 738,
+    "rowWidth": 738,
+    "scrollWidth": 1024,
+    "clientWidth": 1024,
+    "overflowing": [
+      {
+        "name": "workspace-tab",
+        "right": 1032.90625
+      },
+      {
+        "name": "workspace-tab",
+        "right": 1128.90625
+      },
+      {
+        "name": "market-publish-field market-publish-field-number",
+        "right": 1132
+      },
+      {
+        "name": "LABEL",
+        "right": 1132
+      },
+      {
+        "name": "mercado-publish-ratio",
+        "right": 1132
+      },
+      {
+        "name": "market-publish-field market-publish-field-schedule",
+        "right": 1232
+      },
+      {
+        "name": "LABEL",
+        "right": 1232
+      },
+      {
+        "name": "mercado-publish-schedule-at",
+        "right": 1232
+      }
+    ]
+  },
+  "interactionChecks": [
+    "single_selection",
+    "selected_card_style",
+    "select_all",
+    "expand_details",
+    "review_update",
+    "edit_save",
+    "risk_detail",
+    "single_item_detection",
+    "bulk_edit_dialog",
+    "bilingual_preview_dialog",
+    "full_width_empty_state"
+  ],
+  "mutations": [
+    {
+      "kind": "review",
+      "payload": {
+        "product_item_ids": [
+          101
+        ],
+        "review_status": "approved"
+      }
+    },
+    {
+      "kind": "edit",
+      "payload": {
+        "title": "都市轻量双肩背包 · 多口袋防泼水款 · 离线编辑验证",
+        "main_image_url": "http://console.test/__qa/main-images/backpack.svg",
+        "price": 586.04,
+        "category_id": "MLM123456",
+        "weight_g": 320,
+        "package_length_cm": 24,
+        "package_width_cm": 16,
+        "package_height_cm": 32,
+        "description_text": "适合日常生活使用。无品牌标识，包装尺寸与实际重量已登记。",
+        "variations": [],
+        "variation_dimensions": []
+      }
+    }
+  ],
+  "pageErrors": []
+}

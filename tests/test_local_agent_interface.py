@@ -12,11 +12,13 @@ from bit.local_agent_hub import LocalAgentStore
 def agent_interface(monkeypatch, tmp_path):
     user = {
         "id": 7,
+        "role_key": "enterprise_admin",
         "username": "operator",
         "display_name": "操作员",
         "permissions": ["appeal.view", "appeal.execute"],
         "access_version": 1,
         "is_active": True,
+        "organization_key": "test-org",
     }
     store = LocalAgentStore(tmp_path / "hub.sqlite3")
     monkeypatch.setattr(bit_interface, "USE_DB_API", False)
@@ -368,6 +370,39 @@ def test_running_daily_agent_gets_only_required_database_routes(
     token = bit_interface.create_local_agent_credential(agent_id, 7)
     store.enqueue_job("daily-db-job", agent_id, "daily_task", {})
     store.claim_job(agent_id)
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {"total": 0, "rows": []},
+    )
+    headers = {"X-Internal-Token": token}
+    remote = {"REMOTE_ADDR": "198.51.100.10"}
+
+    allowed = client.get(
+        "/api/db/mercado-tokens",
+        headers=headers,
+        environ_overrides=remote,
+    )
+    denied = client.get(
+        "/api/db/workbench/users",
+        headers=headers,
+        environ_overrides=remote,
+    )
+
+    assert allowed.status_code == 200
+    assert allowed.get_json()["data"] == {"total": 0, "rows": []}
+    assert denied.status_code == 403
+
+
+def test_running_appeal_agent_gets_only_required_database_routes(
+    agent_interface, monkeypatch
+):
+    _user, store, client = agent_interface
+    agent_id = "agent-appeal-db"
+    store.heartbeat(agent_id, name="申诉电脑", capabilities=["appeal"])
+    store.enqueue_job("appeal-db-job", agent_id, "appeal", {})
+    store.claim_job(agent_id)
+    token = bit_interface.create_local_agent_credential(agent_id, 7)
     monkeypatch.setattr(
         bit_interface.bit_db_api,
         "list_mercado_store_tokens",

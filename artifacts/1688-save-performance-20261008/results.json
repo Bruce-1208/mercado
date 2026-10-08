@@ -1,0 +1,41 @@
+{
+  "scope": "Actual product HTML/JS in Chromium, mocked PATCH=120ms and list/AI refresh=1000ms; not production network latency.",
+  "runs": [
+    {
+      "elapsed_ms": 123,
+      "dialog_closed": true,
+      "save_enabled": true,
+      "displayed_weight": "375.5 g",
+      "status": "商品资料已保存",
+      "source_requests": [
+        "PATCH"
+      ],
+      "aiStarted": true,
+      "aiFinished": false
+    },
+    {
+      "elapsed_ms": 122,
+      "dialog_closed": true,
+      "save_enabled": true,
+      "displayed_weight": "375.5 g",
+      "status": "商品资料已保存",
+      "source_requests": [
+        "PATCH"
+      ],
+      "aiStarted": true,
+      "aiFinished": false
+    },
+    {
+      "elapsed_ms": 122,
+      "dialog_closed": true,
+      "save_enabled": true,
+      "displayed_weight": "375.5 g",
+      "status": "商品资料已保存",
+      "source_requests": [
+        "PATCH"
+      ],
+      "aiStarted": true,
+      "aiFinished": false
+    }
+  ]
+}

@@ -265,3 +265,199 @@ def test_legacy_interface_import_does_not_connect(monkeypatch):
     module = importlib.import_module("mercado_interface.db_pool")
     importlib.reload(module)
     assert module.get_db_connection is db_pool.get_db_connection
+
+
+@pytest.fixture
+def statement_driver(monkeypatch):
+    """Use real DBUtils recovery with a socket-free PyMySQL stand-in."""
+    state = {
+        "connections": [], "executions": 0, "successful_executions": 0,
+        "statement_error": None, "disconnect_on_execute": False,
+        "rows": [{"value": 1}, {"value": 2}], "iterations": 0,
+        "iteration_error": None,
+    }
+
+    class Cursor:
+        def __init__(self, connection):
+            self.connection = connection
+            self.description = (("value", 3, None, None, None, None, False),)
+            self.lastrowid = 42
+            self.row_index = 0
+
+        def __iter__(self):
+            state["iterations"] += 1
+            return self
+
+        def __next__(self):
+            if state["iteration_error"] is not None:
+                raise state["iteration_error"]
+            if self.row_index >= len(state["rows"]):
+                raise StopIteration
+            row = state["rows"][self.row_index]
+            self.row_index += 1
+            return row
+
+        def execute(self, sql, params=None):
+            state["executions"] += 1
+            if self.connection.broken:
+                raise db_pool.pymysql.OperationalError(2006, "Server has gone away")
+            if state["disconnect_on_execute"]:
+                state["disconnect_on_execute"] = False
+                self.connection.broken = True
+                raise db_pool.pymysql.OperationalError(2013, "Lost connection")
+            if state["statement_error"] is not None:
+                raise state["statement_error"]
+            state["successful_executions"] += 1
+            return 1
+
+        def close(self):
+            pass
+
+    class Connection:
+        def __init__(self, **kwargs):
+            self.closed = False
+            self.broken = False
+            state["connections"].append(self)
+
+        def cursor(self, *args, **kwargs):
+            return Cursor(self)
+
+        def ping(self, *args, **kwargs):
+            if self.broken or self.closed:
+                raise db_pool.pymysql.OperationalError(2006, "Server has gone away")
+
+        def begin(self):
+            pass
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+        def close(self):
+            self.closed = True
+
+    db_pool.close_all_pools()
+    monkeypatch.setenv("MYSQL_POOL_FORCE_ENABLED", "1")
+    monkeypatch.setenv("MYSQL_POOL_MAX_CONNECTIONS", "2")
+    monkeypatch.setenv("MYSQL_POOL_MIN_CACHED", "0")
+    monkeypatch.setenv("MYSQL_POOL_MAX_CACHED", "2")
+    monkeypatch.setattr(db_pool.pymysql, "connect", Connection)
+    yield state
+    db_pool.close_all_pools()
+    assert all(connection.closed for connection in state["connections"])
+
+
+@pytest.mark.parametrize("error_code", [3024, 1205, 1213, 1040, 1045])
+def test_server_operational_errors_are_not_replayed(statement_driver, error_code):
+    state = statement_driver
+    error = db_pool.pymysql.OperationalError(error_code, "Server-side SQL failure")
+    state["statement_error"] = error
+    connection = db_pool.get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            with pytest.raises(db_pool.pymysql.OperationalError) as raised:
+                cursor.execute("SELECT /*+ MAX_EXECUTION_TIME(8000) */ COUNT(*) FROM products")
+        assert raised.value is error
+        assert state["executions"] == 1
+        assert len(state["connections"]) == 1
+        assert db_pool.pool_status()["active"] == 1
+    finally:
+        connection.close()
+    assert db_pool.pool_status()["active"] == 0
+    state["statement_error"] = None
+    connection = db_pool.get_db_connection()
+    try:
+        assert connection.cursor().execute("SELECT 1") == 1
+        assert len(state["connections"]) == 1
+    finally:
+        connection.close()
+
+
+def test_lost_connection_during_execute_is_recovered(statement_driver):
+    state = statement_driver
+    state["disconnect_on_execute"] = True
+    connection = db_pool.get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            assert cursor.execute("SELECT 1") == 1
+        assert len(state["connections"]) == 2
+        assert state["connections"][0].closed
+        assert state["successful_executions"] == 1
+    finally:
+        connection.close()
+    assert db_pool.pool_status()["active"] == 0
+
+
+def test_checkout_ping_recovers_an_idle_lost_connection(statement_driver):
+    state = statement_driver
+    connection = db_pool.get_db_connection()
+    connection.close()
+    state["connections"][0].broken = True
+    connection = db_pool.get_db_connection()
+    try:
+        assert connection.cursor().execute("SELECT 1") == 1
+        assert len(state["connections"]) == 2
+        assert state["connections"][0].closed
+        assert state["executions"] == 1
+    finally:
+        connection.close()
+
+
+def test_lost_connection_in_transaction_does_not_replay_statement(statement_driver):
+    state = statement_driver
+    state["disconnect_on_execute"] = True
+    connection = db_pool.get_db_connection()
+    try:
+        connection.begin()
+        with pytest.raises(db_pool.pymysql.OperationalError) as raised:
+            connection.cursor().execute("UPDATE products SET price = price + 1")
+        assert raised.value.args[0] == 2013
+        assert state["executions"] == 1
+        assert state["successful_executions"] == 0
+    finally:
+        connection.close()
+    assert db_pool.pool_status()["active"] == 0
+
+
+def test_cursor_iteration_and_common_attributes_are_preserved(statement_driver):
+    state = statement_driver
+    connection = db_pool.get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT value FROM products")
+            assert cursor.connection is state["connections"][0]
+            assert cursor.description == (("value", 3, None, None, None, None, False),)
+            assert cursor.lastrowid == 42
+            iterator = iter(cursor)
+            assert next(iterator) == {"value": 1}
+            assert list(iterator) == [{"value": 2}]
+            assert state["iterations"] >= 1
+    finally:
+        connection.close()
+
+
+@pytest.mark.parametrize("error_code", [3024, 2013])
+def test_cursor_iteration_errors_are_classified_without_sql_replay(statement_driver, error_code):
+    state = statement_driver
+    error = db_pool.pymysql.OperationalError(error_code, "Failed while reading rows")
+    connection = db_pool.get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT value FROM products")
+            iterator = iter(cursor)
+            assert next(iterator) == {"value": 1}
+            state["iteration_error"] = error
+            with pytest.raises(db_pool.pymysql.OperationalError) as raised:
+                next(iterator)
+            if error_code == 2013:
+                assert isinstance(raised.value, db_pool._ConnectionOperationalError)
+                assert raised.value.__cause__ is error
+            else:
+                assert raised.value is error
+            assert state["executions"] == 1
+            assert len(state["connections"]) == 1
+    finally:
+        connection.close()
+    assert db_pool.pool_status()["active"] == 0

@@ -40,21 +40,14 @@ def test_member_scope_cannot_be_disabled_by_role_record():
     assert user["own_store_only"] is True
 
 
-def test_members_only_list_and_dispatch_their_agents(member_console, monkeypatch):
+def test_members_cannot_list_or_dispatch_even_their_own_agents(member_console):
     user, store, client = member_console
-    for agent_id, owner in (("own-agent", 71), ("other-agent", 72), ("old-agent", None)):
-        store.heartbeat(agent_id, name=agent_id, owner_user_id=owner, capabilities=["appeal"])
-    monkeypatch.setattr(web, "_filter_store_rows_for_user", lambda data, **kw: data)
-    response = client.get("/api/execution-agents")
-    assert response.status_code == 200
-    assert [a["agent_id"] for a in response.json["data"]["agents"]] == ["own-agent"]
-    for agent_id in ("other-agent", "old-agent", "missing-agent"):
-        response = client.post("/api/run_shensu", json={"agent_id": agent_id, "execution_target": "agent"})
-        assert response.status_code == 403
+    store.heartbeat("own-agent", name="own", owner_user_id=user["id"], capabilities=["appeal"])
+    assert client.get("/api/execution-agents").status_code == 403
+    assert client.get("/api/local-agents/download").status_code == 403
+    assert client.post("/api/run_shensu", json={"agent_id": "own-agent", "execution_target": "agent"}).status_code == 403
     with web.app.test_request_context():
-        assert web.workbench_user_can_use_agent(store.get_agent("own-agent"))
-        response, status = web.enqueue_local_agent_daily_task("other-agent", {})
-        assert status == 403
+        assert not web.workbench_user_can_use_agent(store.get_agent("own-agent"))
     assert not store.list_jobs()
 
 
@@ -107,8 +100,9 @@ def test_public_registration_fixes_company_role_and_pending_state(monkeypatch):
     assert params[6] == "wuhan-zeshun"
 
 
-def test_member_can_enqueue_own_agent(member_console, monkeypatch):
+def test_enterprise_admin_can_enqueue_own_agent(member_console, monkeypatch):
     user, store, _ = member_console
+    user.update(role_key="enterprise_admin")
     store.heartbeat("own-agent", name="my pc", owner_user_id=user["id"], capabilities=["daily_task"])
     monkeypatch.setattr(web, "current_local_agent_bundle", lambda: {"version": "test"})
     with web.app.test_request_context():
@@ -121,6 +115,8 @@ def test_member_can_enqueue_own_agent(member_console, monkeypatch):
 
 def test_enrollment_binds_verified_identity_and_rejects_other_owner(member_console, monkeypatch):
     user, store, client = member_console
+    user.update(role_key="enterprise_admin", is_active=True)
+    monkeypatch.setattr(web, "get_workbench_user", lambda **kw: user)
     monkeypatch.setattr(web, "USE_DB_API", False)
     monkeypatch.setattr(web, "_local_agent_enrollment_user", lambda token: user)
     response = client.post("/api/local-agents/enroll", json={"agent_id": "own-agent", "name": "my pc", "owner_user_id": 72})
@@ -137,6 +133,8 @@ def test_enrollment_binds_verified_identity_and_rejects_other_owner(member_conso
 
 def test_legacy_signed_heartbeat_migrates_owner(member_console, monkeypatch):
     user, store, client = member_console
+    user.update(role_key="enterprise_admin", is_active=True)
+    monkeypatch.setattr(web, "get_workbench_user", lambda **kw: user)
     monkeypatch.setattr(web, "USE_DB_API", False)
     monkeypatch.setattr(web, "current_local_agent_bundle", lambda: {"version": "test", "sha256": "test", "size": 0})
     store.heartbeat("legacy-agent", name="old pc")
@@ -174,8 +172,10 @@ def test_non_super_admin_cannot_request_server_execution(member_console, role):
     assert client.get("/api/tasks/daily/status").status_code == 403
 
 
-def test_daily_jobs_follow_agent_visibility(member_console):
-    _, store, client = member_console
+def test_daily_jobs_follow_agent_visibility(member_console, monkeypatch):
+    user, store, client = member_console
+    user.update(role_key="enterprise_admin")
+    monkeypatch.setattr(web, "_workbench_backend", lambda *args: [{"id": 72, "organization_key": "other-company"}])
     for name, owner in (("own", 71), ("other", 72)):
         store.heartbeat(name, name=name, owner_user_id=owner, capabilities=["daily_task"])
         store.enqueue_job(name + "-job", name, "daily_task", {})
@@ -318,3 +318,6 @@ def test_invalid_worker_company_cannot_use_data(scoped_worker):
     user, _, client, headers = scoped_worker
     user["is_active"] = False
     assert client.get("/api/db/mercado-tokens", headers=headers).status_code == 403
+
+
+pytestmark = pytest.mark.usefixtures("subscribed_workbench_account")

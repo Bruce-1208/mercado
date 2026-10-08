@@ -9,10 +9,14 @@ let products1688Categories = [];
 let products1688CategorySaving = false;
 let products1688EditState = null;
 let products1688EditSaving = false;
+let products1688EditRevision = 0;
 let products1688LoadSequence = 0;
 let products1688SelectionScope = "";
 let products1688ReviewSaving = false;
 let products1688Loading = false;
+let products1688OptionsPromise = null;
+let products1688OptionsLoadedAt = 0;
+const PRODUCTS_1688_OPTIONS_TTL_MS = 60000;
 const PRODUCTS_1688_EDIT_FIELDS = [
   ["weight_g", "重量（g）"],
   ["package_length_cm", "包装长度（cm）"],
@@ -144,6 +148,7 @@ function products1688SourceValue(row, key) {
   const original = products1688Original(row);
   const originalValue = original[key];
   if (key === "price") {
+    if (Object.prototype.hasOwnProperty.call(original, key) && originalValue == null) return null;
     const originalPrice = Number(originalValue);
     if (Number.isFinite(originalPrice) && originalPrice > 0) return originalValue;
     return row.source_purchase_price_cny ?? row.price ?? originalValue;
@@ -231,18 +236,18 @@ function products1688RenderRows() {
       : `<strong title="${products1688Escape(title)}">${products1688Escape(title)}</strong>`;
     const status = String(row.ai_status || "pending").toLowerCase();
     return `<tr class="p1688-editable-row" onclick="products1688RowClick(event, ${Number(row.id)})" title="点击空白处修改资料">
-      <td class="p1688-check-cell"><input type="checkbox" aria-label="选择 ${products1688Escape(title)}" ${products1688Selected.has(Number(row.id)) ? "checked" : ""} onchange="products1688Toggle(${Number(row.id)}, this.checked)"></td>
-      <td><div class="p1688-product-cell">${linkedImage}<div class="p1688-product-copy">${linkedTitle}</div></div></td>
-      <td title="${products1688Escape(products1688Category(row))}">${products1688Escape(products1688Category(row))}</td>
-      <td><span class="p1688-price">${products1688Money(products1688SourceValue(row, "price"))}</span><small class="p1688-muted"> CNY</small></td>
-      <td>${row.net_proceeds_usd === null || row.net_proceeds_usd === undefined || row.net_proceeds_usd === "" ? '<span class="p1688-muted">—</span>' : `<span class="p1688-price">$${products1688Escape(Number(row.net_proceeds_usd).toFixed(2))}</span>`}</td>
-      <td>${products1688Escape(products1688Weight(row))}</td>
-      <td>${products1688Escape(products1688Dimensions(row))}</td>
-      <td><select class="p1688-review-select" aria-label="修改 ${products1688Escape(title)} 的审核状态" onchange="products1688UpdateReviewStatus([${Number(row.id)}], this.value, this)">${products1688ReviewOptions().map(([value, label]) => `<option value="${value}" ${String(row.review_status || "unreviewed") === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>
-      <td>${products1688Status(row) ? `<span class="p1688-status ${products1688Escape(status)}">${products1688Escape(products1688Status(row))}</span>` : "—"}</td>
-      <td>${products1688Escape(row.collector_salesperson || "未记录")}</td>
-      <td>${products1688Escape(products1688Date(original.collected_at || row.added_at))}</td>
-      <td><div class="p1688-row-actions"><button class="secondary" type="button" onclick="products1688OpenDetail(${Number(row.id)})">查看详情</button><button class="secondary" type="button" onclick="products1688OpenEdit(${Number(row.id)})">修改资料</button><button class="secondary" type="button" onclick="products1688OpenAiEditor(${Number(row.id)})">编辑刊登内容</button>${sourceUrl ? `<a href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">打开1688</a>` : ""}</div></td>
+      <td data-label="选择" class="p1688-check-cell"><input type="checkbox" aria-label="选择 ${products1688Escape(title)}" ${products1688Selected.has(Number(row.id)) ? "checked" : ""} onchange="products1688Toggle(${Number(row.id)}, this.checked)"></td>
+      <td data-label="商品"><div class="p1688-product-cell">${linkedImage}<div class="p1688-product-copy">${linkedTitle}</div></div></td>
+      <td data-label="自建产品分类" title="${products1688Escape(products1688Category(row))}">${products1688Escape(products1688Category(row))}</td>
+      <td data-label="采购价"><span class="p1688-price">${products1688Money(products1688SourceValue(row, "price"))}</span><small class="p1688-muted"> CNY</small></td>
+      <td data-label="净收益价 · USD">${row.net_proceeds_usd === null || row.net_proceeds_usd === undefined || row.net_proceeds_usd === "" ? '<span class="p1688-muted">—</span>' : `<span class="p1688-price">$${products1688Escape(Number(row.net_proceeds_usd).toFixed(2))}</span>`}</td>
+      <td data-label="包装毛重">${products1688Escape(products1688Weight(row))}</td>
+      <td data-label="包装尺寸">${products1688Escape(products1688Dimensions(row))}</td>
+      <td data-label="审核状态"><select class="p1688-review-select" aria-label="修改 ${products1688Escape(title)} 的审核状态" onchange="products1688UpdateReviewStatus([${Number(row.id)}], this.value, this)">${products1688ReviewOptions().map(([value, label]) => `<option value="${value}" ${String(row.review_status || "unreviewed") === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>
+      <td data-label="AI 状态">${products1688Status(row) ? `<span class="p1688-status ${products1688Escape(status)}">${products1688Escape(products1688Status(row))}</span>` : "—"}</td>
+      <td data-label="采集业务员">${products1688Escape(row.collector_salesperson || "未记录")}</td>
+      <td data-label="采集时间">${products1688Escape(products1688Date(original.collected_at || row.added_at))}</td>
+      <td data-label="操作"><div class="p1688-row-actions">${window.catalogVisibilityControl ? window.catalogVisibilityControl(row, "products") : ""}<button class="secondary" type="button" onclick="products1688OpenDetail(${Number(row.id)})">查看详情</button><button class="secondary" type="button" onclick="products1688OpenEdit(${Number(row.id)})">修改资料</button><button class="secondary" type="button" onclick="products1688OpenAiEditor(${Number(row.id)})">编辑刊登内容</button>${sourceUrl ? `<a href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">打开1688</a>` : ""}</div></td>
     </tr>`;
   }).join("") : '<tr><td class="p1688-empty" colspan="12">暂无 1688 商品；请先在 1688 商品页使用泽顺插件采集。</td></tr>';
   const total = Number(document.getElementById("products-1688-total-value")?.dataset.total || products1688Rows.length);
@@ -307,7 +312,17 @@ function products1688FillSelect(id, options) {
   select.value = options.some(([value]) => String(value) === selected) ? selected : "";
 }
 
-async function products1688LoadOptions() {
+function products1688LoadOptions() {
+  if (products1688OptionsPromise) return products1688OptionsPromise;
+  if (products1688OptionsLoadedAt && Date.now() - products1688OptionsLoadedAt < PRODUCTS_1688_OPTIONS_TTL_MS) return Promise.resolve([]);
+  products1688OptionsPromise = products1688FetchOptions().then(warnings => {
+    if (!warnings.length) products1688OptionsLoadedAt = Date.now();
+    return warnings;
+  }).finally(() => { products1688OptionsPromise = null; });
+  return products1688OptionsPromise;
+}
+
+async function products1688FetchOptions() {
   const results = await Promise.allSettled([
     fetch("/api/1688-products/options", {cache: "no-store"}).then(async response => {
       const payload = await response.json();
@@ -455,17 +470,37 @@ async function products1688SaveEdit(event) {
     });
     const payload = await response.json();
     if (!response.ok || payload.status !== "success") throw Object.assign(new Error(payload.message || `HTTP ${response.status}`), {status: response.status});
-    if (payload.data && typeof payload.data === "object" && Number(payload.data.id) === id) {
+    const hasSavedRow = payload.data && typeof payload.data === "object" && Number(payload.data.id) === id;
+    products1688EditRevision++;
+    if (hasSavedRow) {
       products1688Rows = products1688Rows.map(row => Number(row.id) === id ? payload.data : row);
       products1688RenderRows();
     }
-    const refreshed = await load1688Products(false, true);
-    const refreshError = document.getElementById("products-1688-status")?.textContent || "列表刷新失败";
     const detail = document.getElementById("products-1688-detail-dialog");
-    if (detail?.open) products1688OpenDetail(id);
+    if (hasSavedRow && detail?.open) products1688OpenDetail(id);
     products1688SetEditBusy(false);
     products1688CloseEdit();
-    products1688SetStatus(refreshed ? "商品资料已保存" : `商品资料已保存，列表刷新失败：${refreshError}；请重新刷新数据`, refreshed ? "success" : "error");
+    products1688SetStatus("商品资料已保存", "success");
+    // The PATCH response is authoritative. Refreshing up to 500 AI products
+    // and the source page must not keep a committed edit in the saving state.
+    Promise.resolve().then(() => {
+      if (hasSavedRow && typeof aiOriginalRows !== "undefined" && typeof renderAiOriginalProducts === "function") {
+        aiOriginalRows = aiOriginalRows.map(row => Number(row.id) === id ? {...row, ...payload.data} : row);
+        renderAiOriginalProducts({preserveInputsExcept: [id]});
+      }
+      if (typeof loadAiOriginalProducts === "function") {
+        return loadAiOriginalProducts({preserveTaskStatus: true});
+      }
+    }).catch(error => console.warn("1688 资料已保存，AI 原创列表同步失败", error));
+    if (!hasSavedRow) {
+      // Compatibility with a server that does not yet return the saved row.
+      load1688Products(false, true).then(refreshed => {
+        if (refreshed === false) {
+          const refreshError = document.getElementById("products-1688-status")?.textContent || "列表刷新失败";
+          products1688SetStatus(`商品资料已保存，列表刷新失败：${refreshError}；请重新刷新数据`, "error");
+        }
+      }).catch(error => console.warn("1688 资料已保存，列表刷新失败", error));
+    }
   } catch (error) {
     products1688EditMessage(`保存失败：${error.message || error}`, "error");
   } finally {
@@ -515,6 +550,7 @@ async function products1688ApplyReviewStatus() {
 
 async function load1688Products(resetPage = true, preserveRowsOnError = false) {
   const loadSequence = ++products1688LoadSequence;
+  const editRevision = products1688EditRevision;
   if (resetPage) products1688Page = 1;
   const scope = products1688Query().toString();
   if (scope !== products1688SelectionScope) {
@@ -527,11 +563,14 @@ async function load1688Products(resetPage = true, preserveRowsOnError = false) {
   const body = document.getElementById("products-1688-body");
   if (body && !products1688Rows.length) body.innerHTML = '<tr><td class="p1688-empty" colspan="12">正在加载…</td></tr>';
   try {
-    const optionWarnings = await products1688LoadOptions();
-    if (loadSequence !== products1688LoadSequence) return;
-    const response = await fetch(`/api/1688-products?${products1688Query().toString()}`, {cache: "no-store"});
+    // Filter metadata must never hold up the product list. Capture the query
+    // before background option updates can touch the select controls.
+    const optionsPromise = products1688LoadOptions();
+    const response = await fetch(`/api/1688-products?${scope}`, {cache: "no-store"});
     const payload = await response.json();
     if (loadSequence !== products1688LoadSequence) return;
+    // A list requested before a completed edit may contain the old values.
+    if (editRevision !== products1688EditRevision) return await load1688Products(false, true);
     if (!response.ok || payload.status !== "success") throw Object.assign(new Error(payload.message || `HTTP ${response.status}`), {status: response.status});
     const data = payload.data || {};
     const lastPage = Math.max(1, Math.ceil(Number(data.total || 0) / products1688PageSize));
@@ -545,10 +584,17 @@ async function load1688Products(resetPage = true, preserveRowsOnError = false) {
     if (totalValue) { totalValue.dataset.total = String(Number(data.total || 0)); totalValue.textContent = Number(data.total || 0).toLocaleString("zh-CN"); }
     products1688UpdateSummary(Number(data.total || 0));
     products1688RenderRows();
-    products1688SetStatus(`已加载 ${products1688Rows.length} 件，数据来源：泽顺插件${optionWarnings.length ? `；${optionWarnings.join("；")}` : ""}`, optionWarnings.length ? "partial" : "success");
+    const loadedMessage = `已加载 ${products1688Rows.length} 件，数据来源：泽顺插件`;
+    products1688SetStatus(loadedMessage, "success");
+    optionsPromise.then(warnings => {
+      if (loadSequence === products1688LoadSequence && warnings.length) {
+        products1688SetStatus(`${loadedMessage}；${warnings.join("；")}`, "partial");
+      }
+    });
     return true;
   } catch (error) {
     if (loadSequence !== products1688LoadSequence) return;
+    if (editRevision !== products1688EditRevision) return await load1688Products(false, true);
     if (!preserveRowsOnError) products1688Rows = [];
     products1688RenderRows();
     if (!preserveRowsOnError) products1688Selected.clear();
@@ -565,9 +611,14 @@ function products1688OpenAiWorkflow() {
 }
 
 async function products1688OpenAiEditor(id) {
+  const source = products1688Rows.find(item => Number(item.id) === Number(id));
+  const reason = products1688WorkflowIssue(source);
+  if (reason) {
+    products1688SetStatus(`产品 ${id} 无法转入 AI 原创产品：${reason}`, "error");
+    return;
+  }
   products1688OpenAiWorkflow();
   if (typeof loadAiOriginalProducts === "function") await loadAiOriginalProducts();
-  const source = products1688Rows.find(item => Number(item.id) === Number(id));
   const match = typeof aiOriginalRows !== "undefined" && aiOriginalRows.find(item => Number(item.id) === Number(id))
     || (typeof aiOriginalRows !== "undefined" && aiOriginalRows.find(item => String(item.source_item_id || "") === String(source?.source_item_id || "")));
   if (match && typeof openAiOriginalEditor === "function") openAiOriginalEditor(match.id);
@@ -641,16 +692,39 @@ function products1688CloseDetail() {
   document.getElementById("products-1688-detail-dialog")?.close();
 }
 
+function products1688WorkflowIssue(row) {
+  if (!row) return "产品已不在当前列表，请刷新后重试";
+  const missing = [];
+  const weight = Number(products1688SourceValue(row, "weight_g"));
+  const net = Number(products1688SourceValue(row, "net_proceeds_usd"));
+  if (!Number.isFinite(weight) || weight <= 0) missing.push("重量");
+  if (!Number.isFinite(net) || net <= 0) missing.push("净收益");
+  return missing.length ? `请先填写有效${missing.join("、")}（须大于 0）` : "";
+}
+
 function products1688SendSelectedToWorkflow() {
-  const ids = [...products1688Selected].map(Number).filter(value => value > 0);
-  if (!ids.length) {
+  const selected = [...products1688Selected].map(Number).filter(value => value > 0);
+  if (!selected.length) {
     products1688SetStatus("请先勾选要执行 AI 任务的产品", "error");
     return;
   }
+  const ids = [], failures = [];
+  selected.forEach(id => {
+    const reason = products1688WorkflowIssue(products1688Rows.find(row => Number(row.id) === id));
+    if (reason) failures.push(`产品 ${id}：${reason}`);
+    else ids.push(id);
+  });
+  const message = `已转入 ${ids.length} 件产品${failures.length ? `，未通过 ${failures.length} 件：${failures.slice(0, 3).join("；")}` : ""}`;
+  const kind = failures.length ? (ids.length ? "partial" : "error") : "success";
+  products1688SetStatus(message, kind);
+  if (!ids.length) return;
   try { localStorage.setItem("mercado.aiOriginalSelected", JSON.stringify(ids)); } catch (_error) {}
   if (typeof aiOriginalSelected !== "undefined") ids.forEach(id => aiOriginalSelected.add(id));
+  ids.forEach(id => products1688Selected.delete(id));
+  products1688UpdateSelection();
   products1688OpenAiWorkflow();
   if (typeof renderAiOriginalProducts === "function") renderAiOriginalProducts();
+  if (typeof aiOriginalStatus === "function") aiOriginalStatus(message, kind);
 }
 
 document.addEventListener("DOMContentLoaded", () => {

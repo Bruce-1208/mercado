@@ -1,0 +1,61 @@
+{
+  "scenario": "10 matched orders; equal simulated detail latency of 105-150ms; real headless browser; no live account writes",
+  "measurements": [
+    {
+      "mode": "serial",
+      "attempt": 1,
+      "seconds": 1.5708,
+      "peak_details": 1,
+      "orders": 10,
+      "payload_bytes": 102320
+    },
+    {
+      "mode": "serial",
+      "attempt": 2,
+      "seconds": 1.5451,
+      "peak_details": 1,
+      "orders": 10,
+      "payload_bytes": 102320
+    },
+    {
+      "mode": "serial",
+      "attempt": 3,
+      "seconds": 1.5762,
+      "peak_details": 1,
+      "orders": 10,
+      "payload_bytes": 102320
+    },
+    {
+      "mode": "parallel",
+      "attempt": 1,
+      "seconds": 0.4376,
+      "peak_details": 4,
+      "orders": 10,
+      "payload_bytes": 1450
+    },
+    {
+      "mode": "parallel",
+      "attempt": 2,
+      "seconds": 0.4742,
+      "peak_details": 4,
+      "orders": 10,
+      "payload_bytes": 1450
+    },
+    {
+      "mode": "parallel",
+      "attempt": 3,
+      "seconds": 0.4722,
+      "peak_details": 4,
+      "orders": 10,
+      "payload_bytes": 1450
+    }
+  ],
+  "median_serial_seconds": 1.5708,
+  "median_parallel_seconds": 0.4722,
+  "speedup": 3.33,
+  "duration_reduction_percent": 69.9,
+  "python_regressions_passed": 46,
+  "frontend_regressions_passed": 1,
+  "live_account_benchmark": false,
+  "business_bundle_version": "b581856594a830782541ebac"
+}

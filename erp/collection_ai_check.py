@@ -14,19 +14,18 @@ def positive(value):
 
 
 def measurements(detail, selected):
-    # A selected SKU's measurements take precedence; never infer missing dimensions.
+    # A package size must come from one complete source.
     result = {}
-    for field in FIELDS:
-        value = positive(selected.get(field)) or positive(detail.get(field))
-        if value is not None:
-            result[field] = value
+    weight = positive(selected.get("weight_g")) or positive(detail.get("weight_g"))
+    if weight is not None:
+        result["weight_g"] = weight
     # Playwright's official-SKU reader returns packaging evidence as text;
     # the extension returns numeric fields. Accept both without guessing.
-    from erp.ai_weight_price.models import parse_dimensions_evidence
-    dimensions = parse_dimensions_evidence(selected.get('raw_dimensions') or detail.get('raw_dimensions') or '')
+    from erp.ai_weight_price.models import supplier_dimensions_evidence
+    dimensions = supplier_dimensions_evidence(selected, detail)
     if dimensions:
         for field, value in zip(FIELDS[1:], dimensions.split('x')):
-            if field not in result and positive(value) is not None:
+            if positive(value) is not None:
                 result[field] = positive(value)
     return result
 
@@ -38,6 +37,7 @@ def products(ids, *, list_mode="collection"):
     ids = db._normalize_row_ids(ids, empty_message="请勾选需要AI核查的商品")
     if len(ids) > 100:
         raise ValueError("每批最多核查100件商品")
+    db.check_catalog_access(list_mode, ids)
     connection = db._connect()
     try:
         with connection.cursor() as cursor:
@@ -66,6 +66,7 @@ def save_result(task, status, reason, changes=None, evidence=None):
     product_id = task.get('product_item_id')
     item_id = int(product_id or task['collection_item_id'])
     table = db.PRODUCT_TABLE if product_id else db.COLLECTION_TABLE
+    db.check_catalog_access('products' if product_id else 'collection', [item_id])
     changes = changes or {}
     if set(changes) - set(FIELDS) or any(positive(v) is None for v in changes.values()):
         raise ValueError('重量尺寸必须是有效正数')

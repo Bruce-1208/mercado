@@ -1,0 +1,69 @@
+{
+  "code_status": "Local implementation complete; live service restart and optional covering-index creation not performed.",
+  "implemented": [
+    "Authorization-scoped covering aggregation with compatible fallback indexes",
+    "SQL outside global cache lock, per-scope refresh coordination before borrowing page connections, generation-safe invalidation",
+    "Category picker reuses base metadata",
+    "MySQL connection returned before workflow companion reads",
+    "Only lost-connection errors are automatically recovered, statement timeouts are not replayed",
+    "Deduplicated visible-tab polling and non-interrupting automatic list refresh"
+  ],
+  "mysql_read_only_validation": [
+    {
+      "case": "cold",
+      "new_index_created": false,
+      "current_count": 90206.0,
+      "sites": 4,
+      "seconds": 2.42,
+      "query_trace": [
+        {
+          "kind": "other",
+          "seconds": 0.0
+        },
+        {
+          "kind": "other",
+          "seconds": 0.0
+        },
+        {
+          "kind": "other",
+          "seconds": 0.003
+        },
+        {
+          "kind": "sites",
+          "seconds": 2.032
+        },
+        {
+          "kind": "summary",
+          "seconds": 0.017
+        },
+        {
+          "kind": "last_sync",
+          "seconds": 0.364
+        }
+      ]
+    },
+    {
+      "case": "warm",
+      "new_index_created": false,
+      "current_count": 90206.0,
+      "sites": 4,
+      "seconds": 0.0,
+      "query_trace": []
+    }
+  ],
+  "tests": {
+    "python_integration": 121,
+    "frontend_node": 18,
+    "result": "passed"
+  },
+  "application_steps": [
+    "python3 -m scripts.optimize_store_link_indexes",
+    "python3 -m scripts.optimize_store_link_indexes --apply",
+    "./restart_workbench.sh"
+  ],
+  "limits": [
+    "SQL timings exclude browser/network and workflow decoration.",
+    "New covering index has not been created, so its performance gain is not yet measured.",
+    "Read-only SQL validation cannot prove production behavior under the full mixed load."
+  ]
+}

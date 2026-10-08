@@ -61,8 +61,9 @@
     .security { padding:12px 15px; border-left:4px solid #5b91d5; border-radius:7px; background:#f2f7fd; color:#46546a; }
     @media (max-width:760px) { .hero,.section-head { flex-direction:column; } .grid,.form-grid { grid-template-columns:1fr; } .account { align-self:flex-start; } section { padding:18px; } }
   </style>
-  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261004-responsive">
-    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261004-responsive"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261007-date-filters">
+<script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261007"></script>
+    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261007-date-filters"></script>
 </head>
 <body class="zs-standalone">
   <header class="bar">
@@ -82,9 +83,10 @@
       <div class="table-wrap"><table>
         <thead><tr><th>功能</th><th>模型 / 服务</th><th>需要配置</th><th>说明</th></tr></thead>
         <tbody>
-          <tr><td>智赢查侵权、侵权检测、AI 申诉话术、日常任务 AI 话术、AI 原创文案</td><td><code>deepseek-v4-pro</code><br><small>api.deepseek.com</small></td><td>DeepSeek API Key</td><td>统一复用同一枚账号 Token</td></tr>
+          <tr><td>智赢查侵权、侵权检测、AI 申诉话术、日常任务 AI 话术</td><td><code>qwen3.7-flash</code><br><small>dashscope.aliyuncs.com/compatible-mode/v1</small></td><td>阿里云百炼 API Key</td><td>统一复用同一枚账号 Token</td></tr>
           <tr><td>AI 核重核价</td><td><code>qwen3-vl-flash</code> + <code>qwen3-vl-plus</code><br><small>dashscope.aliyuncs.com/compatible-mode/v1</small></td><td>阿里云百炼 DashScope API Key</td><td>视觉识别与复核；当前使用北京地域</td></tr>
-          <tr><td>侵权检测（选择“千问”）</td><td><code>qwen-plus</code><br><small>dashscope.aliyuncs.com/compatible-mode/v1</small></td><td>阿里云百炼 DashScope API Key</td><td>与 AI 核重核价共用</td></tr>
+          <tr><td>侵权检测（选择“千问”）</td><td><code>qwen3.7-flash</code><br><small>dashscope.aliyuncs.com/compatible-mode/v1</small></td><td>阿里云百炼 DashScope API Key</td><td>与 AI 核重核价共用</td></tr>
+          <tr><td>美客多 AI 原创文案、分类、属性与 SKU</td><td><code>qwen3.7-flash</code><br><small>dashscope.aliyuncs.com/compatible-mode/v1</small></td><td>阿里云百炼 DashScope API Key</td><td>北京地域，关闭思考，全天生成</td></tr>
           <tr><td>AI 原创图片</td><td><code>rembg / isnet-general-use</code><br><small>服务器本地 ONNX 推理</small></td><td>无需 Token</td><td>免费抠图并合成纯白背景</td></tr>
           <tr><td>AI 视频主模型</td><td><code>doubao-seedance-2-5-260628</code><br><small>ark.cn-beijing.volces.com/api/v3</small></td><td>火山方舟 API Key</td><td>Seedance 2.5，北京地域</td></tr>
           <tr><td>AI 视频备用模型</td><td><code>wan3.0-video-prime</code><br><small>{workspace}.cn-beijing.maas.aliyuncs.com/api/v1</small></td><td>阿里云百炼 API Key + Workspace ID</td><td>Wan 3.0 备用通道</td></tr>
@@ -96,7 +98,7 @@
     <section id="tokens">
       <div class="section-head"><div><h2>模型 Token</h2><p>凭证默认隐藏；点击“显示”可查看已保存的明文。留空表示保留原 Token。</p></div><span class="security">凭证加密落盘，只有点击“显示”后才会请求明文。</span></div>
       <div class="grid">
-        <div class="provider"><div class="provider-head"><h3>DeepSeek</h3><span class="badge" data-status="deepseek">未配置</span></div><label for="deepseek_api_key">API Key</label><div class="secret-field"><input id="deepseek_api_key" type="password" autocomplete="new-password" placeholder="sk-…（留空保留）"><button class="secret-toggle" type="button" data-secret-input="deepseek_api_key" aria-pressed="false">显示</button></div><details><summary>简易配置教程</summary><ol><li>登录 DeepSeek 开放平台。</li><li>进入 API Keys，创建并复制 Key。</li><li>粘贴到上方并保存。</li></ol><a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">打开 DeepSeek API Keys</a></details></div>
+        <div class="provider"><div class="provider-head"><h3>DeepSeek（历史凭证，生成已停用）</h3><span class="badge" data-status="deepseek">未配置</span></div><label for="deepseek_api_key">API Key</label><div class="secret-field"><input id="deepseek_api_key" type="password" autocomplete="new-password" placeholder="sk-…（留空保留）"><button class="secret-toggle" type="button" data-secret-input="deepseek_api_key" aria-pressed="false">显示</button></div><details><summary>简易配置教程</summary><ol><li>登录 DeepSeek 开放平台。</li><li>进入 API Keys，创建并复制 Key。</li><li>粘贴到上方并保存。</li></ol><a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">打开 DeepSeek API Keys</a></details></div>
         <div class="provider"><div class="provider-head"><h3>阿里云百炼 DashScope</h3><span class="badge" data-status="dashscope">未配置</span></div><label for="dashscope_api_key">API Key</label><div class="secret-field"><input id="dashscope_api_key" type="password" autocomplete="new-password" placeholder="sk-…（留空保留）"><button class="secret-toggle" type="button" data-secret-input="dashscope_api_key" aria-pressed="false">显示</button></div><details><summary>简易配置教程</summary><ol><li>登录阿里云百炼控制台并选择北京地域。</li><li>在 API Key 管理中创建 Key。</li><li>复制后粘贴到上方。</li></ol><a href="https://bailian.console.aliyun.com/" target="_blank" rel="noopener">打开阿里云百炼</a></details></div>
         <div class="provider"><div class="provider-head"><h3>OpenAI</h3><span class="badge" data-status="openai">未配置</span></div><label for="openai_api_key">API Key</label><div class="secret-field"><input id="openai_api_key" type="password" autocomplete="new-password" placeholder="sk-…（留空保留）"><button class="secret-toggle" type="button" data-secret-input="openai_api_key" aria-pressed="false">显示</button></div><details><summary>简易配置教程</summary><ol><li>登录 OpenAI Platform。</li><li>打开 API keys 并创建 Secret key。</li><li>复制后粘贴到上方。</li></ol><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">打开 OpenAI API Keys</a></details></div>
         <div class="provider"><div class="provider-head"><h3>火山方舟 Seedance</h3><span class="badge" data-status="seedance">未配置</span></div><label for="seedance_api_key">API Key</label><div class="secret-field"><input id="seedance_api_key" type="password" autocomplete="new-password" placeholder="留空保留"><button class="secret-toggle" type="button" data-secret-input="seedance_api_key" aria-pressed="false">显示</button></div><details><summary>简易配置教程</summary><ol><li>在火山方舟开通 Seedance 模型服务。</li><li>进入 API Key 管理创建 Key。</li><li>粘贴到上方并保存。</li></ol><a href="https://www.volcengine.com/docs/82379" target="_blank" rel="noopener">查看火山方舟文档</a></details></div>

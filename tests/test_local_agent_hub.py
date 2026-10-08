@@ -160,15 +160,15 @@ def test_claimed_deepseek_token_is_delivered_once_then_redacted(tmp_path):
         {
             "mode": "AI客服",
             "appeal_copy_mode": "AI话术模式",
-            "deepseek_api_key": "manual-secret",
+            "dashscope_api_key": "manual-secret",
         },
         now=101,
     )
 
     claimed = store.claim_job("agent-secret-pc", now=102)
 
-    assert claimed["payload"]["deepseek_api_key"] == "manual-secret"
-    assert "deepseek_api_key" not in store.get_job("appeal-secret-job")["payload"]
+    assert claimed["payload"]["dashscope_api_key"] == "manual-secret"
+    assert "dashscope_api_key" not in store.get_job("appeal-secret-job")["payload"]
 
 
 def test_daily_agent_history_is_pruned_after_retention_window(tmp_path):

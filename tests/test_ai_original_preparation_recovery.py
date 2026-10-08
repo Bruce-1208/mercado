@@ -1,4 +1,5 @@
 """Preparation checkpoints resume failed work without paid image/copy regeneration."""
+from contextlib import nullcontext
 
 import ast
 import concurrent.futures
@@ -232,10 +233,13 @@ def test_worker_persists_partial_copy_and_actionable_failure(monkeypatch):
         kwargs["on_preparation_checkpoint"]("copy", partial)
         raise products.OriginalPreparationError("variations", "Check specifications", {
             **partial, "failed_step": "variations", "workflow_status": "needs_variations"})
+    from erp import ai_original_cost_control as scheduling
+    monkeypatch.setattr(scheduling, "product_generation_lock", lambda pid: nullcontext(lambda: None))
     monkeypatch.setattr(products, "prepare_ai_original_product", prepare)
     namespace = dict(json=json, logging=logging, ThreadPoolExecutor=concurrent.futures.ThreadPoolExecutor,
                      as_completed=concurrent.futures.as_completed, _ai_original_task_lock=threading.Lock(),
                      _ai_original_task_state=state,
+                     db_get_mercado_product_items_by_ids=lambda ids: [{"id": ids[0], "source_type": "ai_original"}],
                      db_update_ai_original_product=lambda pid, changes: saved.append(deepcopy(changes)))
     exec(compile(ast.Module(body=[node], type_ignores=[]), "<worker>", "exec"), namespace)
     namespace["_run_ai_original_task"]([{"id": 1}], workers=1)

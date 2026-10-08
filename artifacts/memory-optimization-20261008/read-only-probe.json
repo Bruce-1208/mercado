@@ -1,0 +1,30 @@
+{
+  "sample_rows": 20000,
+  "retained_rows": 1000,
+  "sql_page_rows": 200,
+  "elapsed_seconds": 12.59,
+  "process_peak_rss_mib": 87.62,
+  "samples": [
+    {
+      "scanned": 1000,
+      "python_current_mib": 9.21,
+      "python_peak_mib": 10.06
+    },
+    {
+      "scanned": 5000,
+      "python_current_mib": 9.36,
+      "python_peak_mib": 11.55
+    },
+    {
+      "scanned": 10000,
+      "python_current_mib": 9.24,
+      "python_peak_mib": 11.55
+    },
+    {
+      "scanned": 20000,
+      "python_current_mib": 10.14,
+      "python_peak_mib": 17.52
+    }
+  ],
+  "note": "Read-only sample; no schema setup, writes or AI requests. Not a full-table benchmark."
+}

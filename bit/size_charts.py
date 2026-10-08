@@ -6,7 +6,6 @@ import hashlib
 import math
 import re
 from copy import deepcopy
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -236,13 +235,14 @@ def _requirements(api, identity, domain_id, attributes):
     if missing:
         result["errors"] = [f"请先选择 {field['name']}，再加载尺码行规范" for field in missing]
         return result
-    query_fields = {field["id"] for field in metadata["template_fields"]
-                    if _field_tags(field) & {"grid_filter", "grid_template_required"}}
+    query_fields = {field["id"] for field in filter_fields}
     query_attributes = [row for row in attributes if row["id"] in query_fields]
     grids = api.technical_specs(identity["site_id"], domain_id, query_attributes, grids=True)
     grid_metadata = extract_fields(grids)
     # Full specs give filter choices; grids give domain/gender-specific rows.
-    combined = {field["id"]: field for field in metadata["template_fields"]}
+    # Listing filters (e.g. MODEL) are not chart creation requirements.
+    combined = {field["id"]: field for field in metadata["template_fields"]
+                if field["id"] in query_fields | {"GENDER", "BRAND"}}
     combined.update({field["id"]: field for field in grid_metadata["template_fields"]})
     result.update(grid_metadata)
     result["template_fields"] = list(combined.values())
@@ -332,9 +332,15 @@ def _prepare_reference_template(template, requirements):
     fields = {field["id"]: field for field in requirements["row_fields"]}
     measurement_ids = {f"{base}_{suffix}" for base in (
         "CHEST_CIRCUMFERENCE", "WAIST_CIRCUMFERENCE", "HIP_CIRCUMFERENCE",
-        "PERSON_HEIGHT", "NECK_CIRCUMFERENCE") for suffix in ("FROM", "TO")}
+        "PERSON_HEIGHT", "NECK_CIRCUMFERENCE", "BUST_CIRCUMFERENCE") for suffix in ("FROM", "TO")}
     filter_ids = {"FILTRABLE_SIZE", "PANTS_FILTRABLE_SIZES"}
-    omitted, resolved, errors = set(), 0, []
+    omitted, resolved, errors, renamed = set(), 0, [], set()
+    # Live CBT validation applies an adult 30–70 cm neck range to children
+    # too. These columns are optional: preserve the reference measurements,
+    # omit the pair from the child submission rather than alter their values.
+    child_reference = source["preset_id"].startswith(("builtin_v1_boys_", "builtin_v1_girls_"))
+    optional_child_neck = child_reference and all(
+        not fields.get(f"NECK_CIRCUMFERENCE_{suffix}", {}).get("required") for suffix in ("FROM", "TO"))
 
     def resolve(attributes, official_fields):
         nonlocal resolved
@@ -362,6 +368,15 @@ def _prepare_reference_template(template, requirements):
         kept = []
         for attribute in row["attributes"]:
             attr_id = attribute["id"]
+            if attr_id in {"CHEST_CIRCUMFERENCE_FROM", "CHEST_CIRCUMFERENCE_TO"} and attr_id not in fields:
+                bust_id = attr_id.replace("CHEST_", "BUST_")
+                if bust_id in fields:
+                    renamed.add(f"{attr_id} → {bust_id}")
+                    attribute["id"] = bust_id
+                    attr_id = bust_id
+            if optional_child_neck and attr_id in {"NECK_CIRCUMFERENCE_FROM", "NECK_CIRCUMFERENCE_TO"}:
+                omitted.add(attr_id)
+                continue
             if attr_id in filter_ids and attr_id not in fields:
                 alternatives = sorted(filter_ids & fields.keys())
                 if len(alternatives) == 1 and not any(item["id"] == alternatives[0] for item in row["attributes"]):
@@ -379,7 +394,11 @@ def _prepare_reference_template(template, requirements):
     if resolved:
         notices.append(f"已按目标店铺官方选项匹配 {resolved} 个尺码或属性值编号，保留原参考数值")
     if omitted:
-        notices.append("目标规格不接收以下参考列，本次提交省略这些列；原模板仍完整保留：" + "、".join(sorted(omitted)))
+        notices.append("按目标规格省略以下参考列；原模板仍完整保留：" + "、".join(sorted(omitted)))
+    if renamed:
+        notices.append("已按该类目官方胸围字段提交，数值及单位保持一致：" + "、".join(sorted(renamed)))
+    if optional_child_neck and omitted & {"NECK_CIRCUMFERENCE_FROM", "NECK_CIRCUMFERENCE_TO"}:
+        notices.append("平台对颈围限定 30–70 cm；童装参考颈围低于该范围，已省略非必填颈围列，保留真实参考值和其余测量数据")
     return prepared, notices, errors
 
 
@@ -455,6 +474,9 @@ def dispatch(action: str, payload: dict | None = None, *, organization_key: str,
         return {"template": storage.update_template(org, template_id, revision, normalize_template(payload.get("template") or payload))}
 
     summaries = _scoped_summaries(org, allowed_token_ids)
+    if action in {"batch-upload", "batch-status"}:
+        from bit.size_chart_batch import dispatch as batch_dispatch
+        return batch_dispatch(action, payload, org, summaries, storage)
     if action == "reconcile":
         record = storage.get_record(org, str(payload.get("record_id") or ""))
         if not record or record["token_id"] not in summaries:
@@ -479,17 +501,24 @@ def dispatch(action: str, payload: dict | None = None, *, organization_key: str,
         def one_option(item):
             token_id, summary = item
             option = {"id": token_id, "name": str(summary.get("display_name") or summary.get("nickname") or token_id),
-                      "enabled": bool(summary.get("enabled", True)), "sites": []}
+                      "enabled": bool(summary.get("enabled", True)), "sites": [],
+                      "salespersons": sorted({str(row.get("salesperson") or "").strip()
+                          for row in summary.get("site_settings") or [] if str(row.get("salesperson") or "").strip()})}
             if option["enabled"]:
-                try:
-                    _, identity = _adapter(token_id, summaries, org)
-                    option["sites"] = [{"site_id": site} for site in identity["sites"]]
-                    option["site_id"] = identity["site_id"]
-                except Exception:
-                    option["message"] = "无法获取官方店铺站点，请检查授权后重试"
+                # Opening the selector must not fan out to every remote seller.
+                # Preview and upload still verify live identity and site access.
+                main_site = str(summary.get("site_id") or "").strip().upper()
+                sites = {str(row.get("site_id") or "").strip().upper()
+                         for row in summary.get("site_settings") or []}
+                if main_site:
+                    sites.add(main_site)
+                sites = sorted(site for site in sites if re.fullmatch(r"[A-Z]{3}", site))
+                option["sites"] = [{"site_id": site} for site in sites]
+                option["site_id"] = main_site
+                option["message"] = ("站点来自已保存授权，预检时实时核验" if sites
+                                     else "暂无已保存的授权站点，请先更新店铺授权")
             return option
-        with ThreadPoolExecutor(max_workers=4) as pool:
-            options = list(pool.map(one_option, summaries.items()))
+        options = [one_option(item) for item in summaries.items()]
         return {"stores": options}
     if action == "requirements":
         api, identity = _adapter(_positive_id(payload.get("token_id"), "店铺编号"), summaries, org)
@@ -504,8 +533,13 @@ def dispatch(action: str, payload: dict | None = None, *, organization_key: str,
         if revision != template["revision"]:
             raise ValueError("模板版本已变更，请刷新后预检")
         targets = payload.get("targets") or []
+        token_ids = payload.get("token_ids")
+        if token_ids is not None:
+            if not isinstance(token_ids, list):
+                raise ValueError("店铺编号须为数组")
+            targets = [{"token_id": value} for value in token_ids]
         if not isinstance(targets, list) or not targets or len(targets) > 200:
-            raise ValueError("请明确选择店铺和目标站点（最多 200 项）")
+            raise ValueError("请选择上传店铺（最多 200 项）")
         grouped = {}
         for target in targets:
             if not isinstance(target, dict):
@@ -514,8 +548,6 @@ def dispatch(action: str, payload: dict | None = None, *, organization_key: str,
             if token_id not in summaries:
                 raise ValueError("目标店铺不在当前授权范围")
             site = str(target.get("site_id") or "").upper().strip()
-            if not site:
-                raise ValueError("请选择目标站点")
             grouped.setdefault(token_id, set()).add(site)
         results = []
         for token_id, chosen in grouped.items():
@@ -523,8 +555,10 @@ def dispatch(action: str, payload: dict | None = None, *, organization_key: str,
             result = {"token_id": token_id, "sites": sites, "status": "invalid", "errors": []}
             try:
                 api, identity = _adapter(token_id, summaries, org)
-                if not chosen <= set(identity["sites"]):
+                if "" not in chosen and not chosen <= set(identity["sites"]):
                     raise ValueError("目标站点不属于官方返回的店铺销售站点")
+                sites = sorted(identity["sites"])
+                result["sites"] = sites
                 requirements = _requirements(api, identity, template["domain_id"], template["attributes"])
                 prepared, notices, preparation_errors = _prepare_reference_template(template, requirements)
                 chart_payload, errors = _build_payload(prepared, identity, sites, requirements)
@@ -541,8 +575,10 @@ def dispatch(action: str, payload: dict | None = None, *, organization_key: str,
                     result.update({"status": "ready", "message": "官方字段与站点校验通过，可提交创建"})
             except ValueError as exc:
                 result.update({"message": str(exc), "errors": [str(exc)]})
-            except Exception:
-                result.update({"message": "官方规范或店铺身份读取失败，请检查授权后重试", "errors": ["无法获取完整官方规范"]})
+            except Exception as exc:
+                from bit.size_chart_batch import error_message
+                detail = error_message(exc)
+                result.update({"message": f"官方规范或店铺身份读取失败：{detail}", "errors": [detail]})
             results.append(result)
         expires = (datetime.now(timezone.utc) + timedelta(minutes=15)).replace(microsecond=0).isoformat()
         return storage.save_preview(org, {"template_id": template_id, "revision": revision,
@@ -584,6 +620,9 @@ def dispatch(action: str, payload: dict | None = None, *, organization_key: str,
                            "response": response, "message": "尺码表已创建；发布商品时使用 chart_id 和对应的 row_id"}
             except SizeChartWriteError as exc:
                 updates = {"status": "unknown" if exc.unknown else "failed", "message": str(exc), "response": exc.details or {}}
+                if isinstance(exc.details, dict):
+                    updates["errors"] = [f"{row.get('code', '平台校验')}：{row.get('message', '')}"
+                        for row in exc.details.get("errors") or [] if isinstance(row, dict)]
             except Exception:
                 updates = {"status": "unknown", "message": "提交过程未获得确定结果；请核对官方尺码表，禁止直接重试"}
             results.append(storage.finish_upload(org, reserved["record_id"], updates))

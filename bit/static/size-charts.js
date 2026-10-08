@@ -107,19 +107,31 @@
   function boot(document, window) {
     const panel = document.getElementById('size-charts');
     if (!panel) return;
+    if (panel.sizeChartsApp) return panel.sizeChartsApp;
     const $ = id => document.getElementById(`sc-${id}`);
     const canManage = panel.dataset.canManage === 'true';
-    const state = {templates:[],stores:[],records:[],draft:null,schema:null,schemaStale:false,targets:[],dirty:false,preview:null,busy:'',loading:false,requirementsRequest:0,listRequest:0,recordsRequest:0,controlId:0,toastTimer:null,confirmAction:null};
+    const state = {templates:[],stores:[],records:[],draft:null,schema:null,schemaStale:false,targets:[],dirty:false,preview:null,busy:'',loading:false,requirementsRequest:0,listRequest:0,recordsRequest:0,controlId:0,toastTimer:null,confirmAction:null,batchTokenIds:[],batchTask:null,batchStarting:false,batchTimer:null};
     function node(tag, text, className) { const el = document.createElement(tag); if (text !== undefined && text !== null) el.textContent = String(text); if (className) el.className = className; return el; }
     function button(text, callback, className='sc-button') { const el = node('button',text,className); el.type='button'; el.addEventListener('click',callback); return el; }
     function message(id, text) { $(id).textContent=text || ''; $(id).hidden=!text; }
     function error(text) { message('error',text); }
     function toast(text) { window.clearTimeout(state.toastTimer); message('toast',text); state.toastTimer=window.setTimeout(() => { $('toast').hidden=true; },4500); }
-    async function api(path, method='GET', body) {
+    const readRequests = new Map();
+    function api(path, method='GET', body) {
+      if (method==='GET' && readRequests.has(path)) return readRequests.get(path);
+      if (method!=='GET') readRequests.clear();
+      const pending=request(path,method,body).finally(() => {
+        if (method!=='GET') readRequests.clear();
+        else if (readRequests.get(path)===pending) readRequests.delete(path);
+      });
+      if (method==='GET') readRequests.set(path,pending);
+      return pending;
+    }
+    async function request(path, method='GET', body) {
       const options={method,credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}};
       if (body !== undefined) { options.headers['Content-Type']='application/json'; options.body=JSON.stringify(body); }
       const organization=new URLSearchParams(window.location?.search || '').get('organization_key');
-      const query=organization ? `?${new URLSearchParams({organization_key:organization})}` : '';
+      const query=organization ? `${path.includes('?') ? '&' : '?'}${new URLSearchParams({organization_key:organization})}` : '';
       const response=await window.fetch(`/api/size-charts${path}${query}`,options);
       let result; try { result=await response.json(); } catch (_) { throw new Error(response.status===401 ? '登录已失效，请重新登录。' : '服务未返回有效数据，请刷新后重试。'); }
       if (!response.ok || result.status !== 'success') throw new Error(result.message || `请求失败（${response.status}），请重试。`);
@@ -127,6 +139,7 @@
     }
     function controls() {
       const busy=!!state.busy;
+      batchControls();
       $('new').disabled=$('welcome-new').disabled=$('standard-use').disabled=!canManage || busy;
       $('builtin-use').disabled=!canManage || busy || !builtins?.get($('builtin-select').value);
       $('standard-generate').disabled=!canManage || busy || !standardMainField();
@@ -142,8 +155,8 @@
       $('preview').disabled=!canManage || busy || !state.draft?.id || state.dirty || !state.targets.length;
       $('preview').textContent=state.busy==='preview' ? '校验中…' : '校验并预览';
       const ready=array(state.preview?.results).some(result => result.status==='ready');
-      $('upload').disabled=!canManage || busy || state.dirty || !state.preview?.preview_id || !ready;
-      $('upload').textContent=state.busy==='upload' ? '上传中…' : '确认上传';
+      $('upload').disabled=!canManage || busy || state.dirty || !state.draft?.id || !state.targets.length;
+      $('upload').textContent=state.busy==='upload' ? '上传中…' : state.busy==='preview' ? '校验中…' : '上传到授权店铺';
       $('reload').disabled=state.loading || busy;
       $('records-reload').disabled=state.busy==='upload';
       for (const id of ['name','domain','measure-type','import','apply-json']) $(id).disabled=!canManage || busy;
@@ -154,8 +167,8 @@
       panel.setAttribute('aria-busy',String(busy || state.loading));
       if (!state.draft?.id) $('upload-hint').textContent='先保存模板，再校验选中的店铺与站点。';
       else if (state.dirty) $('upload-hint').textContent='模板内容已修改，请先保存新版本，再重新校验。';
-      else if (!state.targets.length) $('upload-hint').textContent='请选择至少一个授权店铺站点。';
-      else if (!state.preview) $('upload-hint').textContent='校验会读取各店铺的最新官方规格，预览后再确认上传。';
+      else if (!state.targets.length) $('upload-hint').textContent='请选择至少一个授权店铺，默认上传全部站点。';
+      else if (!state.preview) $('upload-hint').textContent='点击上传会自动校验所选授权店铺，核对结果后确认即可上传。';
       else $('upload-hint').textContent=ready ? '请核对通过校验的店铺。点击确认上传后，将创建平台尺码表。' : '当前无可上传的店铺，请根据校验结果修正模板。';
     }
     function invalidatePreview() { state.preview=null; $('preview-panel').hidden=true; controls(); }
@@ -347,22 +360,83 @@
     function renderStores() {
       const source=$('source-store'), value=source.value; source.replaceChildren(newOption('','请选择授权店铺'));
       state.stores.forEach(store => { const option=newOption(store.id,store.name || `店铺 #${store.id}`); option.disabled=store.enabled===false; source.appendChild(option); });
-      source.value=state.stores.some(store => String(store.id)===value && store.enabled!==false) ? value : String(state.stores.find(store => store.enabled!==false)?.id || ''); renderTargets(); controls();
+      source.value=state.stores.some(store => String(store.id)===value && store.enabled!==false) ? value : String(state.stores.find(store => store.enabled!==false)?.id || ''); renderTargets(); renderBatchFilters(); controls();
     }
     function renderTargets() {
       const container=$('targets'); container.replaceChildren(); if (!state.stores.length) { container.appendChild(node('div','暂无可用授权店铺。请先在店铺管理中完成授权。','sc-inline-empty')); renderNames(); return; }
       for (const store of state.stores) {
         const card=node('div',null,`sc-target-card${store.enabled===false ? ' sc-target-disabled' : ''}`); card.appendChild(node('h4',store.name || `店铺 #${store.id}`)); const sites=node('div',null,'sc-target-sites');
-        for (const siteValue of array(store.sites)) { const site=typeof siteValue==='string' ? siteValue : siteValue.site_id; if (!site) continue; const label=node('label'); const input=node('input'); input.type='checkbox'; input.dataset.targetControl='true'; input.dataset.unavailable=String(store.enabled===false); input.disabled=!canManage || store.enabled===false; input.checked=state.targets.some(target => Number(target.token_id)===Number(store.id) && target.site_id===site);
-          input.addEventListener('change',() => { if (!canManage || state.busy) return; state.targets=state.targets.filter(target => !(Number(target.token_id)===Number(store.id) && target.site_id===site)); if (input.checked) state.targets.push({token_id:Number(store.id),site_id:site}); invalidatePreview(); renderNames(); renderMainAttributes(); syncJSON(); controls(); }); label.appendChild(input); label.appendChild(node('span',siteLabel(site))); sites.appendChild(label); }
+        const label=node('label'), input=node('input'); input.type='checkbox'; input.dataset.targetControl='true'; input.dataset.unavailable=String(store.enabled===false); input.disabled=!canManage || store.enabled===false; input.checked=state.targets.some(target => Number(target.token_id)===Number(store.id));
+        input.addEventListener('change',() => { if (!canManage || state.busy) return; state.targets=state.targets.filter(target => Number(target.token_id)!==Number(store.id)); if (input.checked) state.targets.push({token_id:Number(store.id)}); invalidatePreview(); renderNames(); controls(); }); label.appendChild(input); label.appendChild(node('span','上传到全部授权站点')); sites.appendChild(label);
         card.appendChild(sites); if (!sites.children.length || store.message) card.appendChild(node('p',store.message || '未读取到可用站点，请检查店铺授权。','sc-target-message')); container.appendChild(card);
       }
       renderNames();
     }
     function renderNames() {
-      $('site-names').replaceChildren(); $('target-count').textContent=`已选 ${state.targets.length} 个站点`; if (!state.draft) return;
+      $('site-names').replaceChildren(); $('target-count').textContent=`已选 ${state.targets.length} 个店铺 · 全部站点`; if (!state.draft) return;
       const sites=selectedSiteIds(state.targets); for (const store of state.stores) if (state.targets.some(target => Number(target.token_id)===Number(store.id)) && store.site_id && !sites.includes(store.site_id)) sites.unshift(store.site_id);
       for (const site of sites) { const label=node('label',`${siteLabel(site)} · 平台尺码表名称`); const input=node('input'); input.type='text'; input.maxLength=60; input.value=state.draft.names[site] || state.draft.name || ''; input.placeholder='例如：Size Chart 1'; input.dataset.draftControl='true'; input.disabled=!canManage; input.addEventListener('input',() => { if (input.value) state.draft.names[site]=input.value; else delete state.draft.names[site]; changed(); }); label.appendChild(input); label.appendChild(node('small','默认沿用模板名称；最多 60 个字符，字母、数字和空格')); $('site-names').appendChild(label); }
+    }
+    function filteredStores() {
+      const salesperson=$('salesperson-filter').value, storeId=$('store-filter').value;
+      return state.stores.filter(store => (!salesperson || array(store.salespersons).includes(salesperson)) && (!storeId || String(store.id)===storeId));
+    }
+    function batchControls() {
+      const running=state.batchStarting || state.batchTask?.running;
+      $('batch-upload').disabled=!canManage || !!state.busy || running || !state.batchTokenIds.length;
+      $('batch-upload').textContent=running ? '全部分类上传中…' : '上传全部分类到全部站点';
+      $('batch-select-all').disabled=$('batch-clear').disabled=!canManage || running;
+      $('batch-count').textContent=`已选 ${state.batchTokenIds.length} 个店铺 · 全部站点`;
+      for (const input of panel.querySelectorAll('[data-batch-store]')) input.disabled=!canManage || running || input.dataset.unavailable==='true';
+    }
+    function renderBatchStores() {
+      const container=$('batch-stores'); container.replaceChildren();
+      for (const store of filteredStores()) {
+        const card=node('label',null,'sc-target-card'), input=node('input'); input.type='checkbox'; input.dataset.batchStore='true'; input.dataset.unavailable=String(store.enabled===false); input.checked=state.batchTokenIds.includes(Number(store.id));
+        input.addEventListener('change',() => { if (!canManage || state.batchStarting || state.batchTask?.running) return; state.batchTokenIds=state.batchTokenIds.filter(id => id!==Number(store.id)); if (input.checked) state.batchTokenIds.push(Number(store.id)); batchControls(); });
+        card.appendChild(input); card.appendChild(node('span',`${store.name} · ${array(store.salespersons).join('、') || '未分配业务员'}${store.enabled===false ? ' · 已关闭' : ''}`)); card.appendChild(node('p','自动核验并覆盖全部授权站点','sc-target-message')); container.appendChild(card);
+      }
+      if (!container.children.length) container.appendChild(node('div','没有符合筛选条件的授权店铺。','sc-inline-empty'));
+      batchControls();
+    }
+    function renderBatchFilters() {
+      const salesperson=$('salesperson-filter'), store=$('store-filter'), previousSalesperson=salesperson.value, previousStore=store.value;
+      salesperson.replaceChildren(newOption('','全部业务员')); store.replaceChildren(newOption('','全部店铺'));
+      [...new Set(state.stores.flatMap(item => array(item.salespersons)))].sort().forEach(name => salesperson.appendChild(newOption(name,name)));
+      state.stores.forEach(item => store.appendChild(newOption(item.id,item.name)));
+      salesperson.value=previousSalesperson; store.value=previousStore;
+      state.batchTokenIds=state.batchTokenIds.filter(id => state.stores.some(item => Number(item.id)===id && item.enabled!==false));
+      renderBatchStores();
+    }
+    function renderBatchTask() {
+      const task=state.batchTask; if (!task) return;
+      $('batch-summary').textContent=`${task.message || '正在处理全部分类'}（${task.completed || 0}/${task.total || 0}）`;
+      $('batch-progress').hidden=false; $('batch-progress').max=task.total || 1; $('batch-progress').value=task.completed || 0;
+      const container=$('batch-results'); container.hidden=false; container.replaceChildren();
+      for (const result of array(task.results)) {
+        const card=node('div',null,'sc-result'), head=node('div',null,'sc-result-head');
+        head.appendChild(node('span',`${result.template_name} · ${storeName(result.token_id)} · ${array(result.sites).join(' / ') || '全部站点'}`)); head.appendChild(statusBadge(result.status)); card.appendChild(head);
+        if (result.chart_id) card.appendChild(node('div',`平台尺码表 ID：${result.chart_id}`,'sc-chart-id'));
+        if (result.message) card.appendChild(node('p',result.message));
+        for (const detail of [...array(result.errors),...array(result.notices)]) card.appendChild(node('p',detail));
+        container.appendChild(card);
+      }
+      batchControls();
+    }
+    async function loadBatchTask() {
+      window.clearTimeout(state.batchTimer);
+      try {
+        const data=await api('/batch'); state.batchTask=data.task || null; renderBatchTask();
+        if (state.batchTask?.running) state.batchTimer=window.setTimeout(loadBatchTask,3000);
+        else if (state.batchTask) { await Promise.allSettled([loadTemplates(),loadRecords()]); renderBatchStores(); }
+      } catch(exc) { $('batch-summary').textContent=`上传进度读取失败：${exc.message}，可刷新页面恢复进度。`; state.batchTimer=window.setTimeout(loadBatchTask,5000); }
+    }
+    async function startBatchUpload() {
+      if (!canManage || state.busy || state.batchStarting || state.batchTask?.running || !state.batchTokenIds.length) return;
+      state.batchStarting=true; batchControls(); error('');
+      try { const data=await api('/batch','POST',{token_ids:clone(state.batchTokenIds)}); state.batchTask=data.task; renderBatchTask(); await loadBatchTask(); }
+      catch(exc) { error(`批量上传未启动：${exc.message}`); }
+      finally { state.batchStarting=false; batchControls(); }
     }
     async function loadTemplates() { const request=++state.listRequest; try { const data=await api('/templates'); if (request!==state.listRequest) return; state.templates=array(data.templates); renderLibrary(); } catch(exc) { if (request===state.listRequest && !state.templates.length) $('template-list').replaceChildren(node('div',`读取模板失败：${exc.message} 可点击刷新重试。`,'sc-empty')); throw exc; } }
     async function loadRecords() {
@@ -381,7 +455,7 @@
     }
     async function init() {
       state.loading=true; controls(); error('');
-      const results=await Promise.allSettled([loadTemplates(),api('/options').then(data => { state.stores=array(data.stores); renderStores(); }),loadRecords()]);
+      const results=await Promise.allSettled([loadTemplates(),api('/options').then(data => { state.stores=array(data.stores); renderStores(); }),loadRecords(),loadBatchTask()]);
       const failures=results.filter(result => result.status==='rejected').map(result => result.reason.message); if (failures.length) error(`部分数据读取失败：${[...new Set(failures)].join('；')}`); state.loading=false; controls();
     }
     async function requirements(discover=false) {
@@ -429,7 +503,20 @@
         if (result.status==='unknown') card.appendChild(node('p','平台可能已创建尺码表，请先刷新记录并核对上传结果，避免重复创建。')); $('preview-results').appendChild(card); }
       if (!array(results).length) $('preview-results').appendChild(node('div','未返回可上传结果，请重新校验。','sc-empty'));
     }
-    function upload() { if (!canManage || state.busy || state.dirty || !previewValid()) { if (state.preview && !previewValid()) { invalidatePreview(); error('预览已失效，请重新校验。'); } return; } const ready=array(state.preview.results).filter(result => result.status==='ready'); if (!ready.length) return; confirm('确认上传平台尺码表',`将为 ${ready.length} 个通过校验的店铺创建平台尺码表，使用模板“${state.draft.name}”的 v${state.draft.revision} 版本。请确认测量数据和站点均已核对。`,performUpload); }
+    async function upload() {
+      if (!canManage || state.busy || state.dirty || !state.draft?.id || !state.targets.length) return;
+      if (!previewValid()) await preview();
+      if (!previewValid() || state.busy || state.dirty) return;
+      const ready=array(state.preview.results).filter(result => result.status==='ready');
+      if (!ready.length) { error('所选店铺暂无可上传结果，请查看校验问题或已有上传记录。'); return; }
+      const previewId=state.preview.preview_id;
+      const destinations=ready.map(result => `${storeName(result.token_id)}（${array(result.sites).map(siteLabel).join(' / ')}）`).join('；');
+      const skipped=array(state.preview.results).length-ready.length;
+      confirm('确认上传到美客多授权店铺',`将使用模板“${state.draft.name}”的 v${state.draft.revision} 版本，上传到：${destinations}。${skipped ? `另有 ${skipped} 个店铺未通过校验或已有上传记录，本次不会上传。` : ''}请核对尺码数据及校验结果。`,() => {
+        if (state.preview?.preview_id!==previewId) { error('上传目标或校验结果已变化，请重新点击上传。'); return; }
+        return performUpload();
+      });
+    }
     async function performUpload() {
       if (!canManage || state.busy || state.dirty || !previewValid()) { error('预览已失效，请重新校验。'); return; } const previewId=state.preview.preview_id; state.busy='upload'; controls(); error('');
       try { const data=await api('/upload','POST',{preview_id:previewId}); state.preview=null; renderResults(data.results); $('preview-expiry').textContent='本次上传结果'; $('preview-panel').hidden=false; await loadRecords().catch(exc => message('notice',`平台已返回本次上传结果，记录列表刷新失败：${exc.message} 请刷新记录核对。`)); toast(`上传完成：成功 ${data.succeeded || 0}，失败 ${data.failed || 0}，待核对 ${data.unknown || 0}。`); }
@@ -456,13 +543,19 @@
       $('builtin-select').value=builtins.templates[0].id; renderBuiltin();
     }
     $('builtin-select').addEventListener('change',renderBuiltin);
+    $('salesperson-filter').addEventListener('change',renderBatchStores);
+    $('store-filter').addEventListener('change',renderBatchStores);
+    $('batch-select-all').addEventListener('click',() => { if (!canManage || state.batchStarting || state.batchTask?.running) return; state.batchTokenIds=[...new Set([...state.batchTokenIds,...filteredStores().filter(store => store.enabled!==false).map(store => Number(store.id))])]; renderBatchStores(); });
+    $('batch-clear').addEventListener('click',() => { if (!canManage || state.batchStarting || state.batchTask?.running) return; state.batchTokenIds=[]; renderBatchStores(); });
+    $('batch-upload').addEventListener('click',startBatchUpload);
     $('builtin-use').addEventListener('click',() => useBuiltin());
     $('builtin-download').addEventListener('click',() => { const item=builtins?.get($('builtin-select').value); if (item) downloadJSON(templateContent(item.template),`size-chart-${item.id}.json`); });
     $('standard-preset').addEventListener('change',() => renderStandards(true)); $('standard-system').addEventListener('change',() => renderStandards());
     $('standard-use').addEventListener('click',() => useStandard()); $('standard-download').addEventListener('click',downloadStandards); $('standard-generate').addEventListener('click',generateStandardRows);
     $('standard-official').addEventListener('click',() => { if (!canManage || state.busy) return; const options=valueOptions(standardMainField() || {}); if (options.length) $('standard-labels').value=options.map(item => item.name).join('\n'); });
     init();
-    return {state,init,selectTemplate,newTemplate,requirements,saveTemplate,copyTemplate,deleteTemplate,preview,upload,performUpload,addRow,applyJSON,loadRecords,invalidatePreview,previewValid,useStandard,generateStandardRows,useBuiltin};
+    panel.sizeChartsApp={state,init,selectTemplate,newTemplate,requirements,saveTemplate,copyTemplate,deleteTemplate,preview,upload,performUpload,addRow,applyJSON,loadRecords,invalidatePreview,previewValid,useStandard,generateStandardRows,useBuiltin,startBatchUpload,loadBatchTask,filteredStores};
+    return panel.sizeChartsApp;
   }
   const exported={boot,fieldValues,readValue,unitOptions,valueOptions,templateContent,targetFingerprint,officialNameValid,replaceAttribute,rowLabel,sizeLabels,standardRows,standardLibraryContent};
   if (typeof module!=='undefined' && module.exports) module.exports=exported;

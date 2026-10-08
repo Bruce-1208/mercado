@@ -40,12 +40,11 @@
         refresh();
     }
     foldFilters(document.querySelector('#tab-orders .order-filters'), [
-        'order-salesperson-filter', 'order-group-filter', 'order-freight-variance-filter',
-        'order-start-date', 'order-end-date', 'order-remark-search',
+        'order-freight-variance-filter', 'order-remark-search',
     ], '.order-filter-field');
     foldFilters(byId('mercado-product-filters'), [
         'mercado-platform-category-filter', 'mercado-zying-category-filter',
-        'mercado-product-developer-filter', 'mercado-weight-status-filter',
+        'mercado-weight-status-filter',
         'mercado-weight-min', 'mercado-price-min', 'mercado-net-min', 'mercado-date-from',
     ], '.market-filter-field');
     foldFilters(document.querySelector('.store-link-filters'), [

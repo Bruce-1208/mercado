@@ -1,6 +1,9 @@
 import ftplib
+import base64
 import io
 import json
+import subprocess
+import sys
 import zipfile
 from datetime import date
 
@@ -53,6 +56,31 @@ class FakeFTP:
             callback(content[index:index + blocksize])
 
 
+class CachedFTP(FakeFTP):
+    def __init__(self, packages, *, interrupt_after=None, chunk_size=None):
+        super().__init__(packages)
+        self.offsets = []
+        self.interrupt_after, self.chunk_size = interrupt_after, chunk_size
+
+    def voidcmd(self, command):
+        assert command == "TYPE I"
+        return "200 OK"
+
+    def size(self, name):
+        return len(self.packages[name])
+
+    def retrbinary(self, command, callback, blocksize, rest=None):
+        self.commands.append(command)
+        self.offsets.append(rest)
+        content = self.packages[command.removeprefix("RETR ")][rest or 0:]
+        if self.interrupt_after is not None:
+            callback(content[:self.interrupt_after])
+            raise OSError("connection interrupted")
+        width = self.chunk_size or blocksize
+        for index in range(0, len(content), width):
+            callback(content[index:index + width])
+
+
 def test_official_xml_uses_current_mark_text_and_ir_not_holder_or_basic_number():
     rows = wipo_madrid.parse_madrid_archive(_archive(_xml(("123456", "Example Brand"), ("654321", ""))))
     assert [(row["brand_name"], row["registration_number"]) for row in rows] == [
@@ -69,7 +97,7 @@ def test_chronological_packages_keep_latest_ir_and_ignore_unpublished_weekend(mo
     rows, summary = wipo_madrid.fetch_madrid_updates({"madrid_from_date": "2026-09-25"}, session=ftp)
     assert ftp.commands == ["RETR 20260925.zip", "RETR 20260928.zip"]
     assert {row["brand_name"] for row in rows} == {"New Name", "Other Brand"}
-    assert all(row["list_type"] == "pending" and row["evidence_count"] == 0 for row in rows)
+    assert all(row["list_type"] == "blacklist" and row["evidence_count"] == 0 for row in rows)
     detail = json.loads(next(row for row in rows if row["brand_name"] == "New Name")["source_detail"])
     assert detail["source"] == "WIPO Madrid Monitor"
     assert detail["registration"] == "1" and detail["update_date"] == "2026-09-28"
@@ -82,6 +110,16 @@ def test_no_new_package_returns_empty_without_advancing_cursor(monkeypatch):
     rows, summary = wipo_madrid.fetch_madrid_updates({"madrid_from_date": "2026-09-29"},
                                                     session=FakeFTP({"20260928.zip": b"unused"}))
     assert rows == [] and summary["packages"] == 0 and summary["madrid_through_date"] == ""
+
+
+def test_service_batches_one_date_package_for_durable_backlog_progress(monkeypatch):
+    monkeypatch.setattr(wipo_madrid, "_today", lambda: date(2026, 9, 30))
+    ftp = FakeFTP({"20260925.zip": _archive(_xml(("1", "First"))),
+                   "20260928.zip": _archive(_xml(("2", "Second")))})
+    rows, summary = wipo_madrid.fetch_madrid_updates(
+        {"madrid_from_date": "2026-09-25", "madrid_batch_packages": 1}, session=ftp)
+    assert [row["brand_name"] for row in rows] == ["First"]
+    assert summary["madrid_through_date"] == "2026-09-25" and summary["remaining_packages"] == 1
 
 
 def test_same_brand_registration_group_uses_latest_update_date(monkeypatch):
@@ -150,6 +188,140 @@ def test_download_limit_is_checked_as_bytes_arrive(monkeypatch):
     with pytest.raises(ValueError, match="下载上限"):
         wipo_madrid.fetch_madrid_updates({"madrid_from_date": "2026-09-28"},
             session=FakeFTP({"20260928.zip": b"more than five bytes"}))
+
+
+def test_archive_download_resumes_saved_prefix_and_reuses_completed_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(wipo_madrid, "_today", lambda: date(2026, 9, 30))
+    content = _archive(_xml(("1", "Resumable Brand")))
+    settings = {"madrid_from_date": "2026-09-28", "madrid_cache_dir": str(tmp_path)}
+    with pytest.raises(ValueError, match="日期包下载失败"):
+        wipo_madrid.fetch_madrid_updates(settings,
+            session=CachedFTP({"20260928.zip": content}, interrupt_after=100))
+    partial = tmp_path / "monitor-ST66/20260928.zip.part"
+    assert partial.read_bytes() == content[:100]
+
+    resumed = CachedFTP({"20260928.zip": content})
+    rows, summary = wipo_madrid.fetch_madrid_updates(settings, session=resumed)
+    assert resumed.offsets == [100]
+    assert [row["brand_name"] for row in rows] == ["Resumable Brand"]
+    assert summary["download_bytes"] == len(content) - 100
+    assert summary["madrid_through_date"] == "2026-09-28"
+    assert not partial.exists()
+    assert partial.with_suffix("").read_bytes() == content
+
+    retry = CachedFTP({"20260928.zip": content})
+    _, summary = wipo_madrid.fetch_madrid_updates(settings, session=retry)
+    assert retry.commands == [] and summary["download_bytes"] == 0
+
+
+def test_process_exit_during_download_preserves_rest_offset(monkeypatch, tmp_path):
+    monkeypatch.setattr(wipo_madrid, "_today", lambda: date(2026, 9, 30))
+    content = _archive(_xml(("1", "Restart Brand")))
+    cache = tmp_path / "monitor-ST66"
+    cache.mkdir()
+    script = """
+import base64, os, sys, time
+from pathlib import Path
+from bit.wipo_madrid import _fetch_cached_archive
+content = base64.b64decode(sys.argv[2])
+class ExitingFTP:
+    def retrbinary(self, command, callback, blocksize):
+        callback(content[:100])
+        os._exit(73)
+_fetch_cached_archive(ExitingFTP(), '20260928.zip', len(content),
+                     Path(sys.argv[1]), time.monotonic()+1800, len(content))
+"""
+    result = subprocess.run([sys.executable, "-c", script, str(cache),
+                             base64.b64encode(content).decode()], check=False, timeout=10)
+    assert result.returncode == 73
+    assert (cache / "20260928.zip.part").read_bytes() == content[:100]
+    resumed = CachedFTP({"20260928.zip": content})
+    rows, _ = wipo_madrid.fetch_madrid_updates(
+        {"madrid_from_date": "2026-09-28", "madrid_cache_dir": str(tmp_path)}, session=resumed)
+    assert resumed.offsets == [100] and rows[0]["brand_name"] == "Restart Brand"
+
+
+def test_deadline_keeps_partial_archive_and_exposes_resume_progress(monkeypatch, tmp_path):
+    monkeypatch.setattr(wipo_madrid, "_today", lambda: date(2026, 9, 30))
+    clock = iter((0, 1801))
+    monkeypatch.setattr(wipo_madrid.time, "monotonic", lambda: next(clock))
+    content = _archive(_xml(("1", "Slow Brand")))
+    settings = {"madrid_from_date": "2026-09-28", "madrid_cache_dir": str(tmp_path)}
+    with pytest.raises(wipo_madrid.MadridDownloadPending) as pending:
+        wipo_madrid.fetch_madrid_updates(settings,
+            session=CachedFTP({"20260928.zip": content}, chunk_size=100))
+    assert pending.value.summary == {"download_bytes": 100, "cached_download_bytes": 100,
+        "archive_bytes": len(content), "resume_pending": True, "source_mode": "madrid"}
+    assert (tmp_path / "monitor-ST66/20260928.zip.part").read_bytes() == content[:100]
+    assert "madrid_through_date" not in pending.value.summary
+    assert str(tmp_path) not in str(pending.value)
+
+    monkeypatch.setattr(wipo_madrid.time, "monotonic", lambda: 0)
+    resumed = CachedFTP({"20260928.zip": content})
+    _, summary = wipo_madrid.fetch_madrid_updates(settings, session=resumed)
+    assert resumed.offsets == [100] and summary["madrid_through_date"] == "2026-09-28"
+
+
+def test_cache_resume_falls_back_when_ftp_rejects_rest(monkeypatch, tmp_path):
+    monkeypatch.setattr(wipo_madrid, "_today", lambda: date(2026, 9, 30))
+    content = _archive(_xml(("1", "Fallback Brand")))
+    cache = tmp_path / "monitor-ST66"
+    cache.mkdir()
+    (cache / "20260928.zip.part").write_bytes(content[:100])
+    class NoRestFTP(CachedFTP):
+        def retrbinary(self, command, callback, blocksize, rest=None):
+            if rest:
+                self.offsets.append(rest)
+                raise ftplib.error_perm("502 REST unsupported")
+            return super().retrbinary(command, callback, blocksize, rest)
+    ftp = NoRestFTP({"20260928.zip": content})
+    rows, summary = wipo_madrid.fetch_madrid_updates(
+        {"madrid_from_date": "2026-09-28", "madrid_cache_dir": str(tmp_path)}, session=ftp)
+    assert ftp.offsets == [100, None]
+    assert rows[0]["brand_name"] == "Fallback Brand"
+    assert summary["download_bytes"] == len(content)
+    assert (cache / "20260928.zip").read_bytes() == content
+
+
+def test_download_cache_removes_only_dates_older_than_success_cursor(monkeypatch, tmp_path):
+    monkeypatch.setattr(wipo_madrid, "_today", lambda: date(2026, 9, 30))
+    cache = tmp_path / "monitor-ST66"
+    cache.mkdir()
+    for name in ("20260925.zip", "20260928.zip.part", "20260929.zip.part", "unrelated.txt"):
+        (cache / name).write_bytes(b"saved")
+    rows, _ = wipo_madrid.fetch_madrid_updates(
+        {"madrid_from_date": "2026-09-29", "madrid_cache_dir": str(tmp_path)},
+        session=CachedFTP({"20260928.zip": b"not fetched"}))
+    assert rows == []
+    assert sorted(path.name for path in cache.iterdir()) == ["20260929.zip.part", "unrelated.txt"]
+
+
+def test_completed_cache_size_mismatch_is_redownloaded(monkeypatch, tmp_path):
+    monkeypatch.setattr(wipo_madrid, "_today", lambda: date(2026, 9, 30))
+    content = _archive(_xml(("1", "Verified Brand")))
+    cache = tmp_path / "monitor-ST66"
+    cache.mkdir()
+    (cache / "20260928.zip").write_bytes(content[:100])
+    ftp = CachedFTP({"20260928.zip": content})
+    rows, summary = wipo_madrid.fetch_madrid_updates(
+        {"madrid_from_date": "2026-09-28", "madrid_cache_dir": str(tmp_path)}, session=ftp)
+    assert ftp.offsets == [None] and summary["download_bytes"] == len(content)
+    assert rows[0]["brand_name"] == "Verified Brand"
+
+
+def test_download_progress_reports_received_file_bytes_and_completed_reuse(monkeypatch, tmp_path):
+    monkeypatch.setattr(wipo_madrid, "_today", lambda: date(2026, 9, 30))
+    content = _archive(_xml(("1", "Progress Brand")))
+    progress = []
+    settings = {"madrid_from_date": "2026-09-28", "madrid_cache_dir": str(tmp_path),
+                "madrid_download_progress": lambda saved, expected: progress.append((saved, expected))}
+    wipo_madrid.fetch_madrid_updates(settings,
+        session=CachedFTP({"20260928.zip": content}, chunk_size=100))
+    assert progress[0] == (100, len(content)) and progress[-1] == (len(content), len(content))
+    assert all(saved <= len(content) and expected == len(content) for saved, expected in progress)
+    progress.clear()
+    wipo_madrid.fetch_madrid_updates(settings, session=CachedFTP({"20260928.zip": content}))
+    assert progress == [(len(content), len(content))]
 
 
 def test_fixed_official_connection_and_directory_fallback(monkeypatch):

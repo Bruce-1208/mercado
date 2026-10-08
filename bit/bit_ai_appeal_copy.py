@@ -1,4 +1,4 @@
-"""DeepSeek-backed, product-grounded copy for infringement appeals."""
+"""千问-backed, product-grounded copy for infringement appeals."""
 
 from __future__ import annotations
 
@@ -140,16 +140,16 @@ def fetch_store_product_contexts(shop_name, product_ids):
 
 def _clean_model_text(value):
     if not isinstance(value, str):
-        raise RuntimeError("DeepSeek 返回的话术格式无效")
+        raise RuntimeError("千问 返回的话术格式无效")
     text = value.strip()
     text = re.sub(r"^```(?:text|markdown)?\s*", "", text, flags=re.I)
     text = re.sub(r"\s*```$", "", text)
     text = text.strip().strip('"').strip()
     if not text:
-        raise RuntimeError("DeepSeek 未返回可用话术")
+        raise RuntimeError("千问 未返回可用话术")
     if len(text) > MAX_REASON_CHARS:
         raise RuntimeError(
-            f"DeepSeek 返回的理由超过 {MAX_REASON_CHARS} 个字，已停止发送"
+            f"千问 返回的理由超过 {MAX_REASON_CHARS} 个字，已停止发送"
         )
     return text
 
@@ -194,7 +194,7 @@ def generate_ai_appeal_copy(
     """Return generated copy plus the product facts used to generate it."""
     api_key = str(api_key or "").strip()
     if not api_key:
-        raise ValueError("AI话术模式必须手动填写 DeepSeek Token")
+        raise ValueError("AI话术模式必须手动填写 千问 Token")
     if appeal_type not in SUPPORTED_APPEAL_TYPES:
         raise ValueError("AI话术模式只支持侵权和禁限售")
     product_ids = normalize_product_ids(product_ids)
@@ -213,17 +213,18 @@ def generate_ai_appeal_copy(
         text = chat(
             build_deepseek_messages(appeal_type, product_contexts),
             temperature=0.2,
-            max_tokens=256,
+            max_tokens=8192,
             api_key=api_key,
-            thinking=False,
-            timeout=60,
+            thinking=True,
+            thinking_budget=4096,
+            timeout=120,
             max_retries=0,
         )
     except Exception as exc:
         # Provider errors may echo credentials or request bodies into task logs.
         status = getattr(exc, "status_code", None)
         detail = f"（HTTP {status}）" if isinstance(status, int) else ""
-        raise RuntimeError(f"DeepSeek 话术生成失败{detail}，请检查 Token、服务及网络后重试") from None
+        raise RuntimeError(f"千问 话术生成失败{detail}，请检查 Token、服务及网络后重试") from None
     generated = _clean_model_text(text)
     identifiers = "、".join(row["product_id"] for row in product_contexts)
     return {

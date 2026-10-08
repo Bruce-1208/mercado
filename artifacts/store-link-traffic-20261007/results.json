@@ -1,0 +1,68 @@
+[
+  {
+    "item_id": "MCO4168274560",
+    "kind": "total",
+    "status": 200,
+    "data": {
+      "MCO4168274560": 2
+    }
+  },
+  {
+    "item_id": "MCO4168274560",
+    "kind": "30days",
+    "status": 200,
+    "data": {
+      "item_id": "MCO4168274560",
+      "date_from": "2026-09-05T00:00:00-04:00",
+      "date_to": "2026-10-05T00:00:00-04:00",
+      "total_visits": 0,
+      "last": 30,
+      "unit": "day",
+      "results": []
+    }
+  },
+  {
+    "item_id": "MCO4168242062",
+    "kind": "total",
+    "status": 200,
+    "data": {
+      "MCO4168242062": 1
+    }
+  },
+  {
+    "item_id": "MCO4168242062",
+    "kind": "30days",
+    "status": 200,
+    "data": {
+      "item_id": "MCO4168242062",
+      "date_from": "2026-09-05T00:00:00-04:00",
+      "date_to": "2026-10-05T00:00:00-04:00",
+      "total_visits": 0,
+      "last": 30,
+      "unit": "day",
+      "results": []
+    }
+  },
+  {
+    "item_id": "MCO4167980670",
+    "kind": "total",
+    "status": 200,
+    "data": {
+      "MCO4167980670": 0
+    }
+  },
+  {
+    "item_id": "MCO4167980670",
+    "kind": "30days",
+    "status": 200,
+    "data": {
+      "item_id": "MCO4167980670",
+      "date_from": "2026-09-05T00:00:00-04:00",
+      "date_to": "2026-10-05T00:00:00-04:00",
+      "total_visits": 0,
+      "last": 30,
+      "unit": "day",
+      "results": []
+    }
+  }
+]

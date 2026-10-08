@@ -64,6 +64,19 @@ let fetch = async url => {
     fetch = async () => ({status: 403, ok: false});
     await assert.rejects(window.ZeshunAppealPolling.follow('job-2', {onLog() {}}),
         error => error.permanent === true);
+    let localCalls = [];
+    const localResult = await window.ZeshunAppealPolling.follow('local-job', {
+        onLog() {},
+        fetchEvents: async (url, options) => {
+            localCalls.push(url);
+            assert.equal(options.cache, 'no-store');
+            return {status: 200, ok: true, json: async () => ({status: 'success', data: {
+                log: 'local', next_after: 5, done: true, has_more: false, status: 'success',
+            }})};
+        },
+    });
+    assert.equal(localResult.status, 'success');
+    assert.deepEqual(localCalls, ['/api/run_shensu/local-job/events?after=0']);
 })().catch(error => { console.error(error); process.exitCode = 1; });
 """
     subprocess.run([node, "-"], input=harness + source + assertions, text=True,

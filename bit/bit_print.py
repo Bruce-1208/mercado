@@ -497,6 +497,61 @@ def _record_unavailable_orders(order_ids, exc):
     )
 
 
+def _print_prepaid_site(contexts, *, shop_name, site, stop_event, logger, output_dir):
+    """Keep each shipment's funded PDF durable before recording print success."""
+    from bit import print_wallet
+
+    shipments = {}
+    for context in contexts:
+        shipments.setdefault(str(context.get("shipping_id") or ""), []).append(context)
+    documents, printed, failed, files, errors = [], [], [], [], []
+    charge_cents = shipment_count = 0
+    for shipment_orders in shipments.values():
+        if stop_event is not None and stop_event.is_set():
+            break
+        order_ids = [str(row["order_id"]) for row in shipment_orders]
+        shipment_files = []
+
+        def persist_result(result):
+            path, _name = _write_output(
+                [result["content"]], output_dir=output_dir, task_id=uuid.uuid4().hex
+            )
+            shipment_files.append(str(path))
+
+        try:
+            result = print_wallet.download_automatic_paid_labels(
+                order_ids, request_id=f"auto_{uuid.uuid4().hex}",
+                persist_result=persist_result,
+            )
+            successful = list(result.get("order_ids") or [])
+            files.extend(shipment_files)
+            documents.append(result["content"])
+            printed.extend(successful)
+            shipment_count += int(result.get("shipment_count") or 0)
+            charge_cents += int(result.get("wallet_charge_cents") or 0)
+            failed.extend(result.get("failed_order_ids") or [])
+            try:
+                _record_printed_orders(successful, operator_name="系统自动打印")
+            except Exception as exc:
+                # Settled wallet rows also exclude these orders from later
+                # automatic rounds; the persisted PDF remains downloadable.
+                errors.append(f"打印审计写入失败：{exc}")
+        except Exception as exc:
+            failed.extend(order_ids)
+            errors.append(f"{'、'.join(order_ids)}: {exc}")
+            _emit(logger, f"{shop_name} / {site} 自动打印未完成：{exc}")
+    message = f"已生成 {shipment_count} 个面单，扣费 {charge_cents / 100:.2f} 元"
+    if errors:
+        message += "；" + "；".join(errors[:3])
+    row = _result_row(
+        shop_name, site, "partial" if printed and errors else "printed" if printed else "failed",
+        message, selected_count=len(contexts), shipment_count=shipment_count,
+        failed_count=len(set(failed)),
+    )
+    row.update(output_files=files, wallet_charge_cents=charge_cents, failed_order_ids=sorted(set(failed)))
+    return row, documents, printed
+
+
 def _run_shop_job(
     job,
     *,
@@ -512,6 +567,9 @@ def _run_shop_job(
     operator_name="订单打印/API",
     candidate_start_at=None,
     include_first_run_backlog=True,
+    require_prepaid=False,
+    output_dir=None,
+    persist_labels=False,
     **_legacy_options,
 ):
     """Generate labels for one API-authorized store and return per-site rows."""
@@ -584,6 +642,17 @@ def _run_shop_job(
             )
             continue
 
+        if require_prepaid:
+            row, documents, printed = _print_prepaid_site(
+                site_contexts, shop_name=shop_name, site=site,
+                stop_event=stop_event, logger=logger, output_dir=output_dir,
+            )
+            document_sink.extend(documents)
+            printed_order_sink.extend(printed)
+            results.append(row)
+            _emit(logger, f"{shop_name} / {site}：{row['message']}")
+            continue
+
         shipments = {}
         for context in site_contexts:
             shipments.setdefault(str(context.get("shipping_id") or ""), []).append(context)
@@ -593,6 +662,7 @@ def _run_shop_job(
         skipped_messages = []
         skipped_count = 0
         attempts = 0
+        output_files = []
         for shipment_id, shipment_orders in shipments.items():
             key = (int(job["token_id"]), shipment_id)
             if key in downloaded_shipments:
@@ -606,6 +676,12 @@ def _run_shop_job(
                     stop_event=stop_event,
                     logger=logger,
                 )
+                if persist_labels:
+                    # Store the individual PDF before the audit marks the
+                    # order printed. A later combined-PDF failure must not
+                    # hide already generated labels from the next round.
+                    path, _name = _write_output([content], output_dir=output_dir, task_id=uuid.uuid4().hex)
+                    output_files.append(str(path))
                 attempts = max(attempts, used_attempts)
                 downloaded_shipments.add(key)
                 document_sink.append(content)
@@ -677,6 +753,7 @@ def _run_shop_job(
                 fallback_used=scan["first_run"],
             )
         )
+        results[-1]["output_files"] = output_files
     return results
 
 
@@ -710,7 +787,12 @@ def _write_output(documents, *, output_dir, task_id):
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     filename = f"mercado-api-labels-{timestamp}-{str(task_id)[:8]}.pdf"
     path = directory / filename
-    path.write_bytes(content)
+    temporary = path.with_suffix(".pdf.partial")
+    with temporary.open("wb") as handle:
+        handle.write(content)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
     return path, filename
 
 
@@ -752,6 +834,7 @@ def print_orders_all(
     operator_name="订单打印/API",
     candidate_start_by_token=None,
     include_first_run_backlog=True,
+    require_prepaid=False,
     **_legacy_options,
 ):
     """Run one API-only print round and create a combined official-label PDF."""
@@ -797,6 +880,9 @@ def print_orders_all(
                 or candidate_start_by_token.get(str(job["token_id"]))
             ),
             include_first_run_backlog=include_first_run_backlog,
+            require_prepaid=require_prepaid,
+            output_dir=output_dir,
+            persist_labels=True,
         )
         return job_index, store_results, store_documents, store_printed_order_ids
 
@@ -851,9 +937,17 @@ def print_orders_all(
         documents.extend(store_documents)
         printed_order_ids.extend(store_printed_order_ids)
 
-    output_path, output_name = _write_output(
-        documents, output_dir=output_dir, task_id=task_id
-    )
+    output_error = ""
+    try:
+        output_path, output_name = _write_output(
+            documents, output_dir=output_dir, task_id=task_id
+        )
+    except Exception as exc:
+        if not any(row.get("output_files") for row in results):
+            raise
+        output_path, output_name = None, None
+        output_error = str(exc) or exc.__class__.__name__
+        _emit(logger, f"合并面单失败，已保留分批面单：{output_error}")
     if persist and results:
         try:
             persisted_results = [
@@ -887,6 +981,9 @@ def print_orders_all(
             "printed_order_ids": sorted({str(order_id) for order_id in printed_order_ids}),
             "printed_order_count": len(set(printed_order_ids)),
             "shipment_count": len(documents),
+            "wallet_charge_cents": sum(int(row.get("wallet_charge_cents") or 0) for row in results),
+            "output_files": [path for row in results for path in row.get("output_files") or []],
+            "output_error": output_error,
             "store_worker_count": worker_count,
             "fallback_store_count": len(
                 {row["shop_name"] for row in results if row.get("fallback_used")}

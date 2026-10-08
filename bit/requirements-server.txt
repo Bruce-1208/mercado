@@ -1,6 +1,7 @@
 waitress>=3.0,<4
 Flask>=3.0,<4
 argostranslate==1.11.0
+langid==1.1.6
 DBUtils>=3.1,<4
 PyMySQL>=1.1,<2
 openpyxl>=3.1,<4

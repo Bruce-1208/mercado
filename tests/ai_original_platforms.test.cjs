@@ -46,6 +46,17 @@ test('a completed Mercado listing is pending on Amazon, without Mercado copy or 
   assert.equal(nodes.get('ai-original-count-unreviewed').textContent, 1);
 });
 
+test('explicitly cleared source net stays blank while a later manually saved AI net is shown', () => {
+  const {run, nodes} = setup('mercadolibre');
+  run(`aiOriginalRows[0].net_proceeds_usd = null;
+    aiOriginalRows[0].suggested_net_proceeds_usd = 12;
+    aiOriginalRows[0].source_1688_overrides = {net_proceeds_usd: null};
+    renderAiOriginalProducts();`);
+  assert.match(nodes.get('ai-original-grid').innerHTML, /id="ai-original-net-1"[^>]*value=""/);
+  run('aiOriginalRows[0].net_proceeds_usd = 15; renderAiOriginalProducts();');
+  assert.match(nodes.get('ai-original-grid').innerHTML, /id="ai-original-net-1"[^>]*value="15"/);
+});
+
 test('platform status filtering and select all use independent draft statuses', () => {
   const {run} = setup('yandex');
   run(`aiOriginalRows.push({id: 2, ai_status: 'pending', marketplace_listings: {yandex: {status:'completed',title:'Товар'}}});
@@ -110,4 +121,51 @@ test('platform rules show readable language and safely escape validation content
   assert.doesNotMatch(nodes.get('ai-original-platform-rules').innerHTML, /en_US/);
   assert.match(nodes.get('ai-original-grid').innerHTML, /&lt;script&gt;/);
   assert.doesNotMatch(nodes.get('ai-original-grid').innerHTML, /<script>/);
+});
+
+test('manual checklist distinguishes suggested or edited net from persisted net and updates on input', () => {
+  const {run} = setup('mercadolibre');
+  run(`
+    aiOriginalRows[0].net_proceeds_usd = null;
+    const netInput = {id: 'ai-original-net-1', value: '12', classList: {toggle() {}},
+      setAttribute() {}, removeAttribute() {}};
+    const manualList = {innerHTML: ''};
+    const card = {querySelector(selector) {
+      if (selector === '#ai-original-net-1') return netInput;
+      if (selector === '.ai-original-manual-checks') return manualList;
+      return null;
+    }};
+    netInput.closest = selector => selector === "label" ? null : card;
+    updateAiOriginalManualChecks({target: netInput});
+  `);
+  assert.match(run('manualList.innerHTML'), /净收益<small>已填写待保存/);
+  assert.equal(run('aiOriginalManualListingChecks(aiOriginalRows[0]).find(c => c.label === "净收益").ok'), false);
+  run('aiOriginalRows[0].net_proceeds_usd = 12; updateAiOriginalManualChecks({target: netInput})');
+  assert.match(run('manualList.innerHTML'), /净收益<small>已填写<\/small>/);
+  run('netInput.value = "15"; updateAiOriginalManualChecks({target: netInput})');
+  assert.match(run('manualList.innerHTML'), /净收益<small>已填写待保存/);
+  for (const value of ['', '0', '-1', 'invalid']) {
+    run(`netInput.value = ${JSON.stringify(value)}; updateAiOriginalManualChecks({target: netInput})`);
+    assert.match(run('manualList.innerHTML'), /净收益<small>待补齐/);
+  }
+  assert.equal(run('aiOriginalRows[0].net_proceeds_usd'), 12);
+});
+
+test('parameter save rejects stale net or incomplete approval in the server readback', async () => {
+  for (const saved of [
+    {id: 1, net_proceeds_usd: 99, review_status: 'approved'},
+    {id: 1, net_proceeds_usd: 14.75, review_status: 'unreviewed'},
+    {id: 2, net_proceeds_usd: 14.75, review_status: 'approved'},
+  ]) {
+    const {run, nodes} = setup('mercadolibre');
+    run(`aiOriginalRows[0].net_proceeds_usd = 10;
+      document.getElementById('ai-original-weight-1').value = '100';
+      document.getElementById('ai-original-net-1').value = '14.75';
+      fetch = async () => ({ok:true, json: async () => ({status:'success', data:${JSON.stringify(saved)}})});
+      loadAiOriginalProducts = async () => {throw new Error('Unexpected refresh after unverified save');};`);
+    await run('saveAiOriginalProduct(1)');
+    assert.match(nodes.get('ai-original-task-status').textContent, /保存失败：保存后回读的净收益、实重或审核状态不一致/);
+    assert.equal(run('aiOriginalRows[0].net_proceeds_usd'), 10);
+    assert.equal(nodes.get('ai-original-net-1').value, '14.75');
+  }
 });

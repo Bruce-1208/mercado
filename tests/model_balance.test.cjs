@@ -32,13 +32,13 @@ test('alerts appear, recharge clears warning, and refresh button works', async (
   const {node, state} = harness('/', {status:'overdue', message:'overdue'});
   await tick();
   assert.equal(node('model-balance-alert').hidden,false);
-  assert.equal(node('model-balance-title').textContent,'DeepSeek 欠费提醒');
+  assert.equal(node('model-balance-title').textContent,'阿里云百炼余额');
   state.data={status:'ok', message:'ok'}; state.interval(); await tick();
   assert.equal(node('model-balance-alert').hidden,true);
   assert.equal(node('bell').textContent,'♢');
   state.data={status:'low', message:'low'}; node('model-balance-refresh').click(); await tick();
   assert.ok(state.urls.at(-1).endsWith('?refresh=1'));
-  assert.equal(node('model-balance-title').textContent,'DeepSeek 低余额预警');
+  assert.equal(node('model-balance-title').textContent,'阿里云百炼余额');
   assert.equal(node('model-balance-refresh').disabled,false);
   state.data={status:'ok', message:'ok'}; node('bell').click(); await tick();
   assert.equal(node('model-balance-alert').hidden,false);

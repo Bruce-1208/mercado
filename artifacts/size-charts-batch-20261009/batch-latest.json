@@ -1,0 +1,420 @@
+{
+  "task_id": "6e41bf7eacb249aaa61f9f1f4c4ab244",
+  "organization_key": "wuhan-zeshun",
+  "token_ids": [
+    70
+  ],
+  "total": 21,
+  "completed": 21,
+  "results": [
+    {
+      "template_id": 12,
+      "template_name": "女装短裤参考尺码表",
+      "token_id": 70,
+      "status": "succeeded",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "尺码表已创建；发布商品时使用 chart_id 和对应的 row_id",
+      "chart_id": "9629871",
+      "record_id": "663c75f3e1b94ae590bf932654928d57"
+    },
+    {
+      "template_id": 11,
+      "template_name": "女装长裤／牛仔裤参考尺码表",
+      "token_id": 70,
+      "status": "succeeded",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "尺码表已创建；发布商品时使用 chart_id 和对应的 row_id",
+      "chart_id": "9173782",
+      "record_id": "e1fc72813eae4c5bb1dde96672fcd76a"
+    },
+    {
+      "template_id": 5,
+      "template_name": "男装短裤参考尺码表",
+      "token_id": 70,
+      "status": "succeeded",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "尺码表已创建；发布商品时使用 chart_id 和对应的 row_id",
+      "chart_id": "9629873",
+      "record_id": "8270295190664e2387b43ee48ccb8cf6"
+    },
+    {
+      "template_id": 4,
+      "template_name": "男装长裤／牛仔裤参考尺码表",
+      "token_id": 70,
+      "status": "succeeded",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "尺码表已创建；发布商品时使用 chart_id 和对应的 row_id",
+      "chart_id": "9173784",
+      "record_id": "23ff33be013242a4bb9888fa73762b56"
+    },
+    {
+      "template_id": 22,
+      "template_name": "女童长裤参考尺码表",
+      "token_id": 70,
+      "status": "duplicate",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "该版本已上传或结果待确认；重复创建已阻止。新增站点请保存新版本后预检",
+      "errors": [],
+      "notices": [
+        "已按目标店铺官方选项匹配 6 个尺码或属性值编号，保留原参考数值"
+      ],
+      "chart_id": "9629835"
+    },
+    {
+      "template_id": 21,
+      "template_name": "女童T 恤参考尺码表",
+      "token_id": 70,
+      "status": "succeeded",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "尺码表已创建；发布商品时使用 chart_id 和对应的 row_id",
+      "chart_id": "9173786",
+      "record_id": "28851b533db342e59bd30fae6b7f98a8"
+    },
+    {
+      "template_id": 20,
+      "template_name": "男童长裤参考尺码表",
+      "token_id": 70,
+      "status": "duplicate",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "该版本已上传或结果待确认；重复创建已阻止。新增站点请保存新版本后预检",
+      "errors": [],
+      "notices": [
+        "已按目标店铺官方选项匹配 6 个尺码或属性值编号，保留原参考数值"
+      ],
+      "chart_id": "9173752"
+    },
+    {
+      "template_id": 19,
+      "template_name": "男童T 恤参考尺码表",
+      "token_id": 70,
+      "status": "succeeded",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "尺码表已创建；发布商品时使用 chart_id 和对应的 row_id",
+      "chart_id": "9173788",
+      "record_id": "1852b155a5694071a2685d147e6c0d82"
+    },
+    {
+      "template_id": 18,
+      "template_name": "女装打底裤参考尺码表",
+      "token_id": 70,
+      "status": "duplicate",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "该版本已上传或结果待确认；重复创建已阻止。新增站点请保存新版本后预检",
+      "errors": [],
+      "notices": [
+        "已按目标店铺官方选项匹配 7 个尺码或属性值编号，保留原参考数值"
+      ],
+      "chart_id": "9629839"
+    },
+    {
+      "template_id": 17,
+      "template_name": "女装女式上衣参考尺码表",
+      "token_id": 70,
+      "status": "duplicate",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "该版本已上传或结果待确认；重复创建已阻止。新增站点请保存新版本后预检",
+      "errors": [],
+      "notices": [
+        "已按目标店铺官方选项匹配 7 个尺码或属性值编号，保留原参考数值"
+      ],
+      "chart_id": "9629841"
+    },
+    {
+      "template_id": 16,
+      "template_name": "女装连衣裙参考尺码表",
+      "token_id": 70,
+      "status": "duplicate",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "该版本已上传或结果待确认；重复创建已阻止。新增站点请保存新版本后预检",
+      "errors": [],
+      "notices": [
+        "已按目标店铺官方选项匹配 7 个尺码或属性值编号，保留原参考数值",
+        "目标规格不接收以下参考列，本次提交省略这些列；原模板仍完整保留：NECK_CIRCUMFERENCE_FROM、NECK_CIRCUMFERENCE_TO"
+      ],
+      "chart_id": "9629845"
+    },
+    {
+      "template_id": 15,
+      "template_name": "女装睡衣参考尺码表",
+      "token_id": 70,
+      "status": "succeeded",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "尺码表已创建；发布商品时使用 chart_id 和对应的 row_id",
+      "chart_id": "9629875",
+      "record_id": "ae633cb22cfc446ca7b49357bc4ac9f0"
+    },
+    {
+      "template_id": 14,
+      "template_name": "女装卫衣参考尺码表",
+      "token_id": 70,
+      "status": "duplicate",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "该版本已上传或结果待确认；重复创建已阻止。新增站点请保存新版本后预检",
+      "errors": [],
+      "notices": [
+        "已按目标店铺官方选项匹配 7 个尺码或属性值编号，保留原参考数值"
+      ],
+      "chart_id": "9173754"
+    },
+    {
+      "template_id": 13,
+      "template_name": "女装夹克／外套参考尺码表",
+      "token_id": 70,
+      "status": "duplicate",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "该版本已上传或结果待确认；重复创建已阻止。新增站点请保存新版本后预检",
+      "errors": [],
+      "notices": [
+        "已按目标店铺官方选项匹配 7 个尺码或属性值编号，保留原参考数值"
+      ],
+      "chart_id": "9173756"
+    },
+    {
+      "template_id": 10,
+      "template_name": "女装衬衫参考尺码表",
+      "token_id": 70,
+      "status": "duplicate",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "该版本已上传或结果待确认；重复创建已阻止。新增站点请保存新版本后预检",
+      "errors": [],
+      "notices": [
+        "已按目标店铺官方选项匹配 7 个尺码或属性值编号，保留原参考数值"
+      ],
+      "chart_id": "9173758"
+    },
+    {
+      "template_id": 9,
+      "template_name": "女装T 恤参考尺码表",
+      "token_id": 70,
+      "status": "duplicate",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "该版本已上传或结果待确认；重复创建已阻止。新增站点请保存新版本后预检",
+      "errors": [],
+      "notices": [
+        "已按目标店铺官方选项匹配 7 个尺码或属性值编号，保留原参考数值"
+      ],
+      "chart_id": "9173760"
+    },
+    {
+      "template_id": 8,
+      "template_name": "男装睡衣参考尺码表",
+      "token_id": 70,
+      "status": "succeeded",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "尺码表已创建；发布商品时使用 chart_id 和对应的 row_id",
+      "chart_id": "9629877",
+      "record_id": "a6864d1e25604592a6150ca225ed2f3b"
+    },
+    {
+      "template_id": 7,
+      "template_name": "男装卫衣参考尺码表",
+      "token_id": 70,
+      "status": "duplicate",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "该版本已上传或结果待确认；重复创建已阻止。新增站点请保存新版本后预检",
+      "errors": [],
+      "notices": [
+        "已按目标店铺官方选项匹配 7 个尺码或属性值编号，保留原参考数值"
+      ],
+      "chart_id": "9629851"
+    },
+    {
+      "template_id": 6,
+      "template_name": "男装夹克／外套参考尺码表",
+      "token_id": 70,
+      "status": "duplicate",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "该版本已上传或结果待确认；重复创建已阻止。新增站点请保存新版本后预检",
+      "errors": [],
+      "notices": [
+        "已按目标店铺官方选项匹配 7 个尺码或属性值编号，保留原参考数值"
+      ],
+      "chart_id": "9173764"
+    },
+    {
+      "template_id": 3,
+      "template_name": "男装衬衫参考尺码表",
+      "token_id": 70,
+      "status": "duplicate",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "该版本已上传或结果待确认；重复创建已阻止。新增站点请保存新版本后预检",
+      "errors": [],
+      "notices": [
+        "已按目标店铺官方选项匹配 7 个尺码或属性值编号，保留原参考数值"
+      ],
+      "chart_id": "9629853"
+    },
+    {
+      "template_id": 2,
+      "template_name": "男装T 恤参考尺码表",
+      "token_id": 70,
+      "status": "duplicate",
+      "sites": [
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "message": "该版本已上传或结果待确认；重复创建已阻止。新增站点请保存新版本后预检",
+      "errors": [],
+      "notices": [
+        "已按目标店铺官方选项匹配 7 个尺码或属性值编号，保留原参考数值"
+      ],
+      "chart_id": "9629681"
+    }
+  ],
+  "message": "全部分类处理完成：成功 8，已上传跳过 13，失败 0，待核对 0",
+  "job_type": "size_chart_batch",
+  "running": false,
+  "status": "success",
+  "started_at": "2026-10-09 01:42:35",
+  "finished_at": "2026-10-09 01:43:24",
+  "stop_requested": false,
+  "current": null,
+  "succeeded": 8,
+  "failed": 0,
+  "skipped": 13,
+  "unknown": 0
+}

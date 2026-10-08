@@ -1,0 +1,38 @@
+[
+  {
+    "width": 1440,
+    "title_60_chars": "fully visible",
+    "collected_at": "always visible",
+    "alignment": "shared tracks, matching card heights",
+    "selection_details_empty_state": "passed",
+    "overflow": false,
+    "page_errors": []
+  },
+  {
+    "width": 1024,
+    "title_60_chars": "fully visible",
+    "collected_at": "always visible",
+    "alignment": "shared tracks, matching card heights",
+    "selection_details_empty_state": "passed",
+    "overflow": false,
+    "page_errors": []
+  },
+  {
+    "width": 390,
+    "title_60_chars": "fully visible",
+    "collected_at": "always visible",
+    "alignment": "shared tracks, matching card heights",
+    "selection_details_empty_state": "passed",
+    "overflow": false,
+    "page_errors": []
+  },
+  {
+    "width": 320,
+    "title_60_chars": "fully visible",
+    "collected_at": "always visible",
+    "alignment": "shared tracks, matching card heights",
+    "selection_details_empty_state": "passed",
+    "overflow": false,
+    "page_errors": []
+  }
+]

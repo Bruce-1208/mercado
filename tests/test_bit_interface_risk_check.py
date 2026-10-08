@@ -6,11 +6,18 @@ from openpyxl import load_workbook
 
 from bit import bit_db_api, bit_interface
 
+pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user", "subscribed_workbench_account")
+
+
+@pytest.fixture(autouse=True)
+def isolated_risk_credential(monkeypatch):
+    monkeypatch.setattr(bit_interface, "_account_api_key", lambda provider: "sk-offline-risk-fixture")
+
 
 def _logged_in_client():
     client = bit_interface.app.test_client()
     with client.session_transaction() as flask_session:
-        flask_session["workbench_user"] = {"username": "tester"}
+        flask_session["workbench_user"] = {"id": 7, "username": "tester"}
     return client
 
 
@@ -23,7 +30,8 @@ def test_risk_check_console_exposes_start_sort_and_export_controls():
     assert 'id="tab-risk-check"' in template
     assert 'id="start-risk-check-btn"' in template
     assert 'id="risk-check-log"' in template
-    assert "主图链接和 Logo 暂不参与判断" in template
+    assert 'id="risk-check-list-task-center"' in template
+    assert "当前筛选全部（跨分页）" in template
     assert 'data-risk-sort="risk_level"' in template
     assert "function sortRiskResults(column)" in template
     assert "function exportRiskResults()" in template
@@ -35,7 +43,8 @@ def test_risk_check_console_exposes_start_sort_and_export_controls():
     assert 'id="risk-check-salesperson"' in template
     assert 'id="risk-check-group"' in template
     assert 'id="risk-check-account"' in template
-    assert "黑名单优先" in template
+    assert "WIPO 商标自动纳入黑名单" in template
+    assert "AI 和其他公开资料进入待复核" in template
 
 
 def test_build_risk_check_params_clamps_console_values():
@@ -84,15 +93,17 @@ def test_build_risk_check_params_supports_qianwen_and_one_time_token():
     assert params["ai_provider"] == "qianwen"
     assert params["api_key"] == "sk-qianwen-secret"
     assert params["base_url"] == "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    assert params["model"] == "qwen-plus"
+    assert params["model"] == "qwen3.7-flash"
     assert params["sources"] == ["product_list", "collection_list"]
     assert bit_interface._public_risk_check_params(params)["token_configured"] is True
     assert "api_key" not in bit_interface._public_risk_check_params(params)
 
 
 def test_build_risk_check_params_requires_explicit_token_and_local_connection():
+    with pytest.raises(ValueError, match="DeepSeek 已停用"):
+        bit_interface.build_risk_check_params({"ai_provider": "deepseek", "api_key": "legacy-key"})
     with pytest.raises(ValueError, match="Token"):
-        bit_interface.build_risk_check_params({"ai_provider": "deepseek"})
+        bit_interface.build_risk_check_params({"ai_provider": "qianwen"})
     with pytest.raises(ValueError, match="模型名称"):
         bit_interface.build_risk_check_params({
             "ai_provider": "local",
@@ -307,7 +318,7 @@ def test_risk_check_start_never_returns_one_time_token(monkeypatch):
         previous_logs = list(bit_interface._risk_check_logs)
     try:
         response = _logged_in_client().post("/api/risk-check/start", json={
-            "ai_provider": "deepseek",
+            "ai_provider": "qianwen",
             "api_key": secret,
         })
         status_response = _logged_in_client().get("/api/risk-check/status")

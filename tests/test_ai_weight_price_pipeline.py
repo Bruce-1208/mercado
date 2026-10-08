@@ -62,11 +62,12 @@ class PipelineBrowser:
 
     def write(self, task, before_save):
         key = task["erp_goods_id"]
-        before_save({"net_income_usd": "9.5", "weight_g": "430"})
+        before_save({"net_income_usd": "9.5", "weight_g": "430", "review_status": "待审核"})
         self.operations.append(("save", key))
         if self.fail_write:
             raise ValueError("模拟保存失败")
-        return {"net_income_usd": task["net_income_usd"], "weight_g": task["weight_g"]}
+        return {"net_income_usd": task["net_income_usd"], "weight_g": task["weight_g"],
+                "review_status": "通过"}
 
 
 def setup(tmp_path, monkeypatch):
@@ -98,8 +99,10 @@ def test_ten_products_strict_order_persistent_database_logs_and_excel(tmp_path, 
     assert persisted.list()["total"] == 10  # eleventh product was never collected
     run, rows = persisted.run_report("offline-ten")
     assert run["outcome"] == "completed" and len(rows) == 10
-    assert all(row["erp_before"] == {"weight_g": "430", "net_income_usd": "9.5"} for row in rows)
-    assert all(row["erp_after"] == {"weight_g": "450", "net_income_usd": "9.5"} and row["write_verified"] for row in rows)
+    assert all(row["erp_before"] == {"weight_g": "430", "net_income_usd": "9.5", "review_status": "待审核"} for row in rows)
+    assert all(row["erp_after"] == {"weight_g": "450", "net_income_usd": "9.5", "review_status": "通过"}
+               and row["write_verified"] for row in rows)
+    assert all(row["write_intent"]["review_status"] == "通过" for row in rows)
     assert sum("回填前：" in log["message"] for log in persisted.logs(limit=1000)) == 10
     assert sum("保存成功并回读确认" in log["message"] for log in persisted.logs(limit=1000)) == 10
     assert [log["task_id"] for log in persisted.logs(limit=1000)

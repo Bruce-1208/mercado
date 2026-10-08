@@ -182,7 +182,7 @@ def _normalize_ai_results(payload, records):
     if isinstance(payload, dict):
         payload = payload.get("results") or payload.get("data") or []
     if not isinstance(payload, list):
-        raise ValueError("DeepSeek 返回结果不是数组")
+        raise ValueError("千问 返回结果不是数组")
 
     wanted_ids = {int(record["row_id"]) for record in records}
     normalized = {}
@@ -222,7 +222,7 @@ def _normalize_ai_results(payload, records):
 
 
 def classify_risk_records(records, model=None):
-    """让 DeepSeek 综合商品标题和图片 OCR 文字进行保守的侵权风险判断。"""
+    """让 千问 综合商品标题和图片 OCR 文字进行保守的侵权风险判断。"""
     products = [
         {
             "row_id": int(record["row_id"]),
@@ -347,7 +347,7 @@ def main():
         default=DEFAULT_OCR_CONFIDENCE,
         help=f"OCR 最低置信度（默认 {DEFAULT_OCR_CONFIDENCE}）",
     )
-    parser.add_argument("--model", default=None, help="DeepSeek 模型，默认读取项目配置")
+    parser.add_argument("--model", default=None, help="千问 模型，默认读取项目配置")
     parser.add_argument(
         "--dry-run",
         action="store_true",

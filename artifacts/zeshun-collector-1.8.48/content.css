@@ -1,0 +1,281 @@
+.zeshun-collector-floating {
+  position: fixed;
+  right: 22px;
+  top: 42%;
+  z-index: 2147483646;
+  font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+}
+
+.zeshun-collector-primary,
+.zeshun-card-collect {
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  cursor: pointer;
+  font: 600 14px/1.2 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  box-shadow: 0 8px 24px rgba(20, 65, 142, 0.24);
+  background: #2563eb;
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+
+.zeshun-collector-primary {
+  min-width: 116px;
+  padding: 13px 18px;
+}
+
+.zeshun-collector-primary:hover,
+.zeshun-card-collect:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(20, 65, 142, 0.32);
+}
+
+.zeshun-collector-primary:disabled,
+.zeshun-card-collect:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.zeshun-collector-card-host {
+  position: relative !important;
+}
+
+.zeshun-card-collect {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 20;
+  min-width: 58px;
+  padding: 8px 11px;
+  font-size: 13px;
+}
+
+.zeshun-collector-toast {
+  position: fixed;
+  left: 50%;
+  top: 24px;
+  z-index: 2147483647;
+  max-width: min(520px, calc(100vw - 40px));
+  padding: 12px 18px;
+  border-radius: 10px;
+  color: #fff;
+  background: #263238;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.25);
+  font: 500 14px/1.5 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -12px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.zeshun-collector-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.zeshun-collector-toast.is-success { background: #137a49; }
+.zeshun-collector-toast.is-warning { background: #9a6300; }
+.zeshun-collector-toast.is-error { background: #b3261e; }
+
+@media (max-width: 760px) {
+  .zeshun-collector-floating {
+    right: 12px;
+    top: auto;
+    bottom: 18px;
+  }
+}
+
+/* Reserve space below every product instead of relying on native hover
+   expansion. Include content wrappers and the LI so none can clip the data. */
+.zeshun-collector-list-item,
+.zeshun-collector-product-card,
+.zeshun-collector-data-host {
+  min-width: 0;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.zeshun-collector-product-card:not(.zeshun-collector-product-card--horizontal) {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.zeshun-collector-data-content {
+  flex-wrap: wrap !important;
+}
+
+.zeshun-collector-data-host > .zeshun-product-info {
+  display: block !important;
+  position: relative !important;
+  flex: 0 0 auto;
+  align-self: stretch;
+  grid-column: 1 / -1;
+  height: auto !important;
+  max-height: none !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.zeshun-product-info {
+  /* Match the ERP tokens in bit/static/zeshun-theme.css. Keep them local so
+     the extension does not change the marketplace page's own theme. */
+  --zs-data-brand: #2563eb;
+  --zs-data-brand-hover: #1d4ed8;
+  --zs-data-brand-tint: #eff6ff;
+  --zs-data-card: #fff;
+  --zs-data-heading: #172033;
+  --zs-data-copy: #344054;
+  --zs-data-secondary: #64748b;
+  --zs-data-stroke: #dce3ec;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 12px 10px;
+  border: 0;
+  border-top: 1px solid var(--zs-data-stroke);
+  border-radius: 0 0 6px 6px;
+  background: var(--zs-data-card);
+  color: var(--zs-data-copy);
+  font: 12px/21px Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
+  text-align: left;
+  white-space: normal;
+  position: relative;
+  z-index: 2;
+  font-variant-numeric: tabular-nums;
+}
+
+.zeshun-product-info--detail {
+  margin-top: 12px;
+  border: 1px solid var(--zs-data-stroke);
+  border-radius: 6px;
+}
+
+.zeshun-product-info * { box-sizing: border-box; }
+.zeshun-product-info .zs-info-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 4px;
+  line-height: 22px;
+}
+.zeshun-product-info .zs-info-identity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 3px 6px;
+}
+.zeshun-product-info .zs-info-id { color: var(--zs-data-heading); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.zeshun-product-info .zs-info-country { font-size: 13px; line-height: 18px; }
+.zeshun-product-info .zs-info-brand {
+  flex: 0 0 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--zs-data-brand);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 700;
+  text-align: center;
+}
+.zeshun-product-info .zs-info-tag {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 4px;
+  border: 1px solid #bfdbfe;
+  border-radius: 2px;
+  color: var(--zs-data-brand);
+  background: var(--zs-data-brand-tint);
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+.zeshun-product-info .zs-info-reputation { border-color: #b7e2cb; color: #176b43; background: #e9f7ef; }
+.zeshun-product-info .zs-info-seller {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 5px;
+  min-width: 0;
+  margin-bottom: 2px;
+  min-height: 22px;
+}
+.zeshun-product-info .zs-info-label { color: var(--zs-data-secondary); font-weight: 400; white-space: nowrap; }
+.zeshun-product-info .zs-info-shop {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: calc(100% - 41px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--zs-data-brand);
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 600;
+}
+.zeshun-product-info a.zs-info-shop:hover { text-decoration: underline; color: var(--zs-data-brand-hover); }
+.zeshun-product-info a.zs-info-shop:focus-visible,
+.zeshun-product-info .zs-info-refresh:focus-visible { outline: 2px solid var(--zs-data-brand); outline-offset: 2px; }
+.zeshun-product-info .zs-info-tags { display: flex; flex-wrap: wrap; max-width: 100%; gap: 3px; }
+.zeshun-product-info .zs-info-row {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  gap: 5px;
+}
+.zeshun-product-info .zs-info-row > .zs-info-label { flex: 0 0 36px; }
+.zeshun-product-info .zs-info-value { min-width: 0; overflow-wrap: anywhere; }
+.zeshun-product-info .zs-info-stats { display: flex; justify-content: space-between; gap: 12px; }
+.zeshun-product-info .zs-info-measure > .zs-info-value { flex: 1; }
+.zeshun-product-info .zs-info-hint { color: var(--zs-data-secondary); font-size: 11px; }
+.zeshun-product-info .zs-info-freight {
+  display: inline-flex;
+  align-items: baseline;
+  flex-shrink: 0;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--zs-data-stroke);
+  color: var(--zs-data-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.zeshun-product-info .zs-info-freight.is-selected { color: #176b43; font-weight: 600; }
+.zeshun-product-info .zs-info-low { color: #b45309; font-size: 10px; font-weight: 400; }
+.zeshun-product-info .zs-info-profit { margin-top: 1px; }
+.zeshun-product-info .zs-info-profit .zs-info-value { font-weight: 400; }
+.zeshun-product-info .zs-info-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px 6px;
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid var(--zs-data-stroke);
+  color: var(--zs-data-secondary);
+  font-size: 9px;
+  line-height: 17px;
+}
+.zeshun-product-info .zs-info-profit-rule { margin-left: auto; }
+.zeshun-product-info .zs-info-updated { white-space: nowrap; }
+.zeshun-product-info .zs-info-refresh {
+  appearance: none;
+  padding: 0 5px;
+  border: 1px solid #bfdbfe;
+  border-radius: 2px;
+  color: var(--zs-data-brand);
+  background: var(--zs-data-brand-tint);
+  font: 12px/17px Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.zeshun-product-info .zs-info-refresh:hover { color: #fff; border-color: var(--zs-data-brand-hover); background: var(--zs-data-brand-hover); }
+.zeshun-product-info .zs-info-warning { margin-top: 4px; color: #b45309; font-size: 10px; overflow-wrap: anywhere; }
+.zeshun-product-info .zs-info-state { display: flex; align-items: center; gap: 6px; min-height: 26px; }
+.zeshun-product-info .zs-info-state-message { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+.zeshun-1688-preferences { position: fixed; right: 20px; bottom: 85px; z-index: 2147483646; width: 265px; padding: 12px; border: 1px solid #dfcba5; border-radius: 10px; background: #fffaf0; color: #684c21; font: 13px/1.5 sans-serif; box-shadow: 0 4px 16px #0002; }
+.zeshun-1688-preferences select { width: 100%; margin: 8px 0; padding: 6px; }
+.zeshun-1688-preferences button { cursor: pointer; padding: 4px 8px; }

@@ -8,9 +8,13 @@
 from __future__ import annotations
 
 import logging
+import base64
+import re
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from datetime import date
+from datetime import date, datetime, time as datetime_time, timezone, tzinfo
 from typing import Any
 
 import requests
@@ -134,6 +138,7 @@ class MercadoCommunicationsClient:
         self.session = session or requests.Session()
         self.timeout = max(1, int(timeout))
         self.max_attempts = max(1, int(max_attempts))
+        self._refresh_lock = threading.Lock()
 
     @staticmethod
     def _response_payload(response: requests.Response) -> Any:
@@ -173,6 +178,7 @@ class MercadoCommunicationsClient:
         params: Mapping[str, Any] | None = None,
         json: Any = None,
         files: Mapping[str, Any] | None = None,
+        binary: bool = False,
     ) -> Any:
         """发送认证请求。
 
@@ -223,6 +229,12 @@ class MercadoCommunicationsClient:
                     time.sleep(delay)
                     continue
 
+            if binary and response.ok:
+                content = response.content
+                if len(content) > 25 * 1024 * 1024:
+                    raise ValueError("附件不能超过 25 MB")
+                return {"content_base64": base64.b64encode(content).decode("ascii"),
+                        "content_type": response.headers.get("Content-Type", "application/octet-stream").split(";")[0]}
             payload = self._response_payload(response)
             if not response.ok:
                 message = self._error_message(payload)
@@ -238,6 +250,27 @@ class MercadoCommunicationsClient:
             return payload
 
         raise MercadoCommunicationError(f"{request_method} {path} 多次重试后仍失败")
+
+    def get_chat_attachment(self, attachment_id: Any, *, claim_id: Any = None,
+                            site_id: str = "") -> dict[str, Any]:
+        filename = str(attachment_id or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,254}", filename) or ".." in filename:
+            raise ValueError("附件编号格式错误")
+        if claim_id is not None:
+            claim = _required_identifier(claim_id, "索赔 ID")
+            try:
+                result = self.request("GET", f"/marketplace/v2/claims/{claim}/attachments/{filename}/download", binary=True)
+            except MercadoCommunicationError as exc:
+                if not (exc.claims_1_restricted or exc.status_code == 404):
+                    raise
+                result = self.request("GET", f"/post-purchase/v1/claims/{claim}/attachments/{filename}/download", binary=True)
+        else:
+            site = str(site_id or "").strip().upper()
+            if site not in {"MLM", "MLB", "MLA", "MLC", "MCO", "MLU", "MPE", "MEC"}:
+                raise ValueError("读取售后附件需要有效的订单站点")
+            result = self.request("GET", f"/marketplace/messages/attachments/{filename}",
+                                  params={"tag": "post_sale", "site_id": site}, binary=True)
+        return {**result, "filename": filename}
 
     def get_seller_notices(self, *, limit: int = 20, offset: int = 0) -> dict[str, Any]:
         """Read currently active seller communications for this authorized user."""
@@ -353,6 +386,7 @@ class MercadoCommunicationsClient:
         *,
         limit: int = 50,
         offset: int = 0,
+        mark_as_read: bool = False,
     ) -> dict[str, Any]:
         pack = _required_identifier(pack_id, "Pack ID")
         result = self.request(
@@ -361,6 +395,7 @@ class MercadoCommunicationsClient:
             params={
                 "limit": _bounded_int(limit, "每页数量", minimum=1, maximum=100),
                 "offset": _bounded_int(offset, "偏移量", minimum=0, maximum=1_000_000),
+                "mark_as_read": "true" if mark_as_read else "false",
             },
         )
         if not isinstance(result, dict):
@@ -470,10 +505,15 @@ class MercadoCommunicationsClient:
         pack_id: Any = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        calendar_timezone: tzinfo = timezone.utc,
         sort: str = "last_updated:desc",
         limit: int = 50,
         offset: int = 0,
     ) -> dict[str, Any]:
+        """Search claims created within calendar dates in the selected timezone.
+
+        Convert boundaries to UTC for the official timestamp range syntax.
+        """
         params: dict[str, Any] = {
             "user_id": _required_identifier(user_id, "Seller ID"),
             "limit": _bounded_int(limit, "每页数量", minimum=1, maximum=100),
@@ -503,11 +543,17 @@ class MercadoCommunicationsClient:
             params["pack_id"] = _required_identifier(pack_id, "Pack ID")
         range_parts: list[str] = []
         if str(date_from or "").strip():
-            start = date.fromisoformat(str(date_from).strip())
-            range_parts.append(f"after:{start.isoformat()}T00:00:00.000+00:00")
+            start = datetime.combine(
+                date.fromisoformat(str(date_from).strip()), datetime_time.min,
+                tzinfo=calendar_timezone,
+            ).astimezone(timezone.utc)
+            range_parts.append(f"after:{start.isoformat(timespec='milliseconds')}")
         if str(date_to or "").strip():
-            end = date.fromisoformat(str(date_to).strip())
-            range_parts.append(f"before:{end.isoformat()}T23:59:59.999+00:00")
+            end = datetime.combine(
+                date.fromisoformat(str(date_to).strip()), datetime_time(23, 59, 59, 999000),
+                tzinfo=calendar_timezone,
+            ).astimezone(timezone.utc)
+            range_parts.append(f"before:{end.isoformat(timespec='milliseconds')}")
         if date_from and date_to and date.fromisoformat(str(date_from).strip()) > date.fromisoformat(str(date_to).strip()):
             raise ValueError("索赔起始日期不能晚于截止日期")
         if range_parts:
@@ -601,12 +647,60 @@ class MercadoCommunicationsClient:
             raise MercadoCommunicationError("投诉期望方案接口返回格式错误", payload=result)
         return [resolution for resolution in result if isinstance(resolution, dict)]
 
-    def get_claim_bundle(self, claim_id: Any) -> dict[str, Any]:
+    def get_claim_bundle(self, claim_id: Any, *, section: str = "all") -> dict[str, Any]:
         """返回工作台展示投诉所需的详情、处理说明、消息及声誉影响。"""
+        if section not in {"all", "core", "extras"}:
+            raise ValueError("不支持的索赔详情分组")
         claim, claim_legacy = self._get_claim_compatible(claim_id)
         reason_id = claim.get("reason_id")
         resource_errors: dict[str, str] = {}
         used_legacy = claim_legacy
+
+        if section == "extras":
+            # Each worker owns a Session. Coordinate token refresh so parallel
+            # reads cannot consume the same single-use refresh token twice.
+            initial_token = self.access_token
+            def refresh_current():
+                with self._refresh_lock:
+                    if self.access_token == initial_token:
+                        self._refresh()
+                    return self.access_token
+
+            def read_extra(name):
+                session = requests.Session()
+                session.trust_env = getattr(self.session, "trust_env", False)
+                worker = MercadoCommunicationsClient(
+                    self.access_token, refresh_access_token=refresh_current,
+                    session=session, timeout=self.timeout, max_attempts=self.max_attempts,
+                )
+                try:
+                    if name == "detail":
+                        return worker._get_claim_detail_compatible(claim_id)
+                    if name == "reason":
+                        return worker.get_claim_reason(reason_id) if reason_id else {}
+                    if name == "affects_reputation":
+                        return worker.get_claim_affects_reputation(claim_id)
+                    return worker.get_claim_expected_resolutions(claim_id)
+                finally:
+                    session.close()
+
+            extras = {}
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                pending = {name: pool.submit(read_extra, name) for name in (
+                    "detail", "reason", "affects_reputation", "expected_resolutions",
+                )}
+                for name, future in pending.items():
+                    try:
+                        value = future.result()
+                        if name == "detail":
+                            value, legacy = value
+                            used_legacy = used_legacy or legacy
+                        extras[name] = value
+                    except MercadoCommunicationError as exc:
+                        resource_errors[name] = str(exc)
+                        extras[name] = [] if name == "expected_resolutions" else {}
+            return {**extras, "api_version": "claims_1" if used_legacy else "claims_2",
+                    "resource_errors": resource_errors}
 
         def optional_resource(name: str, default: Any, loader: Callable[[], Any]) -> Any:
             nonlocal used_legacy
@@ -626,10 +720,10 @@ class MercadoCommunicationsClient:
 
         detail = optional_resource(
             "detail", {}, lambda: self._get_claim_detail_compatible(claim_id)
-        )
+        ) if section == "all" else {}
         reason = (
             optional_resource("reason", {}, lambda: self.get_claim_reason(reason_id))
-            if reason_id
+            if reason_id and section == "all"
             else {}
         )
         messages = optional_resource(
@@ -639,12 +733,12 @@ class MercadoCommunicationsClient:
             "affects_reputation",
             {},
             lambda: self.get_claim_affects_reputation(claim_id),
-        )
+        ) if section == "all" else {}
         expected_resolutions = optional_resource(
             "expected_resolutions",
             [],
             lambda: self.get_claim_expected_resolutions(claim_id),
-        )
+        ) if section == "all" else []
         return {
             "claim": claim,
             "detail": detail,
@@ -654,6 +748,7 @@ class MercadoCommunicationsClient:
             "expected_resolutions": expected_resolutions,
             "api_version": "claims_1" if used_legacy else "claims_2",
             "resource_errors": resource_errors,
+            "extras_pending": section == "core",
         }
 
     def send_claim_message(

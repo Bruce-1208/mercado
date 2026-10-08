@@ -2,6 +2,12 @@ import json
 
 import pytest
 
+
+def test_durable_worker_run_flag_is_not_a_runtime_config_path():
+    from bit.workbench_runtime import _parse_runtime_arguments
+    options = _parse_runtime_arguments(["--run", "/tmp/tasks", "job123"])
+    assert options.config_path is None
+
 from bit.workbench_runtime import (
     DEFAULT_DB_API_BASE_URL,
     DEFAULT_SERVER_DB_HOST,

@@ -34,7 +34,7 @@ from urllib.parse import urlsplit
 import requests
 
 
-AGENT_VERSION = "1.2.7"
+AGENT_VERSION = "1.2.8"
 DEFAULT_SERVER_URL = "https://wuhanzeshun.com"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
@@ -646,6 +646,21 @@ class AgentRateLimitError(RuntimeError):
         self.retry_after = retry_after
 
 
+class AgentAuthorizationError(RuntimeError):
+    """The server explicitly rejected the Agent's current credential."""
+
+
+class AgentServiceUnavailableError(RuntimeError):
+    """The control server failed while an already-authorized worker is active."""
+
+
+def _transient_control_error(error):
+    return isinstance(error, (
+        requests.ConnectionError, requests.Timeout,
+        AgentRateLimitError, AgentServiceUnavailableError,
+    ))
+
+
 def _retry_after_seconds(value):
     value = str(value or "").strip()
     try:
@@ -1060,7 +1075,12 @@ class LocalAgent:
             if message:
                 self._rate_limit_message += f"；{message}"
             raise AgentRateLimitError(self._rate_limit_message, delay)
-        raise RuntimeError(message or f"服务端请求失败：HTTP {response.status_code}")
+        error = message or f"服务端请求失败：HTTP {response.status_code}"
+        if response.status_code in (401, 403):
+            raise AgentAuthorizationError(error)
+        if 500 <= response.status_code < 600:
+            raise AgentServiceUnavailableError(error)
+        raise RuntimeError(error)
 
     def _request(self, method, path, **kwargs):
         self._check_cooldown()
@@ -1291,6 +1311,9 @@ class LocalAgent:
                 return self.send_event(job_id, **payload)
             except KeyboardInterrupt:
                 raise
+            except AgentAuthorizationError as exc:
+                self.log(f"任务 {job_id} 的结果上传被拒绝：{exc}；结果与日志保留在本机")
+                return None
             except Exception as exc:
                 failures += 1
                 delay = self._retry_delay_with_cooldown(failures)
@@ -1429,6 +1452,10 @@ class LocalAgent:
                         "任务日志暂时无法上传，将继续保留并重试："
                         f"{exc}；{delay:.0f} 秒后重试"
                     )
+                    if isinstance(exc, AgentAuthorizationError) and not cancel_file.exists():
+                        self.log("服务端已拒绝 Agent 凭证，正在停止本机任务")
+                        cancel_file.write_text("agent authorization rejected", encoding="utf-8")
+                        cancel_started = now
                 else:
                     pending_logs = pending_logs[len(chunk) :]
                     last_log_flush = now
@@ -1442,11 +1469,16 @@ class LocalAgent:
                     delay = self._retry_delay_with_cooldown(heartbeat_failures)
                     next_heartbeat_at = time.monotonic() + delay
                     self.log(f"任务运行中，心跳暂时失败：{exc}；{delay:.0f} 秒后重试")
-                    if (
-                        now - last_heartbeat_success >= JOB_CONTROL_LOSS_STOP_SECONDS
+                    if isinstance(exc, AgentAuthorizationError) and not cancel_file.exists():
+                        self.log("服务端已拒绝 Agent 凭证，正在停止本机任务")
+                        cancel_file.write_text("agent authorization rejected", encoding="utf-8")
+                        cancel_started = now
+                    elif (
+                        not _transient_control_error(exc)
+                        and now - last_heartbeat_success >= JOB_CONTROL_LOSS_STOP_SECONDS
                         and not cancel_file.exists()
                     ):
-                        self.log("任务控制连接长时间中断，为避免失控执行，正在停止本机任务")
+                        self.log("任务控制响应长时间异常，正在停止本机任务")
                         cancel_file.write_text("control lease expired", encoding="utf-8")
                         cancel_started = now
                 else:

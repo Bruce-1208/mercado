@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>个人资料 · 泽顺运营中心</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='account-profile.css') }}?v=20261008">
+  <script src="{{ url_for('static', filename='account-profile.js') }}?v=20261008" defer></script>
+</head>
+<body>
+  <header><strong>ZS · 泽顺运营中心</strong><nav><a href="/">返回工作台</a><a href="/billing">支付管理</a></nav></header>
+  <main>
+    <div class="heading"><p class="eyebrow">MY ACCOUNT</p><h1>个人资料</h1><p>管理本人的资料与登录密码。</p></div>
+    <p id="load-message" role="status" aria-live="polite">正在读取个人资料…</p>
+    <button id="retry-load" type="button" hidden>重新加载</button>
+    <div class="panels">
+      <section class="panel"><h2>基本资料</h2>
+        <form id="profile-form">
+          <fieldset disabled id="profile-fields">
+            <div class="form-grid">
+              <label>登录账号<input id="username" readonly autocomplete="username"></label>
+              <label>业务员标识<input id="salesperson" readonly></label>
+              <p class="hint wide">业务员标识用于店铺归属；修改个人姓名不会改变店铺权限。</p>
+              <label>姓名<input name="personal_name" required maxlength="64" autocomplete="name"></label>
+              <label>部门<input name="department" maxlength="64" autocomplete="organization-title"></label>
+              <label class="wide">邮箱<input name="email" type="email" maxlength="128" autocomplete="email"></label>
+              <label>手机号<input name="phone" type="tel" maxlength="32" autocomplete="tel"></label>
+              <label>微信号<input name="wechat_id" maxlength="64" autocomplete="off"></label>
+            </div>
+            <p id="profile-message" class="message" role="status" aria-live="polite"></p>
+            <div class="actions"><button id="save-profile" class="primary" type="submit">保存资料</button></div>
+          </fieldset>
+        </form>
+      </section>
+      <section class="panel"><h2>修改密码</h2><p class="hint">新密码需为 8–128 位，修改成功后请重新登录。</p>
+        <form id="password-form">
+          <fieldset disabled id="password-fields">
+            <div class="password-grid">
+              <label>原密码<input name="current_password" type="password" required maxlength="128" autocomplete="current-password"></label>
+              <label>新密码<input name="new_password" type="password" required minlength="8" maxlength="128" autocomplete="new-password"></label>
+              <label>确认新密码<input name="confirm_password" type="password" required minlength="8" maxlength="128" autocomplete="new-password"></label>
+            </div>
+            <p id="password-message" class="message" role="status" aria-live="polite"></p>
+            <div class="actions"><button id="save-password" class="primary" type="submit">修改密码</button></div>
+          </fieldset>
+        </form>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

@@ -78,9 +78,11 @@
   function boot(document, window) {
     const panel = document.getElementById('clearance-alerts');
     if (!panel) return;
+    if (panel.clearanceAlertsApp) return panel.clearanceAlertsApp;
     const $ = id => document.getElementById(`ca-${id}`);
     const canManage = panel.dataset.canManage === 'true';
-    const state = {page:1, pageSize:25, total:0, rows:[], checking:false, refreshing:false, loading:false, requestId:0, controller:null, timer:null, selected:null, saving:false, toastTimer:null};
+    const state = {page:1, pageSize:25, total:0, rows:[], checking:false, refreshing:false, loading:false, requestId:0, controller:null, timer:null, selected:null, saving:false, toastTimer:null,lastLoadedAt:0};
+    const isActive = () => window.ZeshunPerformance?.isActive() ?? !document.hidden;
     function node(tag, text, className) {
       const element = document.createElement(tag);
       if (text !== null && text !== undefined) element.textContent = String(text);
@@ -211,7 +213,7 @@
       for (const metric of panel.querySelectorAll('[data-status]')) metric.setAttribute('aria-pressed', String(metric.dataset.status === $('status').value));
     }
     function clearPoll() { window.clearTimeout(state.timer); state.timer = null; }
-    function schedulePoll() { clearPoll(); if (state.checking && !document.hidden) state.timer = window.setTimeout(() => loadData(), 5000); }
+    function schedulePoll() { clearPoll(); if (state.checking && isActive()) state.timer = window.setTimeout(() => { if (isActive()) loadData(); }, 5000); }
     async function request(url, options = {}) {
       const controller = options.signal ? null : new AbortController();
       const timeout = controller ? window.setTimeout(() => controller.abort(), 30000) : null;
@@ -239,6 +241,7 @@
         const data = await request(`/api/clearance-alerts?${params}`, {signal:controller.signal});
         if (requestId !== state.requestId) return;
         render(data);
+        state.lastLoadedAt = Date.now();
       } catch (err) {
         if (requestId !== state.requestId) return;
         error(`加载告警失败：${err.name === 'AbortError' ? '请求超时，请检查网络后重试。' : err.message || err}`);
@@ -309,10 +312,17 @@
     $('facts-form').addEventListener('submit', saveFacts);
     $('dialog-close').addEventListener('click', closeFacts); $('dialog-cancel').addEventListener('click', closeFacts);
     $('facts-dialog').addEventListener('cancel', event => { if (state.saving) event.preventDefault(); else state.selected = null; });
-    document.addEventListener('visibilitychange', () => { if (document.hidden) clearPoll(); else loadData(); });
+    function visibilityChanged() {
+      if (!isActive()) clearPoll();
+      else if (!state.loading && (state.checking || !state.lastLoadedAt || Date.now() - state.lastLoadedAt >= 60000)) loadData();
+      else schedulePoll();
+    }
+    document.addEventListener('visibilitychange', visibilityChanged);
+    document.addEventListener('zeshun:visibility', visibilityChanged);
     window.addEventListener('pagehide', () => { clearPoll(); window.clearTimeout(state.toastTimer); if (state.controller) { state.requestId++; state.controller.abort(); } });
     loadData();
-    return {state, loadData, refresh, openFacts, saveFacts};
+    panel.clearanceAlertsApp = {state, loadData, refresh, openFacts, saveFacts};
+    return panel.clearanceAlertsApp;
   }
   const api = {boot, chinaToday, dateInput, dateLabel, numberLabel, reasons, missingLabel, referenceVisits, factValues, validatedFacts};
   if (typeof module === 'object' && module.exports) module.exports = api;

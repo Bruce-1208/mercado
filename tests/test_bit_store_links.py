@@ -372,6 +372,7 @@ def test_store_sync_processes_multiple_stores_in_parallel(monkeypatch):
 
 def test_due_scheduler_starts_only_returned_store_ids(monkeypatch):
     calls = []
+    monkeypatch.setattr(bit_store_link_sync, "get_lock_owner", lambda _key: None)
     monkeypatch.setattr(
         bit_store_link_sync,
         "list_due_store_link_token_ids",
@@ -472,7 +473,7 @@ def test_full_sync_order_prioritizes_never_synced_then_oldest_completed():
     assert queries[-1][1] == (11, 12, 13, 14)
 
 
-def test_token_records_applies_priority_only_when_syncing_all(monkeypatch):
+def test_token_records_applies_priority_to_all_and_selected_stores(monkeypatch):
     summaries = [{"id": 1}, {"id": 2}, {"id": 3}]
     calls = []
     monkeypatch.setattr(
@@ -495,13 +496,14 @@ def test_token_records_applies_priority_only_when_syncing_all(monkeypatch):
     selected_records = bit_store_link_sync._token_records([1, 3])
 
     assert [row["id"] for row in all_records] == [3, 1, 2]
-    assert [row["id"] for row in selected_records] == [1, 3]
-    assert calls == [[1, 2, 3]]
+    assert [row["id"] for row in selected_records] == [3, 1]
+    assert calls == [[1, 2, 3], [1, 3]]
 
 
 def test_replace_store_snapshot_marks_missing_links_and_upserts_current_rows():
     calls = []
     batches = []
+    scheduled = []
 
     class Cursor:
         rowcount = 0
@@ -517,7 +519,7 @@ def test_replace_store_snapshot_marks_missing_links_and_upserts_current_rows():
             calls.append((sql, params))
 
         def executemany(self, sql, rows):
-            batches.extend(rows)
+            (scheduled if "erp_mercadolibre_store_link_visit_schedule" in sql else batches).extend(rows)
             calls.append((sql, None))
 
         def fetchall(self):
@@ -555,6 +557,7 @@ def test_replace_store_snapshot_marks_missing_links_and_upserts_current_rows():
 
     assert result == {"total": 2, "inserted": 1, "updated": 1}
     assert len(batches) == 2
+    assert scheduled == [(2, "MLM-OLD", None), (2, "MLM-NEW", None)]
     assert any("SET `is_current` = 0" in sql for sql, _params in calls)
     assert any("ON DUPLICATE KEY UPDATE" in sql for sql, _params in calls)
 
@@ -1036,6 +1039,7 @@ def test_sync_store_writes_listing_batches_incrementally(monkeypatch):
     assert captured["batches"][0]["items"][0]["attributes"][0]["id"] == "PACKAGE_WEIGHT"
 
 
+@pytest.mark.usefixtures("subscribed_workbench_account")
 def test_workbench_store_link_ui_and_routes():
     client = _client()
     response = client.get("/")
@@ -1244,6 +1248,7 @@ def test_workbench_store_link_ui_and_routes():
     )
 
 
+@pytest.mark.usefixtures("subscribed_workbench_account")
 def test_start_store_link_sync_route_starts_background_task():
     client = _client()
     with patch.object(
@@ -1258,6 +1263,7 @@ def test_start_store_link_sync_route_starts_background_task():
     start.assert_called_once_with([7])
 
 
+@pytest.mark.usefixtures("subscribed_workbench_account")
 def test_start_all_store_link_sync_ignores_selected_store_ids():
     client = _client()
     with patch.object(
@@ -1276,3 +1282,37 @@ def test_start_all_store_link_sync_ignores_selected_store_ids():
 
 # These route tests mock business data; they must not authenticate against production MySQL.
 pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user")
+
+
+def test_auto_sync_prioritizes_never_completed_before_explicit_requests(monkeypatch):
+    queries = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def execute(self, sql, params):
+            queries.append(sql)
+
+        def fetchall(self):
+            return [{"id": 12}, {"id": 11}]
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(store, "ensure_store_link_table", lambda cursor: None)
+    monkeypatch.setattr(store, "ensure_store_link_sync_state_table", lambda cursor: None)
+    assert store.list_due_store_link_token_ids(connection_factory=Connection) == [12, 11]
+    ordering = queries[0].split("ORDER BY", 1)[1]
+    assert ordering.index("`last_completed_at` IS NULL") < ordering.index("`requested_at` IS NOT NULL")
+    assert ordering.index("`last_completed_at` IS NULL") < ordering.index("LIMIT")

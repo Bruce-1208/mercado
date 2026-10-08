@@ -6,14 +6,18 @@ import hashlib
 import json
 import logging
 import re
+import secrets
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterable, Mapping
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, current_app, jsonify, render_template, request
+from itsdangerous import URLSafeTimedSerializer, BadSignature
 
 from bit import bit_db_api
+from bit.action_center_cache import SnapshotCache
 
 
 ALLOWED_TOPICS = frozenset({
@@ -76,6 +80,17 @@ def _parse_datetime(value: Any) -> datetime | None:
         return None
     if result.tzinfo is None:
         return result
+    return result.astimezone(_WORKBENCH_TZ).replace(tzinfo=None)
+
+
+def _parse_order_datetime(value: Any) -> datetime | None:
+    """Synced platform order timestamps are stored as UTC without an offset."""
+    try:
+        result = datetime.fromisoformat(str(value or "").strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if result.tzinfo is None:
+        result = result.replace(tzinfo=timezone.utc)
     return result.astimezone(_WORKBENCH_TZ).replace(tzinfo=None)
 
 
@@ -369,81 +384,137 @@ def _upsert_watch_task(storage, *, organization_key, token_id, topic, resource, 
     })
 
 
+def _action_center_order_rows(storage, token_ids):
+    offset = 0
+    while True:
+        rows = storage.list_mercado_action_center_orders(
+            token_ids=token_ids, limit=1000, offset=offset,
+        ) or []
+        yield from rows
+        if len(rows) < 1000:
+            break
+        offset += len(rows)
+
+
 def _refresh_order_watch_tasks(storage, token_ids: Iterable[int], organization_by_token: Mapping[int, str], *, now=None):
     """Convert stale local fulfillment/procurement signals into persistent tasks."""
-    now = now or datetime.now()
-    rows = storage.list_mercado_action_center_orders(token_ids=token_ids, limit=1000)
+    now = _parse_datetime(now) if now is not None else datetime.now(_WORKBENCH_TZ).replace(tzinfo=None)
     completed_age_watch_keys = []
     recent_order_keys = set()
-    for row in rows or ():
+    watch_order_keys = set()
+    for row in _action_center_order_rows(storage, list(token_ids)):
         token_id = int(row.get("token_id") or 0)
         order_id = str(row.get("order_id") or "")
         if not token_id or not order_id:
             continue
         organization_key = organization_by_token.get(token_id) or "wuhan-zeshun"
-        updated = _parse_datetime(row.get("last_updated") or row.get("date_created"))
-        created = _parse_datetime(row.get("date_created"))
-        if created is None or created < now - timedelta(days=30):
+        updated = _parse_order_datetime(row.get("last_updated") or row.get("date_created"))
+        created = _parse_order_datetime(row.get("date_created"))
+        if created is None:
             continue
-        recent_order_keys.add((token_id, order_id))
+        watch_order_keys.add((token_id, order_id))
+        if created >= now - timedelta(days=30):
+            recent_order_keys.add((token_id, order_id))
         if updated is None:
             updated = created
+        created_label = f"{created:%Y-%m-%d %H:%M:%S}（北京时间）"
+        updated_label = f"{updated:%Y-%m-%d %H:%M:%S}（北京时间）"
         order_age = now - created
         age = now - updated
         raw = row.get("raw") if isinstance(row.get("raw"), dict) else {}
+        shipping = raw.get("shipping") if isinstance(raw.get("shipping"), dict) else {}
         shipment_status = str(
             raw.get("_shipment_status")
-            or (raw.get("shipping") or {}).get("status")
+            or shipping.get("status")
             or ""
-        ).lower()
+        ).strip().lower()
         order_status = str(row.get("status") or "").strip().lower()
         workflow_status = str(row.get("workflow_status") or "").strip()
-        in_transit = (
+        delivered = (
+            "delivered" in {order_status, shipment_status}
+            or workflow_status in {"已签收", "完成", "交付"}
+        )
+        cancelled = (
+            order_status in {"cancelled", "canceled", "invalid", "expired", "refunded"}
+            or shipment_status in {"cancelled", "canceled"}
+            or workflow_status in {"已取消", "取消", "取消-发货前", "取消-发货后"}
+        )
+        terminal = delivered or cancelled
+        in_transit = not terminal and (
             shipment_status in {"shipped", "in_transit", "on_route", "transporting"}
             or order_status in {"shipped", "in_transit", "on_route", "transporting"}
             or workflow_status in {"运输中", "已发", "已发货", "已发-在途中"}
+        ) and (
+            workflow_status not in {"已发-异常", "问题-物流退件", "退货"}
+            and "not_delivered" not in {order_status, shipment_status}
         )
         stale_task_key = _task_key(
             "order_age_watch", organization_key, token_id,
             "order_not_in_transit_7d", order_id,
         )
-        terminal = order_status in {"delivered", "not_delivered", "cancelled", "canceled", "invalid", "expired", "refunded", "partially_refunded"} or workflow_status in {"已签收", "完成", "已取消", "已入库", "交付", "取消-发货前", "取消-发货后"}
         if in_transit or terminal:
             completed_age_watch_keys.append(stale_task_key)
-        elif order_age > timedelta(days=7) and not in_transit:
+        elif order_age >= timedelta(hours=168):
             _upsert_watch_task(
                 storage,
                 organization_key=organization_key,
                 token_id=token_id,
                 topic="order_not_in_transit_7d",
                 resource=order_id,
-                title="订单已创建超过 7 天，仍未进入运输中，请检查发货状态",
+                title="订单已满 168 小时仍未在途中，请检查发货状态",
                 details=(
                     f"店铺 {row.get('shop_name') or ''}；订单 {order_id}；"
                     f"订单状态 {order_status or '未知'}；本地流程 {workflow_status or '未设置'}；"
-                    f"最近更新时间 {row.get('last_updated') or row.get('date_created') or ''}。"
+                    f"创建时间 {created_label}；最近更新时间 {updated_label}。"
                 ),
-                due_at=created + timedelta(days=7),
+                due_at=created + timedelta(hours=168),
                 priority="high",
                 entry_url="/?tab=orders",
                 source="order_age_watch",
             )
-        for topic, hours, field, label in (
-            ("purchase_order_missing_24h", 24, "purchase_order", "采购订单号"),
-            ("purchase_tracking_missing_48h", 48, "purchase_tracking", "采购物流号"),
+        else:
+            completed_age_watch_keys.append(stale_task_key)
+        delivery_key = _task_key(
+            "order_age_watch", organization_key, token_id,
+            "order_not_delivered_30d", order_id,
+        )
+        if terminal:
+            completed_age_watch_keys.append(delivery_key)
+        elif order_age >= timedelta(days=30):
+            _upsert_watch_task(
+                storage, organization_key=organization_key, token_id=token_id,
+                topic="order_not_delivered_30d", resource=order_id,
+                title="订单已满 30 天仍未交付，请跟进交付进度",
+                details=(
+                    f"店铺 {row.get('shop_name') or ''}；订单 {order_id}；"
+                    f"订单状态 {order_status or '未知'}；本地流程 {workflow_status or '未设置'}；"
+                    f"物流状态 {shipment_status or '未知'}；创建时间 {created_label}。"
+                ),
+                due_at=created + timedelta(days=30), priority="urgent",
+                source="order_age_watch",
+            )
+        else:
+            completed_age_watch_keys.append(delivery_key)
+        for topic, hours, field, label, inclusive in (
+            ("purchase_order_missing_24h", 24, "purchase_order", "采购订单号", False),
+            ("purchase_tracking_missing_48h", 48, "purchase_tracking", "采购物流号", True),
         ):
             key = _task_key("procurement_watch", organization_key, token_id, topic, order_id)
-            if terminal or in_transit or str(row.get(field) or "").strip():
+            threshold = timedelta(hours=hours)
+            overdue = order_age >= threshold if inclusive else order_age > threshold
+            if terminal or (in_transit and field == "purchase_order") or str(row.get(field) or "").strip():
                 completed_age_watch_keys.append(key)
-            elif order_age > timedelta(hours=hours):
+            elif overdue:
                 _upsert_watch_task(
                     storage, organization_key=organization_key, token_id=token_id,
                     topic=topic, resource=order_id, source="procurement_watch",
-                    title=f"订单超过 {hours} 小时未填写{label}",
-                    details=f"店铺 {row.get('shop_name') or ''}；订单 {order_id}；创建时间 {row.get('date_created') or ''}。",
+                    title=f"订单已满 {hours} 小时未填写{label}",
+                    details=f"店铺 {row.get('shop_name') or ''}；订单 {order_id}；创建时间 {created_label}。",
                     due_at=created + timedelta(hours=hours),
                 )
-        if order_status == "ready_to_ship" and age >= timedelta(hours=12):
+            else:
+                completed_age_watch_keys.append(key)
+        if not terminal and not in_transit and order_status == "ready_to_ship" and age >= timedelta(hours=12):
             _upsert_watch_task(
                 storage,
                 organization_key=organization_key,
@@ -451,17 +522,21 @@ def _refresh_order_watch_tasks(storage, token_ids: Iterable[int], organization_b
                 topic="shipment_deadline_check",
                 resource=order_id,
                 title="待发货订单超过 12 小时未更新，请核对官方截止时间",
-                details=f"店铺 {row.get('shop_name') or ''}；最近更新时间 {row.get('last_updated') or row.get('date_created') or ''}。打开订单查看美客多运单的 pay_before。",
+                details=f"店铺 {row.get('shop_name') or ''}；最近更新时间 {updated_label}。打开订单查看美客多运单的 pay_before。",
                 due_at=updated + timedelta(hours=12),
                 priority="urgent",
                 entry_url="/?tab=orders",
             )
+        else:
+            completed_age_watch_keys.append(_task_key(
+                "order_watch", organization_key, token_id, "shipment_deadline_check", order_id,
+            ))
         tracking = row.get("tracking") if isinstance(row.get("tracking"), dict) else {}
         tracking_status = str(tracking.get("status") or "").lower()
         checked = _parse_datetime(row.get("tracking_checked_at"))
         if (
             row.get("purchase_tracking")
-            and str(row.get("workflow_status") or "") not in {"完成", "已签收", "已入库", "已取消"}
+            and not terminal and not in_transit and workflow_status != "已入库"
             and checked
             and now - checked >= timedelta(hours=48)
             and tracking_status in {"pending", "not_found", "exception", "failed"}
@@ -477,18 +552,22 @@ def _refresh_order_watch_tasks(storage, token_ids: Iterable[int], organization_b
                 due_at=checked + timedelta(hours=48),
                 priority="high",
             )
+        else:
+            completed_age_watch_keys.append(_task_key(
+                "order_watch", organization_key, token_id, "procurement_tracking_stalled", order_id,
+            ))
     if completed_age_watch_keys and hasattr(storage, "resolve_mercado_operator_tasks_by_keys"):
         for offset in range(0, len(completed_age_watch_keys), 1000):
             storage.resolve_mercado_operator_tasks_by_keys(
                 completed_age_watch_keys[offset:offset + 1000],
-                "订单已补齐采购信息、进入运输中或已结束，无需继续跟进。",
+                "系统复核订单信息、履约状态和告警时限，当前无需继续处理该提醒。",
             )
-    return recent_order_keys
+    return recent_order_keys, watch_order_keys
 
 
 _ORDER_WATCH_TASK_TOPICS = frozenset({
     "purchase_order_missing_24h", "purchase_tracking_missing_48h",
-    "order_not_in_transit_7d", "procurement_tracking_stalled",
+    "order_not_in_transit_7d", "order_not_delivered_30d", "procurement_tracking_stalled",
     "shipment_deadline_check",
 })
 _ORDER_NOTIFICATION_TOPICS = frozenset({
@@ -496,22 +575,44 @@ _ORDER_NOTIFICATION_TOPICS = frozenset({
 })
 
 
-def _is_recent_order_task(task, recent_order_keys):
+def _is_recent_order_task(task, recent_order_keys, watch_order_keys=None):
     topic = str(task.get("topic") or "").strip().lower().replace(" ", "_")
     if topic in _ORDER_WATCH_TASK_TOPICS:
         order_id = str(task.get("resource") or "").strip()
+        visible_keys = watch_order_keys if watch_order_keys is not None else recent_order_keys
     elif topic in _ORDER_NOTIFICATION_TOPICS:
         match = re.search(r"/orders/([^/?#]+)", str(task.get("resource") or ""))
         if not match:
             return False
         order_id = match.group(1)
+        visible_keys = recent_order_keys
     else:
         return True
     try:
         token_id = int(task.get("token_id") or 0)
     except (TypeError, ValueError):
         return False
-    return (token_id, order_id) in recent_order_keys
+    return (token_id, order_id) in visible_keys
+
+
+def _today_work_states(storage, token_ids, organization):
+    if hasattr(storage, 'list_mercado_today_work_states'):
+        return storage.list_mercado_today_work_states(token_ids=token_ids, organization_key=organization)
+    return []
+
+
+def _action_center_tasks(storage, *, token_ids, organization_key, include_closed):
+    rows, offset = [], 0
+    while True:
+        data = storage.list_mercado_operator_tasks(
+            token_ids=token_ids, organization_key=organization_key,
+            include_closed=include_closed, limit=1000, offset=offset,
+        )
+        batch = data.get("rows") or []
+        rows.extend(batch)
+        if len(batch) < 1000:
+            return rows
+        offset += len(batch)
 
 
 def _rights_holder_replies(store, token_ids, *, include_replied=False):
@@ -535,9 +636,108 @@ def _rights_holder_replies(store, token_ids, *, include_replied=False):
     return sorted(rows, key=lambda row: str(row.get("due_at") or "9999"))
 
 
+def _unanswered_post_sale(storage, tokens):
+    from bit.mercado_communications import communication_timestamp
+    rows, errors = [], []
+    for token in tokens:
+        token_id = int(token["id"])
+        name = token.get("display_name") or str(token_id)
+        try:
+            packs = set(storage.list_mercado_message_pack_candidates(token_id))
+            pending = storage.execute_mercado_store_communication(token_id, "post-sale-unread", {}) or {}
+            packs.update(str(row.get("resource") or "").rstrip("/").split("/")[-1]
+                         for row in pending.get("results") or [])
+        except Exception as exc:
+            errors.append(f"店铺 {name}：{exc}")
+            continue
+        def read_pack(pack):
+            try:
+                messages, offset, seller = [], 0, str(token.get("meli_user_id") or "")
+                while True:
+                    page = storage.execute_mercado_store_communication(token_id, "post-sale-messages", {
+                        "pack_id": pack, "offset": offset, "limit": 100,
+                    }) or {}
+                    seller = str(page.get("seller_id") or seller)
+                    batch = page.get("messages") or []
+                    messages.extend(batch)
+                    offset += len(batch)
+                    if offset >= int((page.get("paging") or {}).get("total") or offset):
+                        break
+                    if not batch:
+                        raise ValueError(f"会话 {pack} 分页不完整")
+                if not messages:
+                    return None, None
+                def date(message):
+                    dates = message.get("message_date") or {}
+                    return (dates.get("created") or dates.get("received") if isinstance(dates, dict) else dates) or message.get("date_created")
+                latest = max(messages, key=lambda message: communication_timestamp(date(message)) or 0)
+                sender = str((latest.get("from") or {}).get("user_id") or "")
+                if not seller or not sender:
+                    raise ValueError(f"会话 {pack} 缺少发送者信息，无法核实回复状态")
+                if sender == seller:
+                    return None, None
+                return {"token_id": token_id, "store_name": name, "pack_id": pack,
+                             "latest_at": date(latest), "text": latest.get("text_translated") or latest.get("text") or "（附件消息）"}, None
+            except Exception as exc:
+                return None, f"店铺 {name} / 会话 {pack}：{exc}"
+        # Bound platform concurrency; each conversation still reads every page.
+        with ThreadPoolExecutor(max_workers=6, thread_name_prefix="today-post-sale") as executor:
+            for row, error in executor.map(read_pack, sorted(packs - {""})):
+                if row is not None:
+                    rows.append(row)
+                if error is not None:
+                    errors.append(error)
+    return {"rows": rows, "errors": errors}
+
+
+def _store_page(rows):
+    """Bound per-request work after authorization and filters, never truncate scope."""
+    rows = sorted(rows, key=lambda row: int(row.get("id") or 0))
+    try:
+        page = max(1, int(request.args.get("store_page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+    size = 20
+    pages = max(1, (len(rows) + size - 1) // size)
+    page = min(page, pages)
+    return rows[(page - 1) * size:page * size], {
+        "page": page, "page_size": size, "total": len(rows), "pages": pages,
+    }
+
+
 def create_action_center_blueprint(*, login_required, current_user, authorized_token_ids, storage=None, has_permission=None):
     store = storage or bit_db_api
     blueprint = Blueprint("mercado_action_center", __name__)
+    order_snapshots = SnapshotCache(ttl=300, workers=4)
+    post_sale_snapshots = SnapshotCache(ttl=300)
+
+    data_reads = ThreadPoolExecutor(max_workers=4, thread_name_prefix="today-read")
+    signing_key = secrets.token_hex(32)
+
+    def signer():
+        return URLSafeTimedSerializer(current_app.secret_key or signing_key, salt="today-work-status")
+
+    def annotate(rows, kind, tokens, saved):
+        """Local handling status is separate from the platform's reply/event state."""
+        organizations = {int(t['id']): str(t.get('organization_key') or '') for t in tokens}
+        states = {row.get('task_key'): row for row in saved if row.get('source') == 'today_work_status'}
+        result = []
+        for original in rows:
+            row = dict(original)
+            token_id = int(row.get('token_id') or 0)
+            resource = str(row.get({'post-sale': 'pack_id', 'rights': 'infraction_id', 'events': 'id'}[kind]) or '')
+            if token_id in organizations and resource:
+                # A new buyer message creates a new handling item.
+                version = str(row.get('latest_at') or '') if kind == 'post-sale' else ''
+                organization = organizations[token_id]
+                key = _task_key('today_work_status', organization, token_id, kind, resource + ':' + version)
+                row['work_status'] = states.get(key, {}).get('status', 'open')
+                row['work_ref'] = signer().dumps({'task_key': key, 'organization_key': organization,
+                    'token_id': token_id, 'source': 'today_work_status', 'topic': kind,
+                    'resource': resource, 'title': {'post-sale': '售后消息处理', 'rights': '权利人案件处理', 'events': '通知人工处理'}[kind],
+                    'due_at': datetime.now(_WORKBENCH_TZ).strftime('%Y-%m-%d %H:%M:%S')})
+            result.append(row)
+        return result
 
     def scope():
         user = current_user() or {}
@@ -565,6 +765,49 @@ def create_action_center_blueprint(*, login_required, current_user, authorized_t
             can_execute=permission("tasks.execute"),
         )
 
+    @blueprint.route("/api/mercado/today/post-sale", methods=["GET"])
+    @login_required
+    def unanswered_post_sale():
+        if not permission("tasks.view"):
+            return jsonify(status="error", message="无待办查看权限"), 403
+        user, allowed, organization = scope()
+        tokens = [row for row in store.list_mercado_store_tokens().get("rows", [])
+                  if (allowed is None or int(row.get("id") or 0) in allowed)
+                  and (not organization or str(row.get("organization_key") or "") == organization)
+                  and any(all(not request.args.get(key) or str(setting.get(key) or "") == request.args[key]
+                              for key in ("salesperson", "group_name"))
+                          for setting in (row.get("site_settings") or [row]))]
+        tokens, pagination = _store_page(tokens)
+        background = request.args.get("background") == "1"
+        force = request.args.get("refresh") == "1"
+        data = {"rows": [], "errors": [], "refreshing": False, "pending": False, "store_pagination": pagination}
+        for token in tokens:
+            # Cache per store, after authorization, so changing filters reuses work.
+            key = (str(token.get("organization_key") or ""), int(token["id"]),
+                   str(token.get("meli_user_id") or ""))
+            try:
+                snapshot, refreshing = post_sale_snapshots.read(
+                    key, lambda token=dict(token): {
+                        **_unanswered_post_sale(store, [token]),
+                        "checked_at": datetime.now(_WORKBENCH_TZ).isoformat(),
+                    }, background=background, force=force,
+                )
+                data["refreshing"] |= refreshing
+                data["pending"] |= snapshot is None
+                if snapshot is not None:
+                    data["rows"].extend(snapshot["rows"])
+                    data["errors"].extend(snapshot["errors"])
+                    stamp = snapshot["checked_at"]
+                    data["checked_at"] = min(data.get("checked_at", stamp), stamp)
+            except Exception as exc:
+                data["errors"].append(f"店铺 {token.get('display_name') or token['id']}：{exc}")
+        if data['rows'] and hasattr(store, 'list_mercado_operator_tasks'):
+            saved = _today_work_states(store, [int(t['id']) for t in tokens], organization)
+            data['rows'] = annotate(data['rows'], 'post-sale', tokens, saved)
+        response = jsonify(status="success", data=data)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     @blueprint.route("/api/mercado/today/tasks", methods=["GET"])
     @login_required
     def list_tasks():
@@ -585,40 +828,81 @@ def create_action_center_blueprint(*, login_required, current_user, authorized_t
                 all(not value or str(setting.get(key) or "").strip() == value for key, value in selected.items())
                 for setting in (row.get("site_settings") or [row])
             )]
+            token_rows, pagination = _store_page(token_rows)
+            errors = []
             token_ids = sorted(int(row["id"]) for row in token_rows if int(row.get("id") or 0) > 0)
             recent_order_keys = set()
+            watch_order_keys = set()
+            refreshing = pending = False
             if token_ids:
                 organization_by_token = {
                     int(row["id"]): str(row.get("organization_key") or "wuhan-zeshun")
                     for row in token_rows if int(row.get("id") or 0) > 0
                 }
-                recent_order_keys = _refresh_order_watch_tasks(
-                    store, token_ids, organization_by_token
-                ) or set()
-            data = store.list_mercado_operator_tasks(
-                token_ids=token_ids,
-                organization_key=organization,
-                include_closed=str(request.args.get("include_closed") or "0") == "1",
-                limit=500,
-            )
-            events = store.list_mercado_notification_events(
-                token_ids=token_ids,
-                organization_key=organization,
-                limit=100,
-            )
+                for token_id in token_ids:
+                    try:
+                        keys, updating = order_snapshots.read(
+                            (organization_by_token[token_id], token_id),
+                            lambda token_id=token_id: _refresh_order_watch_tasks(
+                                store, [token_id], {token_id: organization_by_token[token_id]}
+                            ) or (set(), set()),
+                            force=request.args.get("refresh") == "1",
+                            background=request.args.get("background") == "1",
+                        )
+                    except Exception as exc:
+                        errors.append(f"店铺 #{token_id} 订单核对失败：{exc}")
+                        continue
+                    refreshing |= updating
+                    pending |= keys is None
+                    if keys is not None:
+                        recent_order_keys.update(keys[0])
+                        watch_order_keys.update(keys[1])
+            # These independent local/remote reads previously paid their latencies in series.
+            event_page = max(1, request.args.get("event_page", 1, type=int) or 1)
+            reads = {
+                "运营待办": data_reads.submit(_action_center_tasks, store, token_ids=token_ids,
+                    organization_key=organization, include_closed=request.args.get("include_closed") == "1"),
+                "通知记录": data_reads.submit(store.list_mercado_notification_events,
+                    token_ids=token_ids, organization_key=organization, limit=50, offset=(event_page - 1) * 50),
+                "权利人案件": data_reads.submit(_rights_holder_replies, store, token_ids),
+                "人工处理状态": data_reads.submit(_today_work_states, store, token_ids, organization),
+            }
+            def read_result(label, fallback):
+                try:
+                    return reads[label].result()
+                except Exception as exc:
+                    errors.append(f"{label}读取失败：{exc}")
+                    return fallback
+            data = {"rows": read_result("运营待办", [])}
+            events = read_result("通知记录", {"rows": [], "total": 0})
+            rights = read_result("权利人案件", [])
+            saved_tasks = read_result("人工处理状态", [])
             data["rows"] = [
                 row for row in (data.get("rows") or [])
-                if str(row.get("topic") or "") not in {"promotion_deadline", "promotion_result_unknown"}
-                and _is_recent_order_task(row, recent_order_keys)
+                if row.get("source") != "today_work_status"
+                and (request.args.get("include_closed") == "1" or row.get("status") != "resolved")
+                and str(row.get("topic") or "").replace(" ", "_") not in {"promotion_deadline", "promotion_result_unknown", "messages", "marketplace_messages"}
+                and _is_recent_order_task(row, recent_order_keys, watch_order_keys)
             ]
+            data["errors"] = errors
+            data["store_pagination"] = pagination
+            data["refreshing"] = refreshing
+            data["pending"] = pending
             data["filter_options"] = filter_options
             data["total"] = len(data["rows"])
             data["open"] = sum(row.get("status") != "resolved" for row in data["rows"])
             data["overdue"] = sum(bool(row.get("overdue")) for row in data["rows"])
-            data["rights_holder_replies"] = _rights_holder_replies(store, token_ids)
-            data["events"] = events.get("rows") or []
-            data["generated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            return jsonify(status="success", data=data)
+            try:
+                data["rights_holder_replies"] = annotate(rights, "rights", token_rows, saved_tasks)
+            except Exception as exc:
+                errors.append(f"权利人案件读取失败：{exc}")
+                data["rights_holder_replies"] = []
+            data["event_pagination"] = {"page": event_page, "pages": max(1, (int(events.get("total") or 0) + 49) // 50), "total": int(events.get("total") or 0)}
+            data["events"] = annotate(events.get("rows") or [], "events", token_rows, saved_tasks)
+            data["generated_at"] = datetime.now(_WORKBENCH_TZ).strftime("%Y-%m-%d %H:%M:%S")
+            response = jsonify(status="success", data=data)
+            response.headers["Cache-Control"] = "no-store"
+            return response
         except Exception as exc:
             logging.exception("加载美客多运营待办失败")
             return jsonify(status="error", message=str(exc)), 500
@@ -659,6 +943,61 @@ def create_action_center_blueprint(*, login_required, current_user, authorized_t
         except Exception:
             logging.exception("权利人案件处理异常")
             return jsonify(status="error", message="案件处理异常，请在店铺浏览器核实当前状态后处理"), 502
+
+    @blueprint.route("/api/mercado/today/batch-status", methods=["PATCH"])
+    @login_required
+    def batch_status():
+        if not permission("tasks.execute"):
+            return jsonify(status="error", message="无待办处理权限"), 403
+        body = request.get_json(silent=True)
+        if (not isinstance(body, dict) or body.get('status') not in {'open', 'in_progress', 'resolved'}
+                or not isinstance(body.get('items'), list) or not 1 <= len(body['items']) <= 100
+                or not isinstance(body.get('note', ''), str) or len(body.get('note', '')) > 2000):
+            return jsonify(status="error", message="请选择 1–100 条记录和有效状态，备注最多 2000 字"), 400
+        user, allowed, organization = scope()
+        tokens = {int(t['id']): t for t in store.list_mercado_store_tokens().get('rows', [])}
+        prepared = []
+        seen = set()
+        # Validate the entire selection before any write; never trust client store IDs.
+        try:
+            for item in body['items']:
+                if not isinstance(item, dict):
+                    raise ValueError('无效记录')
+                if item.get('ref'):
+                    existing = signer().loads(item['ref'], max_age=3600)
+                    task_id = None
+                else:
+                    task_id = int(item.get('id') or 0)
+                    existing = store.get_mercado_operator_task(task_id)
+                if not existing:
+                    raise ValueError('记录不存在，请刷新后重试')
+                token_id = int(existing.get('token_id') or 0)
+                token = tokens.get(token_id)
+                if (not token or (allowed is not None and token_id not in allowed)
+                        or (organization and existing.get('organization_key') != organization)
+                        or str(token.get('organization_key') or '') != str(existing.get('organization_key') or '')):
+                    return jsonify(status="error", message="无权处理所选记录"), 403
+                identity = ('task', task_id) if task_id is not None else ('ref', existing['task_key'])
+                if identity not in seen:
+                    prepared.append((item, task_id, existing))
+                    seen.add(identity)
+        except (BadSignature, ValueError, TypeError):
+            return jsonify(status="error", message="所选记录已失效，请刷新后重试"), 400
+        results, errors = [], []
+        for item, task_id, existing in prepared:
+            try:
+                if task_id is None:
+                    task_id = store.upsert_mercado_operator_task(existing)
+                result = store.update_mercado_operator_task(task_id,
+                    actor=str(user.get('display_name') or user.get('username') or '未知用户'),
+                    status=body['status'], note=body.get('note') or '')
+                results.append({'item': item, 'task': result})
+            except Exception:
+                logging.exception('批量更新今日必办失败：%s', task_id)
+                errors.append({'item': item, 'message': '保存失败，请重试此条记录'})
+        response = jsonify(status="success", data={'results': results, 'errors': errors})
+        response.headers['Cache-Control'] = 'no-store'
+        return response
 
     @blueprint.route("/api/mercado/today/tasks/<int:task_id>", methods=["PATCH"])
     @login_required

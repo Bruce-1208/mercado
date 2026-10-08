@@ -55,10 +55,10 @@ def test_integration_page_documents_every_supported_credential():
     ).read_text(encoding="utf-8")
 
     for value in (
-        "deepseek-v4-pro",
+        "qwen3.7-flash",
         "qwen3-vl-flash",
         "qwen3-vl-plus",
-        "qwen-plus",
+        "qwen3.7-flash",
         "rembg / isnet-general-use",
         "doubao-seedance-2-5-260628",
         "wan3.0-video-prime",

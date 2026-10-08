@@ -104,7 +104,7 @@ function refreshStoreAnalysisFilters(changed = "") {
     storeAnalysisFiltersLoaded = true;
 }
 
-function initStoreAnalysis() {
+function initStoreAnalysisDates() {
     if (!storeAnalysisReady) {
         const now = new Date(Date.now() + 8 * 3600000);
         document.getElementById("store-analysis-start").value = new Date(now.getTime() - 6 * 86400000).toISOString().slice(0, 10);
@@ -112,6 +112,33 @@ function initStoreAnalysis() {
         document.getElementById("store-analysis-category-level").value = "2";
         storeAnalysisReady = true;
     }
+}
+
+function storeAnalysisQueryParams(force = false) {
+    return !force && storeAnalysisUseRestoredQuery && storeAnalysisRestoredQuery
+        ? new URLSearchParams(storeAnalysisRestoredQuery)
+        : new URLSearchParams({
+        start_date: document.getElementById("store-analysis-start").value,
+        end_date: document.getElementById("store-analysis-end").value,
+        metric: document.getElementById("store-analysis-metric").value,
+        category_level: document.getElementById("store-analysis-category-level").value,
+        salesperson: document.getElementById("store-analysis-salesperson").value,
+        group_name: document.getElementById("store-analysis-group").value,
+        token_id: document.getElementById("store-analysis-store").value,
+    });
+}
+
+function storeAnalysisPreloadUrls() {
+    initStoreAnalysisDates();
+    restoreStoreAnalysisQuery();
+    return [
+        enterpriseScopedUrl("/api/mercado-tokens"),
+        enterpriseScopedUrl(`/api/store-analysis?${storeAnalysisQueryParams()}`),
+    ];
+}
+
+function initStoreAnalysis() {
+    initStoreAnalysisDates();
     if (storeAnalysisScopePromise) return storeAnalysisScopePromise;
     storeAnalysisScopePromise = (async () => {
         const response = await fetch(enterpriseScopedUrl("/api/mercado-tokens"), {cache: "no-store"});
@@ -240,17 +267,7 @@ async function loadStoreAnalysis(force = false) {
     try {
         void initStoreAnalysis();
         restoreStoreAnalysisQuery();
-        const params = !force && storeAnalysisUseRestoredQuery && storeAnalysisRestoredQuery
-            ? new URLSearchParams(storeAnalysisRestoredQuery)
-            : new URLSearchParams({
-            start_date: document.getElementById("store-analysis-start").value,
-            end_date: document.getElementById("store-analysis-end").value,
-            metric: document.getElementById("store-analysis-metric").value,
-            category_level: document.getElementById("store-analysis-category-level").value,
-            salesperson: document.getElementById("store-analysis-salesperson").value,
-            group_name: document.getElementById("store-analysis-group").value,
-            token_id: document.getElementById("store-analysis-store").value,
-        });
+        const params = storeAnalysisQueryParams(force);
         if (!params.get("start_date") || !params.get("end_date")) throw new Error("请选择统计时间段");
         message.textContent = force
             ? `正在重新统计订单和${params.get("category_level")}级分类…`

@@ -2,6 +2,7 @@ import json
 import os
 import time
 import requests
+from datetime import datetime
 
 from bit.workbench_runtime import bootstrap_runtime
 
@@ -28,6 +29,10 @@ def _resolve_db_mode():
 
 
 DB_MODE = _resolve_db_mode()
+
+
+class DatabaseAPIUnavailableError(RuntimeError):
+    """A transport failure or temporarily unavailable upstream."""
 
 
 class DatabaseAPIAuthError(RuntimeError):
@@ -68,6 +73,12 @@ def _request(method, path, **kwargs):
     timeout = kwargs.pop("timeout", 60)
     max_attempts = kwargs.pop("max_attempts", None)
     headers = _headers()
+    if path.startswith("/api/db/"):
+        from bit.product_access import forwarding_headers
+        headers.update(forwarding_headers())
+    if path.startswith(("/api/db/infringement-knowledge", "/api/db/infringement-risk")):
+        from bit.knowledge_organization import HEADER, organization
+        headers[HEADER] = organization()
     if path.startswith("/api/db/store-links"):
         from erp.store_link_audit import forwarding_headers
         headers.update(forwarding_headers())
@@ -93,7 +104,7 @@ def _request(method, path, **kwargs):
             if attempt + 1 < attempts and isinstance(e, (requests.ConnectionError, requests.Timeout)):
                 time.sleep(attempt + 1)
                 continue
-            raise RuntimeError(f"数据库接口请求失败：{url}，请确认 bit_interface.py 已启动。原因：{e}") from e
+            raise DatabaseAPIUnavailableError(f"数据库接口请求失败：{url}，请确认 bit_interface.py 已启动。原因：{e}") from e
         if response.status_code in (401, 403):
             raise DatabaseAPIAuthError(
                 f"数据库接口鉴权失败：{path}，状态码：{response.status_code}；"
@@ -106,7 +117,7 @@ def _request(method, path, **kwargs):
         break
 
     if response.status_code in (502, 503, 504):
-        raise RuntimeError(
+        raise DatabaseAPIUnavailableError(
             f"数据库服务暂时不可用（HTTP {response.status_code}）：{path}；"
             "请等待服务恢复后继续任务。写入结果可能未确认，不自动重复提交。"
         )
@@ -798,6 +809,7 @@ def update_zying_product_risks(results):
 def get_infringement_risk_candidates(
     hours=0, limit=0, zying_category=None, include_checked=False,
     sources=None, salesperson=None, group_name=None, token_ids=None,
+    items=None, detection_scope="title", rule_version=None,
 ):
     payload = {
         "hours": hours,
@@ -809,12 +821,17 @@ def get_infringement_risk_candidates(
         "salespeople": salesperson or [],
         "group_names": group_name or [],
         "token_ids": list(token_ids or []),
+        "detection_scope": detection_scope,
+        "rule_version": rule_version,
     }
+    if items is not None:
+        payload["items"] = items
     if DB_MODE == "mysql":
         return _local_call("get_infringement_risk_candidates", **{
             "hours": hours, "limit": limit, "zying_category": zying_category,
             "include_checked": include_checked, "sources": sources,
             "salesperson": salesperson, "group_name": group_name, "token_ids": token_ids,
+            "items": items, "detection_scope": detection_scope, "rule_version": rule_version,
         })
     return _request("POST", "/api/db/infringement-risk/candidates", json=payload)
 
@@ -831,18 +848,32 @@ def update_infringement_product_risks(results):
 def get_infringement_risk_results(
     zying_category=None, risk_level=None, search="", sort_by="risk_level",
     sort_dir="desc", limit=1000, sources=None,
+    items=None, rule_version=None, detection_scope=None, page=None,
 ):
     if DB_MODE == "mysql":
         return _local_call(
             "get_infringement_risk_results", zying_category=zying_category,
             risk_level=risk_level, search=search, sort_by=sort_by,
-            sort_dir=sort_dir, limit=limit, sources=sources,
+            sort_dir=sort_dir, limit=limit, sources=sources, items=items,
+            rule_version=rule_version, detection_scope=detection_scope, **({"page": page} if page is not None else {}),
         )
     return _request("GET", "/api/db/infringement-risk/results", params={
         "category": zying_category or "", "risk_level": risk_level or "",
         "search": search or "", "sort_by": sort_by, "sort_dir": sort_dir,
-        "limit": limit, "sources": ",".join(sources or []),
+        "page": page, "limit": limit, "sources": ",".join(sources or []),
+        "items": json.dumps(items, ensure_ascii=False) if items is not None else "",
+        "rule_version": rule_version or "", "detection_scope": detection_scope or "",
     })
+
+
+def update_infringement_risk_review(items, decision, reason, reviewer, expires_at=None,
+                                   site_ids=None, evidence_ref="", rule_version=None):
+    payload = {"items": items, "decision": decision, "reason": reason, "reviewer": reviewer,
+               "expires_at": expires_at, "site_ids": site_ids or [],
+               "evidence_ref": evidence_ref, "rule_version": rule_version}
+    if DB_MODE == "mysql":
+        return _local_call("update_infringement_risk_review", **payload)
+    return _request("POST", "/api/db/infringement-risk/review", json=payload)
 
 
 def list_infringement_risk_scope_options():
@@ -982,13 +1013,17 @@ def list_orders(
     origin="",
     freight_variance="",
     page=1,
-    page_size=200,
+    page_size=50,
     store_ids=None,
     salespeople=None,
     remark_search="",
     sort_by="ordered_at",
     sort_dir="desc",
     allowed_store_ids=None,
+    transfer_warehouse=None,
+    include_summary=True,
+    summary_only=False,
+    sync_identifiers_only=False,
 ):
     normalized_store_ids = [int(value) for value in store_ids or [] if str(value or "").lstrip("-").isdigit() and int(value) != 0]
     normalized_salespeople = [
@@ -1008,8 +1043,16 @@ def list_orders(
         "origin": origin or "",
         "freight_variance": freight_variance or "",
         "page": int(page or 1),
-        "page_size": int(page_size or 200),
+        "page_size": int(page_size or 50),
     }
+    if not include_summary:
+        local_params["include_summary"] = False
+    if summary_only:
+        local_params["summary_only"] = True
+    if sync_identifiers_only:
+        local_params["sync_identifiers_only"] = True
+    if transfer_warehouse is not None:
+        local_params["transfer_warehouse"] = transfer_warehouse
     if normalized_store_ids:
         local_params["store_ids"] = normalized_store_ids
     if normalized_salespeople:
@@ -1501,16 +1544,19 @@ def get_prohibited_listing_sync_status():
     return _request("GET", "/api/db/prohibited-listings/sync/status")
 
 
-def bulk_update_orders(order_ids, operator_id=None, operator_name="", allowed_token_ids=None, **changes):
+def bulk_update_orders(order_ids, operator_id=None, operator_name="", allowed_token_ids=None, allowed_warehouse=None, **changes):
     payload = {"order_ids": [str(value) for value in order_ids or []]}
     for field in (
         "workflow_status", "purchase_order", "purchase_tracking",
         "logistics_company", "purchase_cost", "purchase_remark", "order_remark",
+        "purchase_net_proceeds_ratio", "transfer_warehouse",
     ):
         if field in changes:
             payload[field] = changes.get(field)
     if allowed_token_ids is not None:
         payload["allowed_token_ids"] = list(allowed_token_ids)
+    if allowed_warehouse is not None:
+        payload["allowed_warehouse"] = allowed_warehouse
     payload["operator_id"] = operator_id
     payload["operator_name"] = str(operator_name or "")
     if DB_MODE == "mysql":
@@ -1520,6 +1566,13 @@ def bulk_update_orders(order_ids, operator_id=None, operator_name="", allowed_to
             **payload,
         )
     return _request("POST", "/api/db/orders/bulk-update", json=payload)
+
+
+def get_order_access_contexts(order_ids):
+    ids = [str(value) for value in order_ids or []]
+    if DB_MODE == "mysql":
+        return _local_call("get_mercado_order_access_contexts", ids)
+    return _request("POST", "/api/db/orders/access-contexts", json={"order_ids": ids})
 
 
 def get_purchase_tracking_orders(order_ids, *, all_orders=False, date_start=None, date_end=None, missing_tracking=False):
@@ -1533,12 +1586,36 @@ def get_purchase_tracking_orders(order_ids, *, all_orders=False, date_start=None
     return _request("POST", "/api/db/orders/purchase-tracking", json=payload)
 
 
-def download_order_labels(order_ids):
-    payload = {"order_ids": [str(value) for value in order_ids or []]}
-    if DB_MODE == "mysql":
-        from bit.bit_order_labels import download_order_labels as local_download
+def _raise_print_wallet_error(response):
+    from bit.print_wallet import WalletConflict, WalletInsufficientFunds
+    try:
+        payload = response.json() or {}
+        message = payload.get("message")
+    except ValueError:
+        payload = {}
+        message = None
+    message = message or f"打印余额服务返回 {response.status_code}"
+    if response.status_code == 402:
+        raise WalletInsufficientFunds(message)
+    if response.status_code == 409:
+        raise WalletConflict(message, request_status=payload.get("request_status"))
+    if response.status_code == 403:
+        raise PermissionError(message)
+    if response.status_code in (400, 422):
+        raise ValueError(message)
+    raise RuntimeError(message)
 
-        return local_download(payload["order_ids"])
+
+def download_order_labels(order_ids, *, actor_id=None, request_id=None, organization_key=None):
+    if not actor_id or not request_id:
+        raise ValueError("打印面单必须提供操作账号和打印编号，请刷新页面")
+    payload = {"order_ids": [str(value) for value in order_ids or []],
+               "actor_id": actor_id, "request_id": request_id, "organization_key": organization_key}
+    if DB_MODE == "mysql":
+        from bit.print_wallet import download_paid_labels
+
+        return download_paid_labels(payload["order_ids"], actor_id=actor_id, request_id=request_id,
+                                    organization_key=organization_key)
     url = f"{DB_API_BASE_URL}/api/db/orders/labels"
     try:
         response = DB_API_SESSION.post(
@@ -1550,11 +1627,9 @@ def download_order_labels(order_ids):
     except requests.RequestException as exc:
         raise RuntimeError(f"美客多面单接口请求失败：{exc}") from exc
     if not response.ok:
-        try:
-            message = (response.json() or {}).get("message")
-        except ValueError:
-            message = (response.text or "")[:500]
-        raise RuntimeError(message or f"美客多面单接口返回 {response.status_code}")
+        _raise_print_wallet_error(response)
+    if response.headers.get("X-Print-Wallet-Request-Id") != str(request_id):
+        raise RuntimeError("中心服务未确认本次打印扣费，请更新中心服务后重试，并核实余额流水")
     printed_header = response.headers.get("X-Mercado-Printed-Order-Ids", "")
     printed_order_ids = [value for value in printed_header.split(",") if value]
     if not printed_header:
@@ -1573,6 +1648,8 @@ def download_order_labels(order_ids):
         "failed_order_count": int(
             response.headers.get("X-Mercado-Failed-Order-Count") or 0
         ),
+        "wallet_charge_cents": int(response.headers.get("X-Print-Wallet-Charge-Cents") or 0),
+        "wallet_request_id": request_id,
     }
 
 
@@ -1720,6 +1797,27 @@ def create_infringement_knowledge(record):
     if DB_MODE == "mysql":
         return _local_call("create_infringement_knowledge", record)
     return _request("POST", "/api/db/infringement-knowledge", json=record or {})
+
+
+def get_infringement_knowledge_detail(record_id):
+    if DB_MODE == "mysql":
+        return _local_call("get_infringement_knowledge_detail", record_id)
+    return _request("GET", f"/api/db/infringement-knowledge/{int(record_id)}")
+
+
+def get_infringement_knowledge_products(record_id, limit=50, token_ids=None):
+    if DB_MODE == "mysql":
+        return _local_call("get_infringement_knowledge_products", record_id, limit=limit, token_ids=token_ids)
+    params = {"limit": limit}
+    if token_ids is not None:
+        params["token_ids"] = list(token_ids) or [""]
+    return _request("GET", f"/api/db/infringement-knowledge/{int(record_id)}/products", params=params)
+
+
+def submit_infringement_knowledge_candidate(record, actor=""):
+    if DB_MODE == "mysql":
+        return _local_call("submit_infringement_knowledge_candidate", record, actor=actor)
+    return _request("POST", "/api/db/infringement-knowledge/candidates", json={"record": record, "actor": actor})
 
 
 def update_infringement_knowledge(record_id, record):
@@ -2013,7 +2111,7 @@ def delete_mercado_account_group(group_id):
 
 
 def exchange_mercado_store_token(
-    display_name, callback_or_code, application_id=None, organization_key="wuhan-zeshun"
+    display_name, callback_or_code, application_id=None, organization_key="wuhan-zeshun", salesperson=""
 ):
     if DB_MODE == "mysql":
         from bit import bit_mysql
@@ -2025,6 +2123,7 @@ def exchange_mercado_store_token(
             upsert=bit_mysql.upsert_mercado_store_token,
             application_id=application_id,
             organization_key=organization_key,
+            salesperson=salesperson,
             get_application=bit_mysql.get_mercado_application,
         )
     try:
@@ -2037,6 +2136,7 @@ def exchange_mercado_store_token(
                 "code": callback_or_code,
                 "application_id": application_id,
                 "organization_key": organization_key,
+                "salesperson": salesperson,
             },
         )
     except RuntimeError as exc:
@@ -2051,6 +2151,7 @@ def exchange_mercado_store_token(
             upsert=bit_mysql.upsert_mercado_store_token,
             application_id=application_id,
             organization_key=organization_key,
+            salesperson=salesperson,
             get_application=bit_mysql.get_mercado_application,
         )
 
@@ -2352,6 +2453,7 @@ def list_mercado_collection_items(
     weight_min=None, weight_max=None, price_min=None, price_max=None,
     net_proceeds_min=None, net_proceeds_max=None, date_from="", date_to="",
     exclude_added=False, management_category_id=None, weight_status="",
+    salesperson="", include_salesperson_options=False,
 ):
     params = {
         "weight_status": str(weight_status or "").strip().lower(),
@@ -2371,6 +2473,10 @@ def list_mercado_collection_items(
         "exclude_added": bool(exclude_added),
         "management_category_id": management_category_id,
     }
+    if str(salesperson or "").strip():
+        params["salesperson"] = str(salesperson).strip()
+    if include_salesperson_options:
+        params["include_salesperson_options"] = True
     if task_id not in (None, ""):
         params["task_id"] = int(task_id)
     if DB_MODE == "mysql":
@@ -2422,6 +2528,7 @@ def list_mercado_product_items(
     mercado_category="", zying_category="", product_developer_id="", token_ids=None,
     collector_salesperson="", generator_salesperson="", weight_status="",
     collector_salesperson_exact=False, target_platform="mercadolibre",
+    include_generator_options=False, include_total=True,
 ):
     params = {
         "weight_status": str(weight_status or "").strip().lower(),
@@ -2446,10 +2553,14 @@ def list_mercado_product_items(
         "zying_category": str(zying_category or "").strip(),
         "product_developer_id": str(product_developer_id or "").strip(),
     }
+    if not include_total:
+        params["include_total"] = False
     if collector_salesperson:
         params["collector_salesperson"] = str(collector_salesperson).strip()
         if collector_salesperson_exact:
             params["collector_salesperson_exact"] = True
+    if include_generator_options:
+        params["include_generator_options"] = True
     if generator_salesperson:
         params["generator_salesperson"] = str(generator_salesperson).strip()
     if token_ids is not None:
@@ -2474,6 +2585,26 @@ def list_mercado_product_items(
         return _collection_store_call(
             "list_product_items", **params
         )
+
+
+def list_mercado_product_developers(token_ids=None):
+    params = {}
+    if token_ids is not None:
+        params["token_ids"] = sorted({
+            int(value) for value in token_ids or () if int(value or 0) > 0
+        })
+    if DB_MODE == "mysql":
+        return _collection_store_call("list_product_developers", **params)
+    if token_ids is not None and not params["token_ids"]:
+        # Keep an explicit empty scope over query-string serialization.
+        params["token_ids"] = [""]
+    path = "/api/db/mercado-products/developers"
+    try:
+        return _request("GET", path, params=params, timeout=(3, 25), max_attempts=1)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("list_product_developers", **params)
 
 
 def get_1688_product_options():
@@ -2617,6 +2748,20 @@ def create_mercado_management_category(name, listing_ratio_percent=100):
         return _collection_store_call(
             "create_management_category", payload["name"], payload["listing_ratio_percent"]
         )
+
+
+def update_mercado_product_items(product_item_ids, changes):
+    ids = [int(value) for value in product_item_ids or []]
+    if DB_MODE == "mysql":
+        return _collection_store_call("update_product_items", ids, changes)
+    return _request("PATCH", "/api/db/mercado-products/bulk-edit", json={"product_item_ids": ids, "changes": dict(changes or {})})
+
+
+def update_mercado_collection_items(collection_item_ids, changes):
+    ids = [int(value) for value in collection_item_ids or []]
+    if DB_MODE == "mysql":
+        return _collection_store_call("update_collection_items", ids, changes)
+    return _request("PATCH", "/api/db/mercado-collection/bulk-edit", json={"collection_item_ids": ids, "changes": dict(changes or {})})
 
 
 def update_mercado_management_category(category_id, name, listing_ratio_percent=None):
@@ -3161,12 +3306,18 @@ def _mercado_action_center_local(operation, payload=None):
         return bit_mysql.resolve_mercado_notification_task(
             data.get("event_id"), data.get("reason") or ""
         )
+    if operation == "message_pack_candidates":
+        return bit_mysql.list_mercado_message_pack_candidates(data["token_id"])
+    if operation == "list_today_work_states":
+        return bit_mysql.list_mercado_today_work_states(
+            token_ids=data.get("token_ids"), organization_key=data.get("organization_key") or "")
     if operation == "list_tasks":
         return bit_mysql.list_mercado_operator_tasks(
             token_ids=data.get("token_ids"),
             organization_key=data.get("organization_key") or "",
             include_closed=bool(data.get("include_closed")),
             limit=data.get("limit", 300),
+            offset=data.get("offset", 0),
         )
     if operation == "get_task":
         return bit_mysql.get_mercado_operator_task(data.get("task_id"))
@@ -3180,7 +3331,7 @@ def _mercado_action_center_local(operation, payload=None):
         return bit_mysql.list_mercado_notification_events(
             token_ids=data.get("token_ids"),
             organization_key=data.get("organization_key") or "",
-            limit=data.get("limit", 100),
+            limit=data.get("limit", 100), offset=data.get("offset", 0),
         )
     if operation == "get_event":
         return bit_mysql.get_mercado_notification_event(data.get("event_id"))
@@ -3188,7 +3339,8 @@ def _mercado_action_center_local(operation, payload=None):
         return bit_mysql.replay_mercado_notification_event(data.get("event_id"))
     if operation == "list_orders":
         return bit_mysql.list_mercado_action_center_orders(
-            token_ids=data.get("token_ids"), limit=data.get("limit", 500)
+            token_ids=data.get("token_ids"), limit=data.get("limit", 500),
+            offset=data.get("offset", 0),
         )
     if operation == "upsert_task":
         return bit_mysql.upsert_mercado_operator_task(data.get("task") or {})
@@ -3234,12 +3386,19 @@ def resolve_mercado_notification_task(event_id, reason):
     })
 
 
-def list_mercado_operator_tasks(*, token_ids=None, organization_key="", include_closed=False, limit=300):
+def list_mercado_today_work_states(*, token_ids, organization_key=""):
+    return _mercado_action_center_call("list_today_work_states", {
+        "token_ids": list(token_ids or []), "organization_key": organization_key,
+    })
+
+
+def list_mercado_operator_tasks(*, token_ids=None, organization_key="", include_closed=False, limit=300, offset=0):
     return _mercado_action_center_call("list_tasks", {
         "token_ids": None if token_ids is None else list(token_ids),
         "organization_key": organization_key,
         "include_closed": include_closed,
         "limit": limit,
+        "offset": offset,
     })
 
 
@@ -3254,10 +3413,10 @@ def update_mercado_operator_task(task_id, *, actor, owner=None, status=None, due
     })
 
 
-def list_mercado_notification_events(*, token_ids=None, organization_key="", limit=100):
+def list_mercado_notification_events(*, token_ids=None, organization_key="", limit=100, offset=0):
     return _mercado_action_center_call("list_events", {
         "token_ids": None if token_ids is None else list(token_ids),
-        "organization_key": organization_key, "limit": limit,
+        "organization_key": organization_key, "limit": limit, "offset": offset,
     })
 
 
@@ -3269,14 +3428,17 @@ def replay_mercado_notification_event(event_id):
     return _mercado_action_center_call("replay_event", {"event_id": int(event_id)})
 
 
-def list_mercado_action_center_orders(*, token_ids=None, limit=500):
+def list_mercado_action_center_orders(*, token_ids=None, limit=500, offset=0):
     return _mercado_action_center_call("list_orders", {
-        "token_ids": list(token_ids or ()), "limit": limit,
+        "token_ids": list(token_ids or ()), "limit": limit, "offset": offset,
     })
 
 
 def upsert_mercado_operator_task(task):
-    return _mercado_action_center_call("upsert_task", {"task": dict(task or {})})
+    row = dict(task or {})
+    if DB_MODE != "mysql" and isinstance(row.get("due_at"), datetime):
+        row["due_at"] = row["due_at"].isoformat()
+    return _mercado_action_center_call("upsert_task", {"task": row})
 
 def resolve_mercado_operator_tasks_by_keys(task_keys, reason):
     return _mercado_action_center_call("resolve_tasks_by_keys", {"task_keys": list(task_keys or ()), "reason": reason})
@@ -3347,6 +3509,17 @@ def register_workbench_user(data):
             "账号", "密码", "邮箱", "验证码", "姓名", "微信号", "手机号",
             "该邮箱", "客户标识", "所选角色",
         )):
+            raise ValueError(str(exc)) from exc
+        raise
+
+
+def workbench_profile(payload):
+    if DB_MODE == "mysql":
+        return _local_interface_call("workbench_profile_local", payload)
+    try:
+        return _request("POST", "/api/db/workbench/profile", json=payload, timeout=15)
+    except RuntimeError as exc:
+        if str(exc).startswith(("个人资料", "姓名", "邮箱", "部门", "微信号", "手机号", "原密码", "密码", "新密码", "两次输入")):
             raise ValueError(str(exc)) from exc
         raise
 
@@ -3430,3 +3603,58 @@ def yandex_order_sync(action="status"):
     if action == "start":
         return {"started": service.start(full=True), "state": service.status()}
     return service.status()
+
+
+def account_billing(payload):
+    if DB_MODE == "mysql":
+        from bit.account_billing import billing_local
+        return billing_local(payload)
+    return _request("POST", "/api/db/workbench/billing", json=payload, timeout=20, max_attempts=1)
+
+
+def ai_usage_billing(payload):
+    """Query the central AI ledger or deliver an idempotent usage record."""
+    from erp import ai_usage_billing as billing
+
+    if DB_MODE == "mysql":
+        return billing.ai_usage_billing(payload)
+    body = dict(payload or {})
+    delivering = body.pop("_outbox_delivery", False)
+    timeout = body.pop("_delivery_timeout", (5, 15))
+    if not delivering:
+        billing.resume_outbox()
+    return _request("POST", "/api/db/ai-usage-billing", json=body, timeout=timeout, max_attempts=1)
+
+
+def print_wallet(payload):
+    if DB_MODE == "mysql":
+        from bit.print_wallet import wallet_local
+        return wallet_local(payload)
+    try:
+        response = DB_API_SESSION.post(
+            f"{DB_API_BASE_URL}/api/db/workbench/print-wallet",
+            headers=_headers(), timeout=20, json=payload,
+        )
+    except requests.RequestException as exc:
+        raise RuntimeError("打印余额服务连接失败，写入结果可能未确认，请使用原操作编号重试") from exc
+    if not response.ok:
+        _raise_print_wallet_error(response)
+    return response.json()["data"]
+
+
+def list_mercado_message_pack_candidates(token_id):
+    return _mercado_action_center_call("message_pack_candidates", {"token_id": int(token_id)})
+
+
+def check_catalog_access(item_type, item_ids, *, manage_visibility=False):
+    payload = {'item_type': item_type, 'item_ids': list(item_ids), 'manage_visibility': manage_visibility}
+    if DB_MODE == 'mysql':
+        return _collection_store_call('check_catalog_access', **payload)
+    return _request('POST', '/api/db/catalog/access', json=payload)
+
+
+def set_catalog_visibility(item_type, item_ids, visibility):
+    payload = {'item_type': item_type, 'item_ids': list(item_ids), 'visibility': visibility}
+    if DB_MODE == 'mysql':
+        return _collection_store_call('set_catalog_visibility', **payload)
+    return _request('POST', '/api/db/catalog/visibility', json=payload)

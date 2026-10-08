@@ -1,0 +1,917 @@
+{
+  "note": "SELECT-only database diagnostics, no schema changes; workflow marker decoration omitted from listing timings.",
+  "snapshot": {
+    "tables": [
+      {
+        "TABLE_NAME": "erp_mercadolibre_products",
+        "TABLE_ROWS": 965573,
+        "size_mb": "16927"
+      },
+      {
+        "TABLE_NAME": "erp_mercadolibre_store_links",
+        "TABLE_ROWS": 975513,
+        "size_mb": "16394"
+      },
+      {
+        "TABLE_NAME": "mercado_synced_orders",
+        "TABLE_ROWS": 51472,
+        "size_mb": "437"
+      }
+    ],
+    "erp_mercadolibre_store_links_indexes": [
+      {
+        "Key_name": "PRIMARY",
+        "Seq_in_index": 1,
+        "Column_name": "id",
+        "Cardinality": 971272,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "uniq_erp_meli_store_link",
+        "Seq_in_index": 1,
+        "Column_name": "token_id",
+        "Cardinality": 144,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "uniq_erp_meli_store_link",
+        "Seq_in_index": 2,
+        "Column_name": "item_id",
+        "Cardinality": 975513,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_current",
+        "Seq_in_index": 1,
+        "Column_name": "is_current",
+        "Cardinality": 1,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_current",
+        "Seq_in_index": 2,
+        "Column_name": "status",
+        "Cardinality": 7,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_current",
+        "Seq_in_index": 3,
+        "Column_name": "last_synced_at",
+        "Cardinality": 52806,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_store",
+        "Seq_in_index": 1,
+        "Column_name": "token_id",
+        "Cardinality": 138,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_store",
+        "Seq_in_index": 2,
+        "Column_name": "is_current",
+        "Cardinality": 211,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_store",
+        "Seq_in_index": 3,
+        "Column_name": "item_id",
+        "Cardinality": 975513,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_sales_page",
+        "Seq_in_index": 1,
+        "Column_name": "is_current",
+        "Cardinality": 1,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_sales_page",
+        "Seq_in_index": 2,
+        "Column_name": "sold_quantity",
+        "Cardinality": 96,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_sales_page",
+        "Seq_in_index": 3,
+        "Column_name": "last_synced_at",
+        "Cardinality": 93200,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_sales_page",
+        "Seq_in_index": 4,
+        "Column_name": "id",
+        "Cardinality": 975513,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_site_page",
+        "Seq_in_index": 1,
+        "Column_name": "is_current",
+        "Cardinality": 1,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_site_page",
+        "Seq_in_index": 2,
+        "Column_name": "site_id",
+        "Cardinality": 12,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_category_page",
+        "Seq_in_index": 1,
+        "Column_name": "is_current",
+        "Cardinality": 1,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_category_page",
+        "Seq_in_index": 2,
+        "Column_name": "category_id",
+        "Cardinality": 13423,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_category_page",
+        "Seq_in_index": 3,
+        "Column_name": "sold_quantity",
+        "Cardinality": 20007,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_category_page",
+        "Seq_in_index": 4,
+        "Column_name": "last_synced_at",
+        "Cardinality": 439860,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_category_page",
+        "Seq_in_index": 5,
+        "Column_name": "id",
+        "Cardinality": 975513,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_price",
+        "Seq_in_index": 1,
+        "Column_name": "is_current",
+        "Cardinality": 1,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_price",
+        "Seq_in_index": 2,
+        "Column_name": "price",
+        "Cardinality": 10347,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_price",
+        "Seq_in_index": 3,
+        "Column_name": "sold_quantity",
+        "Cardinality": 71860,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_price",
+        "Seq_in_index": 4,
+        "Column_name": "last_synced_at",
+        "Cardinality": 668348,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_price",
+        "Seq_in_index": 5,
+        "Column_name": "id",
+        "Cardinality": 975513,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_weight_g",
+        "Seq_in_index": 1,
+        "Column_name": "is_current",
+        "Cardinality": 1,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_weight_g",
+        "Seq_in_index": 2,
+        "Column_name": "weight_g",
+        "Cardinality": 3648,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_weight_g",
+        "Seq_in_index": 3,
+        "Column_name": "sold_quantity",
+        "Cardinality": 5424,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_weight_g",
+        "Seq_in_index": 4,
+        "Column_name": "last_synced_at",
+        "Cardinality": 384660,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_weight_g",
+        "Seq_in_index": 5,
+        "Column_name": "id",
+        "Cardinality": 975513,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_available_quantity",
+        "Seq_in_index": 1,
+        "Column_name": "is_current",
+        "Cardinality": 1,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_available_quantity",
+        "Seq_in_index": 2,
+        "Column_name": "available_quantity",
+        "Cardinality": 2227,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_available_quantity",
+        "Seq_in_index": 3,
+        "Column_name": "sold_quantity",
+        "Cardinality": 3675,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_available_quantity",
+        "Seq_in_index": 4,
+        "Column_name": "last_synced_at",
+        "Cardinality": 57078,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_available_quantity",
+        "Seq_in_index": 5,
+        "Column_name": "id",
+        "Cardinality": 975513,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_last_synced_at",
+        "Seq_in_index": 1,
+        "Column_name": "is_current",
+        "Cardinality": 1,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_last_synced_at",
+        "Seq_in_index": 2,
+        "Column_name": "last_synced_at",
+        "Cardinality": 19720,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_last_synced_at",
+        "Seq_in_index": 3,
+        "Column_name": "sold_quantity",
+        "Cardinality": 24420,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_last_synced_at",
+        "Seq_in_index": 4,
+        "Column_name": "id",
+        "Cardinality": 975513,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_net_proceeds_usd",
+        "Seq_in_index": 1,
+        "Column_name": "is_current",
+        "Cardinality": 1,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_net_proceeds_usd",
+        "Seq_in_index": 2,
+        "Column_name": "net_proceeds_usd",
+        "Cardinality": 18004,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_net_proceeds_usd",
+        "Seq_in_index": 3,
+        "Column_name": "sold_quantity",
+        "Cardinality": 11241,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_net_proceeds_usd",
+        "Seq_in_index": 4,
+        "Column_name": "last_synced_at",
+        "Cardinality": 541439,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_link_sort_net_proceeds_usd",
+        "Seq_in_index": 5,
+        "Column_name": "id",
+        "Cardinality": 975513,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_search",
+        "Seq_in_index": 1,
+        "Column_name": "title",
+        "Cardinality": 975513,
+        "Collation": null
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_search",
+        "Seq_in_index": 2,
+        "Column_name": "item_id",
+        "Cardinality": 975513,
+        "Collation": null
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_search",
+        "Seq_in_index": 3,
+        "Column_name": "seller_sku",
+        "Cardinality": 975513,
+        "Collation": null
+      },
+      {
+        "Key_name": "idx_erp_meli_store_link_search",
+        "Seq_in_index": 4,
+        "Column_name": "store_name",
+        "Cardinality": 975513,
+        "Collation": null
+      }
+    ],
+    "mercado_synced_orders_indexes": [
+      {
+        "Key_name": "PRIMARY",
+        "Seq_in_index": 1,
+        "Column_name": "order_id",
+        "Cardinality": 51354,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_mercado_synced_orders_token_updated",
+        "Seq_in_index": 1,
+        "Column_name": "token_id",
+        "Cardinality": 111,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_mercado_synced_orders_token_updated",
+        "Seq_in_index": 2,
+        "Column_name": "last_updated",
+        "Cardinality": 51472,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_mercado_synced_orders_created",
+        "Seq_in_index": 1,
+        "Column_name": "date_created",
+        "Cardinality": 51472,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_mercado_synced_orders_status",
+        "Seq_in_index": 1,
+        "Column_name": "status_label",
+        "Cardinality": 7,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_mercado_synced_orders_country",
+        "Seq_in_index": 1,
+        "Column_name": "country",
+        "Cardinality": 6,
+        "Collation": "A"
+      }
+    ],
+    "erp_mercadolibre_products_indexes": [
+      {
+        "Key_name": "PRIMARY",
+        "Seq_in_index": 1,
+        "Column_name": "id",
+        "Cardinality": 957325,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "uniq_erp_meli_product_item",
+        "Seq_in_index": 1,
+        "Column_name": "source_item_id",
+        "Cardinality": 965573,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_product_added",
+        "Seq_in_index": 1,
+        "Column_name": "added_at",
+        "Cardinality": 15815,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_product_source",
+        "Seq_in_index": 1,
+        "Column_name": "source_type",
+        "Cardinality": 3,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_product_source",
+        "Seq_in_index": 2,
+        "Column_name": "id",
+        "Cardinality": 965573,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_product_review",
+        "Seq_in_index": 1,
+        "Column_name": "review_status",
+        "Cardinality": 1,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_product_review",
+        "Seq_in_index": 2,
+        "Column_name": "id",
+        "Cardinality": 965573,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_product_publish",
+        "Seq_in_index": 1,
+        "Column_name": "last_publish_status",
+        "Cardinality": 2,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_product_publish",
+        "Seq_in_index": 2,
+        "Column_name": "id",
+        "Cardinality": 965573,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_product_weight",
+        "Seq_in_index": 1,
+        "Column_name": "weight_g",
+        "Cardinality": 2617,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_product_price",
+        "Seq_in_index": 1,
+        "Column_name": "price",
+        "Cardinality": 7198,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_product_net",
+        "Seq_in_index": 1,
+        "Column_name": "net_proceeds_usd",
+        "Cardinality": 17369,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_profit_refresh",
+        "Seq_in_index": 1,
+        "Column_name": "profitability_updated_at",
+        "Cardinality": 81443,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_profit_refresh",
+        "Seq_in_index": 2,
+        "Column_name": "id",
+        "Cardinality": 965573,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_product_management_category",
+        "Seq_in_index": 1,
+        "Column_name": "management_category_id",
+        "Cardinality": 1,
+        "Collation": "A"
+      },
+      {
+        "Key_name": "idx_erp_meli_product_management_category",
+        "Seq_in_index": 2,
+        "Column_name": "id",
+        "Cardinality": 965573,
+        "Collation": "A"
+      }
+    ],
+    "active_queries": [],
+    "query_digests": [
+      {
+        "digest": "SELECT /*+ MAX_EXECUTION_TIME (?) */ COUNT ( * ) AS `total` FROM `erp_mercadolibre_products` WHERE ( `last_publish_token_id` IN (...) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_publish_records` AS `own_records` WHERE `own_records` . `product_item_id` = `erp_mercadolibre_products` . `id` AND `own_records` . `token_id` IN (...) ) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_store_links` AS `own_links` WHERE `own_links` . `item_id` = `erp_mercadolibre_products` . `source_item_id` AND `own_links` . `token_id` IN (...) ) )",
+        "calls": 36,
+        "total_seconds": "291.940",
+        "avg_seconds": "8.109",
+        "max_seconds": "8.150",
+        "rows_examined": 2708693225,
+        "sort_rows": 0
+      },
+      {
+        "digest": "SELECT /*+ MAX_EXECUTION_TIME (?) */ COUNT ( * ) AS `total` FROM `erp_mercadolibre_products` WHERE ( `last_publish_token_id` IN (...) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_publish_records` AS `own_records` WHERE `own_records` . `product_item_id` = `erp_mercadolibre_products` . `id` AND `own_records` . `token_id` IN (...) ) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_store_links` AS `own_links` WHERE `own_links` . `item_id` = `erp_mercadolibre_products` . `source_item_id` AND `own_links` . `token_id` IN (...) ) ) AND `source_type` = ?",
+        "calls": 30,
+        "total_seconds": "242.204",
+        "avg_seconds": "8.073",
+        "max_seconds": "8.106",
+        "rows_examined": 1850219433,
+        "sort_rows": 0
+      },
+      {
+        "digest": "INSERT INTO `erp_mercadolibre_store_links` ( `token_id` , `store_name` , `seller_id` , `site_id` , `item_id` , `title` , `permalink` , `thumbnail_url` , `status` , `price` , `currency_id` , `available_quantity` , `sold_quantity` , `seller_sku` , `category_id` , `listing_type_id` , `weight_g` , `volumetric_weight_kg` , `package_length_cm` , `package_width_cm` , `package_height_cm` , `net_proceeds_usd` , `sync_marker` , `remote_json` , `is_current` , `last_synced_at` ) VALUES (...) /* , ... */ ON DUPLICATE KEY UPDATE `store_name` = VALUES ( `store_name` ) , `seller_id` = VALUES ( `seller_id` ) , `site_id` = VALUES ( `site_id` ) , `title` = COALESCE ( `NULLIF` ( VALUES ( `title` ) , ? ) , `title` ) , `permalink` = COALESCE ( `NULLIF` ( VALUES ( `permalink` ) , ? ) , `permalink` ) , `thumbnail_url` = COALESCE ( `NULLIF` ( VALUES ( `thumbnail_url` ) , ? ) , `thumbnail_url` ) , `status` = IF ( `status` = ? , `status` , VALUES ( `status` ) ) , `price` = IF ( `price_manual` = ? , `price` , COALESCE ( VALUES ( `price` ) , `price` ) ) , `currency_id` = COALESCE ( `NULLIF` ( VALUES (",
+        "calls": 9700,
+        "total_seconds": "241.973",
+        "avg_seconds": "0.025",
+        "max_seconds": "0.644",
+        "rows_examined": 0,
+        "sort_rows": 0
+      },
+      {
+        "digest": "UPDATE `erp_mercadolibre_store_links` SET `is_current` = ? , `sync_marker` = ? WHERE `token_id` = ? AND `item_id` IN (...)",
+        "calls": 4677,
+        "total_seconds": "143.145",
+        "avg_seconds": "0.031",
+        "max_seconds": "0.217",
+        "rows_examined": 888545,
+        "sort_rows": 0
+      },
+      {
+        "digest": "SELECT `links` . `site_id` , COUNT ( * ) AS `link_count` FROM `erp_mercadolibre_store_links` AS `links` WHERE `links` . `is_current` = ? AND `links` . `site_id` IS NOT NULL AND `links` . `site_id` != ? AND `links` . `token_id` IN (...) GROUP BY `links` . `site_id` ORDER BY `links` . `site_id`",
+        "calls": 4,
+        "total_seconds": "87.825",
+        "avg_seconds": "21.956",
+        "max_seconds": "29.363",
+        "rows_examined": 3397880,
+        "sort_rows": 0
+      },
+      {
+        "digest": "SELECT COUNT ( * ) AS `current_count` FROM `erp_mercadolibre_store_links` WHERE `is_current` = ? AND `token_id` IN (...)",
+        "calls": 4,
+        "total_seconds": "75.244",
+        "avg_seconds": "18.811",
+        "max_seconds": "20.986",
+        "rows_examined": 3397880,
+        "sort_rows": 0
+      },
+      {
+        "digest": "SELECT MAX ( `last_synced_at` ) AS `last_synced_at` FROM `erp_mercadolibre_store_links` WHERE `is_current` = ? AND `token_id` IN (...)",
+        "calls": 4,
+        "total_seconds": "75.166",
+        "avg_seconds": "18.791",
+        "max_seconds": "21.437",
+        "rows_examined": 3397880,
+        "sort_rows": 0
+      },
+      {
+        "digest": "UPDATE `erp_mercadolibre_store_links` SET `is_current` = ? WHERE `token_id` = ? AND ( `sync_marker` IS NULL OR `sync_marker` != ? ) AND COALESCE ( `status` , ? ) != ?",
+        "calls": 141,
+        "total_seconds": "75.111",
+        "avg_seconds": "0.533",
+        "max_seconds": "6.169",
+        "rows_examined": 2049762,
+        "sort_rows": 0
+      },
+      {
+        "digest": "SELECT /*+ MAX_EXECUTION_TIME (?) */ COUNT ( * ) AS `total` FROM `erp_mercadolibre_products` WHERE `management_category_id` = ? AND ( `last_publish_token_id` IN (...) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_publish_records` AS `own_records` WHERE `own_records` . `product_item_id` = `erp_mercadolibre_products` . `id` AND `own_records` . `token_id` IN (...) ) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_store_links` AS `own_links` WHERE `own_links` . `item_id` = `erp_mercadolibre_products` . `source_item_id` AND `own_links` . `token_id` IN (...) ) ) AND `review_status` = ?",
+        "calls": 7,
+        "total_seconds": "48.864",
+        "avg_seconds": "6.981",
+        "max_seconds": "8.150",
+        "rows_examined": 522515489,
+        "sort_rows": 0
+      },
+      {
+        "digest": "SELECT `token_id` , `site_id` , `item_id` , `permalink` , `thumbnail_url` FROM `erp_mercadolibre_store_links` WHERE `is_current` = ? AND `token_id` IN (...) AND `item_id` IN (...)",
+        "calls": 2666,
+        "total_seconds": "30.316",
+        "avg_seconds": "0.011",
+        "max_seconds": "0.627",
+        "rows_examined": 158709,
+        "sort_rows": 0
+      },
+      {
+        "digest": "SELECT /*+ MAX_EXECUTION_TIME (?) */ COUNT ( * ) AS `total` FROM `erp_mercadolibre_products` WHERE `management_category_id` = ? AND ( `last_publish_token_id` IN (...) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_publish_records` AS `own_records` WHERE `own_records` . `product_item_id` = `erp_mercadolibre_products` . `id` AND `own_records` . `token_id` IN (...) ) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_store_links` AS `own_links` WHERE `own_links` . `item_id` = `erp_mercadolibre_products` . `source_item_id` AND `own_links` . `token_id` IN (...) ) )",
+        "calls": 3,
+        "total_seconds": "24.395",
+        "avg_seconds": "8.132",
+        "max_seconds": "8.148",
+        "rows_examined": 260541023,
+        "sort_rows": 0
+      },
+      {
+        "digest": "SELECT /*+ MAX_EXECUTION_TIME (?) */ COUNT ( * ) AS `total` FROM `erp_mercadolibre_products` WHERE ( `last_publish_token_id` IN (...) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_publish_records` AS `own_records` WHERE `own_records` . `product_item_id` = `erp_mercadolibre_products` . `id` AND `own_records` . `token_id` IN (...) ) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_store_links` AS `own_links` WHERE `own_links` . `item_id` = `erp_mercadolibre_products` . `source_item_id` AND `own_links` . `token_id` IN (...) ) ) AND `review_status` = ?",
+        "calls": 3,
+        "total_seconds": "24.365",
+        "avg_seconds": "8.122",
+        "max_seconds": "8.135",
+        "rows_examined": 246661772,
+        "sort_rows": 0
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "default_cold_50",
+      "query_trace": [
+        {
+          "kind": "metadata",
+          "sql": "SELECT `token_id`, `site_id`, COALESCE(`group_name`, '') AS `group_name` FROM `mercado_store_site_settings`",
+          "args_count": 0,
+          "seconds": 0.002
+        },
+        {
+          "kind": "other",
+          "sql": "SELECT tokens.`id` AS `token_id`, tokens.`display_name` AS `store_name`, NULL AS `link_count`, NULL AS `last_synced_at` FROM `mercado_store_tokens` AS tokens ORDER BY tokens.`display_name`, tokens.`id`",
+          "args_count": 0,
+          "seconds": 0.001
+        },
+        {
+          "kind": "count",
+          "sql": "SELECT links.`site_id`, COUNT(*) AS `link_count` FROM `erp_mercadolibre_store_links` AS links WHERE links.`is_current` = 1 AND links.`site_id` IS NOT NULL AND links.`site_id` <> '' GROUP BY links.`site_id` ORDER BY links.`site_id`",
+          "args_count": 0,
+          "seconds": 0.248
+        },
+        {
+          "kind": "count",
+          "sql": "SELECT COUNT(*) AS `all_count` FROM `erp_mercadolibre_store_links`",
+          "args_count": 0,
+          "seconds": 0.417
+        },
+        {
+          "kind": "count",
+          "sql": "SELECT COUNT(*) AS `current_count` FROM `erp_mercadolibre_store_links` WHERE `is_current` = 1",
+          "args_count": 0,
+          "seconds": 0.067
+        },
+        {
+          "kind": "count",
+          "sql": "SELECT COUNT(DISTINCT `token_id`) AS `store_count` FROM `erp_mercadolibre_store_links` WHERE `is_current` = 1",
+          "args_count": 0,
+          "seconds": 0.002
+        },
+        {
+          "kind": "other",
+          "sql": "SELECT MAX(`last_synced_at`) AS `last_synced_at` FROM `erp_mercadolibre_store_links` WHERE `is_current` = 1",
+          "args_count": 0,
+          "seconds": 0.0
+        },
+        {
+          "kind": "other",
+          "sql": "SELECT 1 AS `table_exists` FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = %s LIMIT 1",
+          "args_count": 1,
+          "seconds": 0.002
+        },
+        {
+          "kind": "page",
+          "sql": "SELECT full_links.`id`, full_links.`token_id`, full_links.`store_name`, full_links.`seller_id`, full_links.`site_id`, full_links.`item_id`, full_links.`title`, full_links.`permalink`, full_links.`thumbnail_url`, full_links.`status`, full_links.`price`, full_links.`currency_id`, full_links.`available_quantity`, full_links.`sold_quantity`, full_links.`seller_sku`, full_links.`category_id`, full_links.`listing_type_id`, full_links.`weight_g`, full_links.`volumetric_weight_kg`, full_links.`package_length_cm`, full_links.`package_width_cm`, full_links.`package_height_cm`, full_links.`net_proceeds_usd`, full_links.`price_manual`, full_links.`weight_manual`, full_links.`dimensions_manual`, full_links.`net_proceeds_manual`, full_links.`is_current`, full_links.`last_synced_at`, full_links.`created_at`, full_links.`updated_at`, page_ids.`sales_14d`, product.`category_name`, product.`management_category_id`, management_category.`name` AS `management_category_name` FROM `erp_mercadolibre_store_links` AS full_links LEFT JOIN `erp_mercadolibre_products` AS product ON product.`source_item_id` = full_links.`item_id` LEFT JOIN `erp_mercadolibre_management_categories` AS management_category ON management_category.`id` = product.`management_category_id` INNER JOIN ( SELECT links.`id`, 0 AS `sales_14d` FROM `erp_mercadolibre_store_links` AS links WHERE links.`is_current` = 1 ORDER BY links.`sold_quantity` DESC, links.`last_synced_at` DESC, links.`id` DESC LIMIT %s OFFSET %s ) AS page_ids ON page_ids.`id` = full_links.`id` ORDER BY full_links.`sold_quantity` DESC, full_links.`last_synced_at` DESC, full_links.`id` DESC",
+          "args_count": 2,
+          "seconds": 0.007
+        },
+        {
+          "kind": "recent_sales",
+          "sql": "SELECT recent_orders.`token_id`, order_items.`item_id`, SUM(COALESCE(order_items.`quantity`, 0)) AS `sales_14d` FROM `mercado_synced_orders` AS recent_orders CROSS JOIN JSON_TABLE( IF( JSON_VALID(recent_orders.`raw_json`), recent_orders.`raw_json`, JSON_OBJECT('order_items', JSON_ARRAY()) ), '$.order_items[*]' COLUMNS ( `item_id` VARCHAR(64) PATH '$.item.id', `quantity` INT PATH '$.quantity' ) ) AS order_items WHERE recent_orders.`date_created` >= UTC_TIMESTAMP() - INTERVAL 14 DAY AND COALESCE(recent_orders.`status`, '') NOT IN ('cancelled', 'invalid') AND recent_orders.`token_id` IN (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) AND JSON_OVERLAPS( JSON_EXTRACT( IF( JSON_VALID(recent_orders.`raw_json`), recent_orders.`raw_json`, JSON_OBJECT('order_items', JSON_ARRAY()) ), '$.order_items[*].item.id' ), CAST(%s AS JSON) ) AND (recent_orders.`token_id`, order_items.`item_id`) IN ((%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s)) GROUP BY recent_orders.`token_id`, order_items.`item_id`",
+          "args_count": 116,
+          "seconds": 0.03
+        }
+      ],
+      "rows": 50,
+      "total": 849470,
+      "seconds": 0.785
+    },
+    {
+      "name": "default_warm_50",
+      "query_trace": [
+        {
+          "kind": "other",
+          "sql": "SELECT 1 AS `table_exists` FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = %s LIMIT 1",
+          "args_count": 1,
+          "seconds": 0.0
+        },
+        {
+          "kind": "page",
+          "sql": "SELECT full_links.`id`, full_links.`token_id`, full_links.`store_name`, full_links.`seller_id`, full_links.`site_id`, full_links.`item_id`, full_links.`title`, full_links.`permalink`, full_links.`thumbnail_url`, full_links.`status`, full_links.`price`, full_links.`currency_id`, full_links.`available_quantity`, full_links.`sold_quantity`, full_links.`seller_sku`, full_links.`category_id`, full_links.`listing_type_id`, full_links.`weight_g`, full_links.`volumetric_weight_kg`, full_links.`package_length_cm`, full_links.`package_width_cm`, full_links.`package_height_cm`, full_links.`net_proceeds_usd`, full_links.`price_manual`, full_links.`weight_manual`, full_links.`dimensions_manual`, full_links.`net_proceeds_manual`, full_links.`is_current`, full_links.`last_synced_at`, full_links.`created_at`, full_links.`updated_at`, page_ids.`sales_14d`, product.`category_name`, product.`management_category_id`, management_category.`name` AS `management_category_name` FROM `erp_mercadolibre_store_links` AS full_links LEFT JOIN `erp_mercadolibre_products` AS product ON product.`source_item_id` = full_links.`item_id` LEFT JOIN `erp_mercadolibre_management_categories` AS management_category ON management_category.`id` = product.`management_category_id` INNER JOIN ( SELECT links.`id`, 0 AS `sales_14d` FROM `erp_mercadolibre_store_links` AS links WHERE links.`is_current` = 1 ORDER BY links.`sold_quantity` DESC, links.`last_synced_at` DESC, links.`id` DESC LIMIT %s OFFSET %s ) AS page_ids ON page_ids.`id` = full_links.`id` ORDER BY full_links.`sold_quantity` DESC, full_links.`last_synced_at` DESC, full_links.`id` DESC",
+          "args_count": 2,
+          "seconds": 0.004
+        }
+      ],
+      "rows": 50,
+      "total": 849470,
+      "seconds": 0.01
+    },
+    {
+      "name": "default_warm_200",
+      "query_trace": [
+        {
+          "kind": "other",
+          "sql": "SELECT 1 AS `table_exists` FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = %s LIMIT 1",
+          "args_count": 1,
+          "seconds": 0.0
+        },
+        {
+          "kind": "page",
+          "sql": "SELECT full_links.`id`, full_links.`token_id`, full_links.`store_name`, full_links.`seller_id`, full_links.`site_id`, full_links.`item_id`, full_links.`title`, full_links.`permalink`, full_links.`thumbnail_url`, full_links.`status`, full_links.`price`, full_links.`currency_id`, full_links.`available_quantity`, full_links.`sold_quantity`, full_links.`seller_sku`, full_links.`category_id`, full_links.`listing_type_id`, full_links.`weight_g`, full_links.`volumetric_weight_kg`, full_links.`package_length_cm`, full_links.`package_width_cm`, full_links.`package_height_cm`, full_links.`net_proceeds_usd`, full_links.`price_manual`, full_links.`weight_manual`, full_links.`dimensions_manual`, full_links.`net_proceeds_manual`, full_links.`is_current`, full_links.`last_synced_at`, full_links.`created_at`, full_links.`updated_at`, page_ids.`sales_14d`, product.`category_name`, product.`management_category_id`, management_category.`name` AS `management_category_name` FROM `erp_mercadolibre_store_links` AS full_links LEFT JOIN `erp_mercadolibre_products` AS product ON product.`source_item_id` = full_links.`item_id` LEFT JOIN `erp_mercadolibre_management_categories` AS management_category ON management_category.`id` = product.`management_category_id` INNER JOIN ( SELECT links.`id`, 0 AS `sales_14d` FROM `erp_mercadolibre_store_links` AS links WHERE links.`is_current` = 1 ORDER BY links.`sold_quantity` DESC, links.`last_synced_at` DESC, links.`id` DESC LIMIT %s OFFSET %s ) AS page_ids ON page_ids.`id` = full_links.`id` ORDER BY full_links.`sold_quantity` DESC, full_links.`last_synced_at` DESC, full_links.`id` DESC",
+          "args_count": 2,
+          "seconds": 0.069
+        },
+        {
+          "kind": "recent_sales",
+          "sql": "SELECT recent_orders.`token_id`, order_items.`item_id`, SUM(COALESCE(order_items.`quantity`, 0)) AS `sales_14d` FROM `mercado_synced_orders` AS recent_orders CROSS JOIN JSON_TABLE( IF( JSON_VALID(recent_orders.`raw_json`), recent_orders.`raw_json`, JSON_OBJECT('order_items', JSON_ARRAY()) ), '$.order_items[*]' COLUMNS ( `item_id` VARCHAR(64) PATH '$.item.id', `quantity` INT PATH '$.quantity' ) ) AS order_items WHERE recent_orders.`date_created` >= UTC_TIMESTAMP() - INTERVAL 14 DAY AND COALESCE(recent_orders.`status`, '') NOT IN ('cancelled', 'invalid') AND recent_orders.`token_id` IN (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) AND JSON_OVERLAPS( JSON_EXTRACT( IF( JSON_VALID(recent_orders.`raw_json`), recent_orders.`raw_json`, JSON_OBJECT('order_items', JSON_ARRAY()) ), '$.order_items[*].item.id' ), CAST(%s AS JSON) ) AND (recent_orders.`token_id`, order_items.`item_id`) IN ((%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s)) GROUP BY recent_orders.`token_id`, order_items.`item_id`",
+          "args_count": 346,
+          "seconds": 0.121
+        }
+      ],
+      "rows": 200,
+      "total": 849470,
+      "seconds": 0.194
+    },
+    {
+      "name": "status_active",
+      "query_trace": [
+        {
+          "kind": "other",
+          "sql": "SELECT 1 AS `table_exists` FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = %s LIMIT 1",
+          "args_count": 1,
+          "seconds": 0.001
+        },
+        {
+          "kind": "count",
+          "sql": "SELECT COUNT(*) AS `total` FROM `erp_mercadolibre_store_links` AS links WHERE links.`is_current` = 1 AND links.`status` = %s",
+          "args_count": 1,
+          "seconds": 0.24
+        },
+        {
+          "kind": "page",
+          "sql": "SELECT full_links.`id`, full_links.`token_id`, full_links.`store_name`, full_links.`seller_id`, full_links.`site_id`, full_links.`item_id`, full_links.`title`, full_links.`permalink`, full_links.`thumbnail_url`, full_links.`status`, full_links.`price`, full_links.`currency_id`, full_links.`available_quantity`, full_links.`sold_quantity`, full_links.`seller_sku`, full_links.`category_id`, full_links.`listing_type_id`, full_links.`weight_g`, full_links.`volumetric_weight_kg`, full_links.`package_length_cm`, full_links.`package_width_cm`, full_links.`package_height_cm`, full_links.`net_proceeds_usd`, full_links.`price_manual`, full_links.`weight_manual`, full_links.`dimensions_manual`, full_links.`net_proceeds_manual`, full_links.`is_current`, full_links.`last_synced_at`, full_links.`created_at`, full_links.`updated_at`, page_ids.`sales_14d`, product.`category_name`, product.`management_category_id`, management_category.`name` AS `management_category_name` FROM `erp_mercadolibre_store_links` AS full_links LEFT JOIN `erp_mercadolibre_products` AS product ON product.`source_item_id` = full_links.`item_id` LEFT JOIN `erp_mercadolibre_management_categories` AS management_category ON management_category.`id` = product.`management_category_id` INNER JOIN ( SELECT links.`id`, 0 AS `sales_14d` FROM `erp_mercadolibre_store_links` AS links WHERE links.`is_current` = 1 AND links.`status` = %s ORDER BY links.`sold_quantity` DESC, links.`last_synced_at` DESC, links.`id` DESC LIMIT %s OFFSET %s ) AS page_ids ON page_ids.`id` = full_links.`id` ORDER BY full_links.`sold_quantity` DESC, full_links.`last_synced_at` DESC, full_links.`id` DESC",
+          "args_count": 3,
+          "seconds": 0.006
+        }
+      ],
+      "rows": 50,
+      "total": 817295,
+      "seconds": 0.255
+    },
+    {
+      "name": "site_MLM",
+      "query_trace": [
+        {
+          "kind": "other",
+          "sql": "SELECT 1 AS `table_exists` FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = %s LIMIT 1",
+          "args_count": 1,
+          "seconds": 0.001
+        },
+        {
+          "kind": "count",
+          "sql": "SELECT COUNT(*) AS `total` FROM `erp_mercadolibre_store_links` AS links WHERE links.`is_current` = 1 AND links.`site_id` = %s",
+          "args_count": 1,
+          "seconds": 0.037
+        },
+        {
+          "kind": "page",
+          "sql": "SELECT full_links.`id`, full_links.`token_id`, full_links.`store_name`, full_links.`seller_id`, full_links.`site_id`, full_links.`item_id`, full_links.`title`, full_links.`permalink`, full_links.`thumbnail_url`, full_links.`status`, full_links.`price`, full_links.`currency_id`, full_links.`available_quantity`, full_links.`sold_quantity`, full_links.`seller_sku`, full_links.`category_id`, full_links.`listing_type_id`, full_links.`weight_g`, full_links.`volumetric_weight_kg`, full_links.`package_length_cm`, full_links.`package_width_cm`, full_links.`package_height_cm`, full_links.`net_proceeds_usd`, full_links.`price_manual`, full_links.`weight_manual`, full_links.`dimensions_manual`, full_links.`net_proceeds_manual`, full_links.`is_current`, full_links.`last_synced_at`, full_links.`created_at`, full_links.`updated_at`, page_ids.`sales_14d`, product.`category_name`, product.`management_category_id`, management_category.`name` AS `management_category_name` FROM `erp_mercadolibre_store_links` AS full_links LEFT JOIN `erp_mercadolibre_products` AS product ON product.`source_item_id` = full_links.`item_id` LEFT JOIN `erp_mercadolibre_management_categories` AS management_category ON management_category.`id` = product.`management_category_id` INNER JOIN ( SELECT links.`id`, 0 AS `sales_14d` FROM `erp_mercadolibre_store_links` AS links WHERE links.`is_current` = 1 AND links.`site_id` = %s ORDER BY links.`sold_quantity` DESC, links.`last_synced_at` DESC, links.`id` DESC LIMIT %s OFFSET %s ) AS page_ids ON page_ids.`id` = full_links.`id` ORDER BY full_links.`sold_quantity` DESC, full_links.`last_synced_at` DESC, full_links.`id` DESC",
+          "args_count": 3,
+          "seconds": 0.002
+        }
+      ],
+      "rows": 50,
+      "total": 309140,
+      "seconds": 0.042
+    },
+    {
+      "name": "price_unfiltered",
+      "query_trace": [
+        {
+          "kind": "other",
+          "sql": "SELECT 1 AS `table_exists` FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = %s LIMIT 1",
+          "args_count": 1,
+          "seconds": 0.001
+        },
+        {
+          "kind": "page",
+          "sql": "SELECT full_links.`id`, full_links.`token_id`, full_links.`store_name`, full_links.`seller_id`, full_links.`site_id`, full_links.`item_id`, full_links.`title`, full_links.`permalink`, full_links.`thumbnail_url`, full_links.`status`, full_links.`price`, full_links.`currency_id`, full_links.`available_quantity`, full_links.`sold_quantity`, full_links.`seller_sku`, full_links.`category_id`, full_links.`listing_type_id`, full_links.`weight_g`, full_links.`volumetric_weight_kg`, full_links.`package_length_cm`, full_links.`package_width_cm`, full_links.`package_height_cm`, full_links.`net_proceeds_usd`, full_links.`price_manual`, full_links.`weight_manual`, full_links.`dimensions_manual`, full_links.`net_proceeds_manual`, full_links.`is_current`, full_links.`last_synced_at`, full_links.`created_at`, full_links.`updated_at`, page_ids.`sales_14d`, product.`category_name`, product.`management_category_id`, management_category.`name` AS `management_category_name` FROM `erp_mercadolibre_store_links` AS full_links LEFT JOIN `erp_mercadolibre_products` AS product ON product.`source_item_id` = full_links.`item_id` LEFT JOIN `erp_mercadolibre_management_categories` AS management_category ON management_category.`id` = product.`management_category_id` INNER JOIN ( SELECT links.`id`, 0 AS `sales_14d` FROM `erp_mercadolibre_store_links` AS links FORCE INDEX (`idx_erp_meli_link_sort_price`) WHERE links.`is_current` = 1 ORDER BY links.`price` DESC, links.`sold_quantity` DESC, links.`last_synced_at` DESC, links.`id` DESC LIMIT %s OFFSET %s ) AS page_ids ON page_ids.`id` = full_links.`id` ORDER BY full_links.`price` DESC, full_links.`sold_quantity` DESC, full_links.`last_synced_at` DESC, full_links.`id` DESC",
+          "args_count": 2,
+          "seconds": 0.016
+        },
+        {
+          "kind": "recent_sales",
+          "sql": "SELECT recent_orders.`token_id`, order_items.`item_id`, SUM(COALESCE(order_items.`quantity`, 0)) AS `sales_14d` FROM `mercado_synced_orders` AS recent_orders CROSS JOIN JSON_TABLE( IF( JSON_VALID(recent_orders.`raw_json`), recent_orders.`raw_json`, JSON_OBJECT('order_items', JSON_ARRAY()) ), '$.order_items[*]' COLUMNS ( `item_id` VARCHAR(64) PATH '$.item.id', `quantity` INT PATH '$.quantity' ) ) AS order_items WHERE recent_orders.`date_created` >= UTC_TIMESTAMP() - INTERVAL 14 DAY AND COALESCE(recent_orders.`status`, '') NOT IN ('cancelled', 'invalid') AND recent_orders.`token_id` IN (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) AND JSON_OVERLAPS( JSON_EXTRACT( IF( JSON_VALID(recent_orders.`raw_json`), recent_orders.`raw_json`, JSON_OBJECT('order_items', JSON_ARRAY()) ), '$.order_items[*].item.id' ), CAST(%s AS JSON) ) AND (recent_orders.`token_id`, order_items.`item_id`) IN ((%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s), (%s, %s)) GROUP BY recent_orders.`token_id`, order_items.`item_id`",
+          "args_count": 118,
+          "seconds": 0.013
+        }
+      ],
+      "rows": 50,
+      "total": 849470,
+      "seconds": 0.032
+    },
+    {
+      "name": "one_store",
+      "query_trace": [
+        {
+          "kind": "other",
+          "sql": "SELECT 1 AS `table_exists` FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = %s LIMIT 1",
+          "args_count": 1,
+          "seconds": 0.0
+        },
+        {
+          "kind": "count",
+          "sql": "SELECT COUNT(*) AS `total` FROM `erp_mercadolibre_store_links` AS links WHERE links.`is_current` = 1 AND links.`token_id` = %s",
+          "args_count": 1,
+          "seconds": 0.0
+        },
+        {
+          "kind": "page",
+          "sql": "SELECT full_links.`id`, full_links.`token_id`, full_links.`store_name`, full_links.`seller_id`, full_links.`site_id`, full_links.`item_id`, full_links.`title`, full_links.`permalink`, full_links.`thumbnail_url`, full_links.`status`, full_links.`price`, full_links.`currency_id`, full_links.`available_quantity`, full_links.`sold_quantity`, full_links.`seller_sku`, full_links.`category_id`, full_links.`listing_type_id`, full_links.`weight_g`, full_links.`volumetric_weight_kg`, full_links.`package_length_cm`, full_links.`package_width_cm`, full_links.`package_height_cm`, full_links.`net_proceeds_usd`, full_links.`price_manual`, full_links.`weight_manual`, full_links.`dimensions_manual`, full_links.`net_proceeds_manual`, full_links.`is_current`, full_links.`last_synced_at`, full_links.`created_at`, full_links.`updated_at`, page_ids.`sales_14d`, product.`category_name`, product.`management_category_id`, management_category.`name` AS `management_category_name` FROM `erp_mercadolibre_store_links` AS full_links LEFT JOIN `erp_mercadolibre_products` AS product ON product.`source_item_id` = full_links.`item_id` LEFT JOIN `erp_mercadolibre_management_categories` AS management_category ON management_category.`id` = product.`management_category_id` INNER JOIN ( SELECT links.`id`, 0 AS `sales_14d` FROM `erp_mercadolibre_store_links` AS links WHERE links.`is_current` = 1 AND links.`token_id` = %s ORDER BY links.`sold_quantity` DESC, links.`last_synced_at` DESC, links.`id` DESC LIMIT %s OFFSET %s ) AS page_ids ON page_ids.`id` = full_links.`id` ORDER BY full_links.`sold_quantity` DESC, full_links.`last_synced_at` DESC, full_links.`id` DESC",
+          "args_count": 3,
+          "seconds": 0.002
+        },
+        {
+          "kind": "recent_sales",
+          "sql": "SELECT recent_orders.`token_id`, order_items.`item_id`, SUM(COALESCE(order_items.`quantity`, 0)) AS `sales_14d` FROM `mercado_synced_orders` AS recent_orders CROSS JOIN JSON_TABLE( IF( JSON_VALID(recent_orders.`raw_json`), recent_orders.`raw_json`, JSON_OBJECT('order_items', JSON_ARRAY()) ), '$.order_items[*]' COLUMNS ( `item_id` VARCHAR(64) PATH '$.item.id', `quantity` INT PATH '$.quantity' ) ) AS order_items WHERE recent_orders.`date_created` >= UTC_TIMESTAMP() - INTERVAL 14 DAY AND COALESCE(recent_orders.`status`, '') NOT IN ('cancelled', 'invalid') AND recent_orders.`token_id` IN (%s) AND JSON_OVERLAPS( JSON_EXTRACT( IF( JSON_VALID(recent_orders.`raw_json`), recent_orders.`raw_json`, JSON_OBJECT('order_items', JSON_ARRAY()) ), '$.order_items[*].item.id' ), CAST(%s AS JSON) ) AND (recent_orders.`token_id`, order_items.`item_id`) IN ((%s, %s), (%s, %s)) GROUP BY recent_orders.`token_id`, order_items.`item_id`",
+          "args_count": 6,
+          "seconds": 0.009
+        }
+      ],
+      "rows": 2,
+      "total": 2,
+      "seconds": 0.014
+    },
+    {
+      "name": "one_store_scoped",
+      "query_trace": [
+        {
+          "kind": "metadata",
+          "sql": "SELECT `token_id`, `site_id`, COALESCE(`group_name`, '') AS `group_name` FROM `mercado_store_site_settings` WHERE `token_id` IN (%s)",
+          "args_count": 1,
+          "seconds": 0.0
+        },
+        {
+          "kind": "other",
+          "sql": "SELECT tokens.`id` AS `token_id`, tokens.`display_name` AS `store_name`, NULL AS `link_count`, NULL AS `last_synced_at` FROM `mercado_store_tokens` AS tokens WHERE tokens.`id` IN (%s) ORDER BY tokens.`display_name`, tokens.`id`",
+          "args_count": 1,
+          "seconds": 0.0
+        },
+        {
+          "kind": "count",
+          "sql": "SELECT links.`site_id`, COUNT(*) AS `link_count` FROM `erp_mercadolibre_store_links` AS links WHERE links.`is_current` = 1 AND links.`site_id` IS NOT NULL AND links.`site_id` <> '' AND links.`token_id` IN (%s) GROUP BY links.`site_id` ORDER BY links.`site_id`",
+          "args_count": 1,
+          "seconds": 0.0
+        },
+        {
+          "kind": "count",
+          "sql": "SELECT COUNT(*) AS `all_count` FROM `erp_mercadolibre_store_links` WHERE `erp_mercadolibre_store_links`.`token_id` IN (%s)",
+          "args_count": 1,
+          "seconds": 0.002
+        },
+        {
+          "kind": "count",
+          "sql": "SELECT COUNT(*) AS `current_count` FROM `erp_mercadolibre_store_links` WHERE `is_current` = 1 AND `token_id` IN (%s)",
+          "args_count": 1,
+          "seconds": 0.0
+        },
+        {
+          "kind": "count",
+          "sql": "SELECT COUNT(DISTINCT `token_id`) AS `store_count` FROM `erp_mercadolibre_store_links` WHERE `is_current` = 1 AND `token_id` IN (%s)",
+          "args_count": 1,
+          "seconds": 0.0
+        },
+        {
+          "kind": "other",
+          "sql": "SELECT MAX(`last_synced_at`) AS `last_synced_at` FROM `erp_mercadolibre_store_links` WHERE `is_current` = 1 AND `token_id` IN (%s)",
+          "args_count": 1,
+          "seconds": 0.0
+        },
+        {
+          "kind": "other",
+          "sql": "SELECT 1 AS `table_exists` FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = %s LIMIT 1",
+          "args_count": 1,
+          "seconds": 0.001
+        },
+        {
+          "kind": "page",
+          "sql": "SELECT full_links.`id`, full_links.`token_id`, full_links.`store_name`, full_links.`seller_id`, full_links.`site_id`, full_links.`item_id`, full_links.`title`, full_links.`permalink`, full_links.`thumbnail_url`, full_links.`status`, full_links.`price`, full_links.`currency_id`, full_links.`available_quantity`, full_links.`sold_quantity`, full_links.`seller_sku`, full_links.`category_id`, full_links.`listing_type_id`, full_links.`weight_g`, full_links.`volumetric_weight_kg`, full_links.`package_length_cm`, full_links.`package_width_cm`, full_links.`package_height_cm`, full_links.`net_proceeds_usd`, full_links.`price_manual`, full_links.`weight_manual`, full_links.`dimensions_manual`, full_links.`net_proceeds_manual`, full_links.`is_current`, full_links.`last_synced_at`, full_links.`created_at`, full_links.`updated_at`, page_ids.`sales_14d`, product.`category_name`, product.`management_category_id`, management_category.`name` AS `management_category_name` FROM `erp_mercadolibre_store_links` AS full_links LEFT JOIN `erp_mercadolibre_products` AS product ON product.`source_item_id` = full_links.`item_id` LEFT JOIN `erp_mercadolibre_management_categories` AS management_category ON management_category.`id` = product.`management_category_id` INNER JOIN ( SELECT links.`id`, 0 AS `sales_14d` FROM `erp_mercadolibre_store_links` AS links WHERE links.`is_current` = 1 AND links.`token_id` IN (%s) ORDER BY links.`sold_quantity` DESC, links.`last_synced_at` DESC, links.`id` DESC LIMIT %s OFFSET %s ) AS page_ids ON page_ids.`id` = full_links.`id` ORDER BY full_links.`sold_quantity` DESC, full_links.`last_synced_at` DESC, full_links.`id` DESC",
+          "args_count": 3,
+          "seconds": 0.002
+        }
+      ],
+      "rows": 2,
+      "total": 2,
+      "seconds": 0.006
+    }
+  ]
+}

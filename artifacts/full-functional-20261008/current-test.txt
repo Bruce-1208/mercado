@@ -1,0 +1,1 @@
+tests/test_size_chart_routes.py::test_internal_size_chart_api_rejects_unauthenticated_loopback

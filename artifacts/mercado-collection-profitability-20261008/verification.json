@@ -1,0 +1,21 @@
+{
+  "repaired_collection": 372,
+  "repaired_collected_products": 767,
+  "related_tests_passed": 180,
+  "collection": {
+    "total": 2507,
+    "missing": "203"
+  },
+  "eligible_collection_missing": {
+    "eligible_missing": 0
+  },
+  "collected_products": {
+    "total": 1352,
+    "missing": "0"
+  },
+  "service_status": {
+    "5000": 200,
+    "5001": 403,
+    "5004": 403
+  }
+}

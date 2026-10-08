@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import wraps
+from itertools import count
 from pathlib import Path
 
 
@@ -39,6 +40,7 @@ import requests
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 
@@ -147,7 +149,7 @@ def _raise_if_zying_collection_stopped(stop_event=None):
     with _ZYING_STOP_STATE_LOCK:
         event = stop_event or _ZYING_ACTIVE_STOP_EVENT
     if event is not None and event.is_set():
-        raise ZyingCollectionStopped("智赢产品采集已由用户结束")
+        raise ZyingCollectionStopped("智赢产品同步已由用户结束")
 
 
 @contextmanager
@@ -282,6 +284,8 @@ const done = arguments[arguments.length - 1];
 
     def start(self):
         options = webdriver.EdgeOptions()
+        # Signing needs the document and scripts, not every image/analytics request.
+        options.page_load_strategy = "eager"
         options.add_argument("--headless=new")
         options.add_argument("--disable-gpu")
         options.add_argument("--disable-extensions")
@@ -290,15 +294,52 @@ const done = arguments[arguments.length - 1];
         edge_executable = _find_edge_executable()
         if edge_executable:
             options.binary_location = edge_executable
+        driver_path = _clean_text(os.environ.get("BIT_ZYING_EDGE_DRIVER"))
+        if driver_path and not Path(driver_path).is_file():
+            raise RuntimeError(f"BIT_ZYING_EDGE_DRIVER 指定的驱动文件不存在：{driver_path}")
+        for attempt in range(2):
+            service = None
+            try:
+                service = EdgeService(executable_path=driver_path) if driver_path else EdgeService()
+                self.driver = webdriver.Edge(service=service, options=options)
+                break
+            except Exception as exc:
+                self.close()
+                if service is not None:
+                    try:
+                        service.stop()
+                    except Exception:
+                        pass
+                if attempt == 0:
+                    time.sleep(1)
+                    continue
+                raise RuntimeError(
+                    "智赢签名浏览器启动失败："
+                    f"{type(exc).__name__}: {exc}。"
+                    "请检查 Edge 与 msedgedriver 版本是否匹配；"
+                    "若驱动无法自动下载，可通过 BIT_ZYING_EDGE_DRIVER 指定匹配的驱动文件"
+                ) from exc
         try:
-            self.driver = webdriver.Edge(options=options)
             self.driver.set_page_load_timeout(45)
             self.driver.set_script_timeout(60)
-            self.driver.get(f"{ZYING_API_ORIGIN}/")
+            for attempt in range(2):
+                try:
+                    self.driver.get(f"{ZYING_API_ORIGIN}/")
+                    break
+                except TimeoutException:
+                    if attempt:
+                        raise
+                    self.driver.execute_script("window.stop();")
+            WebDriverWait(self.driver, 45).until(
+                lambda driver: driver.execute_script(
+                    "return !!document.querySelector('script[type=\"module\"][src]');"
+                )
+            )
         except Exception as exc:
             self.close()
             raise RuntimeError(
-                "无法启动智赢后台签名组件，请确认本机 Edge 可以正常启动"
+                f"Edge 已启动，但智赢签名页面加载失败（{ZYING_API_ORIGIN}）："
+                f"{type(exc).__name__}: {exc}。请检查智赢站点访问及网络代理"
             ) from exc
         return self
 
@@ -1449,6 +1490,7 @@ def _finalize_zying_listing_snapshot(record):
         "description": {"plain_text": description} if description else {},
         "page_snapshot": {
             "zying_detail": detail,
+            "zying_list_row": record.get("_zying_list_row") or {},
             "detail_form_fields": record.get("detail_form_fields") or {},
             "detail_text": record.get("detail_text") or "",
         },
@@ -1459,6 +1501,7 @@ def _finalize_zying_listing_snapshot(record):
             "product_developer_id": record.get("product_developer_id") or "",
             "product_developer_name": record.get("product_developer_name") or "",
             "zying_status": record.get("zying_status") or "",
+            "salesperson": _clean_text(record.get("salesperson")),
         },
         "weight_g": detail.get("sale_weight"),
         "package_length_cm": package_size[0],
@@ -1467,11 +1510,14 @@ def _finalize_zying_listing_snapshot(record):
         # This is supplied by ZYing itself. Keep it in the raw snapshot so the
         # product list can restore/audit it without estimating fees or freight.
         "zying_net_proceeds_usd": _clean_text(record.get("net_income")) or _format_money(
-            detail.get("sale_netproceed"), source["currency_id"]
+            detail.get("sale_netproceed"), "USD"
         ),
         "scrape_status": "ok",
         "scraped_at": record.get("collected_at"),
     }
+    from erp.mercadolibre_collection_store import zying_captured_metrics
+
+    snapshot.update(zying_captured_metrics(snapshot, record))
     record["listing_attributes"] = attributes
     record["listing_variations"] = variations
     record["listing_sale_terms"] = sale_terms
@@ -1504,16 +1550,20 @@ def _merge_detail_record(record, search_row, detail):
         currency,
     )
     record["net_income"] = _clean_text(record.get("net_income")) or _format_money(
-        detail.get("sale_netproceed"),
-        currency,
+        detail.get("sale_netproceed") if detail.get("sale_netproceed") not in (None, "")
+        else search_row.get("netproceed"),
+        "USD",
     )
 
-    weight = _format_number(detail.get("sale_weight"))
+    weight = _format_number(
+        detail.get("sale_weight") if detail.get("sale_weight") not in (None, "")
+        else search_row.get("weight")
+    )
     record["package_gross_weight"] = _clean_text(
         record.get("package_gross_weight")
     ) or (f"{weight} 克" if weight else "")
 
-    dimensions = detail.get("sale_size") or []
+    dimensions = _detail_list(detail, "sale_size") or _detail_list(search_row, "size")
     dimension_values = [_format_number(value) for value in dimensions[:3]]
     if len(dimension_values) == 3 and all(dimension_values):
         api_dimensions = f"{' X '.join(dimension_values)} 厘米"
@@ -1647,7 +1697,7 @@ def _merge_ui_detail_record(record, details):
     currency = existing_price.split(" ", 1)[0] if " " in existing_price else ""
     record["product_id"] = _clean_text(details.get("product_id"))
     record["sale_price"] = _format_money(details.get("sale_price"), currency)
-    record["net_income"] = _format_money(details.get("net_income"), currency)
+    record["net_income"] = _format_money(details.get("net_income"), "USD")
     record["package_gross_weight"] = (
         f"{_clean_text(details.get('package_gross_weight'))} 克"
     )
@@ -1944,7 +1994,7 @@ def _collect_clicked_product_details(
 def _find_product_search_row(session, token, record):
     product_id = _clean_text(record.get("product_id"))
     if product_id:
-        return {"id": product_id}
+        return {**(record.get("_zying_list_row") or {}), "id": product_id}
 
     search_data = _zying_api_post(
         session,
@@ -2449,29 +2499,46 @@ def _persist_zying_page(
     product_mirror_writer=None,
 ):
     """同步提交单页数据；只有数据库事务提交成功后，采集器才会继续翻页。"""
+    page_label = str(page_number) if page_count is None else f"{page_number}/{page_count}"
     if not page_records:
         print(
-            f"智赢第 {page_number}/{page_count} 页没有可入库商品，继续下一页",
+            f"智赢第 {page_label} 页没有可入库商品，继续下一页",
             flush=True,
         )
         return 0
 
     print(
-        f"智赢第 {page_number}/{page_count} 页读取完成，正在立即提交数据库 "
+        f"智赢第 {page_label} 页读取完成，正在立即提交数据库 "
         f"({len(page_records)} 条)",
         flush=True,
     )
+    from erp.mercadolibre_collection_store import zying_captured_metrics
+
+    for record in page_records:
+        metrics = zying_captured_metrics(record.get("listing_snapshot") or {}, record)
+        missing = []
+        if metrics["net_proceeds_usd"] is None:
+            missing.append("净收益")
+        if metrics["weight_g"] is None or metrics["weight_g"] <= 0:
+            missing.append("重量")
+        if any(metrics[field] is None or metrics[field] <= 0 for field in (
+            "package_length_cm", "package_width_cm", "package_height_cm",
+        )):
+            missing.append("尺寸")
+        if missing:
+            print(f"智赢产品 {record.get('product_id') or record.get('title')} "
+                  f"未读取到有效{'、'.join(missing)}，保留已读取数据，下次采集继续补读", flush=True)
     if product_mirror_writer is not None:
         mirror_result = product_mirror_writer(page_records) or {}
         print(
-            f"智赢第 {page_number}/{page_count} 页已同步产品列表 "
+            f"智赢第 {page_label} 页已同步产品列表 "
             f"{int(mirror_result.get('count') or 0)} 条",
             flush=True,
         )
     writer = product_writer or insert_zying_product_info
     inserted_count = writer(page_records)
     print(
-        f"智赢第 {page_number}/{page_count} 页数据库提交完成："
+        f"智赢第 {page_label} 页数据库提交完成："
         f"{inserted_count} 条；后续即使中断，本页数据仍已保留",
         flush=True,
     )
@@ -2847,6 +2914,7 @@ def _zying_api_list_record(row, page_number, collected_at):
     title = _clean_text(html.unescape(re.sub(r"<[^>]+>", "", str(row.get("title") or ""))))
     record = {
         "product_id": product_id,
+        "_zying_list_row": dict(row),
         "main_image_url": _clean_text(row.get("thumb")),
         "title": title,
         "page_number": page_number,
@@ -2914,14 +2982,21 @@ def collect_zying_products_api(
     category_reader=None,
     return_summary=False,
     stop_event=None,
+    salesperson="",
 ):
     """通过智赢 API 采集；无头 Edge 仅加载官方签名模块，不读取页面 DOM。"""
     from erp.mercadolibre_collection_store import normalize_collection_management_category_id
 
     management_category_id = normalize_collection_management_category_id(management_category_id)
-    page_count = max(1, int(DEFAULT_ZYING_PAGE_COUNT if number is None else number))
+    if max_items is not None and (type(max_items) is not int or max_items < 1):
+        raise ValueError("最多产品数必须是正整数")
+    item_limit = max_items
+    page_count = (
+        None if number is None and item_limit is not None
+        else max(1, int(DEFAULT_ZYING_PAGE_COUNT if number is None else number))
+    )
     start_page = max(1, int(start_page))
-    if start_page > page_count:
+    if page_count is not None and start_page > page_count:
         raise ValueError(f"起始页 {start_page} 不能大于结束页 {page_count}。")
     token = _clean_text(auth_token) or load_zying_auth_token()
     category_selection = _zying_api_category_selection(category, category_name)
@@ -2944,9 +3019,6 @@ def collect_zying_products_api(
     requested_start_product_id = _format_number(start_product_id)
     if _clean_text(start_product_id) and not requested_start_product_id:
         raise ValueError("起始产品编号格式不正确")
-    item_limit = None if max_items is None else int(max_items)
-    if item_limit is not None and not 1 <= item_limit <= 10000:
-        raise ValueError("最多产品数必须是 1–10000 的整数")
     cursor_mode = item_limit is not None or bool(requested_start_product_id)
     cursor_found = not bool(requested_start_product_id)
     selected_count = 0
@@ -2962,6 +3034,7 @@ def collect_zying_products_api(
     started_at = time.time()
     records = []
     seen = set()
+    listing_page_signatures = set()
     known_existing_ids = set()
     checked_product_ids = set()
     inserted_count = 0
@@ -2969,8 +3042,12 @@ def collect_zying_products_api(
     duplicate_count = 0
     category_mismatch_count = 0
     last_committed_page = start_page - 1
+    page_range_text = (
+        f"从第 {start_page} 页按产品数量读取" if page_count is None
+        else f"第 {start_page}-{page_count} 页"
+    )
     print(
-        f"智赢 API 后台采集直接启动：第 {start_page}-{page_count} 页，"
+        f"智赢 API 后台采集直接启动：{page_range_text}，"
         f"分类 {category_selection['category_path'] if category_selection else '全部'}，"
         f"产品开发 {requested_developer_name or '全部'}"
         + (
@@ -2982,7 +3059,11 @@ def collect_zying_products_api(
 
     with requests.Session() as session:
         session.trust_env = False
-        for page_number in range(start_page, page_count + 1):
+        pages = (
+            count(start_page) if page_count is None
+            else range(start_page, page_count + 1)
+        )
+        for page_number in pages:
             _raise_if_zying_collection_stopped(stop_event)
             payload = {
                 "page": page_number,
@@ -3007,6 +3088,18 @@ def collect_zying_products_api(
                 raise RuntimeError(
                     f"智赢接口列表第 {page_number} 页返回格式异常，请刷新登录状态后重试"
                 )
+            if page_count is None and rows:
+                page_signature = tuple(
+                    _format_number(row.get("id")) if isinstance(row, dict) else ""
+                    for row in rows
+                )
+                if all(page_signature):
+                    if page_signature in listing_page_signatures:
+                        raise RuntimeError(
+                            f"智赢接口分页异常：第 {page_number} 页重复返回已读取的产品列表，"
+                            "请刷新智赢登录状态后重试"
+                        )
+                    listing_page_signatures.add(page_signature)
             selected_rows = [row for row in rows if isinstance(row, dict)]
             if cursor_mode and not cursor_found:
                 start_index = next(
@@ -3034,8 +3127,9 @@ def collect_zying_products_api(
                 _zying_api_list_record(row, page_number, collected_at)
                 for row in selected_rows
             ]
+            page_label = str(page_number) if page_count is None else f"{page_number}/{page_count}"
             print(
-                f"智赢 API 列表第 {page_number}/{page_count} 页返回 {len(rows)} 条，"
+                f"智赢 API 列表第 {page_label} 页返回 {len(rows)} 条，"
                 f"本次范围选中 {len(page_records)} 条",
                 flush=True,
             )
@@ -3097,6 +3191,7 @@ def collect_zying_products_api(
             for record in page_records:
                 _attach_zying_category(record, category_selection, category_lookup)
                 _attach_product_developer(record, developer_names)
+                record["salesperson"] = _clean_text(salesperson)
                 _finalize_zying_listing_snapshot(record)
                 if management_category_id is not None:
                     record["management_category_id"] = management_category_id
@@ -3117,6 +3212,16 @@ def collect_zying_products_api(
             if item_limit is not None and selected_count >= item_limit:
                 print(f"已达到本次最多产品数 {item_limit}，停止继续读取", flush=True)
                 break
+            if page_count is None:
+                try:
+                    total_count = int(listing.get("maxcount"))
+                except (TypeError, ValueError):
+                    total_count = None
+                if total_count is not None and total_count > 0 and (
+                    page_number * ZYING_API_PAGE_SIZE >= total_count
+                ):
+                    print("已读取到智赢接口返回的最后一页，结束采集", flush=True)
+                    break
 
     if requested_start_product_id and not cursor_found:
         raise ValueError(
@@ -3171,6 +3276,7 @@ def collect_zying_products(
     api_mode=True,
     stop_event=None,
     management_category_id=None,
+    salesperson="",
 ):
     """采集智赢产品；默认使用后台 API 与无头官方签名模式。"""
     from erp.mercadolibre_collection_store import normalize_collection_management_category_id
@@ -3208,6 +3314,7 @@ def collect_zying_products(
             category_reader=category_reader,
             return_summary=return_summary,
             stop_event=stop_event,
+            salesperson=salesperson,
         )
     requested_pages = DEFAULT_ZYING_PAGE_COUNT if number is None else number
     page_count = max(1, int(requested_pages))
@@ -3339,6 +3446,7 @@ def collect_zying_products(
                 )
             for record in extracted_records:
                 _attach_zying_category(record, category_selection)
+                record["salesperson"] = _clean_text(salesperson)
                 _finalize_zying_listing_snapshot(record)
                 if management_category_id is not None:
                     record["management_category_id"] = management_category_id
@@ -3388,7 +3496,7 @@ def collect_zying_products(
                 releaseBrowserLease(leased_window_id)
 
     print(
-        f"智赢产品采集完成，共 {len(records)} 条，详情失败跳过 {skipped_count} 条，"
+        f"智赢产品同步完成，共 {len(records)} 条，详情失败跳过 {skipped_count} 条，"
         f"已有产品跳过 {skipped_existing_count} 条，页面重复跳过 {duplicate_count} 条，"
         f"入库 {inserted_count} 条，"
         f"耗时 {int(time.time() - started_at)} 秒",

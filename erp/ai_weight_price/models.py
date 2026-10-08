@@ -6,6 +6,8 @@ from decimal import Decimal, InvalidOperation
 
 import requests
 
+from erp.ai_usage_billing import record_usage
+
 from .credentials import api_key
 
 
@@ -60,20 +62,72 @@ def parse_dimensions_evidence(text):
     """Return one unambiguous three-side package size in centimetres."""
     if not isinstance(text, str):
         return None
-    pattern = (r"(?<![\d.])([0-9]+(?:\.[0-9]+)?)\s*[x×*＊]\s*"
-               r"([0-9]+(?:\.[0-9]+)?)\s*[x×*＊]\s*"
-               r"([0-9]+(?:\.[0-9]+)?)\s*(cm|厘米|mm|毫米|m|米)(?![A-Za-z])")
+    text = text.replace("﹡", "*")
+    unit = r"(?:cm|厘米|公分|mm|毫米|m|米)(?=$|[^A-Za-z]|[xX]\s*\d)"
+    value = rf"([0-9]+(?:\.[0-9]+)?)\s*({unit})?"
+    separator = r"\s*[x×*＊乘]\s*"
+    pattern = rf"(?<![\d.\-−+~～–—至到x×*＊]){value}{separator}{value}{separator}{value}"
+    axis = lambda name: rf"(?:包装)?{name}\s*(?:[（(]\s*({unit})\s*[）)])?\s*[:：=]?\s*{value}"
+    named = (axis(r"(?:长度|长)") + r"[\s,，;；/]*" + axis(r"(?:宽度|宽)")
+             + r"[\s,，;；/]*" + axis(r"(?:高度|高)"))
     found = []
-    for match in re.finditer(pattern, text, re.I):
-        unit = match[4].lower()
-        factor = Decimal("0.1") if unit in ("mm", "毫米") else Decimal("100") if unit in ("m", "米") else Decimal(1)
-        sides = tuple(Decimal(match[i]) * factor for i in (1, 2, 3))
-        if all(side > 0 for side in sides):
-            found.append(sides)
+    for expression, named_axes in ((pattern, False), (named, True)):
+        for match in re.finditer(expression, text, re.I):
+            # Do not accept the last three values of a range/four-side claim.
+            if re.search(r"[\-−+~～–—至到x×*＊]\s*$|\d\s*/\s*$", text[:match.start()]):
+                continue
+            if re.match(r"\s*[-−+~～–—至到x×*＊]", text[match.end():]) or re.match(
+                    rf"\s*/\s*\d+(?:\.\d+)?\s*{unit}", text[match.end():], re.I):
+                continue
+            prefix = re.search(
+                rf"(?:包装尺寸|长宽高|尺寸)\s*[（(]\s*({unit})\s*[）)]\s*[:：]?\s*$",
+                text[max(0, match.start() - 40):match.start()], re.I)
+            if named_axes:
+                values = [match[i] for i in (2, 5, 8)]
+                units = [match[i] or match[j] for i, j in ((3, 1), (6, 4), (9, 7))]
+            else:
+                values = [match[i] for i in (1, 3, 5)]
+                units = [match[i] for i in (2, 4, 6)]
+            common_unit = units[-1] or (prefix[1] if prefix else None)
+            if any(not (entry or common_unit) for entry in units):
+                continue
+            sides = []
+            for raw, entry in zip(values, units):
+                current_unit = (entry or common_unit).lower()
+                factor = (Decimal("0.1") if current_unit in ("mm", "毫米") else
+                          Decimal("100") if current_unit in ("m", "米") else Decimal(1))
+                sides.append(Decimal(raw) * factor)
+            if any(side <= 0 for side in sides):
+                return None
+            found.append(tuple(sides))
     if not found or any(sides != found[0] for sides in found[1:]):
         return None
     return "x".join(format(side, "f").rstrip("0").rstrip(".")
                     if "." in format(side, "f") else format(side, "f") for side in found[0])
+
+
+def supplier_dimensions_evidence(selected, detail):
+    """Prefer one SKU size, then an explicit common package; never mix axes."""
+    fields = ("package_length_cm", "package_width_cm", "package_height_cm")
+    for source in (selected, detail):
+        if any(source.get(field) not in (None, "") for field in fields):
+            try:
+                return "x".join(format(number(source.get(field)), "f") for field in fields)
+            except ValueError:
+                return None
+        if source.get("raw_dimensions"):
+            return parse_dimensions_evidence(source["raw_dimensions"])
+        label = source.get("label") or ""
+        parsed = parse_dimensions_evidence(label)
+        if parsed:
+            return parsed
+        # Partial or conflicting SKU evidence must not fall through to a
+        # product-level box belonging to another variant.
+        if source.get("dimension_evidence_present") or re.search(
+                r"\d\s*(?:cm|mm|厘米|毫米|公分|米|[x×*＊]\s*\d)|(?:包装)?(?:长度|宽度|高度)\s*[:：]",
+                label, re.I):
+            return None
+    return None
 
 
 def parse_price_evidence(text):
@@ -165,13 +219,28 @@ class Models:
         try:
             response = requests.post(self.config["api_base_url"].rstrip("/") + "/chat/completions",
                                      headers=headers, json=body, timeout=self.config["api_timeout_seconds"])
-        except requests.RequestException:
+        except requests.RequestException as exc:
+            if isinstance(exc, requests.Timeout):
+                record_usage(usage=None, model=model,
+                             base_url=self.config["api_base_url"],
+                             request_id=getattr(exc, "request_id", ""),
+                             task_type="ai_weight_price", task_name="AI 核重核价",
+                             status="usage_unknown")
             raise ModelServiceError("模型服务连接失败或超时，请检查执行电脑的网络与API地址") from None
+        try:
+            payload = response.json()
+        except (ValueError, TypeError):
+            payload = None
+        if isinstance(payload, dict) and (response.ok or payload.get("usage")):
+            record_usage(payload, model=payload.get("model") or model,
+                         base_url=self.config["api_base_url"],
+                         request_id=payload.get("id") or payload.get("request_id") or "",
+                         task_type="ai_weight_price", task_name="AI 核重核价",
+                         status="completed" if response.ok else "failed")
         if not response.ok:
             hint = "请检查执行电脑的API密钥、服务地址与模型权限" if response.status_code in (401, 403) else "请检查模型服务配置、配额或服务状态"
             raise ModelServiceError(f"模型请求失败 HTTP {response.status_code}；{hint}（未记录密钥或响应正文）")
         try:
-            payload = response.json()
             choice = payload["choices"][0]
             if choice.get("finish_reason") == "length":
                 raise ModelServiceError("模型输出被截断；已暂停，未生成商品结论")

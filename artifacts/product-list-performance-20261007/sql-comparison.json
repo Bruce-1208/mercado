@@ -1,0 +1,118 @@
+[
+  {
+    "scope": "five_stores",
+    "tokens": 5,
+    "round": 0,
+    "baseline_count": {
+      "ms": 161.9,
+      "rows": 0,
+      "total": 99267,
+      "ids_hash": null
+    },
+    "baseline_page": {
+      "ms": 412.0,
+      "rows": 100,
+      "total": null,
+      "ids_hash": "a573146321af40a32508cbed220cbe24966fedea56da9bfd56ed06ca71e8eaa4"
+    },
+    "direct_page": {
+      "ms": 119.7,
+      "rows": 100,
+      "total": null,
+      "ids_hash": "a573146321af40a32508cbed220cbe24966fedea56da9bfd56ed06ca71e8eaa4"
+    },
+    "combined_count_page": {
+      "ms": 139.1,
+      "rows": 100,
+      "total": 99267,
+      "ids_hash": "a573146321af40a32508cbed220cbe24966fedea56da9bfd56ed06ca71e8eaa4"
+    }
+  },
+  {
+    "scope": "five_stores",
+    "tokens": 5,
+    "round": 1,
+    "baseline_count": {
+      "ms": 152.4,
+      "rows": 0,
+      "total": 99267,
+      "ids_hash": null
+    },
+    "baseline_page": {
+      "ms": 214.7,
+      "rows": 100,
+      "total": null,
+      "ids_hash": "a573146321af40a32508cbed220cbe24966fedea56da9bfd56ed06ca71e8eaa4"
+    },
+    "direct_page": {
+      "ms": 123.8,
+      "rows": 100,
+      "total": null,
+      "ids_hash": "a573146321af40a32508cbed220cbe24966fedea56da9bfd56ed06ca71e8eaa4"
+    },
+    "combined_count_page": {
+      "ms": 127.5,
+      "rows": 100,
+      "total": 99267,
+      "ids_hash": "a573146321af40a32508cbed220cbe24966fedea56da9bfd56ed06ca71e8eaa4"
+    }
+  },
+  {
+    "scope": "all_linked_stores",
+    "tokens": 141,
+    "round": 0,
+    "baseline_count": {
+      "ms": 4400.4,
+      "rows": 0,
+      "total": 1681813,
+      "ids_hash": null
+    },
+    "baseline_page": {
+      "ms": 4025.1,
+      "rows": 100,
+      "total": null,
+      "ids_hash": "440a87350dd954d0002cca2651870f966822e5fef96e7c58760612d0a1814445"
+    },
+    "direct_page": {
+      "ms": 3326.5,
+      "rows": 100,
+      "total": null,
+      "ids_hash": "440a87350dd954d0002cca2651870f966822e5fef96e7c58760612d0a1814445"
+    },
+    "combined_count_page": {
+      "ms": 3048.9,
+      "rows": 100,
+      "total": 1681813,
+      "ids_hash": "440a87350dd954d0002cca2651870f966822e5fef96e7c58760612d0a1814445"
+    }
+  },
+  {
+    "scope": "all_linked_stores",
+    "tokens": 141,
+    "round": 1,
+    "baseline_count": {
+      "ms": 3045.0,
+      "rows": 0,
+      "total": 1681813,
+      "ids_hash": null
+    },
+    "baseline_page": {
+      "ms": 3149.2,
+      "rows": 100,
+      "total": null,
+      "ids_hash": "440a87350dd954d0002cca2651870f966822e5fef96e7c58760612d0a1814445"
+    },
+    "direct_page": {
+      "ms": 3038.6,
+      "rows": 100,
+      "total": null,
+      "ids_hash": "440a87350dd954d0002cca2651870f966822e5fef96e7c58760612d0a1814445"
+    },
+    "combined_count_page": {
+      "ms": 5110.0,
+      "rows": 100,
+      "total": 1681813,
+      "ids_hash": "440a87350dd954d0002cca2651870f966822e5fef96e7c58760612d0a1814445"
+    }
+  }
+]

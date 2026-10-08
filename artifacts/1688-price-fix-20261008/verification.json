@@ -1,0 +1,22 @@
+{
+  "product_id": 16327058,
+  "offer_id": "1069012635162",
+  "corrected_cost_cny": 26,
+  "cleared_unverified_sku_prices": 15,
+  "extension_version": "1.8.54",
+  "validation": {
+    "price_and_management_pytest": "64 passed",
+    "ai_original_and_price_backend_pytest": "57 passed",
+    "management_node_tests": "10 passed",
+    "extension_zip": "manifest version, CRC and source equality verified"
+  },
+  "broader_checks": {
+    "result": "74 passed, 2 failed",
+    "existing_unrelated_failures": [
+      "test_1688_list_does_not_restore_known_wrong_stale_metrics: weight/dimensions fallback expectations; price null preservation now covered separately",
+      "test_1688_variant_detail_displays_actual_weight_and_package: prior dimension display format change"
+    ]
+  },
+  "live_supplier_inspection": "Not performed: browser access to supplier URL was blocked; no bypass attempted.",
+  "policy": "Automatically captured one-yuan prices remain empty unless another valid price field is available; manual prices remain allowed."
+}

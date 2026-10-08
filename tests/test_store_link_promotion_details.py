@@ -95,3 +95,27 @@ def test_sync_only_marks_clearance_snapshot_complete_after_all_pages(monkeypatch
     assert store.clearance_item_states([key])[key]['status'] == 'unknown'
     # Preserve previous item data after a partial page, but do not assert currency.
     assert store.applied_item_details([key])[key][0]['promotion_type'] == 'CLEARANCE'
+
+
+def test_available_activities_are_candidates_and_scoped(tmp_path):
+    store = PromotionStore(tmp_path / 'promotions.sqlite3')
+    for token, site, status, parent, end in [
+        (1, 'MLM', 'candidate', 'started', ''),
+        (1, 'MLM', 'started', 'started', ''),
+        (2, 'MLM', 'candidate', 'started', ''),
+        (1, 'MLB', 'candidate', 'started', ''),
+        (1, 'MLM', 'candidate', 'finished', ''),
+        (1, 'MLM', 'candidate', 'started', '2020-01-01T00:00:00Z'),
+    ]:
+        name = f'{token}-{site}-{status}-{parent}-{end}'
+        pk = store.upsert_promotion(token_id=token, store_name='Store', application_id='app',
+            seller_id=str(token), site_id=site,
+            row={'id': name, 'name': name, 'type': 'DEAL', 'status': parent, 'finish_date': end})
+        store.replace_items(pk, [{'id': 'MLM1', 'status': status, 'price': 10}])
+    key = (1, 'MLM', 'MLM1')
+    result = store.available_item_details([key])
+    assert len(result[key]) == 1
+    assert result[key][0]['status_raw'] == 'candidate'
+    assert store.applied_item_details([key])[key][0]['status_raw'] == 'started'
+    assert store.available_item_details([]) == {}
+    assert store.available_item_details([(1, 'MLM', f'MLM{i}') for i in range(1000)]) == result

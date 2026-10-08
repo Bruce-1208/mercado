@@ -1,0 +1,11 @@
+{
+  "last_id": 23554,
+  "checked": 6300,
+  "updated": 1002,
+  "failed": 5298,
+  "started_at": "2026-10-07T11:28:04.612959",
+  "max_id": 15898823,
+  "total": 867585,
+  "status": "handed_over_to_daily_weekly_scheduler",
+  "heartbeat_at": "2026-10-07T11:35:43.721705"
+}

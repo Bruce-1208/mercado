@@ -1,0 +1,87 @@
+{
+  "products": [
+    {
+      "id": 11180444,
+      "status": "completed",
+      "sku_count": 0,
+      "checks": {
+        "completed": true,
+        "required_complete": true,
+        "source_unchanged": true,
+        "image_reused": true,
+        "sku_count_preserved": true,
+        "net_proceeds_preserved": true,
+        "sku_commerce_fields_preserved": true
+      },
+      "additional_cost_yuan": 0.0,
+      "review_status": "unreviewed"
+    },
+    {
+      "id": 15157624,
+      "status": "completed",
+      "sku_count": 28,
+      "checks": {
+        "completed": true,
+        "required_complete": true,
+        "source_unchanged": true,
+        "image_reused": true,
+        "sku_count_preserved": true,
+        "net_proceeds_preserved": true,
+        "sku_commerce_fields_preserved": true
+      },
+      "additional_cost_yuan": 0.0025152,
+      "review_status": "unreviewed"
+    },
+    {
+      "id": 15158025,
+      "status": "completed",
+      "sku_count": 11,
+      "checks": {
+        "completed": true,
+        "required_complete": true,
+        "source_unchanged": true,
+        "image_reused": true,
+        "sku_count_preserved": true,
+        "net_proceeds_preserved": true,
+        "sku_commerce_fields_preserved": true
+      },
+      "additional_cost_yuan": 0.0028796,
+      "review_status": "unreviewed"
+    },
+    {
+      "id": 15158026,
+      "status": "completed",
+      "sku_count": 3,
+      "checks": {
+        "completed": true,
+        "required_complete": true,
+        "source_unchanged": true,
+        "image_reused": true,
+        "sku_count_preserved": true,
+        "net_proceeds_preserved": true,
+        "sku_commerce_fields_preserved": true
+      },
+      "additional_cost_yuan": 0.0,
+      "review_status": "unreviewed"
+    },
+    {
+      "id": 15158332,
+      "status": "completed",
+      "sku_count": 39,
+      "checks": {
+        "completed": true,
+        "required_complete": true,
+        "source_unchanged": true,
+        "image_reused": true,
+        "sku_count_preserved": true,
+        "net_proceeds_preserved": true,
+        "sku_commerce_fields_preserved": true
+      },
+      "additional_cost_yuan": 0.0005436,
+      "review_status": "unreviewed"
+    }
+  ],
+  "tests_passed": 305,
+  "total_additional_cost_yuan": 0.0059384,
+  "published": false
+}

@@ -6,6 +6,7 @@ import json
 import random
 import re
 import time
+import weakref
 from urllib.error import URLError
 from urllib.parse import urljoin, urlsplit
 from urllib.request import ProxyHandler, build_opener
@@ -31,6 +32,44 @@ RISK_VISIBLE = """element => {
   }
   return true;
 }"""
+
+# A successful nc widget can remain mounted. Only its explicit, painted success
+# label clears that widget; unrelated risk dialogs/text still block the page.
+RISK_ACTIVE = """element => {
+  const visible=(VISIBLE);
+  if(!visible(element))return false;
+  if(element.matches('[id^="nc_"][id$="_wrapper"],.nc-container')){
+    const labels=[...element.querySelectorAll('.nc-lang-cnt,[data-nc-lang="success"]')];
+    if(labels.some(label=>visible(label)&&/^(验证通过|验证成功)$/.test(label.textContent.trim())))return false;
+  }
+  return true;
+}""".replace("VISIBLE", RISK_VISIBLE)
+
+SIMPLE_SLIDER_TRACK = '.nc_scale, [id^="nc_"][id$="_scale"]'
+SIMPLE_SLIDER_HANDLE = '.btn_slide, [id^="nc_"][id$="_n1z"]'
+SLIDER_VERIFY_TIMEOUT = 8
+
+SIMPLE_SLIDER_READ = r"""element => {
+  const visible=(VISIBLE);
+  if(!visible(element))return null;
+  const widget=element.closest('[id^="nc_"][id$="_wrapper"],.nc-container')||element;
+  // Only support the ordinary full-track nc control. Image/canvas challenges
+  // and ambiguous handles require the operator instead of guessed movement.
+  if([...widget.querySelectorAll('img,canvas,[class*="puzzle"],[class*="jigsaw"]')].some(visible))return null;
+  const handles=[...element.querySelectorAll(HANDLE)].filter(visible);
+  if(handles.length!==1)return null;
+  const handle=handles[0],track=element.getBoundingClientRect(),box=handle.getBoundingClientRect();
+  if(track.width<120||track.width>1000||track.height<20||track.height>100||
+     box.width<12||box.width>80||box.height<12||box.height>track.height+4||
+     track.width<box.width*3||Math.abs(box.left-track.left)>8||
+     box.top<track.top-2||box.bottom>track.bottom+2)return null;
+  const x=box.left+box.width/2,y=box.top+box.height/2;
+  const hit=document.elementFromPoint(x,y);
+  if(!hit||!(hit===handle||handle.contains(hit)))return null;
+  const end=track.right-box.width/2-2;
+  if(x<0||y<0||end>=innerWidth||y>=innerHeight)return null;
+  return {distance:end-x};
+}""".replace("VISIBLE", RISK_VISIBLE).replace("HANDLE", json.dumps(SIMPLE_SLIDER_HANDLE))
 
 # React keeps the DOM fiber pointer across updates. Its alternate may now be the
 # committed tree; reading the original memoizedProps can return the initial [].
@@ -101,6 +140,150 @@ ERP_DETAIL_ID_READ = """(page, expected) => {
     image_match:!!expected.main_image_url&&images.includes(expected.main_image_url)};
 }"""
 
+# Read package dimensions only inside the official package module. Keep the
+# source unit in raw_dimensions, and keep incomplete/conflicting SKU evidence
+# scoped to that SKU so it cannot fall through to a different common package.
+CURRENT_1688_PACKAGE_DIMENSIONS = r"""(pack, skus, arrays) => {
+  const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
+  const fields=['package_length_cm','package_width_cm','package_height_cm'];
+  const axes=[['package_length_cm','packageLengthCm','lengthCm','lengthMm','length'],
+    ['package_width_cm','packageWidthCm','widthCm','widthMm','width'],
+    ['package_height_cm','packageHeightCm','heightCm','heightMm','height']];
+  // Keep an explicit unknown unit (e.g. inches) so it is rejected instead of
+  // silently falling back to centimetres.
+  const unitOf=value=>clean(value).match(/[（(]\s*([^）)]+)\s*[）)]/)?.[1]?.trim()||
+    clean(value).match(/(?:^|\s)(mm|cm|m|毫米|厘米|公分|米)(?:$|\s)/i)?.[1]||'';
+  const numeric=(value,unit)=>{
+    const match=clean(value).match(/^(\d+(?:\.\d+)?)\s*(mm|cm|m|毫米|厘米|公分|米)?$/i);
+    if(!match||Number(match[1])<=0)return null;
+    const current=clean(match[2]||unit).toLowerCase();
+    if(!['mm','cm','m','毫米','厘米','公分','米'].includes(current))return null;
+    return Number(match[1])*(current==='mm'||current==='毫米'?0.1:current==='m'||current==='米'?100:1);
+  };
+  const fromItem=(item,defaultUnits=[])=>{
+    const claims=axes.map(keys=>keys.map(key=>({key,value:item[key]}))
+      .filter(entry=>entry.value!==undefined&&entry.value!==null&&clean(entry.value)!=='')[0]);
+    // 1688 sends all-zero length/width/height placeholders when no size exists.
+    if(!claims.some(entry=>entry&&!/^0+(?:\.0+)?\s*(?:mm|cm|m|毫米|厘米|公分|米)?$/i.test(clean(entry.value))))return null;
+    const result={raw_dimensions:'',dimension_evidence_present:true},evidence=[];
+    claims.forEach((entry,index)=>{
+      if(!entry)return;
+      const unit=/Mm$/.test(entry.key)?'mm':/(?:Cm$|_cm$)/.test(entry.key)?'cm':
+        item[`${['length','width','height'][index]}Unit`]||item.sizeUnit||item.dimensionUnit||item.lengthUnit||defaultUnits[index]||'cm';
+      const explicit=/\d\s*(?:mm|cm|m|毫米|厘米|公分|米)$/i.test(clean(entry.value));
+      evidence.push(['长度','宽度','高度'][index]+' '+clean(entry.value)+(explicit?'':' '+clean(unit)));
+      const converted=numeric(entry.value,unit);
+      if(converted!==null)result[fields[index]]=converted;
+    });
+    result.raw_dimensions=evidence.join('；');
+    return result;
+  };
+  const labelEvidence=label=>{
+    const raw=clean(label);
+    if(!/\d\s*(?:cm|mm|厘米|毫米|公分|米|[x×*＊]\s*\d)|(?:包装)?(?:长度|宽度|高度|长宽高)\s*[:：]/i.test(raw))return null;
+    const result={raw_dimensions:raw,dimension_evidence_present:true};
+    const unit='(?:mm|cm|m|毫米|厘米|公分|米)(?![A-Za-z])';
+    const value='([0-9]+(?:\\.[0-9]+)?)\\s*('+unit+')?';
+    const expression=new RegExp('(?<![\\d.\\-−+~～至x×*＊])'+value+'\\s*[x×*＊乘]\\s*'+value+'\\s*[x×*＊乘]\\s*'+value,'gi');
+    const tuples=[];
+    for(const match of raw.matchAll(expression)){
+      if(/[\-−+~～至x×*＊]\s*$/.test(raw.slice(0,match.index))||/^\s*[-~～至x×*＊]/.test(raw.slice(match.index+match[0].length)))continue;
+      const prefix=raw.slice(Math.max(0,match.index-40),match.index).match(/(?:包装尺寸|长宽高|尺寸)\s*[（(]\s*([^）)]+)\s*[）)]\s*[:：]?\s*$/)?.[1]||'';
+      const commonUnit=match[6]||prefix;
+      const sides=[numeric(match[1],match[2]||commonUnit),numeric(match[3],match[4]||commonUnit),numeric(match[5],commonUnit)];
+      if(sides.every(side=>side!==null))tuples.push(sides);
+    }
+    if(tuples.length){
+      if(!tuples.every(tuple=>tuple.every((side,index)=>Math.abs(side-tuples[0][index])<1e-8)))
+        return {raw_dimensions:'包装尺寸信息冲突',dimension_evidence_present:true};
+      fields.forEach((field,index)=>{result[field]=tuples[0][index];});
+    }
+    return result;
+  };
+  const complete=item=>!!item&&fields.every(field=>Number.isFinite(item[field])&&item[field]>0);
+  const merge=(left,right)=>{
+    if(!left)return right;
+    if(!right)return left;
+    if(left.raw_dimensions==='包装尺寸信息冲突'||right.raw_dimensions==='包装尺寸信息冲突')
+      return {raw_dimensions:'包装尺寸信息冲突',dimension_evidence_present:true};
+    if(fields.some(field=>left[field]!==undefined&&right[field]!==undefined&&Math.abs(left[field]-right[field])>1e-8))
+      return {raw_dimensions:'包装尺寸信息冲突',dimension_evidence_present:true};
+    if(complete(left))return left;
+    if(complete(right))return right;
+    if(left.raw_dimensions===right.raw_dimensions)return left;
+    return {raw_dimensions:'包装尺寸信息不完整或不一致',dimension_evidence_present:true};
+  };
+  const byId={},commonClaims=[],known=new Set(skus.map(sku=>sku.id));
+  const identity=value=>clean(value).split(/\s*\/\s*|>/).map(part=>part.replace(/^[^:：]+[:：]/,'').trim()).join(' / ');
+  const labelIds=new Map();
+  for(const sku of skus){const key=identity(sku.label);labelIds.set(key,[...(labelIds.get(key)||[]),sku.id]);}
+  const add=(id,claim)=>{
+    if(!claim)return;
+    if(id&&known.has(id))byId[id]=merge(byId[id],claim);
+    else if(!id)commonClaims.push(claim);
+  };
+  if(pack){
+    const tables=[...pack.querySelectorAll('table,[role="table"]')];
+    const headerUnits=[];
+    for(const table of tables){
+      const rows=[...table.querySelectorAll('tr,[role="row"]')];
+      const headerRow=rows.find(row=>row.querySelector('th,[role="columnheader"]'))||rows[0];
+      if(!headerRow)continue;
+      const headers=[...headerRow.querySelectorAll('th,td,[role="columnheader"],[role="cell"]')].map(cell=>clean(cell.textContent));
+      const indexes=[/^(?:包装)?(?:长度|长)(?:\s|[（(]|$)|\blength\b/i,
+        /^(?:包装)?(?:宽度|宽)(?:\s|[（(]|$)|\bwidth\b/i,/^(?:包装)?(?:高度|高)(?:\s|[（(]|$)|\bheight\b/i]
+        .map(pattern=>headers.findIndex(header=>pattern.test(header)));
+      const sizeIndex=headers.findIndex(header=>/包装尺寸|长宽高|尺寸信息/.test(header));
+      if(indexes.every(index=>index<0)&&sizeIndex<0)continue;
+      const units=indexes.map(index=>index>=0?unitOf(headers[index]):'');
+      units.forEach((unit,index)=>{if(unit&&!headerUnits[index])headerUnits[index]=unit;});
+      const data=rows.filter(row=>row!==headerRow&&row.querySelector('td,[role="cell"]'));
+      for(const row of data){
+        const cells=[...row.querySelectorAll('td,[role="cell"]')].map(cell=>clean(cell.textContent));
+        if(cells.length!==headers.length)continue;
+        const item={};indexes.forEach((column,index)=>{if(column>=0)item[['length','width','height'][index]]=cells[column];});
+        let claim=fromItem(item,units);
+        if(sizeIndex>=0&&cells[sizeIndex])claim=merge(claim,labelEvidence(headers[sizeIndex]+'：'+cells[sizeIndex]));
+        if(!claim)continue;
+        const idIndex=headers.findIndex(header=>/^(?:sku|规格)(?:\s*id|标识|编号)$/i.test(header));
+        const explicitId=clean(row.getAttribute('data-sku-id')||row.getAttribute('data-skuid')||(idIndex>=0?cells[idIndex]:''));
+        const spec=cells.filter((cell,index)=>cell&&!indexes.includes(index)&&index!==sizeIndex&&index!==idIndex&&
+          !/重量|毛重|净重|体积|单位|价格|单价|数量|件数|操作/.test(headers[index])).join(' / ');
+        if(explicitId){add(explicitId,claim);continue;}
+        if(spec&&!/^(?:通用|统一|全部SKU|所有规格)$/i.test(spec)){
+          const matches=labelIds.get(identity(spec))||[];
+          if(matches.length===1)add(matches[0],claim);
+        }else if(data.length===1)add('',claim);
+      }
+    }
+    const hasAxis=item=>axes.flat().some(field=>field in item);
+    const sets=arrays(pack,list=>list.length>0&&list.length<=500&&list.every(item=>item&&typeof item==='object'&&hasAxis(item)),
+      item=>hasAxis(item)&&((item.skuId||item.id)||axes.every(keys=>keys.some(field=>field in item))));
+    for(const list of sets){
+      for(const item of list){
+        const claim=fromItem(item,headerUnits),id=clean(item.skuId||item.id);
+        if(id)add(id,claim);
+        else if(list.length===1)add('',claim);
+      }
+    }
+    // A simple product-level claim is usable only outside SKU tables; never
+    // flatten the whole module and accidentally choose another variant's row.
+    if(!tables.length){
+      const text=clean(pack.innerText);
+      const commonText=text.match(/(?:通用|统一|全部SKU|所有规格)\s*(?:包装尺寸|长宽高).*$/i)?.[0]||'';
+      if(commonText)add('',labelEvidence(commonText));
+      else if(!Object.keys(byId).length&&!/规格|sku|颜色|型号/i.test(text)&&/包装尺寸|长宽高/.test(text))
+        add('',labelEvidence(text));
+    }
+  }
+  for(const sku of skus){
+    if(!byId[sku.id])add(sku.id,labelEvidence(sku.raw_dimensions||sku.raw_text||sku.label));
+  }
+  let common=null;
+  for(const claim of commonClaims)common=merge(common,claim);
+  return {byId,common};
+}"""
+
 # The current 1688 detail page exposes the complete SKU list in the React data
 # backing its official SKU module.  Read only the fields needed by this task and
 # cross-check them against the independently rendered packaging data.  This is
@@ -117,19 +300,25 @@ CURRENT_1688_DETAIL = r"""candidateImage => {
   if(titleNodes.length!==1||merchantNodes.length!==1||!selection)
     return {recognized:true,ready:false,error:'1688新版详情的标题、商家或SKU模块尚未完整加载'};
 
-  const arrays=(element,predicate)=>{
+  const arrays=(element,predicate,objectPredicate=null)=>{
     const key=Object.keys(element).find(name=>name.startsWith('__reactFiber$'));
     let fiber=key?element[key]:null;const found=[],seen=new WeakSet();
     const scan=(value,depth)=>{
       if(!value||typeof value!=='object'||depth>9||seen.has(value))return;
       seen.add(value);
       if(Array.isArray(value)&&predicate(value)){found.push(value);return;}
+      // Official packInfoData can hold one package object directly. Continue
+      // scanning its descendants: SKU packages may sit beside common axes.
+      if(!Array.isArray(value)&&objectPredicate&&objectPredicate(value))found.push([value]);
       for(const [name,child] of Object.entries(value)){
         if(name==='_owner'||name==='stateNode'||name==='return'||name==='child'||name==='sibling')continue;
         if(child&&typeof child==='object'&&!child.$$typeof)scan(child,depth+1);
       }
     };
-    for(let depth=0;fiber&&depth<18;depth++,fiber=fiber.return)scan(fiber.memoizedProps,0);
+    for(let depth=0;fiber&&depth<18;depth++,fiber=fiber.return){
+      scan(fiber.memoizedProps,0);
+      if(found.length)return found;
+    }
     return found;
   };
   const priceOf=item=>{
@@ -200,6 +389,7 @@ CURRENT_1688_DETAIL = r"""candidateImage => {
   const skuIds=new Set(skus.map(sku=>sku.id));
   if([...weights.keys()].some(id=>!skuIds.has(id)))
     return {recognized:true,ready:false,error:'1688新版详情的价格与包装SKU标识不一致'};
+  const dimensions=(PACKAGE_DIMENSIONS)(pack,skus,arrays);
   const rows=skus.map(sku=>{
     // Some offers render package weight only in the variant label, e.g.
     // "冲浪板84*56cm(0.45kg)", without a productPackInfo entry. Prefer the
@@ -209,16 +399,16 @@ CURRENT_1688_DETAIL = r"""candidateImage => {
     const weight=packaged?packaged+'g':sku.labelWeight;
     const {labelWeight,...cleanSku}=sku;
     return {...cleanSku,raw_price:'¥'+sku.price,raw_surcharge:'',raw_weight:weight,
-      raw_dimensions:sku.label+(skus.length===1&&pack?'；'+clean(pack.innerText).slice(0,2000):''),
+      raw_dimensions:'',...(dimensions.byId[sku.id]||{}),
       raw_text:sku.label+'；页面单价 ¥'+sku.price+(weight?'；包装重量 '+weight:'')};
   });
   // Keep the detail-page read deliberately narrow: pricing, variant labels and
-  // package weights only. Title/shop/image are retained solely for ownership
+  // package weights and dimensions only. Title/shop/image are retained solely for ownership
   // and product-identity checks elsewhere in the pipeline.
   const description='';
   return {recognized:true,ready:true,offer:{title:clean(titleNodes[0].innerText),main_image_url:mainImage,
-    description,raw_weight:'',merchant_id:merchantId,skus:rows}};
-}"""
+    description,raw_weight:'',...(dimensions.common||{}),merchant_id:merchantId,skus:rows}};
+}""".replace('PACKAGE_DIMENSIONS', CURRENT_1688_PACKAGE_DIMENSIONS)
 
 
 def category_paths(options, parents=()):
@@ -277,6 +467,11 @@ WRITEBACK_REVIEW_STATUSES = {"通过", "价格异常"}
 
 
 class Browser:
+    # Continue creates a new adapter (and can open fresh tabs). Keep an
+    # unresolved attempt for the batch until an independently readable page
+    # proves automatic or manual recovery; adapter recreation is not a retry.
+    _unresolved_slider_attempts = set()
+
     def __init__(self, config, stop, log):
         self.config, self.stop, self.log = config, stop, log
         self.s = dict(config["selectors"])
@@ -287,6 +482,7 @@ class Browser:
         self.owned = []
         self.search_results = {}
         self.collection_page = None
+        self._slider_attempted_pages = weakref.WeakSet()
 
     def __enter__(self):
         from playwright.sync_api import Error as PlaywrightError, sync_playwright
@@ -349,60 +545,247 @@ class Browser:
 
     def check(self, page):
         try:
-            for attempt in range(1, 4):
-                try:
+            self._check_page_risk(page)
+            host = (urlsplit(getattr(page, "url", "")).hostname or "").lower()
+            if self._unresolved_slider_attempts and (host == "1688.com" or host.endswith(".1688.com")):
+                key = self._slider_retry_key(page)
+                if key in self._unresolved_slider_attempts:
+                    try:
+                        readable = self._supplier_page_readable(page)
+                    except Stopped:
+                        raise
+                    except Exception as exc:
+                        raise CircuitOpen("1688验证后的页面状态尚无法确认；请在可见Edge中接手处理后继续执行") from exc
                     if self.stop.is_set():
                         raise Stopped("操作已停止")
-                    for frame in page.frames:
-                        try:
-                            if frame is not page.main_frame and frame.is_detached():
-                                continue
-                            self.check_frame(frame)
-                        except (CircuitOpen, Stopped):
-                            raise
-                        except Exception:
-                            # 1688 replaces ad/login frames while the main page loads.
-                            if frame is not page.main_frame and frame.is_detached():
-                                continue
-                            raise
-                    return
-                except (CircuitOpen, Stopped):
-                    raise
-                except Exception as exc:
-                    message = str(exc).lower()
-                    navigation_transition = (
-                        "execution context was destroyed" in message
-                        or "most likely because of a navigation" in message
-                        or "cannot find context with specified id" in message
-                    )
-                    if not navigation_transition or attempt == 3:
-                        raise
-                    if self.stop.wait(.15):
-                        raise Stopped("操作已停止")
+                    if not readable:
+                        raise CircuitOpen("1688验证后的目标页面尚不可读取；请在可见Edge中接手处理后继续执行")
+                    self._unresolved_slider_attempts.discard(key)
         except CircuitOpen:
+            try:
+                if self._try_simple_slider(page):
+                    return
+            except (CircuitOpen, Stopped):
+                self.retain(page)
+                raise
             # A real login/captcha page is the user's recovery surface. Detach it
             # from automatic cleanup so it remains visible after this worker exits.
             self.retain(page)
             raise
 
-    def check_frame(self, frame):
+    def _check_page_risk(self, page):
+        """Inspect without triggering another drag or repeated manual focus."""
+        for attempt in range(1, 4):
+            try:
+                if self.stop.is_set():
+                    raise Stopped("操作已停止")
+                for frame in page.frames:
+                    try:
+                        if frame is not page.main_frame and frame.is_detached():
+                            continue
+                        self.check_frame(frame)
+                    except (CircuitOpen, Stopped):
+                        raise
+                    except Exception:
+                        # 1688 replaces ad/login frames while the main page loads.
+                        if frame is not page.main_frame and frame.is_detached():
+                            continue
+                        raise
+                return
+            except (CircuitOpen, Stopped):
+                raise
+            except Exception as exc:
+                message = str(exc).lower()
+                navigation_transition = (
+                    "execution context was destroyed" in message
+                    or "most likely because of a navigation" in message
+                    or "cannot find context with specified id" in message
+                )
+                if not navigation_transition or attempt == 3:
+                    raise
+                if self.stop.wait(.15):
+                    raise Stopped("操作已停止")
+
+    @staticmethod
+    def _frame_painted(frame):
         ancestor = frame
         while ancestor is not frame.page.main_frame:
             embedding = ancestor.frame_element()
             try:
                 if not embedding.evaluate(RISK_VISIBLE):
-                    return
+                    return False
             finally:
                 embedding.dispose()
             ancestor = ancestor.parent_frame
             if ancestor is None:
-                return
+                return False
+        return True
+
+    def _slider_retry_key(self, page):
+        run_id = self.config.get("run_id")
+        if run_id:
+            target = ("run", str(run_id))
+        else:
+            parsed = urlsplit(page.url)
+            target = ("page", (parsed.hostname or "").lower(), parsed.path)
+        return (self.config["cdp_url"], *target)
+
+    def _try_simple_slider(self, page):
+        parsed = urlsplit(page.url)
+        host = (parsed.hostname or "").lower()
+        retry_key = self._slider_retry_key(page)
+        if (not (host == "1688.com" or host.endswith(".1688.com"))
+                or host in ("login.1688.com", "passport.1688.com")
+                or page in self._slider_attempted_pages
+                or retry_key in self._unresolved_slider_attempts):
+            return False
+        candidates = []
+        try:
+            for frame in page.frames:
+                if frame is not page.main_frame and frame.is_detached():
+                    continue
+                if not self._frame_painted(frame):
+                    continue
+                for track in frame.locator(SIMPLE_SLIDER_TRACK).all():
+                    data = track.evaluate(SIMPLE_SLIDER_READ)
+                    if data:
+                        candidates.append((track, data))
+            if len(candidates) != 1:
+                return False
+            track, data = candidates[0]
+            handle = track.locator(SIMPLE_SLIDER_HANDLE)
+            painted = [item for item in handle.all() if item.evaluate(RISK_VISIBLE)]
+            if len(painted) != 1:
+                return False
+            box = painted[0].bounding_box()
+            if not box:
+                return False
+            x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+            viewport = page.evaluate("() => ({width:innerWidth,height:innerHeight})")
+            if not (0 <= x < x + data["distance"] < viewport["width"] and 0 <= y < viewport["height"]):
+                return False
+            # Mark before input: a detached/replaced widget or failed mouse call
+            # must not cause a second automatic attempt on this same page.
+            self._slider_attempted_pages.add(page)
+            self._unresolved_slider_attempts.add(retry_key)
+            self.log("1688出现普通滑块，尝试一次拖动并核验页面是否恢复")
+            if self.stop.is_set():
+                raise Stopped("操作已停止")
+            page.mouse.move(x, y)
+            try:
+                page.mouse.down()
+                for step in range(1, 13):
+                    if self.stop.is_set():
+                        raise Stopped("操作已停止")
+                    page.mouse.move(x + data["distance"] * step / 12, y)
+                    if self.stop.wait(.04):
+                        raise Stopped("操作已停止")
+            finally:
+                page.mouse.up()
+            deadline = time.monotonic() + SLIDER_VERIFY_TIMEOUT
+            ready_samples = 0
+            while time.monotonic() < deadline:
+                try:
+                    self._check_page_risk(page)
+                    ready_samples = ready_samples + 1 if self._supplier_page_readable(page) else 0
+                    if ready_samples >= 2:
+                        self._unresolved_slider_attempts.discard(retry_key)
+                        self.log("1688滑块验证已解除，目标页面已恢复可读取，继续当前商品")
+                        return True
+                except CircuitOpen:
+                    ready_samples = 0
+                if self.stop.wait(.15):
+                    raise Stopped("操作已停止")
+        except Stopped:
+            raise
+        except Exception as exc:
+            # An input/inspection error cannot turn an uncertain challenge into
+            # an ordinary product skip. Preserve the page for manual recovery.
+            raise CircuitOpen("1688滑块尝试后无法确认验证状态；请在可见Edge中接手处理后继续执行") from exc
+        raise CircuitOpen("1688自动拖动后验证未解除或目标页面尚不可读取；请在可见Edge中接手处理后继续执行")
+
+    def _supplier_page_readable(self, page):
+        """Use the same intended upload/results/detail surfaces as the worker."""
+        parsed = urlsplit(page.url)
+        host = (parsed.hostname or "").lower()
+        if not (host == "1688.com" or host.endswith(".1688.com")):
+            return False
+        if host == "detail.1688.com" and re.fullmatch(r"/offer/\d+\.html", parsed.path):
+            current = page.evaluate(CURRENT_1688_DETAIL, "")
+            if current.get("recognized"):
+                return current.get("ready") is True and all(
+                    page.locator(selector).evaluate_all(
+                        "items => items.length===1&&items.every(" + RISK_VISIBLE + ")")
+                    for selector in ("#productTitle .title-content h1", "#shopNavigation a.shop-company-name[href]",
+                                     '#skuSelection[data-module="od_sku_selection"]'))
+            if any(not self.s[field] for field in AUTO_FIELDS):
+                return False
+            for field in ("supplier_title", "supplier_image", "supplier_merchant"):
+                items = page.locator(self.s[field])
+                if items.count() != 1 or not items.first.evaluate(RISK_VISIBLE):
+                    return False
+            if (not self.value(page, "supplier_title")
+                    or not self.value(page, "supplier_image", "src")
+                    or not self.value(page, "supplier_merchant", self.s["supplier_merchant_attribute"])):
+                return False
+            rows = page.locator(self.s["sku_rows"])
+            for row in rows.all():
+                if (row.evaluate(RISK_VISIBLE)
+                        and row.get_attribute(self.s["sku_id_attribute"])
+                        and self.value(row, "sku_label") and self.value(row, "sku_price")):
+                    return True
+            return False
+        empty = page.locator("body").evaluate(r"""body => {
+          const visible=(VISIBLE),pattern=/(?:没有找到|未找到|暂无)[^\n]{0,20}(?:相关商品|匹配商品|搜索结果)|没有符合条件的商品/;
+          const walker=document.createTreeWalker(body,NodeFilter.SHOW_TEXT);let count=0;
+          for(let node=walker.nextNode();node&&count<4000;node=walker.nextNode(),count++){
+            if(pattern.test(node.nodeValue||'')&&visible(node.parentElement))return true;
+          }
+          return false;
+        }""".replace("VISIBLE", RISK_VISIBLE)) if page.locator("body").count() else False
+        if "/1688-search/pc-image-search/" in parsed.path:
+            if empty:
+                return True
+            markers = page.get_by_text("找到以下货源", exact=True)
+            if not markers.evaluate_all("items => items.some(" + RISK_VISIBLE + ")"):
+                return False
+            for card in self.result_image_cards(page):
+                image = page.locator(card["result_image_path"])
+                if image.count() == 1 and image.evaluate(RISK_VISIBLE):
+                    return True
+            return False
+        links = page.locator(self.s["result_links"]) if self.s["result_links"] else None
+        if links and links.evaluate_all("""links => links.some(link => {
+          const visible=(VISIBLE);
+          if(!visible(link))return false;
+          for(let node=link,depth=0;node&&depth<6;depth++,node=node.parentElement){
+            const key=((node.id||'')+' '+(typeof node.className==='string'?node.className:'')).toLowerCase();
+            if(/(^|[-_ ])(?:result|results|image-search|search-result|goods-list|offer-list|product-list)([-_ ]|$)/.test(key))return true;
+          }
+          return false;
+        })""".replace("VISIBLE", RISK_VISIBLE)):
+            return True
+        if parsed.path not in ("", "/") or host not in ("1688.com", "www.1688.com"):
+            return False
+        upload = self.s["image_search_upload"]
+        if not upload:
+            return False
+        # Upload inputs are intentionally hidden. Their enclosing search region
+        # must be painted and unique, as required by image_search().
+        return page.locator(upload).evaluate_all("""inputs => {
+          const visible=(VISIBLE);
+          return inputs.filter(input=>!input.disabled&&input.parentElement&&visible(input.parentElement)).length===1;
+        }""".replace("VISIBLE", RISK_VISIBLE))
+
+    def check_frame(self, frame):
+        if not self._frame_painted(frame):
+            return
         host = (urlsplit(frame.url).hostname or "").lower()
         if frame is frame.page.main_frame and host in ("login.taobao.com", "login.1688.com", "passport.1688.com"):
             raise CircuitOpen("1688需要登录；请在可见Edge中完成登录后返回控制台继续执行")
         risk = self.s["risk"]
         if risk and frame.locator(risk).evaluate_all(
-            "elements => elements.some(" + RISK_VISIBLE + ")"
+            "elements => elements.some(" + RISK_ACTIVE + ")"
         ):
             raise CircuitOpen("1688出现验证码或人机审核；请在可见Edge中处理后返回控制台继续执行")
         # Check visible text nodes in-place and stop at the first match. Pulling
@@ -1306,7 +1689,7 @@ class Browser:
         return matches[0] if matches else (None, None)
 
     def current_supplier_offer(self, page, candidate, timeout=45):
-        """Read only current 1688 SKU prices and per-SKU package weights.
+        """Read current 1688 SKU prices, weights and scoped package dimensions.
 
         The new 1688 detail shell can render its title and SKU container before
         the React SKU data arrives.  A 25-second bound was long enough for
@@ -1594,13 +1977,18 @@ class Browser:
             current = self.current_supplier_offer(detail, candidate)
             if current is not None:
                 weighted = sum(bool(sku.get("raw_weight")) for sku in current["skus"])
+                dimensioned = sum(bool(sku.get("raw_dimensions")) for sku in current["skus"])
                 self.log(f"已从1688官方SKU模块读取 {len(current['skus'])} 个变体价格，"
-                         f"其中 {weighted} 个读取到包装重量；未扫描广告和推荐商品", task["erp_goods_id"])
+                         f"其中 {weighted} 个读取到包装重量、{dimensioned} 个读取到尺寸信息"
+                         +("，另有商品通用包装尺寸" if current.get("raw_dimensions") else "")
+                         +"；未扫描广告和推荐商品", task["erp_goods_id"])
                 if self.record_supplier_adaptation:
                     self.record_supplier_adaptation(task["erp_goods_id"], {
                         "url": detail.url, "at": time.time(), "ok": True,
                         "source": "1688_official_sku_modules",
-                        "evidence": {"sku_count": len(current["skus"]), "weighted_sku_count": weighted},
+                        "evidence": {"sku_count": len(current["skus"]), "weighted_sku_count": weighted,
+                                     "dimensioned_sku_count": dimensioned,
+                                     "common_dimensions": bool(current.get("raw_dimensions"))},
                     })
                 return current
             self.ensure_supplier_detail(detail, task["erp_goods_id"])
@@ -1622,11 +2010,16 @@ class Browser:
                 skus.append({"id": sku_id, "label": self.value(row, "sku_label", required=True),
                              "raw_text": row.inner_text(), "raw_price": raw_price,
                              "raw_surcharge": surcharge, "raw_weight": self.value(row, "sku_weight"),
-                             "raw_dimensions": row.inner_text(), **price})
+                             "raw_dimensions": "", **price})
+            dimensions = detail.evaluate(
+                "skus => (" + CURRENT_1688_PACKAGE_DIMENSIONS + ")"
+                "(document.querySelector('#productPackInfo[data-module=\"od_product_pack_info\"]'),skus,()=>[])", skus)
+            for sku in skus:
+                sku.update(dimensions["byId"].get(sku["id"], {}))
             return {"url": detail.url, "title": self.value(detail, "supplier_title", required=True),
                     "main_image_url": urljoin(detail.url, self.value(detail, "supplier_image", "src", True)),
                     "description": self.value(detail, "supplier_description") or detail.locator("body").inner_text()[:20000],
-                    "raw_weight": self.value(detail, "supplier_weight"), "skus": skus,
+                    "raw_weight": self.value(detail, "supplier_weight"), **(dimensions.get("common") or {}), "skus": skus,
                     "merchant_id": self.value(detail, "supplier_merchant", self.s["supplier_merchant_attribute"])}
         finally:
             self.release(detail)
@@ -1742,6 +2135,18 @@ class Browser:
         if not label:
             raise ValueError("智赢当前商品状态标签为空")
         return label
+
+    def set_review_status(self, root, target):
+        matches = []
+        for radio in root.locator("input[name='stat']").all():
+            label = radio.evaluate("e => (e.closest('label')?.innerText||'').replace(/\\s+/g,'').trim()")
+            if label == target:
+                matches.append(radio)
+        if len(matches) != 1:
+            raise ValueError(f"无法唯一定位智赢审核状态：{target}")
+        matches[0].check()
+        if self.review_status(root) != target:
+            raise ValueError(f"智赢审核状态未切换为{target}")
 
     def update_package_by_product_id(self, product_id, weight_g, dimensions_cm):
         """Update one Zying product by exact product number and verify its saved form."""
@@ -2166,18 +2571,7 @@ class Browser:
                 else:
                     raise ValueError("智赢详情未能唯一定位包装尺寸输入框，已停止保存")
             if "review_status" in changes:
-                target = changes["review_status"]
-                radios = root.locator("input[name='stat']")
-                matches = []
-                for radio in radios.all():
-                    label = radio.evaluate("e => (e.closest('label')?.innerText||'').replace(/\\s+/g,'').trim()")
-                    if label == target:
-                        matches.append(radio)
-                if len(matches) != 1:
-                    raise ValueError(f"无法唯一定位智赢审核状态：{target}")
-                matches[0].check()
-                if self.review_status(root) != target:
-                    raise ValueError(f"智赢审核状态未切换为{target}")
+                self.set_review_status(root, changes["review_status"])
             self.visual(task, "erp_saving", "重量、净收益及审核状态已按核重核价结论填写，正在保存", page)
             self.check(page)
             save.click()
@@ -2489,8 +2883,11 @@ class Browser:
             net_income = number(task.get("net_income_usd"))
             if net_income != net_income.to_integral_value():
                 raise ValueError("回填净收益必须是向上取整后的整数美元")
-            old = {"net_income_usd": cost.input_value(), "weight_g": weight.input_value()}
             root = page.locator(".curd-detail-wrap")
+            old = {"net_income_usd": cost.input_value(), "weight_g": weight.input_value(),
+                   "review_status": self.review_status(root)}
+            if old["review_status"] != PENDING_REVIEW_STATUS:
+                raise ValueError(f"智赢商品状态为{old['review_status']}，仅待审核商品允许核重核价")
             dimension_controls = self._zying_package_dimension_controls(root)
             if dimension_controls:
                 old["dimensions_cm"] = (dimension_controls[0].input_value().strip() if len(dimension_controls) == 1
@@ -2520,6 +2917,7 @@ class Browser:
                 else:
                     for control, side in zip(dimension_controls, dims):
                         control.fill(str(number(side)))
+            self.set_review_status(root, "通过")
             self.check(page)
             self.unique(page, "erp_save").click()
             saved.first.wait_for(state="visible")
@@ -2529,7 +2927,8 @@ class Browser:
             if self.value(page, "erp_edit_id", required=True) != task["erp_goods_id"] or self.value(page, "erp_edit_sku", required=True) != task["erp_sku"]:
                 raise ValueError("保存后商品或SKU变化")
             actual = {"net_income_usd": self.unique(page, "erp_net_income_input").input_value(),
-                      "weight_g": self.unique(page, "erp_weight_input").input_value()}
+                      "weight_g": self.unique(page, "erp_weight_input").input_value(),
+                      "review_status": self.review_status(page.locator(".curd-detail-wrap"))}
             dimension_controls = self._zying_package_dimension_controls(page.locator(".curd-detail-wrap"))
             if dimension_controls:
                 actual["dimensions_cm"] = (dimension_controls[0].input_value().strip() if len(dimension_controls) == 1
@@ -2538,6 +2937,8 @@ class Browser:
                 if number(actual["net_income_usd"]) != net_income or number(actual["weight_g"]) != number(task["weight_g"]):
                     raise ValueError()
             except ValueError:
+                raise WritebackMismatch(actual)
+            if actual["review_status"] != "通过":
                 raise WritebackMismatch(actual)
             from .models import erp_value_equal
             if "dimensions_cm" in old and not erp_value_equal(

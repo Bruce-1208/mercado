@@ -167,13 +167,13 @@ def test_route_rejects_unauthorized_or_wrong_case(monkeypatch, kwargs, path, sta
     assert client.post('/api/mercado/today/rights-holder/' + path, data={'text': 'reply'}).status_code == status
 
 
-@pytest.mark.usefixtures('isolated_legacy_console_user')
+@pytest.mark.usefixtures('isolated_legacy_console_user', 'subscribed_workbench_account')
 def test_browser_fallback_queues_only_authorized_store(monkeypatch):
     from bit import bit_interface as app_module
     queued = []
     class AgentStore:
         def get_agent(self, agent_id, **kwargs):
-            return {'agent_id': agent_id, 'name': 'Office', 'online': True, 'capabilities': ['daily_task']}
+            return {'agent_id': agent_id, 'owner_user_id': 1, 'name': 'Office', 'online': True, 'capabilities': ['daily_task']}
         def enqueue_job(self, *args, **kwargs):
             queued.append((args, kwargs))
     monkeypatch.setattr(app_module, 'get_local_agent_store', AgentStore)
@@ -181,7 +181,7 @@ def test_browser_fallback_queues_only_authorized_store(monkeypatch):
     monkeypatch.setattr(app_module.bit_db_api, 'list_mercado_store_tokens', lambda: {'rows': [{'id': 7, 'display_name': 'Shop A'}]})
     client = app_module.app.test_client()
     with client.session_transaction() as session:
-        session['workbench_user'] = {'id': 1, 'role_key': 'super_admin', 'is_platform_admin': True}
+        session['workbench_user'] = {'id': 1, 'role_key': 'super_admin', 'is_platform_admin': True, 'organization_key': 'wuhan-zeshun'}
     response = client.post('/api/mercado/today/rights-holder/7/open-browser', json={'agent_id': 'office', 'target_url': 'https://untrusted.example'})
     assert response.status_code == 202
     assert queued[0][0][2] == 'open_store'
@@ -189,7 +189,7 @@ def test_browser_fallback_queues_only_authorized_store(monkeypatch):
     assert payload['destination'] == 'rights_holder'
     assert payload['token_record']['display_name'] == 'Shop A'
     assert 'target_url' not in payload
-    assert client.post('/api/mercado/today/rights-holder/8/open-browser', json={'agent_id': 'office'}).status_code == 404
+    assert client.post('/api/mercado/today/rights-holder/8/open-browser', json={'agent_id': 'office'}).status_code == 403
     assert client.post('/api/mercado/today/rights-holder/7/open-browser', json={'execution_target': 'server'}).status_code == 400
     assert len(queued) == 1
 

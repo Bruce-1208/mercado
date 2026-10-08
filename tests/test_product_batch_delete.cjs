@@ -89,12 +89,18 @@ test('pending request disables both delete buttons and prevents duplicates', asy
 test('AI select-all reflects only visible filtered rows', () => {
   const {run, nodes} = setup();
   run('aiOriginalRows = [{id:1, ai_status:"pending"}, {id:2, ai_status:"completed"}]; aiOriginalSelected = new Set([2]); updateAiOriginalSelection()');
-  nodes.get('ai-original-status-filter').value = 'pending';
+  nodes.get('ai-original-platform').value = 'mercadolibre';
+  // Current UI filters product readiness, rather than the AI task's execution state.
+  assert.equal(run('aiOriginalProductStatus(aiOriginalRows[0])'), 'unreviewed');
+  assert.equal(run('aiOriginalProductStatus(aiOriginalRows[1])'), 'incomplete');
+  nodes.get('ai-original-status-filter').value = 'unreviewed';
   run('updateAiOriginalSelection()');
   assert.equal(nodes.get('ai-original-select-all').checked, false);
   assert.equal(nodes.get('ai-original-select-all').indeterminate, false);
   run('toggleAiOriginalProduct(1, true)');
   assert.equal(nodes.get('ai-original-select-all').checked, true);
+  run('toggleAllAiOriginalProducts(false)');
+  assert.equal(run('[...aiOriginalSelected].join()'), '2');
 });
 
 

@@ -59,12 +59,17 @@
         const entryTime = String(entry.time || "");
         const target = String(entry.marketplace_item_id || entry.product_id ||
             String(entry.message || "").match(/^链接 ([A-Z]{3}\d+)：/)?.[1] || "");
-        const hasFinalResult = allEntries.some(candidate => candidate && candidate !== entry &&
-            candidate.execution_id === entry.execution_id && candidate.stage === entry.stage &&
-            String(candidate.time || "") >= entryTime &&
-            (!target || !candidate.marketplace_item_id && !candidate.product_id ||
-                String(candidate.marketplace_item_id || candidate.product_id) === target) &&
-            ["成功", "失败", "跳过", "保存失败"].includes(String(candidate.status || "")));
+        const hasFinalResult = allEntries.some(candidate => {
+            if (!candidate || candidate === entry || candidate.execution_id !== entry.execution_id ||
+                String(candidate.time || "") < entryTime) return false;
+            const result = String(candidate.status || "");
+            if (["任务", "任务恢复"].includes(candidate.stage) &&
+                ["失败", "已中断", "已终结"].includes(result)) return true;
+            return candidate.stage === entry.stage &&
+                (!target || !candidate.marketplace_item_id && !candidate.product_id ||
+                    String(candidate.marketplace_item_id || candidate.product_id) === target) &&
+                ["成功", "失败", "跳过", "保存失败", "已中断", "已终结"].includes(result);
+        });
         return hasFinalResult ? "阶段已结束" : "执行中";
     }
     function historyValues(entry, allEntries) {
@@ -441,6 +446,7 @@
         }
     }
     async function loadAgents() {
+        if (globalThis.canAccessAgents === false) return;
         const select = $("wdr-agent-id"); if (!select) return;
         try {
             const response = await fetch("/api/execution-agents?capability=ai_weight_price", {cache: "no-store"}); const payload = await response.json();

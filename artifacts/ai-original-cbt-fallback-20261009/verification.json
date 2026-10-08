@@ -1,0 +1,82 @@
+{
+  "tests_passed": 195,
+  "live_fallback": {
+    "status": "completed",
+    "category_id": "CBT24790",
+    "category_name": "Costumes",
+    "variation_count": 36,
+    "missing_required_attributes": []
+  },
+  "retry_results": [
+    {
+      "product_id": 14069594,
+      "status": "failed",
+      "failed_step": "variations",
+      "workflow_status": "needs_variations",
+      "message": "自动映射已尝试 3 次：规格无法映射到当前分类：{'name': '规格2', 'value_name': '均码'}；请核对分类或规格"
+    },
+    {
+      "product_id": 16327056,
+      "status": "failed",
+      "failed_step": "variations",
+      "workflow_status": "needs_budget_review",
+      "message": "上次调用费用尚未确认，已保留预算；请核对模型供应商账单后人工处理。"
+    },
+    {
+      "product_id": 16327260,
+      "status": "failed",
+      "failed_step": "copy",
+      "workflow_status": "needs_budget_review",
+      "message": "上次调用费用尚未确认，已保留预算；请核对模型供应商账单后人工处理。"
+    },
+    {
+      "product_id": 16327261,
+      "status": "failed",
+      "failed_step": "copy",
+      "workflow_status": "needs_budget_review",
+      "message": "上次调用费用尚未确认，已保留预算；请核对模型供应商账单后人工处理。"
+    },
+    {
+      "product_id": 13088985,
+      "status": "failed",
+      "failed_step": "variations",
+      "workflow_status": "needs_variations",
+      "message": "自动映射已尝试 3 次：规格无法映射到当前分类：{'name': '规格1', 'value_name': 'LR44电子一个'}；请核对分类或规格"
+    },
+    {
+      "product_id": 13091058,
+      "status": "failed",
+      "failed_step": "variations",
+      "workflow_status": "needs_variations",
+      "message": "自动映射已尝试 3 次：AI 映射后存在无法区分的变体，未保存；请保留这两组原规格的完整区别：{\"first\": [{\"option_id\": 22, \"source\": {\"name\": \"完整SKU规格\", \"value_name\": \"规格1: 无&一郎 / 规格2: 110\"}}], \"second\": [{\"option_id\": 55, \"source\": {\"name\": \"完整SKU规格\", \"value_name\": \"规格1: 义&勇 / 规格2: 110\"}}], \"collapsed_attributes\": {\"CHARACTER\": {\"id\": \"CHARACTER\", \"name\": \"Character\", \"value_name\": \"Giyu Tomioka\"}, \"SIZE\": {\"id\": \"SIZE\", \"name\": \"Size\", \"value_name\": \"Kids 110 (90-100 cm)\"}}}"
+    },
+    {
+      "product_id": 14069602,
+      "status": "failed",
+      "failed_step": "variations",
+      "workflow_status": "needs_variations",
+      "message": "自动映射已尝试 3 次：规格无法映射到当前分类：{'name': '规格2', 'value_name': '均码'}；请核对分类或规格"
+    },
+    {
+      "product_id": 16326847,
+      "status": "failed",
+      "failed_step": "variations",
+      "workflow_status": "needs_variations",
+      "message": "自动映射已尝试 3 次：AI 变体选项 6 的属性不符合目标分类（属性ID重复：ACCESSORIES_INCLUDED=Double swords），未保存"
+    },
+    {
+      "product_id": 16326848,
+      "status": "failed",
+      "failed_step": "variations",
+      "workflow_status": "needs_variations",
+      "message": "自动映射已尝试 3 次：规格无法映射到当前分类：{'name': '规格2', 'value_name': '肩到裙摆130cm'}；请核对分类或规格"
+    }
+  ],
+  "verified_recovery_results": [
+    {
+      "product_id": 16326847,
+      "status": "completed",
+      "message": null
+    }
+  ]
+}

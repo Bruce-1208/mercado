@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-07",
+  "version": "1.8.49",
+  "confirmed_findings": [
+    "单商品验证触发全局暂停600000ms，恢复后重置读取期限，无次数上限。",
+    "2026-10-07 16:00:40，插件令牌校验因MySQL连接池等待10秒超时；旧代码将基础设施异常误报401并导致客户端清除令牌。",
+    "商品数据接口原转发到后台worker，和后台任务共享进程数据库连接池。",
+    "生产数据源只读抽样成功，返回1条记录，耗时1.46秒；续期日志正常，未证实数据源会话失效。"
+  ],
+  "fixes": [
+    "单商品验证独立失败，后续商品继续；列表页验证停止并提示人工处理，429仍停止。",
+    "页面消息65秒、网络请求60秒、进度存储3秒上限；原详情与上传90秒保护保留。",
+    "后台登录校验异常返回503，保留有效令牌；只读商品数据请求最多重试一次，共用60秒期限，上传不自动重试。",
+    "商品数据读接口交由Web连接池处理，跨进程缓存与会话文件锁保持不变。"
+  ],
+  "validation": {
+    "node_scheduling_auth_data": 29,
+    "python_auth_routes_batch_manifest_syntax": 8,
+    "browser_card_collection_cases": 36,
+    "python_data_routes_cache": 12,
+    "related_routing_regressions": 11,
+    "note": "部分测试组重复覆盖，不将各组数字累加作为唯一用例数量；首次宽范围测试还暴露了既有订阅mock缺失及浏览器沙箱限制，专项测试已隔离后验证。",
+    "live_collection": "尚未在用户实际Mercado浏览器会话运行整批采集，需要用户更新并重新加载插件。"
+  },
+  "deployment": {
+    "web_pid": 63051,
+    "unchanged_worker_pid": 55953,
+    "local_login_http": 200,
+    "unauthenticated_session_http": 401,
+    "unauthenticated_product_status_http": 401
+  }
+}

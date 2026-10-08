@@ -1,11 +1,15 @@
 (() => {
   'use strict';
   const panel = document.getElementById('employee-panel');
-  if (!panel) return;
+  if (!panel || panel.dataset.tasksInitialized === 'true') return;
+  panel.dataset.tasksInitialized = 'true';
   const $ = id => document.getElementById(id);
   const managing = panel.dataset.mode === 'manage';
   const form = $('employee-form');
   let rows = [], actorId = 0, editingId = null;
+  const selected = new Set();
+  let batchBusy = false, selectable = [];
+  const readRequests = new Map();
   const escape = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const date = value => value ? new Date(value).toLocaleString('zh-CN', {timeZone:'Asia/Shanghai', hour12:false}) : '—';
   const localDate = value => value ? value.slice(0,16) : '';
@@ -15,21 +19,34 @@
     if (!managing) params.set('mine', '1');
     return '/api/employee-tasks' + (id ? '/' + id : '') + '?' + params;
   }
-  async function api(id, method = 'GET', body) {
-    const response = await fetch(endpoint(id), {method, credentials:'same-origin', headers:{'Content-Type':'application/json'}, ...(body ? {body:JSON.stringify(body)} : {})});
-    const result = await response.json();
-    if (!response.ok || result.status !== 'success') throw new Error(result.message || '员工任务请求失败');
-    return result.data;
+  function api(id, method = 'GET', body) {
+    const url = endpoint(id);
+    if (method === 'GET' && readRequests.has(url)) return readRequests.get(url);
+    if (method !== 'GET') readRequests.clear();
+    const pending = (async () => {
+      const response = await fetch(url, {method, credentials:'same-origin', headers:{'Content-Type':'application/json'}, ...(body ? {body:JSON.stringify(body)} : {})});
+      const result = await response.json();
+      if (!response.ok || result.status !== 'success') throw new Error(result.message || '员工任务请求失败');
+      return result.data;
+    })().finally(() => {
+      if (method !== 'GET') readRequests.clear();
+      else if (readRequests.get(url) === pending) readRequests.delete(url);
+    });
+    if (method === 'GET') readRequests.set(url, pending);
+    return pending;
   }
   function render() {
     const active = rows.filter(row => !row.is_completed && !row.not_started);
     $('employee-summary').textContent = `进行中 ${active.length} · 已逾期 ${active.filter(row => row.overdue).length} · 未开始 ${rows.filter(row => !row.is_completed && row.not_started).length} · 已完成 ${rows.filter(row => row.is_completed).length}`;
     const filter = $('employee-filter').value;
     const filtered = rows.filter(row => filter === 'all' || (filter === 'completed' ? row.is_completed : filter === 'upcoming' ? !row.is_completed && row.not_started : !row.is_completed && !row.not_started));
+    selectable = filtered.filter(row => Number(row.assignee_id) === actorId && !row.not_started);
+    for(const id of selected) if(!selectable.some(row=>Number(row.id)===id)) selected.delete(id);
     $('employee-list').innerHTML = filtered.length ? filtered.map(row => {
       const state = row.is_completed ? '已完成' : row.not_started ? '未开始' : row.overdue ? '已逾期' : '进行中';
       const canFeedback = Number(row.assignee_id) === actorId && !row.not_started;
       return `<article class="task ${row.is_completed ? 'resolved' : row.overdue ? 'overdue' : ''}" data-employee-id="${Number(row.id)}">
+        ${canFeedback ? `<label><input type="checkbox" data-employee-select="${Number(row.id)}" ${selected.has(Number(row.id))?'checked':''} ${batchBusy?'disabled':''}> 选择此任务</label>` : ''}
         <div class="task-head"><div class="task-title">${escape(row.title)}</div>${managing ? '<button type="button" class="button" data-action="edit">编辑任务</button>' : ''}</div>
         <div class="task-meta"><span class="tag">${escape(state)}</span><span class="tag">业务员：${escape(row.assignee_name || '账号 #' + row.assignee_id)}</span><span class="tag">开始：${escape(date(row.starts_at))}</span><span class="tag">截止：${escape(date(row.due_at))}</span></div>
         <div class="employee-content">${escape(row.content)}</div>
@@ -37,7 +54,44 @@
         ${canFeedback ? `<div class="employee-feedback"><select data-field="completed" aria-label="是否完成"><option value="false" ${!row.is_completed ? 'selected' : ''}>未完成</option><option value="true" ${row.is_completed ? 'selected' : ''}>已完成</option></select><textarea data-field="note" maxlength="2000" aria-label="完成备注" placeholder="填写进展或完成备注（最多 2000 字）">${escape(row.completion_note)}</textarea><button class="button primary" type="button" data-action="feedback">保存反馈</button></div>` : ''}
       </article>`;
     }).join('') : '<div class="empty">当前筛选下没有员工任务。</div>';
+    updateSelection();
   }
+  function updateSelection() {
+    const bar=$('employee-batch'); if(!bar) return;
+    bar.hidden=!selectable.length;
+    $('employee-selected-count').textContent=`已选 ${selected.size} 条`;
+    const all=$('employee-select-all');
+    all.checked=selectable.length>0 && selected.size===selectable.length;
+    all.indeterminate=selected.size>0 && !all.checked; all.disabled=batchBusy;
+    $('employee-batch-save').disabled=batchBusy || !selected.size;
+  }
+  $('employee-list').addEventListener('change',event=>{
+    const input=event.target.closest('[data-employee-select]'); if(!input) return;
+    const id=Number(input.dataset.employeeSelect);
+    if(input.checked) selected.add(id); else selected.delete(id); updateSelection();
+  });
+  $('employee-select-all')?.addEventListener('change',event=>{
+    selected.clear(); if(event.target.checked) for(const row of selectable) selected.add(Number(row.id)); render();
+  });
+  $('employee-batch-save')?.addEventListener('click',async()=>{
+    if(batchBusy) return;
+    const queue=selectable.filter(row=>selected.has(Number(row.id)));
+    const completed=$('employee-batch-status').value==='true', note=$('employee-batch-note').value;
+    batchBusy=true; render();
+    let successes=0; const failures=[];
+    async function worker() {
+      while(queue.length) {
+        const row=queue.shift();
+        try {
+          await api(row.id,'PATCH',{is_completed:completed, completion_note:note || row.completion_note || ''});
+          selected.delete(Number(row.id)); successes++;
+        } catch(error) { failures.push(`${row.title}：${error.message}`); }
+      }
+    }
+    await Promise.all(Array.from({length:3},worker));
+    batchBusy=false; await load();
+    $('employee-error').textContent=`已更新 ${successes} 条`+(failures.length?'；失败记录保留勾选：'+failures.join('；'):'');
+  });
   async function load() {
     $('employee-refresh').disabled = true;
     $('employee-error').textContent = '';

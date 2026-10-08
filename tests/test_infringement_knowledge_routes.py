@@ -1,5 +1,8 @@
 """Ensure pagination and source filters survive split-service request forwarding."""
+import pytest
 from bit import bit_db_api, bit_interface
+
+pytestmark = pytest.mark.usefixtures("subscribed_workbench_account")
 
 
 def test_public_knowledge_listing_forwards_page_and_source(monkeypatch):

@@ -46,7 +46,7 @@ def test_status_and_generator_filters_share_selected_platform_before_pagination(
         assert f"'{path}.generated_by'" in sql
         assert "'$.plugin_snapshot.created_by'" in sql
         assert "'pending') = %s" in sql
-        assert params[:4] == ("ai_original", "pending", "%李四%", "%张三%")
+        assert params[:4] == ("ai_original", "pending", "%李四%", "张三")
         if platform in {"yandex", "amazon"}:
             assert "'$.ai_original.status'" not in sql
             assert "'$.ai_original.generated_by'" not in sql
@@ -104,3 +104,19 @@ def test_list_routes_forward_platform_and_reject_unrecognized_value(name):
     assert status == 400
     assert "目标平台" in response.get_json()["message"]
     query.assert_not_called()
+
+
+def test_generator_options_ignore_search_and_selection_but_keep_access_scope(monkeypatch):
+    connection = QueryConnection()
+    monkeypatch.setattr(store, "ensure_collection_tables", lambda cursor: None)
+    store.list_product_items(
+        source_type="ai_original", search="产品", generator_salesperson="张三",
+        target_platform="amazon", token_ids=[7], include_generator_options=True,
+        connection_factory=lambda: connection,
+    )
+    sql, params = connection.queries[0]
+    assert "SELECT DISTINCT" in sql
+    assert "$.marketplace_listings.amazon.generated_by" in sql
+    assert "LIMIT" not in sql
+    assert "last_publish_token_id" in sql
+    assert params == (7, 7, 7, "ai_original")

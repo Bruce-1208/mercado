@@ -1,0 +1,19 @@
+{
+  "task": {
+    "task_id": "6e41bf7eacb249aaa61f9f1f4c4ab244",
+    "organization_key": "wuhan-zeshun",
+    "token_ids": [
+      70
+    ],
+    "total": 21,
+    "completed": 0,
+    "results": [],
+    "message": "正在准备全部分类，自动上传到店铺全部授权站点",
+    "job_type": "size_chart_batch",
+    "running": true,
+    "status": "starting",
+    "started_at": "2026-10-09 01:42:35",
+    "finished_at": "",
+    "stop_requested": false
+  }
+}

@@ -64,11 +64,11 @@ DIMENSION_PATTERN = re.compile(
     re.IGNORECASE,
 )
 VOLUMETRIC_WEIGHT_PATTERN = re.compile(
-    r"(?:计\s*抛|抛\s*重|体积\s*重)[^\d]{0,24}(\d+(?:[.,]\d+)?)\s*(kg|公斤|千克|g|克)\b",
+    r"(?:计\s*抛|抛\s*重|体积\s*重)[^\d]{0,24}(\d+(?:[.,]\d+)?)\s*(kg|公斤|千克|g|克)(?![a-zA-Z0-9])",
     re.IGNORECASE,
 )
 ACTUAL_WEIGHT_PATTERN = re.compile(
-    r"(?:商品\s*)?(?:重量|毛重|净重)[^\d]{0,24}(\d+(?:[.,]\d+)?)\s*(kg|公斤|千克|g|克)\b",
+    r"(?:商品\s*)?(?:重量|毛重|净重)[^\d]{0,24}(\d+(?:[.,]\d+)?)\s*(kg|公斤|千克|g|克)(?![a-zA-Z0-9])",
     re.IGNORECASE,
 )
 _PLUGIN_OCR_ENGINE: Any | None = None

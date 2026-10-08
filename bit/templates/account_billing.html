@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+  <script src="{{ url_for('static', filename='console-performance.js') }}?v=20261007-json-fix"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>支付管理 · 泽顺运营中心</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='account-billing.css') }}?v=20261006-billing-print">
+<link rel="stylesheet" href="{{ url_for('static', filename='print-wallet.css') }}?v=20261006-billing-print">
+<link rel="stylesheet" href="{{ url_for('static', filename='date-filter-controls.css') }}?v=20261008">
+<script defer src="{{ url_for('static', filename='date-filter-controls.js') }}?v=20261008"></script>
+<script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261008"></script></head>
+<body data-admin="{{ 'true' if billing_admin else 'false' }}" data-user-id="{{ current_user.id }}">
+<header><strong>ZS · 泽顺运营中心</strong><nav><a href="/">返回工作台</a><a href="/settings/profile">个人资料</a><a href="/logout">退出登录</a></nav></header>
+<main><div class="heading"><div><p class="eyebrow">PAYMENT MANAGEMENT</p><h1>支付管理</h1><p>统一管理账户订阅与业务员打印费用。金额变动保留明细，所有时间均为北京时间。</p></div></div>
+<div class="billing-tabs" role="tablist" aria-label="支付管理模块"><button id="subscription-tab" type="button" role="tab" aria-controls="subscription" aria-selected="true">账户订阅</button><button id="print-wallet-tab" type="button" role="tab" aria-controls="print-wallet" aria-selected="false" tabindex="-1">业务员打印余额</button></div>
+<section id="subscription" role="tabpanel" aria-labelledby="subscription-tab">
+<div class="section-heading"><div><h2>账户订阅</h2><p>按账户订阅，人工登记收款与续费。</p></div><button id="refresh" type="button">刷新订阅</button></div>
+<div class="plans"><section><span>个人版</span><h2>¥299 <small>/ 月</small></h2><p>默认 10 个站点，可由管理员调整</p></section><section class="featured"><span>企业版</span><h2>¥599 <small>/ 月</small></h2><p>包含 30 个站点，超出部分 ¥10 / 站点 / 月</p></section><section><span>续费规则</span><h2 class="rule">按自然月续费</h2><p>未到期从原到期时间续；已到期从当前时间续。实收金额由管理员登记，不在线扣款。</p></section></div>
+<p id="message" role="status" aria-live="polite"></p>
+<section class="panel"><div class="toolbar"><h2>{{ '账户订阅' if billing_admin else '当前订阅' }}</h2><input id="search" type="search" placeholder="搜索账户、业务员或企业" aria-label="搜索账户"><select id="status" aria-label="筛选状态"><option value="">全部状态</option><option value="active">使用中</option><option value="soon">7 天内到期</option><option value="expired">已到期</option><option value="unpaid">未开通</option><option value="over_limit">站点超额</option></select></div>
+<p class="hint">已分配站点按美客多店铺的业务员配置统计（店铺 × 国家站点）；停用店铺仍计入。计费站点数为管理员核定的额度。其他平台暂需人工核定。</p>
+<div class="scroll"><table><thead><tr><th>账户 / 企业</th><th>套餐</th><th>站点用量 / 额度</th><th>月费</th><th>到期时间</th><th>剩余天数</th><th>状态</th><th>操作</th></tr></thead><tbody id="accounts"><tr><td colspan="8">正在加载…</td></tr></tbody></table></div></section>
+<section class="panel" id="records-panel" hidden><div class="toolbar"><h2 id="records-title">充值与调整记录</h2><span class="hint">最近 500 条 · 调整留痕</span></div><div class="scroll"><table><thead><tr><th>登记时间</th><th>类型</th><th>实收金额</th><th>续费月数</th><th>变更详情</th><th>操作人 / 备注</th></tr></thead><tbody id="records"></tbody></table></div></section>
+</section>
+{% include 'print_wallet_panel.html' %}
+</main>
+<dialog id="editor"><form id="edit-form"><div class="toolbar"><h2 id="editor-title">账户管理</h2><button type="button" id="close-editor" aria-label="关闭">×</button></div><p id="editor-account"></p><div class="form-grid">
+<label>套餐<select name="plan"><option value="personal">个人版 · ¥299/月</option><option value="enterprise">企业版 · ¥599/月</option></select></label>
+<label>计费站点数<input name="site_count" type="number" min="0" max="10000" step="1" required></label>
+<label class="recharge-field">续费月数<input name="months" type="number" min="1" max="36" step="1" value="1"></label>
+<label class="recharge-field">实收金额（元）<input name="amount" type="number" min="0.01" max="10000000" step="0.01"></label>
+<label class="adjust-field wide">到期时间（北京时间，留空为未开通）<input name="expires_at" type="datetime-local" step="1"></label>
+<label class="wide">备注 / 收款凭证编号<textarea name="note" maxlength="1000" rows="3" required placeholder="例如：银行转账流水号；或手动调整原因"></textarea></label></div>
+<p id="quote" class="quote"></p><p class="hint">此处登记已收到的款项；实收金额与标准金额不一致时，请在备注中说明。手动调整不计入充值收入。</p><p id="edit-error" role="alert"></p><div class="actions"><button type="button" id="cancel">取消</button><button type="submit" class="primary" id="save">确认保存</button></div></form></dialog>
+<script src="{{ url_for('static', filename='account-billing.js') }}?v=20261008-personal-sites" defer></script>
+<script src="{{ url_for('static', filename='print-wallet.js') }}?v=20261007-preload" defer></script></body></html>

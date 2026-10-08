@@ -12,6 +12,7 @@ function syncCollectionAiTarget() {
 }
 
 async function loadCollectionAiAgents() {
+        if (globalThis.canAccessAgents === false) return;
     const select = collectionAiElement('agent');
     const previous = select.value;
     select.replaceChildren(new Option('正在读取在线 Agent', ''));

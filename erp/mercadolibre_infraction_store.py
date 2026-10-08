@@ -494,6 +494,7 @@ def upsert_infraction_records(
         raise ValueError("保存侵权记录时缺少有效店铺授权")
     store_name = str(token.get("display_name") or token.get("nickname") or token_id)[:128]
     checked_at = checked_at or _now()
+    records = list(records or ())
     rows = []
     official_items: set[tuple[str, str]] = set()
     seen: set[tuple[str, str]] = set()
@@ -601,12 +602,14 @@ def upsert_infraction_records(
                 rows,
             )
         connection.commit()
-        return len(rows)
     except BaseException:
         connection.rollback()
         raise
     finally:
         connection.close()
+    from bit.rights_holder_policy import apply_rights_holder_records
+    apply_rights_holder_records(token, records)
+    return len(rows)
 
 
 def reconcile_infraction_snapshot(
@@ -888,6 +891,8 @@ def replace_pppi_snapshot(token, site_id, records, *, connection_factory=None):
         raise
     finally:
         connection.close()
+    from bit.rights_holder_policy import apply_rights_holder_records
+    apply_rights_holder_records(token, records)
 
 
 def _pppi_only_condition(alias: str = "") -> str:

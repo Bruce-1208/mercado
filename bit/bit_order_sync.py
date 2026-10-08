@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 import uuid
+from bit.service_topology import owns_background
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
@@ -70,6 +71,8 @@ _sync_state = {
     "total_stores": 0,
     "processed_stores": 0,
     "current_store": "",
+    "active_token_ids": [],
+    "target_token_ids": [],
     "fetched_count": 0,
     "inserted_count": 0,
     "updated_count": 0,
@@ -173,12 +176,12 @@ def _env_disabled(name):
 
 def _automatic_print_lookback_seconds(value=None):
     if value is None:
-        value = os.environ.get(AUTO_PRINT_LOOKBACK_ENV, DEFAULT_SYNC_INTERVAL_SECONDS)
+        value = os.environ.get(AUTO_PRINT_LOOKBACK_ENV, RECENT_ORDER_WINDOW_HOURS * 3600)
     try:
         seconds = int(value)
     except (TypeError, ValueError):
-        seconds = DEFAULT_SYNC_INTERVAL_SECONDS
-    return max(60, min(24 * 60 * 60, seconds))
+        seconds = RECENT_ORDER_WINDOW_HOURS * 3600
+    return max(60, min(RECENT_ORDER_WINDOW_HOURS * 3600, seconds))
 
 
 def _automatic_print_state_key(token_id):
@@ -227,15 +230,25 @@ def _run_automatic_order_print(
         return result
 
     try:
-        selected_ids = _token_ids(token_ids)
-        jobs = bit_print.build_print_jobs(selected_token_ids=selected_ids or None)
-        if not jobs:
-            raise ValueError("没有可自动打印的美客多授权店铺")
-        candidate_starts = _automatic_print_candidate_starts(
-            jobs,
-            now=now,
-            lookback_seconds=bootstrap_lookback_seconds,
-        )
+        # Retry only admission/read initialization, before any label download or
+        # prepaid settlement. A transient busy pool must not skip this whole run.
+        from bit.db_pool import PoolAcquireTimeout
+        for attempt in range(3):
+            try:
+                selected_ids = _token_ids(token_ids)
+                jobs = bit_print.build_print_jobs(selected_token_ids=selected_ids or None)
+                if not jobs:
+                    raise ValueError("没有可自动打印的美客多授权店铺")
+                candidate_starts = _automatic_print_candidate_starts(
+                    jobs, now=now, lookback_seconds=bootstrap_lookback_seconds,
+                )
+                break
+            except PoolAcquireTimeout:
+                if attempt == 2:
+                    raise
+                _append_log(f"自动打印等待数据库资源，准备第 {attempt + 1}/2 次重试")
+                if _background_shutdown_event.wait(2 * (attempt + 1)):
+                    return {"status": "interrupted", "message": "服务正在停止"}
     except Exception as exc:
         logging.exception("初始化新订单系统自动打印失败")
         _append_log(f"系统自动打印初始化失败：{exc}")
@@ -263,9 +276,10 @@ def _run_automatic_order_print(
             operator_name=AUTO_PRINT_OPERATOR_NAME,
             candidate_start_by_token=candidate_starts,
             include_first_run_backlog=False,
+            require_prepaid=True,
             logger=lambda message: _append_log(f"系统自动打印：{message}"),
         )
-        result = {"status": "completed", **summary}
+        result = {**summary, "status": "partial" if summary.get("failed") or summary.get("partial") or summary.get("output_error") else "completed"}
         _append_log(
             f"系统自动打印完成：订单 {summary.get('printed_order_count', 0)}，"
             f"面单 {summary.get('shipment_count', 0)}，"
@@ -814,10 +828,15 @@ def _shipment_sender_cost(payload):
         raise ValueError("运单成本响应缺少 senders")
     total = Decimal("0")
     for sender in senders:
+        if not isinstance(sender, dict) or sender.get("cost") is None:
+            raise ValueError("运单成本响应缺少 sender.cost")
         try:
-            total += Decimal(str((sender or {}).get("cost") or 0))
+            cost = Decimal(str(sender["cost"]))
         except (InvalidOperation, TypeError, ValueError) as exc:
             raise ValueError("运单成本响应包含无效的 sender.cost") from exc
+        if not cost.is_finite():
+            raise ValueError("运单成本响应包含无效的 sender.cost")
+        total += cost
     return max(Decimal("0"), total)
 
 
@@ -835,6 +854,8 @@ def _cached_cost_entry(row):
         "payload": payload,
         "checked_at": row.get("checked_at"),
         "error": str(row.get("last_error") or ""),
+        "shipment_status": str(row.get("shipment_status") or "").strip().lower(),
+        "from_cache": True,
     }
 
 
@@ -877,6 +898,17 @@ def _sync_order_financials(
 ):
     """Fetch official shipment costs and allocate each cost across merged orders."""
     shipment_cache = shipment_cache if isinstance(shipment_cache, dict) else {}
+    dispatched_statuses = {"shipped", "delivered", "not_delivered"}
+    shipment_statuses = {}
+    for order in orders or ():
+        shipping_id = str(((order or {}).get("shipping") or {}).get("id") or "").strip()
+        status = str(
+            (order or {}).get("_shipment_status") or (order or {}).get("status") or ""
+        ).strip().lower()
+        if shipping_id and (
+            shipping_id not in shipment_statuses or status in dispatched_statuses
+        ):
+            shipment_statuses[shipping_id] = status
     shipping_ids = list(dict.fromkeys(
         str(((order or {}).get("shipping") or {}).get("id") or "").strip()
         for order in orders or ()
@@ -900,13 +932,21 @@ def _sync_order_financials(
             and cached.get("seller_cost") is not None
             and cached.get("currency_id")
         )
-        if cached_in_this_run:
+        dispatch_requires_refresh = (
+            shipment_statuses.get(shipping_id) in dispatched_statuses
+            and str((cached or {}).get("shipment_status") or "").strip().lower()
+            not in dispatched_statuses
+        )
+        if cached_in_this_run and not dispatch_requires_refresh:
             if cached_success:
                 entries.append(cached)
             else:
                 failed += 1
             continue
-        if cached and not force_refresh and _cache_is_fresh(cached):
+        if (
+            cached and not force_refresh and not dispatch_requires_refresh
+            and _cache_is_fresh(cached)
+        ):
             shipment_cache[shipping_id] = cached
             if cached_success:
                 entries.append(cached)
@@ -938,6 +978,8 @@ def _sync_order_financials(
                 "payload": payload,
                 "checked_at": datetime.now(),
                 "error": "",
+                "shipment_status": shipment_statuses.get(shipping_id, ""),
+                "from_cache": False,
             }
         except Exception as exc:
             failed += 1
@@ -947,6 +989,7 @@ def _sync_order_financials(
                     **cached,
                     "checked_at": datetime.now(),
                     "error": str(exc),
+                    "from_cache": True,
                 }
             else:
                 entry = {
@@ -956,6 +999,8 @@ def _sync_order_financials(
                     "payload": {},
                     "checked_at": datetime.now(),
                     "error": str(exc),
+                    "shipment_status": "",
+                    "from_cache": False,
                 }
         shipment_cache[shipping_id] = entry
         entries.append(entry)
@@ -1150,6 +1195,8 @@ def _image_backfill_loop():
 
 
 def ensure_order_image_backfill_worker():
+    if not owns_background("maintenance"):
+        return False
     global _image_backfill_started
     if _background_shutdown_event.is_set() or _interpreter_shutting_down():
         _request_background_shutdown()
@@ -1291,7 +1338,7 @@ def _financial_backfill_loop():
                 )
             if quoted_result["requested"]:
                 logging.info(
-                    "订单标价运费计算：运单 %s，命中 %s，缺少资料 %s，订单 %s",
+                    "订单标价运费 API 同步：运单 %s，已补全 %s，暂无数据 %s，订单 %s",
                     quoted_result["requested"],
                     quoted_result["quoted_shipments"],
                     quoted_result["missing_shipments"],
@@ -1317,6 +1364,8 @@ def _financial_backfill_loop():
 
 
 def ensure_order_financial_backfill_worker():
+    if not owns_background("maintenance"):
+        return False
     global _financial_backfill_started
     if _background_shutdown_event.is_set() or _interpreter_shutting_down():
         _request_background_shutdown()
@@ -1608,6 +1657,8 @@ def run_order_sync(
         message=mode_messages[mode],
         start_date=start_text,
         end_date=end_text,
+        target_token_ids=[int(record["id"]) for record in records],
+        active_token_ids=[],
         total_stores=len(records),
         processed_stores=0,
         current_store="",
@@ -1649,7 +1700,10 @@ def run_order_sync(
         if mode == DAILY_STATUS_MODE and _recent_sync_due_event.is_set():
             return None
         store_name = str(record.get("display_name") or record.get("nickname") or record.get("id"))
-        _state_update(current_store=store_name)
+        with _state_guard:
+            active_ids = set(_sync_state.get("active_token_ids") or [])
+            active_ids.add(int(record["id"]))
+            _state_update(current_store=store_name, active_token_ids=sorted(active_ids))
         _append_log(f"开始同步 {store_name}")
         try:
             filters = dict(manual_filters or scheduled_filters or {})
@@ -1671,12 +1725,17 @@ def run_order_sync(
                     f"{store_name} 完成：读取 {result['fetched']}，新增 {result['inserted']}，"
                     f"更新 {result['updated']}，失败 {result.get('failed', 0)}"
                 )
-            return result
+            return {**result, "token_id": int(record["id"])}
         except _InterpreterShutdownRequested:
             raise
         except Exception as exc:
             _append_log(f"{store_name} 失败：{exc}")
-            return {"store": store_name, "status": "error", "message": str(exc)}
+            return {"store": store_name, "token_id": int(record["id"]), "status": "error", "message": str(exc)}
+        finally:
+            with _state_guard:
+                active_ids = set(_sync_state.get("active_token_ids") or [])
+                active_ids.discard(int(record["id"]))
+                _sync_state["active_token_ids"] = sorted(active_ids)
 
     with ThreadPoolExecutor(max_workers=store_workers, thread_name_prefix="meli-orders") as executor:
         futures = [executor.submit(run_capacity_store, "orders" if mode != DAILY_STATUS_MODE else "order-history", record["id"], sync_record, record) for record in records]
@@ -1775,13 +1834,13 @@ def _run_background(start_date, end_date, token_ids, mode):
             print_summary = (
                 f"；自动打印 {int(auto_print_result.get('printed_order_count') or 0)} 单，"
                 f"生成 {int(auto_print_result.get('shipment_count') or 0)} 个面单"
-                if auto_print_result.get("status") == "completed" else ""
+                if auto_print_result.get("status") in ("completed", "partial") else ""
             )
             _state_update(
                 auto_print=auto_print_result,
                 running=False,
-                status=final_status,
-                message=final_message + print_summary,
+                status="partial" if auto_print_result.get("status") in ("partial", "error") else final_status,
+                message=final_message + print_summary + ("；部分面单未完成，请查看自动打印明细" if auto_print_result.get("status") in ("partial", "error") else ""),
                 current_store="",
                 finished_at=_now_text(),
             )
@@ -1864,6 +1923,10 @@ def start_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
         _sync_state.update(
             running=True,
             task_id=task_id,
+            target_token_ids=list(selected_ids), active_token_ids=[],
+            current_store="", total_stores=0, processed_stores=0,
+            fetched_count=0, inserted_count=0, updated_count=0, failed_stores=0,
+            results=[], logs=[], daily_financials={}, auto_print={},
             mode=mode,
             status="starting",
             message=(
@@ -1939,6 +2002,8 @@ def _scheduler_loop(interval_seconds):
 
 
 def ensure_order_sync_scheduler():
+    if not owns_background("orders"):
+        return False
     global _scheduler_started
     if _background_shutdown_event.is_set() or _interpreter_shutting_down():
         _request_background_shutdown()

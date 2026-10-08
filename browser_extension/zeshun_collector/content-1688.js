@@ -5,7 +5,7 @@
   // extension is reloaded.  Expose a version marker so the background worker
   // can reload that tab before starting a new search instead of silently
   // running stale search logic alongside this copy.
-  const CONTENT_VERSION = "1.8.39";
+  const CONTENT_VERSION = "1.8.47";
   const previousListener = globalThis.__zeshun1688ContentListener;
   if (globalThis.__zeshun1688ContentVersion === CONTENT_VERSION && previousListener &&
       chrome.runtime.onMessage.hasListener?.(previousListener)) return;
@@ -13,6 +13,10 @@
     try { chrome.runtime.onMessage.removeListener(previousListener); } catch (_) {}
   }
   let mutationTimer = null;
+  let preferencesFocusListener = null;
+  const UI_OWNER_ATTRIBUTE = "data-zeshun-1688-ui-owner";
+  const uiOwner = `${Date.now()}-${Math.random()}`;
+  let aiWeightPriceSearchGeneration = 0;
 
   function text(selector) {
     const node = document.querySelector(selector);
@@ -108,7 +112,9 @@
     const raw = String(value).replace(/,/g, "").replace(/\s*\.\s*/g, ".").trim();
     const match = raw.match(/^(?:¥|￥|CNY)?\s*(\d+(?:\.\d+)?)(?:\s*(?:元|起|\/[^\d]+))?$/i);
     const amount = match ? Number(match[1]) : null;
-    return Number.isFinite(amount) && amount > 0 ? amount : null;
+    // A captured 1 has been emitted as a placeholder/discount value on 1688.
+    // Keep it unknown; a real one-yuan cost can be entered manually.
+    return Number.isFinite(amount) && amount > 0 && amount !== 1 ? amount : null;
   }
 
   function numericPrice(skus, pageData = {}) {
@@ -188,64 +194,152 @@
     return /^\s*\d+(?:\.\d+)?\s*$/.test(raw) ? aiWeightPriceConvertWeight(raw, defaultUnit) : null;
   }
 
-  function aiWeightPriceParseDimensions(value) {
-    const raw = String(value || "").replace(/,/g, ".").replace(/\s+/g, " ").trim();
-    const labelled = /(?:包装尺寸|外箱尺寸|商品尺寸|尺寸|长\s*[x×*]\s*宽\s*[x×*]\s*高|长宽高)[^\d]{0,24}(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)?\b/i.exec(raw);
-    const plain = /(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)\b/i.exec(raw);
-    const match = labelled || plain;
+  function aiWeightPriceDimensionCm(value, defaultUnit = "cm") {
+    const match = String(value ?? "").trim().replace(/，|,/g, ".")
+      .match(/^(\d+(?:\.\d+)?)\s*(mm|cm|m|毫米|厘米|公分|米)?$/i);
     if (!match) return null;
-    const unit = String(match[4] || "cm").toLowerCase();
-    const convert = number => unit === "mm" ? number / 10 : unit === "m" ? number * 100 : number;
-    const values = [convert(Number(match[1])), convert(Number(match[2])), convert(Number(match[3]))];
+    const unit = String(match[2] || defaultUnit).toLowerCase();
+    const number = Number(match[1]);
+    if (!Number.isFinite(number) || number <= 0 || !/^(mm|cm|m|毫米|厘米|公分|米)$/.test(unit)) return null;
+    return /^(mm|毫米)$/.test(unit) ? number / 10 : /^(m|米)$/.test(unit) ? number * 100 : number;
+  }
+
+  function aiWeightPriceDimensionTuple(values, raw) {
     if (!values.every(value => Number.isFinite(value) && value > 0)) return null;
     return {
       package_length_cm: values[0], package_width_cm: values[1], package_height_cm: values[2],
-      dimensions_display: `${match[1]} × ${match[2]} × ${match[3]} ${unit}`
+      dimensions_display: `${values.join(" × ")} cm`, raw_dimensions: String(raw || `${values.join(" × ")} cm`),
+      dimension_evidence_present: true
     };
+  }
+
+  function aiWeightPriceDimensionTextEvidence(value) {
+    const raw = String(value || "");
+    return /(?:尺寸|长宽高|长\s*[x×*＊]\s*宽\s*[x×*＊]\s*高)[^\d]{0,24}[\d-]/i.test(raw)
+      || /\d\s*(?:mm|cm|m|毫米|厘米|公分|米)?\s*[x×*＊]\s*\d\s*(?:mm|cm|m|毫米|厘米|公分|米)?\s*[x×*＊]\s*[\d-]/i.test(raw)
+      || /(?:包装长|包装宽|包装高|长度|宽度|高度|(?:^|[\s,，;；])(?:长|宽|高))\s*(?:[（(][^）)]*[）)])?\s*[:：]?\s*[\d-]/.test(raw);
+  }
+
+  function aiWeightPriceParseDimensions(value, defaultUnit = "") {
+    const raw = String(value || "").replace(/，|,/g, ".").replace(/\s+/g, " ").trim();
+    const number = "(\\d+(?:\\.\\d+)?)";
+    const unit = "(mm|cm|m|毫米|厘米|公分|米)?";
+    const triple = new RegExp(`(^|[^\\d.\\-~～–—+＋/x×*＊])${number}\\s*${unit}\\s*[x×*＊]\\s*${number}\\s*${unit}\\s*[x×*＊]\\s*${number}\\s*${unit}(?![A-Za-z\\d.x×*＊])`, "gi");
+    const tuples = [];
+    for (const match of raw.matchAll(triple)) {
+      if (/(?:[-~～–—+＋/x×*＊]|至|到)\s*$/i.test(raw.slice(0, match.index + match[1].length))) return null;
+      const tail = raw.slice(match.index + match[0].length);
+      if (/^\s*(?:英寸|寸|inches?|inch|in\b|ft\b|feet\b|(?:[-~～–—+＋/x×*＊]|至|到)\s*\d)/i.test(tail)) return null;
+      const prefix = raw.slice(Math.max(0, match.index - 50), match.index + match[1].length);
+      const labelled = /尺寸|长宽高|长\s*[x×*＊]\s*宽\s*[x×*＊]\s*高/i.test(prefix);
+      const prefixUnit = prefix.match(/(?:尺寸|长宽高|长\s*[x×*＊]\s*宽\s*[x×*＊]\s*高)\s*[（(]\s*([^）)]+)\s*[）)]\s*[:：]?\s*$/i)?.[1]?.trim();
+      const fallback = match[7] || match[5] || match[3] || prefixUnit || defaultUnit || (labelled ? "cm" : "");
+      if (!fallback) continue;
+      const result = aiWeightPriceDimensionTuple([
+        aiWeightPriceDimensionCm(match[2], match[3] || fallback),
+        aiWeightPriceDimensionCm(match[4], match[5] || fallback),
+        aiWeightPriceDimensionCm(match[6], match[7] || fallback)
+      ], raw);
+      if (!result) return null;
+      tuples.push(result);
+    }
+    if (!tuples.length) {
+      const values = ["长(?:度)?", "宽(?:度)?", "高(?:度)?"].map(axis => {
+        const pattern = new RegExp(`(?:包装)?${axis}\\s*(?:[（(]\\s*(mm|cm|m|毫米|厘米|公分|米)\\s*[）)])?\\s*[:：]?\\s*${number}\\s*${unit}(?![A-Za-z\\d.])`, "gi");
+        const matches = [...raw.matchAll(pattern)];
+        if (!matches.length) return null;
+        const converted = matches.map(match => {
+          if (/^\s*(?:[-~～–—+＋/x×*＊]|至|到)/.test(raw.slice(match.index + match[0].length))) return null;
+          return aiWeightPriceDimensionCm(match[2], match[3] || match[1] || defaultUnit || "cm");
+        });
+        return converted.every(value => value === converted[0]) ? converted[0] : null;
+      });
+      const labelled = aiWeightPriceDimensionTuple(values, raw);
+      if (labelled) tuples.push(labelled);
+    }
+    const distinct = new Map(tuples.map(item => [JSON.stringify([item.package_length_cm, item.package_width_cm, item.package_height_cm]), item]));
+    return distinct.size === 1 ? [...distinct.values()][0] : null;
   }
 
   function aiWeightPriceStructuredMetrics(item) {
     if (!item || typeof item !== "object") return null;
     const valueFor = keys => {
       for (const key of keys) {
-        if (item[key] !== undefined && item[key] !== null && item[key] !== "") {
-          return {key, value: item[key]};
-        }
+        if (item[key] !== undefined && item[key] !== null && item[key] !== "") return {key, value: item[key]};
       }
       return null;
     };
     const rawWeight = valueFor(["weight_g", "weightG", "weightKg", "grossWeight", "packageWeight", "weight"]);
-    const length = valueFor(["package_length_cm", "packageLengthCm", "lengthCm", "lengthMm", "length"]);
-    const width = valueFor(["package_width_cm", "packageWidthCm", "widthCm", "widthMm", "width"]);
-    const height = valueFor(["package_height_cm", "packageHeightCm", "heightCm", "heightMm", "height"]);
     const result = {};
-    if (rawWeight) {
-      result.weight_g = aiWeightPriceParseWeight(rawWeight.value, /kg|公斤|千克/i.test(rawWeight.key) ? "kg" : item.weightUnit || "g");
-    }
-    const dimensions = [length, width, height];
-    if (dimensions.every(Boolean)) {
-      const unit = dimensions.some(entry => /mm/i.test(entry.key)) ? "mm"
-        : String(item.lengthUnit || item.dimensionUnit || item.sizeUnit || "cm").toLowerCase();
-      const convert = entry => {
-        const match = String(entry.value).replace(/,/g, "").trim().match(/^(\d+(?:\.\d+)?)\s*(mm|cm|m|毫米|厘米|米)?$/i);
-        if (!match) return null;
-        const valueUnit = String(match[2] || unit).toLowerCase();
-        if (!["mm", "cm", "m", "毫米", "厘米", "米"].includes(valueUnit)) return null;
-        const number = Number(match[1]);
-        if (!Number.isFinite(number) || number <= 0) return null;
-        return ["mm", "毫米"].includes(valueUnit) ? number / 10 : ["m", "米"].includes(valueUnit) ? number * 100 : number;
-      };
-      result.package_length_cm = convert(length);
-      result.package_width_cm = convert(width);
-      result.package_height_cm = convert(height);
-      if ([result.package_length_cm, result.package_width_cm, result.package_height_cm]
-        .every(value => Number.isFinite(value) && value > 0)) {
-        result.dimensions_display = `${result.package_length_cm} × ${result.package_width_cm} × ${result.package_height_cm} cm`;
+    if (rawWeight) result.weight_g = aiWeightPriceParseWeight(rawWeight.value, /kg|公斤|千克/i.test(rawWeight.key) ? "kg" : item.weightUnit || "g");
+    const dimensions = [
+      valueFor(["package_length_cm", "packageLengthCm", "lengthCm", "lengthMm", "length"]),
+      valueFor(["package_width_cm", "packageWidthCm", "widthCm", "widthMm", "width"]),
+      valueFor(["package_height_cm", "packageHeightCm", "heightCm", "heightMm", "height"])
+    ];
+    const rawDimension = valueFor(["raw_dimensions", "dimensions_display", "dimensions", "packageDimensions", "packageSize", "packingSize", "size"]);
+    const zeroPlaceholders = !rawDimension && dimensions.every(entry => entry && /^\s*0(?:\.0+)?\s*$/.test(String(entry.value)));
+    if (dimensions.some(Boolean) && !zeroPlaceholders) {
+      result.dimension_evidence_present = true;
+      result.raw_dimensions = typeof item.raw_dimensions === "string" && item.raw_dimensions ? item.raw_dimensions : JSON.stringify(Object.fromEntries([
+        ...dimensions.filter(Boolean).map(entry => [entry.key, entry.value]),
+        ...["lengthUnit", "widthUnit", "heightUnit", "dimensionUnit", "sizeUnit"]
+          .filter(key => item[key] !== undefined && item[key] !== "").map(key => [key, item[key]])
+      ]));
+      const values = dimensions.map((entry, index) => {
+        if (!entry) return null;
+        const keyUnit = /mm$/i.test(entry.key) ? "mm" : /(?:cm|_cm)$/i.test(entry.key) ? "cm" : "";
+        return aiWeightPriceDimensionCm(entry.value, keyUnit || item[["lengthUnit", "widthUnit", "heightUnit"][index]] || item.dimensionUnit || item.sizeUnit || item.lengthUnit || "cm");
+      });
+      const tuple = aiWeightPriceDimensionTuple(values, result.raw_dimensions);
+      if (tuple) Object.assign(result, tuple);
+    } else {
+      const raw = rawDimension;
+      if (raw && (raw.key !== "size" || aiWeightPriceDimensionTextEvidence(raw.value))) {
+        result.dimension_evidence_present = true;
+        result.raw_dimensions = typeof raw.value === "string" ? raw.value : JSON.stringify(raw.value);
+        const parsed = aiWeightPriceParseDimensions(result.raw_dimensions, item.dimensionUnit || item.sizeUnit || "cm");
+        if (parsed) Object.assign(result, parsed);
       }
     }
-    const parsedText = aiWeightPriceParseDimensions(JSON.stringify(item));
-    if (parsedText && !result.dimensions_display) Object.assign(result, parsedText);
+    if (item.dimension_evidence_present) result.dimension_evidence_present = true;
     return Object.keys(result).length ? result : null;
+  }
+
+  function aiWeightPriceResolveMetrics(claims) {
+    const sources = claims.filter(Boolean);
+    if (!sources.length) return null;
+    const result = {};
+    const weights = [...new Set(sources.map(item => item.weight_g).filter(value => value > 0))];
+    if (weights.length === 1) result.weight_g = weights[0];
+    const dimensions = sources.filter(item => item.dimension_evidence_present);
+    if (dimensions.length) {
+      result.dimension_evidence_present = true;
+      result.raw_dimensions = [...new Set(dimensions.map(item => item.raw_dimensions).filter(Boolean))].join("；").slice(0, 1500);
+      const tuples = dimensions.map(item => [item.package_length_cm, item.package_width_cm, item.package_height_cm]);
+      if (tuples.every(values => values.every(value => value > 0)) && new Set(tuples.map(JSON.stringify)).size === 1) {
+        Object.assign(result, aiWeightPriceDimensionTuple(tuples[0], result.raw_dimensions));
+      }
+    }
+    return Object.keys(result).length ? result : null;
+  }
+
+  function aiWeightPriceDomMetrics(cells, headers) {
+    const item = {};
+    headers.forEach((header, index) => {
+      const value = cells[index];
+      if (!value) return;
+      const unit = header.match(/[（(]\s*([^）)]+)\s*[）)]/)?.[1]?.trim()
+        || header.match(/(?:\b(mm|cm|m)\b|毫米|厘米|公分|米)/i)?.[0] || "cm";
+      if (/重量|毛重|净重/.test(header)) {
+        item.weight = value;
+        item.weightUnit = header.match(/kg|公斤|千克|g|克|斤/i)?.[0] || "g";
+      } else if (/尺寸|长宽高/.test(header) && /\d/.test(value)) {item.raw_dimensions = value; item.dimensionUnit = unit;}
+      else if (/^(?:包装|外箱)?长(?:度)?(?:\s|[（(]|$)/.test(header)) {item.length = value; item.lengthUnit = unit;}
+      else if (/^(?:包装|外箱)?宽(?:度)?(?:\s|[（(]|$)/.test(header)) {item.width = value; item.widthUnit = unit;}
+      else if (/^(?:包装|外箱)?高(?:度)?(?:\s|[（(]|$)/.test(header)) {item.height = value; item.heightUnit = unit;}
+    });
+    return aiWeightPriceStructuredMetrics(item);
   }
 
   function aiWeightPriceStableArray(arrays) {
@@ -268,10 +362,10 @@
         const currencyIndex = cells.findIndex(value => /^(?:¥|￥)\s*\d/.test(value));
         const index = priceIndex >= 0 ? priceIndex : currencyIndex;
         if (index < 0) continue;
-        const price = aiWeightPriceNumber(cells[index]);
+        const price = supplierPrice(cells[index]);
         const attributes = cells.flatMap((value, i) => {
           const header = headers[i] || "";
-          if (!value || i === index || /价格|单价|库存|数量|重量|毛重|净重|尺寸信息|包装|操作/.test(header)) return [];
+          if (!value || i === index || /价格|单价|库存|数量|重量|毛重|净重|尺寸信息|包装|操作|^(?:长|宽|高)(?:度)?(?:\s|[（(]|$)/.test(header)) return [];
           if (!header && i >= index) return [];
           return [{name: header || `规格${i + 1}`, value_name: value}];
         });
@@ -281,7 +375,8 @@
         rows.push({id: row.getAttribute("data-sku-id") || "", sku_id: row.getAttribute("data-sku-id") || "",
           label: attributes.map(item => `${item.name}:${item.value_name}`).join(" / "),
           attribute_combinations: attributes, price: price > 0 ? price : null,
-          available_quantity: stock, price_text: cells[index], raw_text: cells.join(" "), raw_weight: ""});
+          available_quantity: stock, price_text: price !== null ? cells[index] : "", raw_text: cells.join(" "), raw_weight: "",
+          ...(aiWeightPriceDomMetrics(cells, headers) || {})});
       }
     });
     return rows;
@@ -310,53 +405,119 @@
           : "",
         available_quantity: stock !== undefined && stock !== null && stock !== "" && Number.isFinite(Number(stock)) ? Number(stock) : null,
         image_url: typeof image === "string" ? absoluteImage(image) : "",
-        label_weight: String(label).match(/(?:重量|毛重|净重)?[^\d]{0,8}(\d+(?:\.\d+)?)\s*(kg|公斤|千克|g|克|斤)\b/i)?.[0] || ""
+        label_weight: String(label).match(/(?:重量|毛重|净重)?[^\d]{0,8}(\d+(?:\.\d+)?)\s*(kg|公斤|千克|g|克|斤)\b/i)?.[0] || "",
+        ...(aiWeightPriceStructuredMetrics(item) || {})
       };
     }).filter(item => /^\d+$/.test(item.id) && item.label)
       .sort((a, b) => a.id.localeCompare(b.id))).filter(list => list.length);
-    const selected = aiWeightPriceStableArray(normalized);
+    const metricKeys = new Set(["weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
+      "dimensions_display", "raw_dimensions", "dimension_evidence_present"]);
+    const selected = aiWeightPriceStableArray(normalized.map(list => list.map(item =>
+      Object.fromEntries(Object.entries(item).filter(([key]) => !metricKeys.has(key))))));
     return selected.map(item => ({
       id: item.id, sku_id: item.id, seller_sku: item.seller_sku,
       label: item.label, attribute_combinations: item.attribute_combinations,
       price: item.price, price_text: item.price_text,
       available_quantity: item.available_quantity, image_url: item.image_url,
-      raw_weight: item.label_weight, raw_text: item.label
+      raw_weight: item.label_weight, raw_text: item.label,
+      ...(aiWeightPriceResolveMetrics(normalized.flatMap(list => list.filter(candidate => candidate.id === item.id)
+        .map(aiWeightPriceStructuredMetrics))) || {})
     }));
   }
 
-  function aiWeightPricePackMetrics(pageData) {
+  function aiWeightPricePackMetrics(pageData, sourceRows = []) {
     const pack = document.querySelector("#productPackInfo[data-module='od_product_pack_info']")
-      || document.querySelector("[data-module='od_product_pack_info']");
-    if (!pack) return {byId: new Map(), common: null};
-    const arrays = pageData.pack_sets || [];
-    const normalizedSets = arrays.map(list => list.map(item => ({
-      id: String(item.skuId || item.id || ""), metrics: aiWeightPriceStructuredMetrics(item)
-    })).filter(item => item.metrics));
-    const selected = aiWeightPriceStableArray(normalizedSets);
-    const byId = new Map(selected.filter(item => item.id).map(item => [item.id, item.metrics]));
-    const common = selected.length === 1 && !selected[0].id ? selected[0].metrics : null;
-    // Some builds expose one common package object in a separate array.
-    const commonValues = arrays.flatMap(list => list.length === 1 ? list : [])
-      .filter(item => item && typeof item === "object" && !item.skuId && !item.id)
-      .map(aiWeightPriceStructuredMetrics).filter(Boolean);
-    if (!common && commonValues.length) {
-      const unique = new Map(commonValues.map(item => [JSON.stringify(item), item]));
-      if (unique.size === 1) return {byId, common: [...unique.values()][0]};
+      || document.querySelector("[data-module='od_product_pack_info']") || document.querySelector("#productPackInfo");
+    const claimsById = new Map();
+    const commonClaims = [];
+    const add = (id, metrics) => {
+      if (!metrics) return;
+      if (!id) {commonClaims.push(metrics); return;}
+      const claims = claimsById.get(String(id)) || [];
+      claims.push(metrics);
+      claimsById.set(String(id), claims);
+    };
+    for (const list of pageData.pack_sets || []) {
+      for (const item of list) {
+        let id = item.skuId || item.id || "";
+        if (!id && item.specAttrs) {
+          const matches = sourceRows.filter(row => row.label === aiWeightPriceDecode(item.specAttrs));
+          if (matches.length !== 1) continue;
+          id = matches[0].id;
+        }
+        add(id, aiWeightPriceStructuredMetrics(item));
+      }
     }
-    return {byId, common};
+    if (pack) {
+      for (const table of pack.querySelectorAll("table")) {
+        const headers = [...table.querySelectorAll("thead th, thead td, tr:first-child th")]
+          .map(cell => String(cell.textContent || "").replace(/\s+/g, " ").trim());
+        for (const row of table.querySelectorAll("tr")) {
+          const cells = [...row.querySelectorAll("td")].map(cell => String(cell.textContent || "").replace(/\s+/g, " ").trim());
+          if (!cells.length) continue;
+          const metrics = aiWeightPriceDomMetrics(cells, headers);
+          if (!metrics) continue;
+          let id = row.getAttribute("data-sku-id") || row.getAttribute("data-skuid") || "";
+          if (!id) {
+            const skuIndex = headers.findIndex(header => /sku\s*(?:id|编号)|规格编号/i.test(header));
+            if (skuIndex >= 0) id = cells[skuIndex] || "";
+          }
+          const labels = cells.filter((value, index) => value
+            && !/重量|毛重|净重|^(?:包装|外箱)?(?:长|宽|高)|sku|编号|数量|件数/i.test(headers[index] || "")
+            && !(/尺寸|长宽高/.test(headers[index] || "") && /\d/.test(value)));
+          if (!id && labels.length) {
+            const matches = sourceRows.filter(candidate => {
+              const attrs = candidate.attribute_combinations || [];
+              return attrs.length && attrs.every(attr => labels.some(label => label === attr.value_name || label.includes(`${attr.name}:${attr.value_name}`)
+                || label.includes(`${attr.name}：${attr.value_name}`)))
+                || aiWeightPriceDecode(labels.join(" / ")) === candidate.label;
+            });
+            if (matches.length === 1) id = matches[0].id;
+            else continue;
+          }
+          add(id, metrics);
+        }
+      }
+      // Some offers render one labelled package tuple without a table.
+      if (!pack.querySelector("table") && sourceRows.length === 1 && !claimsById.size) {
+        const raw = String(pack.innerText || pack.textContent || "");
+        const commonText = /^(?:包装信息\s*)?(?:包装尺寸|外箱尺寸|长宽高)\s*(?:[（(][^）)]+[）)])?\s*[:：]?\s*\d[\d\s.,，x×*＊a-z毫米厘米公分米英寸\-+]*$/i.test(raw.trim());
+        if (commonText && aiWeightPriceDimensionTextEvidence(raw)) add("", {
+          dimension_evidence_present: true, raw_dimensions: raw.slice(0, 1500),
+          ...(aiWeightPriceParseDimensions(raw) || {})
+        });
+      }
+    }
+    for (const property of collectProperties()) {
+      if (/^(?:包装尺寸|外箱尺寸|商品尺寸|产品尺寸|长宽高|尺寸)$/.test(property.name.replace(/[：:]/g, "").trim())
+          && /\d/.test(property.value)) {
+        add("", {dimension_evidence_present: true, raw_dimensions: `${property.name}:${property.value}`,
+          ...(aiWeightPriceParseDimensions(`${property.name}:${property.value}`, "cm") || {})});
+      }
+    }
+    return {
+      byId: new Map([...claimsById].map(([id, claims]) => [id, aiWeightPriceResolveMetrics(claims)])),
+      common: aiWeightPriceResolveMetrics(commonClaims)
+    };
   }
 
-  function aiWeightPriceMergeMetrics(row, metrics) {
+  function aiWeightPriceMergeMetrics(row, metrics, common = null) {
     const result = {...row};
-    const labelDimensions = aiWeightPriceParseDimensions(`${row.label || ""} ${row.raw_text || ""}`);
-    const combined = {...(labelDimensions || {}), ...(metrics || {})};
-    if (combined.weight_g) result.raw_weight = `${combined.weight_g}g`;
-    result.weight_g = combined.weight_g || aiWeightPriceParseWeight(result.raw_weight) || null;
-    if (combined.package_length_cm && combined.package_width_cm && combined.package_height_cm) {
-      result.package_length_cm = combined.package_length_cm;
-      result.package_width_cm = combined.package_width_cm;
-      result.package_height_cm = combined.package_height_cm;
-      result.dimensions_display = combined.dimensions_display;
+    const rawText = `${row.label || ""} ${row.raw_text || ""}`;
+    const labelDimensions = aiWeightPriceDimensionTextEvidence(rawText)
+      ? {dimension_evidence_present: true, raw_dimensions: rawText.trim(), ...(aiWeightPriceParseDimensions(rawText) || {})}
+      : null;
+    const specific = aiWeightPriceResolveMetrics([aiWeightPriceStructuredMetrics(row), metrics, labelDimensions]);
+    const size = specific?.dimension_evidence_present ? specific : common;
+    result.weight_g = specific?.weight_g || aiWeightPriceParseWeight(result.raw_weight) || common?.weight_g || null;
+    if (result.weight_g) result.raw_weight = `${result.weight_g}g`;
+    for (const key of ["package_length_cm", "package_width_cm", "package_height_cm", "dimensions_display", "raw_dimensions", "dimension_evidence_present"]) delete result[key];
+    if (size?.dimension_evidence_present) {
+      result.dimension_evidence_present = true;
+      result.raw_dimensions = size.raw_dimensions || "";
+      if ([size.package_length_cm, size.package_width_cm, size.package_height_cm].every(value => value > 0)) {
+        for (const key of ["package_length_cm", "package_width_cm", "package_height_cm", "dimensions_display"]) result[key] = size[key];
+      }
     }
     return result;
   }
@@ -370,8 +531,8 @@
       if (!matches.length || new Set(matches.map(candidate => candidate.price)).size !== 1) return row;
       return {...row, price: matches[0].price, price_text: matches[0].price_text};
     }) : domRows;
-    const pack = aiWeightPricePackMetrics(pageData);
-    const merged = sourceRows.map(row => aiWeightPriceMergeMetrics(row, pack.byId.get(String(row.id)) || pack.common));
+    const pack = aiWeightPricePackMetrics(pageData, sourceRows);
+    const merged = sourceRows.map(row => aiWeightPriceMergeMetrics(row, pack.byId.get(String(row.id)), pack.common));
     const commonMetric = key => {
       if (!merged.length) return pack.common?.[key] ?? null;
       const values = merged.map(row => row[key]);
@@ -394,12 +555,14 @@
       .map(key => [key, commonMetric(key)]));
     const complete = [metrics.package_length_cm, metrics.package_width_cm, metrics.package_height_cm].every(value => value > 0);
     metrics.dimensions_display = complete ? `${metrics.package_length_cm} × ${metrics.package_width_cm} × ${metrics.package_height_cm} cm` : "";
+    metrics.raw_dimensions = complete ? metrics.dimensions_display : "";
+    metrics.dimension_evidence_present = merged.some(row => row.dimension_evidence_present) || Boolean(pack.common?.dimension_evidence_present);
     if (complete) metrics.volumetric_weight_kg = Number((metrics.package_length_cm * metrics.package_width_cm * metrics.package_height_cm / 6000).toFixed(4));
     return {skus: merged, raw_weight: metrics.weight_g ? `${metrics.weight_g}g` : "", ...metrics};
   }
 
   async function readPageData() {
-    const response = await chrome.runtime.sendMessage({type: "READ_1688_PAGE_DATA"});
+    const response = await sendRuntimeMessage({type: "READ_1688_PAGE_DATA"});
     if (!response?.ok || !response.data || response.data.offer_id !== itemId()) {
       throw new Error(response?.error || "1688商品数据尚未加载或页面已切换，请刷新详情页后重试");
     }
@@ -488,7 +651,7 @@
       [row.package_length_cm, row.package_width_cm, row.package_height_cm].every(value => value > 0)));
     const errors = [];
     const price = numericPrice(variations, pageData);
-    if (price === null) throw new Error("1688采购价尚未加载或当前账号不可见，请确认详情页显示价格后重试");
+    if (price === null) errors.push("1688采购价无法确认，已留空，请核实后填写或重新采集");
     if (variations.some(row => !(row.price > 0))) errors.push("未读取到完整的1688规格采购价，部分规格价格缺失");
     if (!weightComplete) errors.push("未读取到完整的1688规格重量");
     if (!allDimensionsComplete) errors.push("未读取到完整的1688规格包装尺寸");
@@ -511,6 +674,8 @@
       package_height_cm: detailFacts.package_height_cm,
       volumetric_weight_kg: detailFacts.volumetric_weight_kg,
       dimensions_display: detailFacts.dimensions_display,
+      raw_dimensions: detailFacts.raw_dimensions,
+      dimension_evidence_present: detailFacts.dimension_evidence_present,
       weight_basis: detailFacts.weight_g ? "1688_source" : "",
       scrape_status: errors.length ? "partial" : "ok",
       error_message: errors.join("；"),
@@ -525,7 +690,7 @@
     while (Date.now() < deadline) {
       try {
         const product = await extractProductSnapshot();
-        if (!product.variations.some(row => !(row.price > 0))) return product;
+        if (product.price !== null && !product.variations.some(row => !(row.price > 0))) return product;
         // Offer prices can arrive before SKU prices. Keep polling the page
         // bridge even when a usable but incomplete snapshot already exists.
         partialProduct = product;
@@ -893,6 +1058,10 @@
   }
 
   async function aiWeightPriceSearch(data = {}) {
+    const generation = ++aiWeightPriceSearchGeneration;
+    const checkActive = () => {
+      if (generation !== aiWeightPriceSearchGeneration) throw new Error("1688搜索已暂停，请处理滑块验证后继续");
+    };
     const selectors = data.selectors || {};
     const searchStartUrl = location.href;
     let inputs = aiWeightPriceImageUploads(selectors.image_search_upload);
@@ -918,6 +1087,7 @@
     if (!uploadReady()) {
       const deadline = Date.now() + 15000;
       while (Date.now() < deadline && !uploadReady()) {
+        checkActive();
         // Homepage widgets mount after document.complete. Wait for the actual
         // opener, and activate it once when it becomes available.
         if (!opened) {
@@ -928,6 +1098,7 @@
       }
     }
     if (configuredOpen && !opened) throw new Error("配置的1688图片搜索入口未就绪，尚未上传主图");
+    checkActive();
     if (!inputs.length) throw new Error("1688首页没有找到图片上传控件");
     if (!uploadReady()) throw new Error("1688图片上传面板尚未打开，尚未上传主图");
     const input = aiWeightPriceActiveUpload(inputs);
@@ -950,6 +1121,7 @@
     }
     const submitDeadline = Date.now() + 15000;
     while (!submitted && Date.now() < submitDeadline) {
+      checkActive();
       const action = aiWeightPriceImageSubmitButton();
       if (action) {
         aiWeightPriceInvokeClick(action.button); submitted = true; submitLabel = action.label;
@@ -969,6 +1141,7 @@
     if (!submitted) throw new Error("已向1688文件控件传入主图，但页面未确认图片搜索；请检查上传入口、图片预览或上传失败提示");
     const deadline = Date.now() + Math.max(3000, Number(data.timeout_ms || 15000));
     while (Date.now() < deadline) {
+      checkActive();
       const snapshot = aiWeightPriceSearchSnapshot();
       if (snapshot.ready || snapshot.empty) return {...snapshot, submitted, submit_label: submitLabel};
       await new Promise(resolve => setTimeout(resolve, 400));
@@ -1001,6 +1174,20 @@
     toast.dataset.timer = String(window.setTimeout(() => toast.classList.remove("is-visible"), 3200));
   }
 
+  async function sendRuntimeMessage(message) {
+    const runtime = globalThis.chrome?.runtime;
+    const refreshMessage = "插件连接已失效，请刷新当前网页后重试；若仍失败，请在扩展管理页启用或重新加载泽顺插件";
+    if (typeof runtime?.sendMessage !== "function") throw new Error(refreshMessage);
+    try {
+      return await runtime.sendMessage(message);
+    } catch (error) {
+      if (/extension context invalidated|cannot access a chrome.*extension/i.test(error?.message || "")) {
+        throw new Error(refreshMessage);
+      }
+      throw error;
+    }
+  }
+
   async function mountCollectionPreferences() {
     if (document.querySelector('.zeshun-1688-preferences')) return;
     const panel = document.createElement('div');
@@ -1018,14 +1205,15 @@
     panel.append(status, select, refresh);
     document.documentElement.appendChild(panel);
     async function update() {
+      if (!panel.isConnected) return;
       select.disabled = true;
       try {
-        const state = await chrome.runtime.sendMessage({type: 'GET_STATE'});
+        const state = await sendRuntimeMessage({type: 'GET_STATE'});
         if (!state?.authenticated) {
           status.textContent = '⚠ 泽顺插件未登录，请打开插件设置登录后采集';
           return;
         }
-        const response = await chrome.runtime.sendMessage({type: 'GET_ZESHUN_CATEGORIES'});
+        const response = await sendRuntimeMessage({type: 'GET_ZESHUN_CATEGORIES'});
         if (!response?.ok) throw new Error(response?.error || '分类读取失败');
         const saved = (await chrome.storage.local.get('zeshunCollectionCategoryOptions')).zeshunCollectionCategoryOptions || {};
         const previous = saved['1688'];
@@ -1051,6 +1239,7 @@
       } catch (error) { status.textContent = `分类保存失败：${error.message || error}`; }
     });
     refresh.addEventListener('click', update);
+    preferencesFocusListener = update;
     window.addEventListener('focus', update);
     await update();
   }
@@ -1060,7 +1249,7 @@
     const original = button.textContent;
     button.textContent = "正在采集…";
     try {
-      const response = await chrome.runtime.sendMessage({type: "SUBMIT_PRODUCT", product: await extractProduct()});
+      const response = await sendRuntimeMessage({type: "SUBMIT_PRODUCT", product: await extractProduct()});
       if (!response?.ok) throw new Error(response?.error || "采集失败");
       showToast(response.queued ? "控制台暂不可用，商品已加入待传队列" : "已采集到 AI 原创产品", response.queued ? "warning" : "success");
       button.textContent = "采集成功 ✓";
@@ -1078,7 +1267,7 @@
     const original = button.textContent;
     button.textContent = "采集中…";
     try {
-      const response = await chrome.runtime.sendMessage({type: "SUBMIT_PRODUCT", product});
+      const response = await sendRuntimeMessage({type: "SUBMIT_PRODUCT", product});
       if (!response?.ok) throw new Error(response?.error || "采集失败");
       showToast(
         response.queued ? "控制台暂不可用，商品已加入待传队列" : "商品已采集到 AI 原创产品",
@@ -1133,11 +1322,18 @@
   }
 
   function refreshUi() {
+    if (document.documentElement.getAttribute(UI_OWNER_ATTRIBUTE) !== uiOwner) return;
+    if (typeof globalThis.chrome?.runtime?.sendMessage !== "function") return;
     mountCollectorButton();
     mountListButtons();
   }
 
   const contentListener = (message, _sender, sendResponse) => {
+    if (message?.type === "AI_WEIGHT_PRICE_CANCEL_SUPPLIER_ACTION") {
+      aiWeightPriceSearchGeneration++;
+      sendResponse({ok: true});
+      return;
+    }
     if (message?.type === "PING_PAGE") {
       sendResponse({ok: true, detail: Boolean(itemId()), platform: "1688"});
       return;
@@ -1178,11 +1374,24 @@
   // Search/detail message handlers must also exist in child frames.  Only the
   // top frame mounts the floating collector UI and its mutation observer.
   if (window.top === window) {
+    // Re-injection can enter a new extension context while the old page DOM
+    // still contains buttons bound to the invalidated one.
+    globalThis.__zeshun1688UiCleanup?.();
+    // DOM state is shared even when reloading the extension creates a new
+    // isolated world. Old observers must yield to the newest copy too.
+    document.documentElement.setAttribute(UI_OWNER_ATTRIBUTE, uiOwner);
+    document.querySelectorAll('.zeshun-1688-preferences, .zeshun-collector-floating, .zeshun-card-collect')
+      .forEach(node => node.remove());
     const observer = new MutationObserver(() => {
       window.clearTimeout(mutationTimer);
       mutationTimer = window.setTimeout(refreshUi, 180);
     });
     observer.observe(document.documentElement, {childList: true, subtree: true});
+    globalThis.__zeshun1688UiCleanup = () => {
+      observer.disconnect();
+      window.clearTimeout(mutationTimer);
+      if (preferencesFocusListener) window.removeEventListener('focus', preferencesFocusListener);
+    };
     refreshUi();
     mountCollectionPreferences();
   }

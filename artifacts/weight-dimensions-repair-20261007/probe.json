@@ -1,0 +1,198 @@
+[
+  {
+    "order": "2000015303241381",
+    "item": "MLM3472253827",
+    "status": "active",
+    "sub_status": [],
+    "global_id": "CBT4309114099",
+    "global_status": "active",
+    "net_proceeds": {
+      "amount": 4.5,
+      "additional_concepts": [
+        {
+          "id": "shipping_cost",
+          "amount": 3.85
+        },
+        {
+          "id": "sale_fee",
+          "amount": 2.09
+        }
+      ],
+      "currency_id": "USD"
+    },
+    "tags": [
+      "kvs_primary",
+      "user_product_listing",
+      "immediate_payment"
+    ],
+    "inventory_id": "",
+    "global_package": [
+      {
+        "id": "PACKAGE_HEIGHT",
+        "value_name": "20 cm",
+        "value_struct": {
+          "number": 20,
+          "unit": "cm"
+        }
+      },
+      {
+        "id": "PACKAGE_LENGTH",
+        "value_name": "20 cm",
+        "value_struct": {
+          "number": 20,
+          "unit": "cm"
+        }
+      },
+      {
+        "id": "PACKAGE_WEIGHT",
+        "value_name": "324 g",
+        "value_struct": {
+          "number": 324,
+          "unit": "g"
+        }
+      },
+      {
+        "id": "PACKAGE_WIDTH",
+        "value_name": "20 cm",
+        "value_struct": {
+          "number": 20,
+          "unit": "cm"
+        }
+      }
+    ],
+    "target_weight": "324",
+    "target_dimensions": "21x14x10"
+  },
+  {
+    "order": "2000015305483443",
+    "item": "MLB7674886588",
+    "status": "under_review",
+    "sub_status": [
+      "suspended_for_prevention"
+    ],
+    "global_id": "CBT4390722021",
+    "global_status": "active",
+    "net_proceeds": {
+      "amount": 29.6,
+      "additional_concepts": [
+        {
+          "id": "shipping_cost",
+          "amount": 6.6
+        },
+        {
+          "id": "sale_fee",
+          "amount": 7.15
+        }
+      ],
+      "currency_id": "USD"
+    },
+    "tags": [
+      "user_product_listing",
+      "kvs_primary",
+      "immediate_payment"
+    ],
+    "inventory_id": "",
+    "global_package": [
+      {
+        "id": "PACKAGE_HEIGHT",
+        "value_name": "20 cm",
+        "value_struct": {
+          "number": 20,
+          "unit": "cm"
+        }
+      },
+      {
+        "id": "PACKAGE_LENGTH",
+        "value_name": "20 cm",
+        "value_struct": {
+          "number": 20,
+          "unit": "cm"
+        }
+      },
+      {
+        "id": "PACKAGE_WEIGHT",
+        "value_name": "372 g",
+        "value_struct": {
+          "number": 372,
+          "unit": "g"
+        }
+      },
+      {
+        "id": "PACKAGE_WIDTH",
+        "value_name": "20 cm",
+        "value_struct": {
+          "number": 20,
+          "unit": "cm"
+        }
+      }
+    ],
+    "target_weight": "372",
+    "target_dimensions": "25x13x8"
+  },
+  {
+    "order": "2000015299566349",
+    "item": "MLB7639428162",
+    "status": "under_review",
+    "sub_status": [
+      "suspended_for_prevention"
+    ],
+    "global_id": "CBT5239775160",
+    "global_status": "active",
+    "net_proceeds": {
+      "amount": 5.74,
+      "additional_concepts": [
+        {
+          "id": "shipping_cost",
+          "amount": 1.85
+        },
+        {
+          "id": "sale_fee",
+          "amount": 1.5
+        }
+      ],
+      "currency_id": "USD"
+    },
+    "tags": [
+      "kvs_primary",
+      "user_product_listing",
+      "immediate_payment"
+    ],
+    "inventory_id": "",
+    "global_package": [
+      {
+        "id": "PACKAGE_HEIGHT",
+        "value_name": "4 cm",
+        "value_struct": {
+          "number": 4,
+          "unit": "cm"
+        }
+      },
+      {
+        "id": "PACKAGE_LENGTH",
+        "value_name": "16 cm",
+        "value_struct": {
+          "number": 16,
+          "unit": "cm"
+        }
+      },
+      {
+        "id": "PACKAGE_WEIGHT",
+        "value_name": "340 g",
+        "value_struct": {
+          "number": 340,
+          "unit": "g"
+        }
+      },
+      {
+        "id": "PACKAGE_WIDTH",
+        "value_name": "6 cm",
+        "value_struct": {
+          "number": 6,
+          "unit": "cm"
+        }
+      }
+    ],
+    "target_weight": "340",
+    "target_dimensions": "17x8x13"
+  }
+]

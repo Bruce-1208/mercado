@@ -1,9 +1,7 @@
-import os
-
 from AI_Agent.deepseek import chat_deepseek
 
 
-TITLE_MODEL = os.getenv("DEEPSEEK_TITLE_MODEL", os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"))
+TITLE_MODEL = "qwen3.7-flash"
 
 
 def get_title(title: str) -> str:

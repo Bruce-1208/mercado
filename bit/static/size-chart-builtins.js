@@ -7,8 +7,8 @@
   'use strict';
   // House reference profiles, authored for this library; not a national standard,
   // brand sizing chart, or measurements taken from the user's merchandise.
-  const version = '2026.10.02';
-  const note = '泽顺通用参考数据 v2026.10.02：系统预设的身体尺寸范围，单位 cm。适用于按此范围选码的商品；品牌默认 Generic，可在模板维护中修改。';
+  const version = '2026.10.09';
+  const note = '泽顺通用参考数据 v2026.10.09：系统预设的身体尺寸范围，单位 cm。适用于按此范围选码的商品；品牌默认 Generic，可在模板维护中修改。';
   const fields = {
     SIZE:'尺码', FILTRABLE_SIZE:'国际尺码', PANTS_FILTRABLE_SIZES:'裤装尺码',
     CHEST_CIRCUMFERENCE_FROM:'胸围下限', CHEST_CIRCUMFERENCE_TO:'胸围上限',
@@ -94,8 +94,8 @@
   for (const [gender,profile,pants] of [['men',men,menPants],['women',women,womenPants]]) {
     add('tshirts','T 恤','T_SHIRTS',gender,profile);
     add('shirts','衬衫','SHIRTS',gender,profile);
-    add('pants','长裤／牛仔裤','PANTS',gender,pants,'waist',true);
-    add('shorts','短裤','SHORTS',gender,pants,'waist',true);
+    add('pants','长裤／牛仔裤','PANTS',gender,profile,'alpha',true);
+    add('shorts','短裤','SHORTS',gender,profile,'alpha',true);
     add('coats','夹克／外套','JACKETS_AND_COATS',gender,profile);
     add('hoodies','卫衣','SWEATSHIRTS_AND_HOODIES',gender,profile);
     add('pajamas','睡衣','PAJAMAS',gender,profile);

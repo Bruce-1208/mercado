@@ -1,0 +1,38 @@
+[
+  {
+    "actor": "unscoped",
+    "word": "FunctionalAuditNoMatch20261008",
+    "ms": 707.6,
+    "rows": 0
+  },
+  {
+    "actor": "unscoped",
+    "word": "Vestido",
+    "ms": 784.0,
+    "rows": 100
+  },
+  {
+    "actor": "super_admin",
+    "word": "FunctionalAuditNoMatch20261008",
+    "ms": 1065.8,
+    "rows": 0
+  },
+  {
+    "actor": "super_admin",
+    "word": "Vestido",
+    "ms": 1050.3,
+    "rows": 100
+  },
+  {
+    "actor": "employee",
+    "word": "FunctionalAuditNoMatch20261008",
+    "ms": 1424.1,
+    "rows": 0
+  },
+  {
+    "actor": "employee",
+    "word": "Vestido",
+    "ms": 1322.6,
+    "rows": 100
+  }
+]

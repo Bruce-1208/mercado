@@ -1,0 +1,731 @@
+{
+  "store_counts": [
+    {
+      "token_id": 119,
+      "n": 32586
+    },
+    {
+      "token_id": 116,
+      "n": 29282
+    },
+    {
+      "token_id": 64,
+      "n": 28338
+    },
+    {
+      "token_id": 102,
+      "n": 27030
+    },
+    {
+      "token_id": 72,
+      "n": 21867
+    },
+    {
+      "token_id": 118,
+      "n": 20388
+    },
+    {
+      "token_id": 106,
+      "n": 19588
+    },
+    {
+      "token_id": 2,
+      "n": 19570
+    },
+    {
+      "token_id": 117,
+      "n": 19020
+    },
+    {
+      "token_id": 74,
+      "n": 17847
+    },
+    {
+      "token_id": 60,
+      "n": 17172
+    },
+    {
+      "token_id": 73,
+      "n": 16886
+    },
+    {
+      "token_id": 140,
+      "n": 16847
+    },
+    {
+      "token_id": 84,
+      "n": 16377
+    },
+    {
+      "token_id": 105,
+      "n": 15922
+    },
+    {
+      "token_id": 133,
+      "n": 15607
+    },
+    {
+      "token_id": 85,
+      "n": 15186
+    },
+    {
+      "token_id": 101,
+      "n": 14488
+    },
+    {
+      "token_id": 113,
+      "n": 14014
+    },
+    {
+      "token_id": 99,
+      "n": 13408
+    },
+    {
+      "token_id": 86,
+      "n": 13302
+    },
+    {
+      "token_id": 5,
+      "n": 13007
+    },
+    {
+      "token_id": 87,
+      "n": 11827
+    },
+    {
+      "token_id": 92,
+      "n": 11655
+    },
+    {
+      "token_id": 91,
+      "n": 11652
+    },
+    {
+      "token_id": 93,
+      "n": 11613
+    },
+    {
+      "token_id": 39,
+      "n": 11314
+    },
+    {
+      "token_id": 120,
+      "n": 11059
+    },
+    {
+      "token_id": 134,
+      "n": 10421
+    },
+    {
+      "token_id": 88,
+      "n": 9849
+    },
+    {
+      "token_id": 6,
+      "n": 9743
+    },
+    {
+      "token_id": 75,
+      "n": 9232
+    },
+    {
+      "token_id": 67,
+      "n": 9056
+    },
+    {
+      "token_id": 100,
+      "n": 8970
+    },
+    {
+      "token_id": 103,
+      "n": 8883
+    },
+    {
+      "token_id": 143,
+      "n": 8768
+    },
+    {
+      "token_id": 115,
+      "n": 8508
+    },
+    {
+      "token_id": 124,
+      "n": 8441
+    },
+    {
+      "token_id": 108,
+      "n": 8420
+    },
+    {
+      "token_id": 77,
+      "n": 8196
+    },
+    {
+      "token_id": 138,
+      "n": 8029
+    },
+    {
+      "token_id": 139,
+      "n": 7958
+    },
+    {
+      "token_id": 104,
+      "n": 7537
+    },
+    {
+      "token_id": 68,
+      "n": 7472
+    },
+    {
+      "token_id": 4,
+      "n": 7289
+    },
+    {
+      "token_id": 128,
+      "n": 7287
+    },
+    {
+      "token_id": 3,
+      "n": 7144
+    },
+    {
+      "token_id": 80,
+      "n": 6949
+    },
+    {
+      "token_id": 142,
+      "n": 6828
+    },
+    {
+      "token_id": 144,
+      "n": 6676
+    },
+    {
+      "token_id": 63,
+      "n": 6456
+    },
+    {
+      "token_id": 33,
+      "n": 6419
+    },
+    {
+      "token_id": 94,
+      "n": 6263
+    },
+    {
+      "token_id": 130,
+      "n": 5968
+    },
+    {
+      "token_id": 30,
+      "n": 5864
+    },
+    {
+      "token_id": 22,
+      "n": 5725
+    },
+    {
+      "token_id": 135,
+      "n": 5633
+    },
+    {
+      "token_id": 129,
+      "n": 5581
+    },
+    {
+      "token_id": 44,
+      "n": 5563
+    },
+    {
+      "token_id": 20,
+      "n": 5215
+    },
+    {
+      "token_id": 43,
+      "n": 5146
+    },
+    {
+      "token_id": 136,
+      "n": 4760
+    },
+    {
+      "token_id": 110,
+      "n": 4627
+    },
+    {
+      "token_id": 141,
+      "n": 4584
+    },
+    {
+      "token_id": 97,
+      "n": 4550
+    },
+    {
+      "token_id": 66,
+      "n": 4309
+    },
+    {
+      "token_id": 96,
+      "n": 4272
+    },
+    {
+      "token_id": 109,
+      "n": 4238
+    },
+    {
+      "token_id": 107,
+      "n": 4169
+    },
+    {
+      "token_id": 95,
+      "n": 4129
+    },
+    {
+      "token_id": 70,
+      "n": 4121
+    },
+    {
+      "token_id": 131,
+      "n": 4104
+    },
+    {
+      "token_id": 51,
+      "n": 3880
+    },
+    {
+      "token_id": 26,
+      "n": 3754
+    },
+    {
+      "token_id": 149,
+      "n": 3676
+    },
+    {
+      "token_id": 36,
+      "n": 3456
+    },
+    {
+      "token_id": 125,
+      "n": 3400
+    },
+    {
+      "token_id": 28,
+      "n": 3231
+    },
+    {
+      "token_id": 122,
+      "n": 3191
+    },
+    {
+      "token_id": 12,
+      "n": 3036
+    },
+    {
+      "token_id": 111,
+      "n": 2659
+    },
+    {
+      "token_id": 61,
+      "n": 2613
+    },
+    {
+      "token_id": 42,
+      "n": 2588
+    },
+    {
+      "token_id": 150,
+      "n": 2337
+    },
+    {
+      "token_id": 151,
+      "n": 2165
+    },
+    {
+      "token_id": 83,
+      "n": 2138
+    },
+    {
+      "token_id": 112,
+      "n": 2128
+    },
+    {
+      "token_id": 34,
+      "n": 2125
+    },
+    {
+      "token_id": 81,
+      "n": 2041
+    },
+    {
+      "token_id": 7,
+      "n": 2029
+    },
+    {
+      "token_id": 147,
+      "n": 2016
+    },
+    {
+      "token_id": 48,
+      "n": 1677
+    },
+    {
+      "token_id": 76,
+      "n": 1528
+    },
+    {
+      "token_id": 79,
+      "n": 1507
+    },
+    {
+      "token_id": 41,
+      "n": 1410
+    },
+    {
+      "token_id": 148,
+      "n": 1358
+    },
+    {
+      "token_id": 31,
+      "n": 1335
+    },
+    {
+      "token_id": 45,
+      "n": 1196
+    },
+    {
+      "token_id": 54,
+      "n": 825
+    },
+    {
+      "token_id": 21,
+      "n": 767
+    },
+    {
+      "token_id": 47,
+      "n": 763
+    },
+    {
+      "token_id": 16,
+      "n": 654
+    },
+    {
+      "token_id": 132,
+      "n": 622
+    },
+    {
+      "token_id": 114,
+      "n": 475
+    },
+    {
+      "token_id": 137,
+      "n": 384
+    },
+    {
+      "token_id": 15,
+      "n": 372
+    },
+    {
+      "token_id": 17,
+      "n": 343
+    },
+    {
+      "token_id": 50,
+      "n": 337
+    },
+    {
+      "token_id": 49,
+      "n": 234
+    },
+    {
+      "token_id": 11,
+      "n": 216
+    },
+    {
+      "token_id": 14,
+      "n": 198
+    },
+    {
+      "token_id": 71,
+      "n": 185
+    },
+    {
+      "token_id": 62,
+      "n": 180
+    },
+    {
+      "token_id": 35,
+      "n": 100
+    },
+    {
+      "token_id": 69,
+      "n": 35
+    },
+    {
+      "token_id": 65,
+      "n": 30
+    },
+    {
+      "token_id": 29,
+      "n": 18
+    },
+    {
+      "token_id": 58,
+      "n": 11
+    },
+    {
+      "token_id": 25,
+      "n": 10
+    },
+    {
+      "token_id": 37,
+      "n": 5
+    },
+    {
+      "token_id": 13,
+      "n": 4
+    },
+    {
+      "token_id": 52,
+      "n": 3
+    },
+    {
+      "token_id": 53,
+      "n": 3
+    },
+    {
+      "token_id": 145,
+      "n": 3
+    },
+    {
+      "token_id": 1,
+      "n": 2
+    },
+    {
+      "token_id": 23,
+      "n": 2
+    },
+    {
+      "token_id": 27,
+      "n": 2
+    },
+    {
+      "token_id": 59,
+      "n": 2
+    },
+    {
+      "token_id": 78,
+      "n": 2
+    },
+    {
+      "token_id": 127,
+      "n": 2
+    },
+    {
+      "token_id": 8,
+      "n": 1
+    },
+    {
+      "token_id": 19,
+      "n": 1
+    },
+    {
+      "token_id": 82,
+      "n": 1
+    }
+  ],
+  "plans": [
+    {
+      "scope": "all_stores",
+      "scope_size": 133,
+      "kind": "sites",
+      "plan": [
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "links",
+          "partitions": null,
+          "type": "range",
+          "possible_keys": "uniq_erp_meli_store_link,idx_erp_meli_store_link_current,idx_erp_meli_store_link_store,idx_erp_meli_store_link_sales_page,idx_erp_meli_store_link_site_page,idx_erp_meli_store_link_category_page,idx_erp_meli_link_sort_price,idx_erp_meli_link_sort_weight_g,idx_erp_meli_link_sort_available_quantity,idx_erp_meli_link_sort_last_synced_at,idx_erp_meli_link_sort_net_proceeds_usd",
+          "key": "idx_erp_meli_store_link_site_page",
+          "key_len": "68",
+          "ref": null,
+          "rows": 487757,
+          "filtered": 100.0,
+          "Extra": "Using index condition; Using where"
+        }
+      ],
+      "error_code": 3024,
+      "seconds": 15.077
+    },
+    {
+      "scope": "all_stores",
+      "scope_size": 133,
+      "kind": "current_count",
+      "plan": [
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "erp_mercadolibre_store_links",
+          "partitions": null,
+          "type": "ref",
+          "possible_keys": "uniq_erp_meli_store_link,idx_erp_meli_store_link_current,idx_erp_meli_store_link_store,idx_erp_meli_store_link_sales_page,idx_erp_meli_store_link_site_page,idx_erp_meli_store_link_category_page,idx_erp_meli_link_sort_price,idx_erp_meli_link_sort_weight_g,idx_erp_meli_link_sort_available_quantity,idx_erp_meli_link_sort_last_synced_at,idx_erp_meli_link_sort_net_proceeds_usd",
+          "key": "idx_erp_meli_store_link_current",
+          "key_len": "1",
+          "ref": "const",
+          "rows": 487756,
+          "filtered": 100.0,
+          "Extra": "Using where"
+        }
+      ],
+      "error_code": 3024,
+      "seconds": 15.096
+    },
+    {
+      "scope": "all_stores",
+      "scope_size": 133,
+      "kind": "last_sync",
+      "plan": [
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "erp_mercadolibre_store_links",
+          "partitions": null,
+          "type": "ref",
+          "possible_keys": "uniq_erp_meli_store_link,idx_erp_meli_store_link_current,idx_erp_meli_store_link_store,idx_erp_meli_store_link_sales_page,idx_erp_meli_store_link_site_page,idx_erp_meli_store_link_category_page,idx_erp_meli_link_sort_price,idx_erp_meli_link_sort_weight_g,idx_erp_meli_link_sort_available_quantity,idx_erp_meli_link_sort_last_synced_at,idx_erp_meli_link_sort_net_proceeds_usd",
+          "key": "idx_erp_meli_store_link_current",
+          "key_len": "1",
+          "ref": "const",
+          "rows": 487756,
+          "filtered": 100.0,
+          "Extra": "Using where"
+        }
+      ],
+      "error_code": 3024,
+      "seconds": 15.077
+    },
+    {
+      "scope": "largest_3",
+      "scope_size": 3,
+      "kind": "sites",
+      "plan": [
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "links",
+          "partitions": null,
+          "type": "range",
+          "possible_keys": "uniq_erp_meli_store_link,idx_erp_meli_store_link_current,idx_erp_meli_store_link_store,idx_erp_meli_store_link_sales_page,idx_erp_meli_store_link_site_page,idx_erp_meli_store_link_category_page,idx_erp_meli_link_sort_price,idx_erp_meli_link_sort_weight_g,idx_erp_meli_link_sort_available_quantity,idx_erp_meli_link_sort_last_synced_at,idx_erp_meli_link_sort_net_proceeds_usd",
+          "key": "idx_erp_meli_store_link_site_page",
+          "key_len": "68",
+          "ref": null,
+          "rows": 487757,
+          "filtered": 23.59,
+          "Extra": "Using index condition; Using where"
+        }
+      ],
+      "seconds": 8.586
+    },
+    {
+      "scope": "largest_3",
+      "scope_size": 3,
+      "kind": "current_count",
+      "plan": [
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "erp_mercadolibre_store_links",
+          "partitions": null,
+          "type": "range",
+          "possible_keys": "uniq_erp_meli_store_link,idx_erp_meli_store_link_current,idx_erp_meli_store_link_store,idx_erp_meli_store_link_sales_page,idx_erp_meli_store_link_site_page,idx_erp_meli_store_link_category_page,idx_erp_meli_link_sort_price,idx_erp_meli_link_sort_weight_g,idx_erp_meli_link_sort_available_quantity,idx_erp_meli_link_sort_last_synced_at,idx_erp_meli_link_sort_net_proceeds_usd",
+          "key": "idx_erp_meli_store_link_store",
+          "key_len": "9",
+          "ref": null,
+          "rows": 175332,
+          "filtered": 100.0,
+          "Extra": "Using where; Using index"
+        }
+      ],
+      "seconds": 0.034
+    },
+    {
+      "scope": "largest_3",
+      "scope_size": 3,
+      "kind": "last_sync",
+      "plan": [
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "erp_mercadolibre_store_links",
+          "partitions": null,
+          "type": "ref",
+          "possible_keys": "uniq_erp_meli_store_link,idx_erp_meli_store_link_current,idx_erp_meli_store_link_store,idx_erp_meli_store_link_sales_page,idx_erp_meli_store_link_site_page,idx_erp_meli_store_link_category_page,idx_erp_meli_link_sort_price,idx_erp_meli_link_sort_weight_g,idx_erp_meli_link_sort_available_quantity,idx_erp_meli_link_sort_last_synced_at,idx_erp_meli_link_sort_net_proceeds_usd",
+          "key": "idx_erp_meli_store_link_current",
+          "key_len": "1",
+          "ref": "const",
+          "rows": 487756,
+          "filtered": 23.59,
+          "Extra": "Using where"
+        }
+      ],
+      "seconds": 7.425
+    }
+  ],
+  "historical_times": [
+    {
+      "digest": "SELECT `links` . `site_id` , COUNT ( * ) AS `link_count` FROM `erp_mercadolibre_store_links` AS `links` WHERE `links` . `is_current` = ? AND `links` . `site_id` IS NOT NULL AND `links` . `site_id` != ? AND `links` . `token_id` IN (...) GROUP BY `links` . `site_id` ORDER BY `links` . `site_id`",
+      "calls": 7,
+      "first_seen": "2026-10-06 12:19:53.169965",
+      "last_seen": "2026-10-06 17:38:15.958156",
+      "max_seconds": "29.363"
+    },
+    {
+      "digest": "SELECT MAX ( `last_synced_at` ) AS `last_synced_at` FROM `erp_mercadolibre_store_links` WHERE `is_current` = ? AND `token_id` IN (...)",
+      "calls": 7,
+      "first_seen": "2026-10-06 12:20:35.836004",
+      "last_seen": "2026-10-06 17:38:23.424274",
+      "max_seconds": "21.437"
+    },
+    {
+      "digest": "SELECT COUNT ( * ) AS `current_count` FROM `erp_mercadolibre_store_links` WHERE `is_current` = ? AND `token_id` IN (...)",
+      "calls": 7,
+      "first_seen": "2026-10-06 12:20:14.355389",
+      "last_seen": "2026-10-06 17:38:15.997394",
+      "max_seconds": "20.986"
+    },
+    {
+      "digest": "SELECT /*+ MAX_EXECUTION_TIME (?) */ COUNT ( * ) AS `total` FROM `erp_mercadolibre_products` WHERE ( `last_publish_token_id` IN (...) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_publish_records` AS `own_records` WHERE `own_records` . `product_item_id` = `erp_mercadolibre_products` . `id` AND `own_records` . `token_id` IN (...) ) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_store_links` AS `own_links` WHERE `own_links` . `item_id` = `erp_mercadolibre_products` . `source_item_id` AND `own_links` . `token_id` IN (...) ) )",
+      "calls": 36,
+      "first_seen": "2026-10-05 16:59:39.362230",
+      "last_seen": "2026-10-06 17:35:34.350906",
+      "max_seconds": "8.150"
+    },
+    {
+      "digest": "SELECT /*+ MAX_EXECUTION_TIME (?) */ COUNT ( * ) AS `total` FROM `erp_mercadolibre_products` WHERE `management_category_id` = ? AND ( `last_publish_token_id` IN (...) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_publish_records` AS `own_records` WHERE `own_records` . `product_item_id` = `erp_mercadolibre_products` . `id` AND `own_records` . `token_id` IN (...) ) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_store_links` AS `own_links` WHERE `own_links` . `item_id` = `erp_mercadolibre_products` . `source_item_id` AND `own_links` . `token_id` IN (...) ) ) AND `review_status` = ?",
+      "calls": 7,
+      "first_seen": "2026-10-06 15:34:33.417308",
+      "last_seen": "2026-10-06 15:40:25.607413",
+      "max_seconds": "8.150"
+    },
+    {
+      "digest": "SELECT /*+ MAX_EXECUTION_TIME (?) */ COUNT ( * ) AS `total` FROM `erp_mercadolibre_products` WHERE `management_category_id` = ? AND ( `last_publish_token_id` IN (...) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_publish_records` AS `own_records` WHERE `own_records` . `product_item_id` = `erp_mercadolibre_products` . `id` AND `own_records` . `token_id` IN (...) ) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_store_links` AS `own_links` WHERE `own_links` . `item_id` = `erp_mercadolibre_products` . `source_item_id` AND `own_links` . `token_id` IN (...) ) )",
+      "calls": 3,
+      "first_seen": "2026-10-06 15:34:37.756858",
+      "last_seen": "2026-10-06 15:34:54.023802",
+      "max_seconds": "8.148"
+    },
+    {
+      "digest": "SELECT /*+ MAX_EXECUTION_TIME (?) */ COUNT ( * ) AS `total` FROM `erp_mercadolibre_products` WHERE ( `last_publish_token_id` IN (...) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_publish_records` AS `own_records` WHERE `own_records` . `product_item_id` = `erp_mercadolibre_products` . `id` AND `own_records` . `token_id` IN (...) ) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_store_links` AS `own_links` WHERE `own_links` . `item_id` = `erp_mercadolibre_products` . `source_item_id` AND `own_links` . `token_id` IN (...) ) ) AND `review_status` = ?",
+      "calls": 3,
+      "first_seen": "2026-10-06 15:39:36.323957",
+      "last_seen": "2026-10-06 15:39:52.557016",
+      "max_seconds": "8.135"
+    },
+    {
+      "digest": "SELECT /*+ MAX_EXECUTION_TIME (?) */ COUNT ( * ) AS `total` FROM `erp_mercadolibre_products` WHERE ( `last_publish_token_id` IN (...) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_publish_records` AS `own_records` WHERE `own_records` . `product_item_id` = `erp_mercadolibre_products` . `id` AND `own_records` . `token_id` IN (...) ) OR EXISTS ( SELECT ? FROM `erp_mercadolibre_store_links` AS `own_links` WHERE `own_links` . `item_id` = `erp_mercadolibre_products` . `source_item_id` AND `own_links` . `token_id` IN (...) ) ) AND `source_type` = ?",
+      "calls": 30,
+      "first_seen": "2026-10-06 17:33:59.707636",
+      "last_seen": "2026-10-06 17:36:14.593051",
+      "max_seconds": "8.106"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+[
+  {
+    "case": "cold",
+    "new_index_created": false,
+    "current_count": 90206.0,
+    "sites": 4,
+    "seconds": 2.42,
+    "query_trace": [
+      {
+        "kind": "other",
+        "seconds": 0.0
+      },
+      {
+        "kind": "other",
+        "seconds": 0.0
+      },
+      {
+        "kind": "other",
+        "seconds": 0.003
+      },
+      {
+        "kind": "sites",
+        "seconds": 2.032
+      },
+      {
+        "kind": "summary",
+        "seconds": 0.017
+      },
+      {
+        "kind": "last_sync",
+        "seconds": 0.364
+      }
+    ]
+  },
+  {
+    "case": "warm",
+    "new_index_created": false,
+    "current_count": 90206.0,
+    "sites": 4,
+    "seconds": 0.0,
+    "query_trace": []
+  }
+]

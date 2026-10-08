@@ -2,8 +2,42 @@ import pytest
 from collections import deque
 from pathlib import Path
 import threading
+import io
 
 from bit import bit_interface
+
+
+@pytest.fixture(autouse=True)
+def isolated_background_task_directory(tmp_path, monkeypatch):
+    monkeypatch.setenv("BIT_BACKGROUND_TASK_ROOT", str(tmp_path / "background-tasks"))
+
+
+@pytest.fixture
+def isolated_durable_task_store(tmp_path, monkeypatch):
+    from bit import durable_tasks
+    from bit.local_agent_hub import LocalAgentStore
+    from bit.workbench_runtime import RuntimeSettings
+    store = durable_tasks.DurableTaskStore(tmp_path / "background-tasks")
+    hub = LocalAgentStore(tmp_path / "agent-hub.sqlite3")
+    store.received_payloads = {}
+    original_start = store.start
+    def record_start(job_type, payload, state):
+        store.received_payloads[state["task_id"]] = payload
+        return original_start(job_type, payload, state)
+    class FakeProcess:
+        def __init__(self, *args, **kwargs):
+            self.pid = 999999
+            self.stdin = io.BytesIO()
+        def poll(self):
+            return 0
+    monkeypatch.setattr(durable_tasks.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(durable_tasks, "_CHILDREN", {})
+    monkeypatch.setattr(store, "start", record_start)
+    monkeypatch.setattr(bit_interface, "get_durable_task_store", lambda: store)
+    monkeypatch.setattr(bit_interface, "get_local_agent_store", lambda: hub)
+    monkeypatch.setattr(bit_interface, "RUNTIME_SETTINGS", RuntimeSettings("server", "test"))
+    monkeypatch.setattr(bit_interface, "USE_DB_API", False)
+    return store
 
 
 def test_ai_appeal_records_are_enriched_for_filters(monkeypatch):
@@ -319,7 +353,20 @@ def test_mercado_login_console_detects_job_from_another_process(monkeypatch):
     assert "另一个进程" in state["message"]
 
 
-def test_shop_status_can_restart_single_shop_auto_login(monkeypatch):
+@pytest.fixture
+def shop_status_admin(monkeypatch, tmp_path):
+    from bit.local_agent_hub import LocalAgentStore
+    monkeypatch.setattr(bit_interface, "get_current_workbench_user", lambda: {
+        "id": 1, "username": "admin", "role_key": "super_admin",
+        "is_platform_admin": True, "access_version": 1, "permissions": ["*"],
+    })
+    # These execution tests exercise the unscoped platform administrator.
+    monkeypatch.setattr(bit_interface, "workbench_selected_organization", lambda user=None: "")
+    hub = LocalAgentStore(tmp_path / "agents.sqlite3")
+    monkeypatch.setattr(bit_interface, "get_local_agent_store", lambda: hub)
+
+
+def test_shop_status_can_restart_single_shop_auto_login(monkeypatch, shop_status_admin):
     captured = {}
     monkeypatch.setattr(
         bit_interface,
@@ -371,7 +418,7 @@ def test_shop_status_can_restart_single_shop_auto_login(monkeypatch):
     }
 
 
-def test_shop_status_starts_selected_shops_as_one_worker_limited_batch(monkeypatch):
+def test_shop_status_starts_selected_shops_as_one_worker_limited_batch(monkeypatch, shop_status_admin):
     captured = []
     monkeypatch.setattr(
         bit_interface,
@@ -432,7 +479,7 @@ def test_shop_status_starts_selected_shops_as_one_worker_limited_batch(monkeypat
     ]
 
 
-def test_shop_status_all_shops_uses_requested_worker_count(monkeypatch):
+def test_shop_status_all_shops_uses_requested_worker_count(monkeypatch, shop_status_admin):
     captured = {}
 
     def fake_start(**kwargs):
@@ -458,7 +505,7 @@ def test_shop_status_all_shops_uses_requested_worker_count(monkeypatch):
     assert captured == {"shop_name": "", "window_id": "", "workers": 7}
 
 
-def test_resolve_shop_status_stops_only_the_matching_login_task(monkeypatch):
+def test_resolve_shop_status_stops_only_the_matching_login_task(monkeypatch, shop_status_admin):
     captured = []
     monkeypatch.setattr(
         bit_interface,
@@ -556,7 +603,7 @@ def test_shop_status_exposes_stop_current_login_task_button():
     assert 'fetch("/api/window-anomalies/mercado-login/stop"' in template
 
 
-def test_shop_status_stop_login_api_submits_current_task(monkeypatch):
+def test_shop_status_stop_login_api_submits_current_task(monkeypatch, shop_status_admin):
     captured = []
     monkeypatch.setattr(
         bit_interface,
@@ -585,7 +632,7 @@ def test_shop_status_stop_login_api_submits_current_task(monkeypatch):
     assert captured == ["current-login-task"]
 
 
-def test_shop_status_rejects_selected_shop_that_is_no_longer_pending(monkeypatch):
+def test_shop_status_rejects_selected_shop_that_is_no_longer_pending(monkeypatch, shop_status_admin):
     monkeypatch.setattr(
         bit_interface,
         "db_get_window_anomalies",
@@ -657,7 +704,7 @@ def test_shop_status_enriches_salesperson_from_browser_configs(monkeypatch):
     ]
 
 
-def test_shop_status_returns_logged_out_and_human_verification_rows(monkeypatch):
+def test_shop_status_returns_logged_out_and_human_verification_rows(monkeypatch, shop_status_admin):
     monkeypatch.setattr(
         bit_interface,
         "db_get_window_anomalies",
@@ -910,11 +957,11 @@ def test_build_daily_task_params_supports_independent_ai_copy_mode():
     params = bit_interface.build_daily_task_params({
         "appeal_type": "侵权",
         "appeal_copy_mode": "AI话术模式",
-        "deepseek_api_key": "manual-secret",
+        "dashscope_api_key": "manual-secret",
     })
 
     assert params["appeal_copy_mode"] == "AI话术模式"
-    assert params["deepseek_api_key"] == "manual-secret"
+    assert params["dashscope_api_key"] == "manual-secret"
     with pytest.raises(ValueError, match="集成与凭证设置"):
         bit_interface.build_daily_task_params({
             "appeal_type": "禁限售",
@@ -922,10 +969,10 @@ def test_build_daily_task_params_supports_independent_ai_copy_mode():
         })
     normal = bit_interface.build_daily_task_params({
         "appeal_copy_mode": "普通模式",
-        "deepseek_api_key": "must-not-be-retained",
+        "dashscope_api_key": "must-not-be-retained",
     })
-    assert normal["deepseek_api_key"] == ""
-    assert "deepseek_api_key" not in bit_interface._sanitize_daily_task_params(params)
+    assert normal["dashscope_api_key"] == ""
+    assert "dashscope_api_key" not in bit_interface._sanitize_daily_task_params(params)
 
 
 def test_build_daily_task_params_parses_independent_execution_standards():
@@ -981,104 +1028,40 @@ def test_daily_task_options_returns_all_active_salespeople(monkeypatch):
     assert response.get_json()["data"]["groups"] == ["普通组", "精品组"]
 
 
+@pytest.mark.usefixtures("subscribed_workbench_account")
 def test_daily_task_api_starts_multiple_instances_and_stops_only_selected(
-    monkeypatch,
-    tmp_path,
+    monkeypatch, tmp_path, isolated_durable_task_store,
 ):
+    store = isolated_durable_task_store
     monkeypatch.setenv("BIT_DAILY_TASK_MAX_CONCURRENT", "2")
-    class FakeEvent:
-        def __init__(self):
-            self.value = False
-
-        def set(self):
-            self.value = True
-
-        def is_set(self):
-            return self.value
-
-    class FakeManager:
-        def __init__(self):
-            self.event = FakeEvent()
-
-        def Event(self):
-            return self.event
-
-        def dict(self):
-            return {}
-
-        def shutdown(self):
-            return None
-
-    class FakeTaskLock:
-        acquired = True
-
-        def release(self):
-            return None
-
-    class FakeThread:
-        def __init__(self, *args, **kwargs):
-            self.name = kwargs.get("name", "")
-
-        def start(self):
-            return None
-
     task_ids = iter(("task-a", "task-b"))
-    managers = []
-    lock_calls = []
-
-    def make_manager():
-        manager = FakeManager()
-        managers.append(manager)
-        return manager
-
-    monkeypatch.setattr(
-        bit_interface,
-        "get_current_workbench_user",
-        lambda: {"id": 1, "permissions": ["tasks.view", "tasks.execute"]},
-    )
+    monkeypatch.setattr(bit_interface, "get_current_workbench_user", lambda: {
+        "id": 1, "role_key": "super_admin", "is_platform_admin": True,
+        "permissions": ["tasks.view", "tasks.execute"],
+    })
     monkeypatch.setattr(bit_interface, "_daily_tasks", {})
     monkeypatch.setattr(bit_interface, "_daily_task_controls", {})
-    monkeypatch.setattr(
-        bit_interface,
-        "_daily_task_state",
-        {"running": False, "status": "idle", "message": "等待启动"},
-    )
-    monkeypatch.setattr(
-        bit_interface,
-        "_daily_task_log_path",
-        tmp_path / "daily-task.log",
-    )
+    monkeypatch.setattr(bit_interface, "_daily_task_state", {
+        "running": False, "status": "idle", "message": "等待启动",
+    })
+    monkeypatch.setattr(bit_interface, "_daily_task_log_path", tmp_path / "daily-task.log")
     monkeypatch.setattr(bit_interface.secrets, "token_hex", lambda _size: next(task_ids))
-    monkeypatch.setattr(bit_interface.multiprocessing, "Manager", make_manager)
-    monkeypatch.setattr(bit_interface.threading, "Thread", FakeThread)
-    monkeypatch.setattr(
-        bit_interface.bit_daily_task,
-        "acquire_daily_task_lock",
-        lambda **kwargs: lock_calls.append(kwargs) or FakeTaskLock(),
-    )
-    monkeypatch.setattr(
-        bit_interface.bit_daily_task,
-        "get_daily_task_lock_owner",
-        lambda *args, **kwargs: None,
-    )
+    def unexpected_web_controls(*args, **kwargs):
+        raise AssertionError("The Web service must not own worker locks or a Manager")
+    monkeypatch.setattr(bit_interface.multiprocessing, "Manager", unexpected_web_controls)
+    monkeypatch.setattr(bit_interface.bit_daily_task, "acquire_daily_task_lock", unexpected_web_controls)
+    monkeypatch.setattr(bit_interface.bit_daily_task, "get_daily_task_lock_owner", lambda *args, **kwargs: None)
 
     client = bit_interface.app.test_client()
-    first = client.post(
-        "/api/tasks/daily/start",
-        json={"group_names": ["八月新号组"], "appeal_type": "侵权"},
-    )
-    second = client.post(
-        "/api/tasks/daily/start",
-        json={"salespeople": ["张三"], "appeal_type": "投诉"},
-    )
-
-    assert first.status_code == 200
-    assert second.status_code == 200
+    first = client.post("/api/tasks/daily/start", json={"group_names": ["八月新号组"], "appeal_type": "侵权"})
+    second = client.post("/api/tasks/daily/start", json={"salespeople": ["张三"], "appeal_type": "投诉"})
+    assert first.status_code == second.status_code == 200
     assert first.get_json()["data"]["task_id"] == "task-a"
     assert second.get_json()["data"]["task_id"] == "task-b"
-    assert [call["task_id"] for call in lock_calls] == ["task-a", "task-b"]
+    assert set(store.received_payloads) == {"task-a", "task-b"}
     assert len(bit_interface._daily_tasks) == 2
     assert bit_interface._daily_tasks["task-a"]["log_path"] != bit_interface._daily_tasks["task-b"]["log_path"]
+    assert bit_interface._daily_task_controls == {}
 
     status = client.get("/api/tasks/daily/status").get_json()["data"]
     assert status["running_count"] == 2
@@ -1087,19 +1070,19 @@ def test_daily_task_api_starts_multiple_instances_and_stops_only_selected(
     assert any("张三" in task["name"] for task in status["tasks"])
 
     stopped = client.post("/api/tasks/daily/stop", json={"task_id": "task-a"})
-
     assert stopped.status_code == 200
-    assert managers[0].event.is_set() is True
-    assert managers[1].event.is_set() is False
-    assert bit_interface._daily_tasks["task-a"]["status"] == "stopping"
-    assert bit_interface._daily_tasks["task-b"]["status"] == "running"
+    assert store.stop_event("task-a").is_set()
+    assert not store.stop_event("task-b").is_set()
+    assert store.get("task-a")["status"] == "stopping"
+    assert store.get("task-b")["status"] == "starting"
 
 
+@pytest.mark.usefixtures("subscribed_workbench_account")
 def test_daily_task_start_enforces_global_running_limit(monkeypatch):
     monkeypatch.setattr(
         bit_interface,
         "get_current_workbench_user",
-        lambda: {"id": 1, "permissions": ["tasks.view", "tasks.execute"]},
+        lambda: {"id": 1, "role_key": "super_admin", "is_platform_admin": True, "permissions": ["tasks.view", "tasks.execute"]},
     )
     monkeypatch.setattr(bit_interface, "_daily_task_max_concurrent", lambda: 2)
     monkeypatch.setattr(
@@ -1128,67 +1111,31 @@ def test_daily_task_start_enforces_global_running_limit(monkeypatch):
 
 
 @pytest.mark.parametrize("fail_stage", ["event", "registry"])
-def test_daily_task_manager_control_failure_is_cleaned_up(
-    monkeypatch,
-    tmp_path,
-    fail_stage,
-):
+def test_daily_task_worker_manager_control_failure_is_cleaned_up(monkeypatch, tmp_path, fail_stage):
     class BrokenManager:
-        def __init__(self):
-            self.shutdown_called = False
-
+        shutdown_called = False
         def Event(self):
             if fail_stage == "event":
                 raise RuntimeError("event failed")
             return threading.Event()
-
         def dict(self):
             raise RuntimeError("registry failed")
-
         def shutdown(self):
             self.shutdown_called = True
-
     class FakeTaskLock:
-        def __init__(self):
-            self.released = False
-
+        released = False
         def release(self):
             self.released = True
-
     manager = BrokenManager()
     task_lock = FakeTaskLock()
-    monkeypatch.setattr(
-        bit_interface,
-        "get_current_workbench_user",
-        lambda: {"id": 1, "permissions": ["tasks.view", "tasks.execute"]},
-    )
-    monkeypatch.setattr(bit_interface, "_daily_tasks", {})
-    monkeypatch.setattr(bit_interface, "_daily_task_controls", {})
-    monkeypatch.setattr(
-        bit_interface,
-        "_daily_task_state",
-        {"running": False, "status": "idle", "message": "等待启动"},
-    )
-    monkeypatch.setattr(bit_interface, "_daily_task_log_path", tmp_path / "daily.log")
-    monkeypatch.setattr(bit_interface.secrets, "token_hex", lambda _size: "broken")
     monkeypatch.setattr(bit_interface.multiprocessing, "Manager", lambda: manager)
-    monkeypatch.setattr(
-        bit_interface.bit_daily_task,
-        "acquire_daily_task_lock",
-        lambda **_kwargs: task_lock,
-    )
-
-    response = bit_interface.app.test_client().post(
-        "/api/tasks/daily/start",
-        json={"appeal_type": "侵权"},
-    )
-
-    assert response.status_code == 500
-    assert response.get_json()["status"] == "error"
-    assert manager.shutdown_called is True
-    assert task_lock.released is True
-    assert bit_interface._daily_tasks["broken"]["running"] is False
-    assert bit_interface._daily_tasks["broken"]["can_stop"] is False
+    monkeypatch.setattr(bit_interface.bit_daily_task, "acquire_daily_task_lock", lambda **kwargs: task_lock)
+    params = bit_interface.build_daily_task_params({"appeal_type": "侵权"})
+    state = {"task_id": "broken", "log_path": str(tmp_path / "broken.log")}
+    with pytest.raises(RuntimeError, match=f"{fail_stage if fail_stage == 'event' else 'registry'} failed"):
+        bit_interface.execute_durable_task("daily_task", params, state, None, threading.Event())
+    assert manager.shutdown_called
+    assert task_lock.released
 
 
 def test_daily_task_status_legacy_projection_prefers_running_task(monkeypatch):
@@ -1651,7 +1598,7 @@ def test_daily_task_console_dispatches_selected_appeal_type(
             "min_rate": "7%",
             "stop_after_minutes": 1,
             "appeal_copy_mode": "AI话术模式",
-            "deepseek_api_key": "manual-secret",
+            "dashscope_api_key": "manual-secret",
         }
     )
     task_lock = FakeTaskLock()
@@ -1661,7 +1608,7 @@ def test_daily_task_console_dispatches_selected_appeal_type(
     assert calls[0][0] == ("延误率",)
     assert calls[0][1]["min_rate"] == pytest.approx(0.07)
     assert calls[0][1]["appeal_copy_mode"] == "AI话术模式"
-    assert calls[0][1]["deepseek_api_key"] == "manual-secret"
+    assert calls[0][1]["dashscope_api_key"] == "manual-secret"
     assert "stop_after_minutes" not in params
     assert "stop_at" not in calls[0][1]
     assert task_lock.released is True
@@ -1771,7 +1718,7 @@ def test_appeal_console_uses_account_deepseek_token_without_query_string():
     assert 'id="daily-task-deepseek-api-key" type="hidden"' in template
     assert "/settings/integrations" in template
     assert 'appeal_copy_mode: appealCopyMode' in template
-    assert 'deepseek_api_key: deepseekApiKey' in template
+    assert 'dashscope_api_key: deepseekApiKey' in template
     assert 'method: "POST"' in template
 
 
@@ -2523,7 +2470,8 @@ def test_collection_start_rejects_shop_site_without_configured_intersection(monk
     assert "没有配置所选站点" in response.get_json()["message"]
 
 
-def test_run_appeal_api_accepts_multiple_site_and_form_parameters(monkeypatch):
+@pytest.mark.usefixtures("subscribed_workbench_account")
+def test_run_appeal_api_accepts_multiple_site_and_form_parameters(monkeypatch, isolated_durable_task_store):
     captured = {}
 
     def fake_shensu_logic(
@@ -2534,6 +2482,7 @@ def test_run_appeal_api_accepts_multiple_site_and_form_parameters(monkeypatch):
         mode,
         loop_count=10,
         stop_event=None,
+        **kwargs,
     ):
         captured["sites"] = sites
         captured["forms"] = forms
@@ -2541,6 +2490,10 @@ def test_run_appeal_api_accepts_multiple_site_and_form_parameters(monkeypatch):
         yield "完成\n"
 
     monkeypatch.setattr(bit_interface, "shensu_logic", fake_shensu_logic)
+    monkeypatch.setattr(bit_interface, "get_current_workbench_user", lambda: {
+        "id": 1, "username": "tester", "role_key": "super_admin", "is_platform_admin": True,
+        "permissions": ["*"],
+    })
     monkeypatch.setattr(
         bit_interface.bit_daily_task,
         "load_authorized_appeal_shop_site_config",
@@ -2565,17 +2518,25 @@ def test_run_appeal_api_accepts_multiple_site_and_form_parameters(monkeypatch):
             ("mode", "AI客服"),
             ("loop_count", "20"),
             ("task_id", "multi-site-api-test"),
+            ("log_transport", "poll"),
         ],
         buffered=True,
     )
 
     assert response.status_code == 200
-    assert captured["sites"] == ("墨西哥", "智利")
-    assert captured["forms"] == ("侵权", "取消率")
+    store = isolated_durable_task_store
+    payload = store.received_payloads["multi-site-api-test"]
+    assert payload["sites"] == ["墨西哥", "智利"]
+    assert payload["forms"] == ["侵权", "取消率"]
+    assert payload["loop_count"] == 20
+    bit_interface.execute_durable_task("appeal", payload, store.get("multi-site-api-test"), store, threading.Event())
+    assert captured["sites"] == ["墨西哥", "智利"]
+    assert captured["forms"] == ["侵权", "取消率"]
     assert captured["loop_count"] == 20
 
 
-def test_run_appeal_api_passes_manual_token_only_to_ai_script_mode(monkeypatch):
+@pytest.mark.usefixtures("subscribed_workbench_account")
+def test_run_appeal_api_passes_manual_token_only_to_ai_script_mode(monkeypatch, isolated_durable_task_store):
     captured = {}
 
     def fake_shensu_logic(name, sites, forms, message, mode, **kwargs):
@@ -2583,6 +2544,10 @@ def test_run_appeal_api_passes_manual_token_only_to_ai_script_mode(monkeypatch):
         yield "完成\n"
 
     monkeypatch.setattr(bit_interface, "shensu_logic", fake_shensu_logic)
+    monkeypatch.setattr(bit_interface, "get_current_workbench_user", lambda: {
+        "id": 1, "username": "tester", "role_key": "super_admin", "is_platform_admin": True,
+        "permissions": ["*"],
+    })
     monkeypatch.setattr(
         bit_interface.bit_daily_task,
         "load_authorized_appeal_shop_site_config",
@@ -2604,21 +2569,31 @@ def test_run_appeal_api_passes_manual_token_only_to_ai_script_mode(monkeypatch):
             "forms": ["侵权"],
             "mode": "AI客服",
             "appeal_copy_mode": "AI话术模式",
-            "deepseek_api_key": "manual-secret",
+            "dashscope_api_key": "manual-secret",
             "loop_count": 10,
             "task_id": "ai-script-api-test",
             "execution_target": "server",
+            "log_transport": "poll",
         },
         buffered=True,
     )
 
     assert response.status_code == 200
+    store = isolated_durable_task_store
+    payload = store.received_payloads["ai-script-api-test"]
+    assert "dashscope_api_key" not in store.get("ai-script-api-test")["params"]
+    bit_interface.execute_durable_task("appeal", payload, store.get("ai-script-api-test"), store, threading.Event())
     assert captured["mode"] == "AI客服"
     assert captured["appeal_copy_mode"] == "AI话术模式"
-    assert captured["deepseek_api_key"] == "manual-secret"
+    assert captured["dashscope_api_key"] == "manual-secret"
 
 
+@pytest.mark.usefixtures("subscribed_workbench_account")
 def test_run_appeal_api_requires_token_for_ai_script_mode(monkeypatch):
+    monkeypatch.setattr(bit_interface, "get_current_workbench_user", lambda: {
+        "username": "tester", "role_key": "super_admin", "is_platform_admin": True,
+        "permissions": ["*"],
+    })
     monkeypatch.setattr(
         bit_interface.bit_daily_task,
         "load_authorized_appeal_shop_site_config",

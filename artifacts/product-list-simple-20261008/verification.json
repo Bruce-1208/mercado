@@ -1,0 +1,38 @@
+[
+  {
+    "mode": "products",
+    "width": 1440,
+    "checks": "collapsed fields, selection, details, bilingual preview, negative net, failed status, overflow, empty state",
+    "page_errors": []
+  },
+  {
+    "mode": "collection",
+    "width": 1440,
+    "checks": "collapsed fields, selection, details, bilingual preview, negative net, failed status, overflow, empty state",
+    "page_errors": []
+  },
+  {
+    "mode": "products",
+    "width": 1024,
+    "checks": "collapsed fields, selection, details, bilingual preview, negative net, failed status, overflow, empty state",
+    "page_errors": []
+  },
+  {
+    "mode": "collection",
+    "width": 1024,
+    "checks": "collapsed fields, selection, details, bilingual preview, negative net, failed status, overflow, empty state",
+    "page_errors": []
+  },
+  {
+    "mode": "products",
+    "width": 390,
+    "checks": "collapsed fields, selection, details, bilingual preview, negative net, failed status, overflow, empty state",
+    "page_errors": []
+  },
+  {
+    "mode": "collection",
+    "width": 390,
+    "checks": "collapsed fields, selection, details, bilingual preview, negative net, failed status, overflow, empty state",
+    "page_errors": []
+  }
+]

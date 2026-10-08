@@ -1,0 +1,775 @@
+{
+  "input": {
+    "groups": [
+      {
+        "components": [
+          {
+            "component": "GRID",
+            "components": [
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PARENT_PK",
+                    "id": "GENDER",
+                    "name": "Gender",
+                    "relevance": 1,
+                    "tags": [
+                      "grid_template_required",
+                      "grid_filter",
+                      "fixed",
+                      "catalog_required",
+                      "required"
+                    ],
+                    "value_type": "string",
+                    "values": [
+                      {
+                        "id": "339666",
+                        "name": "Man"
+                      }
+                    ]
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Gender",
+                "ui_config": {},
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "PARENT_PK",
+                    "id": "BRAND",
+                    "name": "Brand",
+                    "relevance": 1,
+                    "tags": [
+                      "grid_filter",
+                      "catalog_required",
+                      "required"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_OUTPUT",
+                "label": "Brand",
+                "ui_config": {},
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "CHILD_PK",
+                    "id": "SIZE",
+                    "name": "Manufacturer size",
+                    "relevance": 1,
+                    "tags": [
+                      "unique",
+                      "allow_variations",
+                      "main_attribute_candidate",
+                      "required"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "string"
+                  }
+                ],
+                "component": "TEXT_INPUT",
+                "label": "Manufacturer size",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                },
+                "unified_units": []
+              },
+              {
+                "attributes": [
+                  {
+                    "hierarchy": "ITEM",
+                    "id": "FILTRABLE_SIZE",
+                    "name": "Equivalencies",
+                    "relevance": 2,
+                    "tags": [
+                      "vip_hidden",
+                      "hidden",
+                      "read_only",
+                      "multivalued",
+                      "variation_attribute",
+                      "required"
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "list",
+                    "values": [
+                      {
+                        "id": "12917836",
+                        "name": "2XS"
+                      },
+                      {
+                        "id": "12917776",
+                        "name": "XS"
+                      },
+                      {
+                        "id": "12917796",
+                        "name": "S"
+                      },
+                      {
+                        "id": "12917795",
+                        "name": "M"
+                      },
+                      {
+                        "id": "12917802",
+                        "name": "L"
+                      },
+                      {
+                        "id": "12917787",
+                        "name": "XL"
+                      },
+                      {
+                        "id": "12917846",
+                        "name": "2XL"
+                      },
+                      {
+                        "id": "12917837",
+                        "name": "3XL"
+                      },
+                      {
+                        "id": "12917843",
+                        "name": "4XL"
+                      },
+                      {
+                        "id": "12917842",
+                        "name": "5XL"
+                      },
+                      {
+                        "id": "12917838",
+                        "name": "6XL"
+                      },
+                      {
+                        "id": "12917841",
+                        "name": "7XL"
+                      },
+                      {
+                        "id": "12917845",
+                        "name": "8XL"
+                      },
+                      {
+                        "id": "12917844",
+                        "name": "9XL"
+                      },
+                      {
+                        "id": "12917839",
+                        "name": "10XL"
+                      }
+                    ]
+                  }
+                ],
+                "component": "COMBO",
+                "label": "Equivalencies",
+                "ui_config": {
+                  "allow_custom_value": false,
+                  "allow_filtering": false
+                }
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "CHEST_CIRCUMFERENCE_FROM",
+                    "name": "Contorno del pecho desde",
+                    "relevance": 3,
+                    "tags": [
+                      "BODY_MEASURE",
+                      "required"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  },
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "CHEST_CIRCUMFERENCE_TO",
+                    "name": "Contorno del pecho hasta",
+                    "relevance": 3,
+                    "tags": [
+                      "BODY_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "LINKED_BY_CONNECTOR_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Chest circumference",
+                "ui_config": {
+                  "connector": " - ",
+                  "hint": "Desde - Hasta"
+                },
+                "unified_units": [
+                  {
+                    "id": "\"",
+                    "name": "\""
+                  },
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "WAIST_CIRCUMFERENCE_FROM",
+                    "name": "Circunferencia de la cintura desde",
+                    "relevance": 3,
+                    "tags": [
+                      "BODY_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  },
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "WAIST_CIRCUMFERENCE_TO",
+                    "name": "Circunferencia de la cintura hasta",
+                    "relevance": 3,
+                    "tags": [
+                      "BODY_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "LINKED_BY_CONNECTOR_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Waist circumference",
+                "ui_config": {
+                  "connector": " - ",
+                  "hint": "Desde - Hasta"
+                },
+                "unified_units": [
+                  {
+                    "id": "\"",
+                    "name": "\""
+                  },
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "PERSON_HEIGHT_FROM",
+                    "name": "Altura de la persona desde",
+                    "relevance": 3,
+                    "tags": [
+                      "BODY_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  },
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "PERSON_HEIGHT_TO",
+                    "name": "Altura de la persona hasta",
+                    "relevance": 3,
+                    "tags": [
+                      "BODY_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "LINKED_BY_CONNECTOR_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Person Height",
+                "ui_config": {
+                  "connector": " - ",
+                  "hint": "Desde - Hasta"
+                },
+                "unified_units": [
+                  {
+                    "id": "\"",
+                    "name": "\""
+                  },
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "HIP_CIRCUMFERENCE_FROM",
+                    "name": "Contorno de la cadera desde",
+                    "relevance": 3,
+                    "tags": [
+                      "BODY_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  },
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "HIP_CIRCUMFERENCE_TO",
+                    "name": "Contorno de la cadera hasta",
+                    "relevance": 3,
+                    "tags": [
+                      "BODY_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "LINKED_BY_CONNECTOR_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Hip Circumference",
+                "ui_config": {
+                  "connector": " - ",
+                  "hint": "Desde - Hasta"
+                },
+                "unified_units": [
+                  {
+                    "id": "\"",
+                    "name": "\""
+                  },
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "NECK_CIRCUMFERENCE_FROM",
+                    "name": "Contorno del cuello desde",
+                    "relevance": 3,
+                    "tags": [
+                      "BODY_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  },
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "NECK_CIRCUMFERENCE_TO",
+                    "name": "Contorno del cuello hasta",
+                    "relevance": 3,
+                    "tags": [
+                      "BODY_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "LINKED_BY_CONNECTOR_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Neck Circumference",
+                "ui_config": {
+                  "connector": " - ",
+                  "hint": "Desde - Hasta"
+                },
+                "unified_units": [
+                  {
+                    "id": "\"",
+                    "name": "\""
+                  },
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "GARMENT_CHEST_WIDTH_FROM",
+                    "name": "Ancho de pecho de la prenda desde",
+                    "relevance": 3,
+                    "tags": [
+                      "CLOTHING_MEASURE",
+                      "required"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  },
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "GARMENT_CHEST_WIDTH_TO",
+                    "name": "Ancho de pecho de la prenda hasta",
+                    "relevance": 3,
+                    "tags": [
+                      "CLOTHING_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "LINKED_BY_CONNECTOR_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Garment chest width",
+                "ui_config": {
+                  "connector": " - ",
+                  "hint": "Desde - Hasta"
+                },
+                "unified_units": [
+                  {
+                    "id": "\"",
+                    "name": "\""
+                  },
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "GARMENT_LENGTH_FROM",
+                    "name": "Largo de la prenda desde",
+                    "relevance": 3,
+                    "tags": [
+                      "CLOTHING_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  },
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "GARMENT_LENGTH_TO",
+                    "name": "Largo de la prenda hasta",
+                    "relevance": 3,
+                    "tags": [
+                      "CLOTHING_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "LINKED_BY_CONNECTOR_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Garment length",
+                "ui_config": {
+                  "connector": " - ",
+                  "hint": "Desde - Hasta"
+                },
+                "unified_units": [
+                  {
+                    "id": "\"",
+                    "name": "\""
+                  },
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "GARMENT_SHOULDER_WIDTH_FROM",
+                    "name": "Ancho del hombro de la prenda desde",
+                    "relevance": 3,
+                    "tags": [
+                      "CLOTHING_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  },
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "GARMENT_SHOULDER_WIDTH_TO",
+                    "name": "Ancho del hombro de la prenda hasta",
+                    "relevance": 3,
+                    "tags": [
+                      "CLOTHING_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "LINKED_BY_CONNECTOR_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Garment shoulder width",
+                "ui_config": {
+                  "connector": " - ",
+                  "hint": "Desde - Hasta"
+                },
+                "unified_units": [
+                  {
+                    "id": "\"",
+                    "name": "\""
+                  },
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  }
+                ]
+              },
+              {
+                "attributes": [
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "GARMENT_SLEEVE_LENGTH_FROM",
+                    "name": "Ancho de la manga de la prenda desde",
+                    "relevance": 3,
+                    "tags": [
+                      "CLOTHING_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  },
+                  {
+                    "default_unit_id": "cm",
+                    "hierarchy": "CHILD_DEPENDENT",
+                    "id": "GARMENT_SLEEVE_LENGTH_TO",
+                    "name": "Ancho de la manga de la prenda hasta",
+                    "relevance": 3,
+                    "tags": [
+                      "CLOTHING_MEASURE"
+                    ],
+                    "units": [
+                      {
+                        "id": "\"",
+                        "name": "\""
+                      },
+                      {
+                        "id": "cm",
+                        "name": "cm"
+                      }
+                    ],
+                    "value_max_length": 255,
+                    "value_type": "number_unit"
+                  }
+                ],
+                "component": "LINKED_BY_CONNECTOR_INPUT",
+                "default_unified_unit_id": "cm",
+                "label": "Garment sleeve length",
+                "ui_config": {
+                  "connector": " - ",
+                  "hint": "Desde - Hasta"
+                },
+                "unified_units": [
+                  {
+                    "id": "\"",
+                    "name": "\""
+                  },
+                  {
+                    "id": "cm",
+                    "name": "cm"
+                  }
+                ]
+              }
+            ],
+            "label": "Size chart",
+            "ui_config": {
+              "max_allowed": 75,
+              "allow_custom_value": true,
+              "allow_filtering": false
+            }
+          }
+        ],
+        "id": "SIZE_CHART",
+        "label": "Size chart",
+        "relevance": 1,
+        "section": "GRIDS",
+        "ui_config": {}
+      }
+    ]
+  }
+}

@@ -5,7 +5,12 @@
 function zeshunRead1688PageData() {
   const offerId = location.pathname.match(/^\/offer\/(\d+)\.html$/)?.[1] || "";
   if (location.hostname !== "detail.1688.com" || !offerId) throw new Error("不是1688商品详情页");
-  const arrays = (selector, predicate, fields) => {
+  const metricFields = ["weight", "weight_g", "weightG", "weightKg", "grossWeight", "packageWeight", "weightUnit",
+    "length", "width", "height", "lengthCm", "widthCm", "heightCm", "lengthMm", "widthMm", "heightMm",
+    "package_length_cm", "package_width_cm", "package_height_cm", "packageLengthCm", "packageWidthCm", "packageHeightCm",
+    "lengthUnit", "widthUnit", "heightUnit", "sizeUnit", "dimensionUnit", "raw_dimensions", "dimensions_display",
+    "dimensions", "packageDimensions", "packageSize", "packingSize", "size"];
+  const arrays = (selector, predicate, fields, includeObject = false) => {
     const element = document.querySelector(selector);
     if (!element) return [];
     const key = Object.keys(element).find(name => /^__react(Fiber|InternalInstance)\$/.test(name));
@@ -16,10 +21,11 @@ function zeshunRead1688PageData() {
       const visit = (value, depth) => {
         if (!value || typeof value !== "object" || depth > 8 || seen.has(value)) return;
         seen.add(value);
-        if (Array.isArray(value) && value.length && value.length <= 500 && value.every(predicate)) {
-          found.push(value.map(item => Object.fromEntries(fields.filter(field => item[field] !== undefined)
+        if (Array.isArray(value) && value.length && value.length <= 500 && value.every(predicate)
+            || includeObject && !Array.isArray(value) && predicate(value)) {
+          found.push((Array.isArray(value) ? value : [value]).map(item => Object.fromEntries(fields.filter(field => item[field] !== undefined)
             .map(field => [field, JSON.parse(JSON.stringify(item[field]))]))));
-          return;
+          if (Array.isArray(value)) return;
         }
         for (const [name, child] of Object.entries(value)) {
           if (["_owner", "stateNode", "return", "child", "sibling", "children"].includes(name)) continue;
@@ -36,15 +42,12 @@ function zeshunRead1688PageData() {
     sku_sets: arrays("#skuSelection[data-module='od_sku_selection'], [data-module='od_sku_selection']",
       item => item && typeof item === "object" && item.skuId && item.specAttrs,
       ["skuId", "specAttrs", "discountPrice", "currentPrice", "priceNum", "price", "salePrice", "priceAmount", "priceValue", "skuCode", "sku", "sellerSku",
-        "canBookCount", "availableQuantity", "stock", "quantity", "imageUrl", "imgUrl", "image", "pictureUrl"]),
+        "canBookCount", "availableQuantity", "stock", "quantity", "imageUrl", "imgUrl", "image", "pictureUrl", ...metricFields]),
     price_sets: arrays("#productPrice, [data-module='od_product_price']",
       item => item && typeof item === "object" && ["price", "priceAmount", "priceValue"].some(key => key in item),
       ["price", "priceAmount", "priceValue"]),
     pack_sets: arrays("#productPackInfo[data-module='od_product_pack_info'], [data-module='od_product_pack_info']",
-      item => item && typeof item === "object" && ["weight", "weight_g", "weightG", "weightKg", "grossWeight", "packageWeight", "length", "package_length_cm"].some(key => key in item),
-      ["skuId", "id", "weight", "weight_g", "weightG", "weightKg", "grossWeight", "packageWeight", "weightUnit",
-        "length", "width", "height", "lengthCm", "widthCm", "heightCm", "lengthMm", "widthMm", "heightMm",
-        "package_length_cm", "package_width_cm", "package_height_cm", "packageLengthCm", "packageWidthCm", "packageHeightCm",
-        "lengthUnit", "sizeUnit", "dimensionUnit"])
+      item => item && typeof item === "object" && metricFields.some(key => key in item && !/Unit$/.test(key)),
+      ["skuId", "id", "specAttrs", ...metricFields], true)
   };
 }

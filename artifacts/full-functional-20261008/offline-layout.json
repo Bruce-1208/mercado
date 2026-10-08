@@ -1,0 +1,4996 @@
+{
+  "mode": "Offline: real console HTML/static files; every API and embedded document is an empty fixture.",
+  "timing_scope": "Local browser parsing, synchronous switchTab cost and two-animation-frame paint wait; excludes production API/network/database latency.",
+  "source_root": "/Users/a11/mercado",
+  "rendered_html_bytes": 1963394,
+  "rendered_html_gzip_bytes": 348806,
+  "warm_wait_ms": 3000,
+  "viewports": [
+    {
+      "width": 1440,
+      "domNodes": 5907,
+      "navigation": {
+        "name": "http://console-audit.test/",
+        "entryType": "navigation",
+        "startTime": 0,
+        "duration": 414.70000000298023,
+        "navigationId": 8042,
+        "initiatorType": "navigation",
+        "deliveryType": "",
+        "nextHopProtocol": "",
+        "renderBlockingStatus": "non-blocking",
+        "contentType": "text/html",
+        "contentEncoding": "",
+        "workerStart": 0,
+        "workerRouterEvaluationStart": 0,
+        "workerCacheLookupStart": 0,
+        "workerMatchedSourceType": "",
+        "workerFinalSourceType": "",
+        "redirectStart": 0,
+        "redirectEnd": 0,
+        "fetchStart": 2.600000001490116,
+        "domainLookupStart": 2.600000001490116,
+        "domainLookupEnd": 2.600000001490116,
+        "connectStart": 2.600000001490116,
+        "secureConnectionStart": 0,
+        "connectEnd": 2.600000001490116,
+        "requestStart": 2.600000001490116,
+        "responseStart": 48.400000002235174,
+        "firstInterimResponseStart": 0,
+        "finalResponseHeadersStart": 0,
+        "responseEnd": 48.400000002235174,
+        "transferSize": 1963694,
+        "encodedBodySize": 1963394,
+        "decodedBodySize": 1963394,
+        "responseStatus": 200,
+        "serverTiming": [],
+        "unloadEventStart": 0,
+        "unloadEventEnd": 0,
+        "domInteractive": 373.9000000022352,
+        "domContentLoadedEventStart": 380,
+        "domContentLoadedEventEnd": 393.6000000014901,
+        "domComplete": 414.6000000014901,
+        "loadEventStart": 414.70000000298023,
+        "loadEventEnd": 414.70000000298023,
+        "type": "navigate",
+        "redirectCount": 0,
+        "activationStart": 0,
+        "criticalCHRestart": 0,
+        "notRestoredReasons": null,
+        "confidence": {
+          "randomizedTriggerRate": 0.4994798,
+          "value": "low"
+        }
+      },
+      "resources": [
+        {
+          "name": "http://console-audit.test/static/background-exports.js",
+          "decodedBodySize": 3620,
+          "duration": 27.900000002235174
+        },
+        {
+          "name": "http://console-audit.test/static/store-analysis.css?v=20260929-order-trend",
+          "decodedBodySize": 3003,
+          "duration": 31.600000001490116
+        },
+        {
+          "name": "http://console-audit.test/static/console-ui.css?v=20260930-mobile1",
+          "decodedBodySize": 14337,
+          "duration": 31.800000000745058
+        },
+        {
+          "name": "http://console-audit.test/static/ai-original-products.css?v=20261008-generation-isolation",
+          "decodedBodySize": 14556,
+          "duration": 32
+        },
+        {
+          "name": "http://console-audit.test/static/ai-original-workbench.css?v=20261007-clean-layout",
+          "decodedBodySize": 28506,
+          "duration": 32.20000000298023
+        },
+        {
+          "name": "http://console-audit.test/static/1688-products.css?v=20261002-product-management",
+          "decodedBodySize": 13678,
+          "duration": 32.70000000298023
+        },
+        {
+          "name": "http://console-audit.test/static/weight-dimensions-records.css?v=20260930-server-execution-1",
+          "decodedBodySize": 6157,
+          "duration": 33.20000000298023
+        },
+        {
+          "name": "http://console-audit.test/static/inventory-sku.css?v=20260925-1",
+          "decodedBodySize": 1840,
+          "duration": 33.80000000074506
+        },
+        {
+          "name": "http://console-audit.test/static/console-ui.js?v=20260915",
+          "decodedBodySize": 5952,
+          "duration": 34.600000001490116
+        },
+        {
+          "name": "http://console-audit.test/static/copy-anywhere.js?v=20260922",
+          "decodedBodySize": 11343,
+          "duration": 35.5
+        },
+        {
+          "name": "http://console-audit.test/static/appeal-polling.js?v=20261007-durable",
+          "decodedBodySize": 2710,
+          "duration": 36.400000002235174
+        },
+        {
+          "name": "http://console-audit.test/static/product-visibility.js?v=20261008-permissions",
+          "decodedBodySize": 1820,
+          "duration": 75.80000000074506
+        },
+        {
+          "name": "http://console-audit.test/static/ai-original-workbench.js?v=20261008-review-readback",
+          "decodedBodySize": 14477,
+          "duration": 79.10000000149012
+        },
+        {
+          "name": "http://console-audit.test/static/ai-original-products.js?v=20261008-review-readback",
+          "decodedBodySize": 108477,
+          "duration": 78.80000000074506
+        },
+        {
+          "name": "http://console-audit.test/static/ai-original-publish.css?v=20261003-publish",
+          "decodedBodySize": 10589,
+          "duration": 37.100000001490116
+        },
+        {
+          "name": "http://console-audit.test/static/zeshun-theme.css?v=20261007-date-filters",
+          "decodedBodySize": 24384,
+          "duration": 38.69999999925494
+        },
+        {
+          "name": "http://console-audit.test/static/ai-original-publish.js?v=20261003-publish",
+          "decodedBodySize": 30582,
+          "duration": 79.19999999925494
+        },
+        {
+          "name": "http://console-audit.test/static/1688-products.js?v=20261008-workflow-required-fields",
+          "decodedBodySize": 44052,
+          "duration": 79.80000000074506
+        },
+        {
+          "name": "http://console-audit.test/static/weight-dimensions-records.js?v=20261007-execution-recovery-1",
+          "decodedBodySize": 33981,
+          "duration": 80.5
+        },
+        {
+          "name": "http://console-audit.test/static/inventory-sku.js?v=20260925-1",
+          "decodedBodySize": 17499,
+          "duration": 81.39999999850988
+        },
+        {
+          "name": "http://console-audit.test/static/date-filter-display.js?v=20261008",
+          "decodedBodySize": 1723,
+          "duration": 82.69999999925494
+        },
+        {
+          "name": "http://console-audit.test/static/console-navigation.css?v=20261003",
+          "decodedBodySize": 2158,
+          "duration": 51.79999999701977
+        },
+        {
+          "name": "http://console-audit.test/static/console-workflow.css?v=20261007-order-filters",
+          "decodedBodySize": 5424,
+          "duration": 52.099999997764826
+        },
+        {
+          "name": "http://console-audit.test/static/infringement-knowledge.css?v=20261006",
+          "decodedBodySize": 12337,
+          "duration": 52.5
+        },
+        {
+          "name": "http://console-audit.test/static/console-performance.js?v=20261007-json-fix",
+          "decodedBodySize": 15992,
+          "duration": 52.29999999701977
+        },
+        {
+          "name": "http://console-audit.test/static/console-layout.css?v=20261004",
+          "decodedBodySize": 14020,
+          "duration": 52.899999998509884
+        },
+        {
+          "name": "http://console-audit.test/static/product-cards.css?v=20261007-tiles",
+          "decodedBodySize": 9071,
+          "duration": 53
+        },
+        {
+          "name": "http://console-audit.test/static/workbench-ui.js?v=20261008-list-feedback",
+          "decodedBodySize": 5908,
+          "duration": 83.39999999850988
+        },
+        {
+          "name": "http://console-audit.test/static/product-tiles.css?v=20261008-collection-alignment",
+          "decodedBodySize": 18880,
+          "duration": 53.19999999925494
+        },
+        {
+          "name": "http://console-audit.test/static/date-filter-controls.css?v=20261008",
+          "decodedBodySize": 1731,
+          "duration": 53.30000000074506
+        },
+        {
+          "name": "http://console-audit.test/static/images/zeshun-monogram-gold.png",
+          "decodedBodySize": 331286,
+          "duration": 55.30000000074506
+        },
+        {
+          "name": "http://console-audit.test/static/model-balance.css?v=20261001-2",
+          "decodedBodySize": 3538,
+          "duration": 55.69999999925494
+        },
+        {
+          "name": "http://console-audit.test/static/date-filter-controls.js?v=20261008",
+          "decodedBodySize": 11957,
+          "duration": 84.19999999925494
+        },
+        {
+          "name": "http://console-audit.test/static/model-balance.js?v=20261001-2",
+          "decodedBodySize": 6690,
+          "duration": 85
+        },
+        {
+          "name": "http://console-audit.test/static/mercado-attribute-preflight.css?v=20261003",
+          "decodedBodySize": 977,
+          "duration": 64.19999999925494
+        },
+        {
+          "name": "http://console-audit.test/static/mercado-infringement.css?v=20261006",
+          "decodedBodySize": 7538,
+          "duration": 67.30000000074506
+        },
+        {
+          "name": "http://console-audit.test/static/salesperson-stats.js?v=20261007-preload",
+          "decodedBodySize": 3525,
+          "duration": 63
+        },
+        {
+          "name": "http://console-audit.test/static/store-analysis.js?v=20261007-preload",
+          "decodedBodySize": 18136,
+          "duration": 63.400000002235174
+        },
+        {
+          "name": "http://console-audit.test/static/collection-ai.js?v=20261003-lists",
+          "decodedBodySize": 5328,
+          "duration": 63.400000002235174
+        },
+        {
+          "name": "http://console-audit.test/static/order-management-details.js?v=20261007-api-freight",
+          "decodedBodySize": 22060,
+          "duration": 63.80000000074506
+        },
+        {
+          "name": "http://console-audit.test/static/console-navigation.js?v=20261007-preload",
+          "decodedBodySize": 10968,
+          "duration": 63.900000002235174
+        },
+        {
+          "name": "http://console-audit.test/static/console-workflow.js?v=20261007-order-filters",
+          "decodedBodySize": 11371,
+          "duration": 64.19999999925494
+        },
+        {
+          "name": "http://console-audit.test/static/mercado-attribute-preflight.js?v=20261003",
+          "decodedBodySize": 9152,
+          "duration": 64.5
+        },
+        {
+          "name": "http://console-audit.test/static/service-health.js?v=20260930",
+          "decodedBodySize": 3368,
+          "duration": 64.5
+        },
+        {
+          "name": "http://console-audit.test/static/wipo-sync.js?v=20261007",
+          "decodedBodySize": 14006,
+          "duration": 66.80000000074506
+        },
+        {
+          "name": "http://console-audit.test/static/infringement-knowledge.js?v=20261007",
+          "decodedBodySize": 26025,
+          "duration": 67.19999999925494
+        },
+        {
+          "name": "http://console-audit.test/static/mercado-infringement.js?v=20261007-preload",
+          "decodedBodySize": 41200,
+          "duration": 70.19999999925494
+        },
+        {
+          "name": "http://console-audit.test/static/console-preload.js?v=20261008-one-page",
+          "decodedBodySize": 13049,
+          "duration": 70.40000000223517
+        },
+        {
+          "name": "http://console-audit.test/static/action-center-preload.js?v=20261008",
+          "decodedBodySize": 910,
+          "duration": 82.19999999925494
+        },
+        {
+          "name": "http://console-audit.test/api/overview/mercado-notices",
+          "decodedBodySize": 229,
+          "duration": 3.600000001490116
+        },
+        {
+          "name": "http://console-audit.test/api/access/organizations",
+          "decodedBodySize": 229,
+          "duration": 3.600000001490116
+        },
+        {
+          "name": "http://console-audit.test/api/execution-agents",
+          "decodedBodySize": 229,
+          "duration": 3.800000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/services/health",
+          "decodedBodySize": 352,
+          "duration": 2.099999997764826
+        },
+        {
+          "name": "http://console-audit.test/api/account-integrations/balance",
+          "decodedBodySize": 229,
+          "duration": 1.5
+        },
+        {
+          "name": "http://console-audit.test/mercado/today",
+          "decodedBodySize": 229,
+          "duration": 3.899999998509884
+        },
+        {
+          "name": "http://console-audit.test/billing",
+          "decodedBodySize": 229,
+          "duration": 4.399999998509884
+        },
+        {
+          "name": "http://console-audit.test/api/ai-original-products/profiles",
+          "decodedBodySize": 229,
+          "duration": 4
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-tokens",
+          "decodedBodySize": 229,
+          "duration": 4.399999998509884
+        },
+        {
+          "name": "http://console-audit.test/static/images/zeshun-monogram-gold.png",
+          "decodedBodySize": 331286,
+          "duration": 9
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-tokens",
+          "decodedBodySize": 229,
+          "duration": 1.5
+        },
+        {
+          "name": "http://console-audit.test/api/mercado/today/tasks?include_closed=0&salesperson=&group_name=&background=1",
+          "decodedBodySize": 229,
+          "duration": 1.699999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/mercado/today/post-sale?salesperson=&group_name=&background=1",
+          "decodedBodySize": 229,
+          "duration": 3.899999998509884
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-account-groups",
+          "decodedBodySize": 229,
+          "duration": 2.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/orders?country=&status=&group_name=&search=&remark_search=&start_date=&end_date=&origin=&freight_variance=&sort_by=ordered_at&sort_dir=desc&page=1&page_size=200",
+          "decodedBodySize": 229,
+          "duration": 1.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/order-sync/status",
+          "decodedBodySize": 352,
+          "duration": 1.800000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/inventory/shelves?include_inactive=1",
+          "decodedBodySize": 229,
+          "duration": 1.0999999977648258
+        },
+        {
+          "name": "http://console-audit.test/api/inventory/stocks?inbound_person=&inventory_owner=&search=&shelf_id=&stock_status=positive&page=1&page_size=50",
+          "decodedBodySize": 229,
+          "duration": 1.800000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/inventory/skus?include_inactive=1",
+          "decodedBodySize": 229,
+          "duration": 1
+        },
+        {
+          "name": "http://console-audit.test/api/inventory/sku-mappings",
+          "decodedBodySize": 229,
+          "duration": 1.0999999977648258
+        },
+        {
+          "name": "http://console-audit.test/api/inventory/reconciliation",
+          "decodedBodySize": 229,
+          "duration": 1.1000000014901161
+        },
+        {
+          "name": "http://console-audit.test/api/inventory/movements?inbound_person=&inventory_owner=&search=&movement_type=&shelf_id=&page=1&page_size=50",
+          "decodedBodySize": 229,
+          "duration": 1.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/1688-products?limit=50&offset=0",
+          "decodedBodySize": 229,
+          "duration": 1.699999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/1688-products/options",
+          "decodedBodySize": 229,
+          "duration": 1.6000000014901161
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-management-categories",
+          "decodedBodySize": 229,
+          "duration": 1
+        },
+        {
+          "name": "http://console-audit.test/api/ai-original-products?limit=500&include_cost_summary=0&target_platform=mercadolibre&search=&generator_salesperson=",
+          "decodedBodySize": 229,
+          "duration": 1.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/ai-original-products/cost-summary",
+          "decodedBodySize": 229,
+          "duration": 1.2000000029802322
+        },
+        {
+          "name": "http://console-audit.test/api/ai-original-products/process/status",
+          "decodedBodySize": 352,
+          "duration": 1
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-products/publish/status",
+          "decodedBodySize": 352,
+          "duration": 1.0999999977648258
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-collection/items?search=&limit=100&offset=0",
+          "decodedBodySize": 229,
+          "duration": 4.100000001490116
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-products?search=&limit=100&offset=0&include_total=0",
+          "decodedBodySize": 229,
+          "duration": 72.5
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-shipping-rates?site_id=MLM",
+          "decodedBodySize": 229,
+          "duration": 73
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-publish-records?search=&status=&site_id=&group_name=&start_date=&end_date=&limit=500",
+          "decodedBodySize": 229,
+          "duration": 1.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/yandex-console/status",
+          "decodedBodySize": 352,
+          "duration": 1.699999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/appeal-phrases",
+          "decodedBodySize": 229,
+          "duration": 1.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/tasks/daily/options",
+          "decodedBodySize": 229,
+          "duration": 1.4000000022351742
+        },
+        {
+          "name": "http://console-audit.test/api/salesperson-stats?start_date=&end_date=",
+          "decodedBodySize": 229,
+          "duration": 1.1000000014901161
+        },
+        {
+          "name": "http://console-audit.test/api/store-analysis?start_date=2026-10-02&end_date=2026-10-08&metric=orders&category_level=2&salesperson=&group_name=&token_id=",
+          "decodedBodySize": 229,
+          "duration": 1.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/order-analysis/high-after-sales?sort_by=after_sale_quantity&sort_dir=desc&search=&date_from=2026-09-09T00%3A00&date_to=2026-10-08T20%3A13&limit=100",
+          "decodedBodySize": 229,
+          "duration": 1.2999999970197678
+        },
+        {
+          "name": "http://console-audit.test/api/order-analysis/high-profits?sort_by=total_profit&sort_dir=desc&search=&date_from=2026-09-09T00%3A00&date_to=2026-10-08T20%3A13&limit=100",
+          "decodedBodySize": 229,
+          "duration": 1.5
+        },
+        {
+          "name": "http://console-audit.test/api/ai-videos/jobs?limit=20&page=1",
+          "decodedBodySize": 229,
+          "duration": 1.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/store-links/operation-logs?limit=30&operation_type=&salesperson=&created_after=&created_before=",
+          "decodedBodySize": 229,
+          "duration": 1.2000000029802322
+        },
+        {
+          "name": "http://console-audit.test/api/store-links?search=&site_id=&group_name=&status=&promotion_applied=&advertising_enabled=&video_uploaded=&management_category_id=&mercado_category=&include_categories=0&sort_by=sold_quantity&sort_order=desc&sales_sort=desc&page=1&page_size=50&current_only=1",
+          "decodedBodySize": 229,
+          "duration": 1.2999999970197678
+        },
+        {
+          "name": "http://console-audit.test/api/store-links/sync/status",
+          "decodedBodySize": 352,
+          "duration": 0.9000000022351742
+        },
+        {
+          "name": "http://console-audit.test/api/store-links/bulk-update/status",
+          "decodedBodySize": 352,
+          "duration": 1.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/size-charts?embedded=1",
+          "decodedBodySize": 0,
+          "duration": 55.5
+        },
+        {
+          "name": "http://console-audit.test/api/ad-analysis?force=0",
+          "decodedBodySize": 229,
+          "duration": 51.80000000074506
+        },
+        {
+          "name": "http://console-audit.test/api/prohibited-listings?page=1&page_size=100",
+          "decodedBodySize": 229,
+          "duration": 3.100000001490116
+        },
+        {
+          "name": "http://console-audit.test/clearance-alerts?embedded=1",
+          "decodedBodySize": 0,
+          "duration": 5.400000002235174
+        },
+        {
+          "name": "http://console-audit.test/api/prohibited-listings/sync/status",
+          "decodedBodySize": 352,
+          "duration": 2
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-applications",
+          "decodedBodySize": 229,
+          "duration": 1.1000000014901161
+        },
+        {
+          "name": "http://console-audit.test/promotions?embedded=1",
+          "decodedBodySize": 0,
+          "duration": 5.099999997764826
+        },
+        {
+          "name": "http://console-audit.test/api/funds/latest",
+          "decodedBodySize": 229,
+          "duration": 2.099999997764826
+        },
+        {
+          "name": "http://console-audit.test/api/funds/collect/status",
+          "decodedBodySize": 352,
+          "duration": 2
+        },
+        {
+          "name": "http://console-audit.test/ai-weight-price",
+          "decodedBodySize": 0,
+          "duration": 5.100000001490116
+        },
+        {
+          "name": "http://console-audit.test/api/risk-check/categories",
+          "decodedBodySize": 229,
+          "duration": 1.699999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/risk-check/options",
+          "decodedBodySize": 229,
+          "duration": 1.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/risk-check/results?sources=product_list%2Ccollection_list%2Cpulled%2Czying&category=&risk_level=&search=&sort_by=risk_level&sort_dir=desc&limit=500",
+          "decodedBodySize": 229,
+          "duration": 1.1000000014901161
+        },
+        {
+          "name": "http://console-audit.test/api/risk-check/status",
+          "decodedBodySize": 352,
+          "duration": 1.5
+        },
+        {
+          "name": "http://console-audit.test/api/infringement-knowledge?page=1&page_size=50",
+          "decodedBodySize": 229,
+          "duration": 1.4000000022351742
+        },
+        {
+          "name": "http://console-audit.test/infringement-dashboard?embedded=1",
+          "decodedBodySize": 0,
+          "duration": 4.599999997764826
+        },
+        {
+          "name": "http://console-audit.test/api/reputation/latest",
+          "decodedBodySize": 229,
+          "duration": 1.800000000745058
+        },
+        {
+          "name": "http://console-audit.test/ip-rights-dashboard?embedded=1",
+          "decodedBodySize": 0,
+          "duration": 4.699999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/collections/options",
+          "decodedBodySize": 229,
+          "duration": 1.8999999985098839
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-reputation/status",
+          "decodedBodySize": 352,
+          "duration": 1
+        },
+        {
+          "name": "http://console-audit.test/api/ai-appeal-records?limit=500&appeal_copy_mode=",
+          "decodedBodySize": 229,
+          "duration": 1.2999999970197678
+        },
+        {
+          "name": "http://console-audit.test/api/access/catalog",
+          "decodedBodySize": 229,
+          "duration": 1.6000000014901161
+        },
+        {
+          "name": "http://console-audit.test/api/access/roles",
+          "decodedBodySize": 229,
+          "duration": 0.8000000007450581
+        },
+        {
+          "name": "http://console-audit.test/api/access/users",
+          "decodedBodySize": 229,
+          "duration": 1.0999999977648258
+        }
+      ],
+      "preload": {
+        "requests": 53,
+        "hits": 2,
+        "shared": 0,
+        "failures": 0,
+        "cached": 49,
+        "bytes": 12451,
+        "pending": 0,
+        "queued": 0,
+        "running": 0,
+        "foregroundReaders": 0,
+        "modules": [
+          "overview",
+          "orders",
+          "inventory",
+          "1688-products",
+          "ai-original-products",
+          "mercado-collection",
+          "mercado-products",
+          "weight-dimensions-records",
+          "mercado-shipping-standards",
+          "mercado-publish-records",
+          "yandex",
+          "appeal",
+          "tasks",
+          "salesperson-stats",
+          "store-analysis",
+          "order-analysis",
+          "window-anomalies",
+          "ai-video",
+          "store-operations",
+          "store-links",
+          "size-charts",
+          "clearance-alerts",
+          "promotions",
+          "ad-analysis",
+          "prohibited-listings",
+          "store-tokens",
+          "pre-sale",
+          "customer-service",
+          "funds",
+          "ai-weight-price",
+          "zying-collection",
+          "risk-check",
+          "infringement-knowledge",
+          "infractions",
+          "ip-rights",
+          "reputation",
+          "api-reputation",
+          "ai-appeals",
+          "access"
+        ]
+      },
+      "duplicateIds": [],
+      "initial_requests": {
+        "/api/overview/mercado-notices": 1,
+        "/api/access/organizations": 1,
+        "/api/execution-agents": 1,
+        "/api/services/health": 1,
+        "/api/account-integrations/balance": 1,
+        "/mercado/today": 1,
+        "/billing": 1,
+        "/api/ai-original-products/profiles": 1,
+        "/api/mercado-tokens": 2,
+        "/api/mercado/today/tasks": 1,
+        "/api/mercado/today/post-sale": 1,
+        "/api/mercado-account-groups": 1,
+        "/api/orders": 1,
+        "/api/order-sync/status": 1,
+        "/api/inventory/shelves": 1,
+        "/api/inventory/stocks": 1,
+        "/api/inventory/skus": 1,
+        "/api/inventory/sku-mappings": 1,
+        "/api/inventory/reconciliation": 1,
+        "/api/inventory/movements": 1,
+        "/api/1688-products": 1,
+        "/api/1688-products/options": 1,
+        "/api/mercado-management-categories": 1,
+        "/api/ai-original-products": 1,
+        "/api/ai-original-products/cost-summary": 1,
+        "/api/ai-original-products/process/status": 1,
+        "/api/mercado-products/publish/status": 1,
+        "/api/mercado-collection/items": 1,
+        "/api/mercado-products": 1,
+        "/api/mercado-shipping-rates": 1,
+        "/api/mercado-publish-records": 1,
+        "/api/yandex-console/status": 1,
+        "/api/appeal-phrases": 1,
+        "/api/tasks/daily/options": 1,
+        "/api/salesperson-stats": 1,
+        "/api/store-analysis": 1,
+        "/api/order-analysis/high-after-sales": 1,
+        "/api/order-analysis/high-profits": 1,
+        "/api/ai-videos/jobs": 1,
+        "/api/store-links/operation-logs": 1,
+        "/api/store-links": 1,
+        "/api/store-links/sync/status": 1,
+        "/api/store-links/bulk-update/status": 1,
+        "/api/ad-analysis": 1,
+        "/size-charts": 1,
+        "/api/prohibited-listings": 1,
+        "/api/prohibited-listings/sync/status": 1,
+        "/clearance-alerts": 1,
+        "/api/mercado-applications": 1,
+        "/api/funds/latest": 1,
+        "/promotions": 1,
+        "/api/funds/collect/status": 1,
+        "/api/risk-check/categories": 1,
+        "/ai-weight-price": 1,
+        "/api/risk-check/options": 1,
+        "/api/risk-check/results": 1,
+        "/api/risk-check/status": 1,
+        "/api/infringement-knowledge": 1,
+        "/infringement-dashboard": 1,
+        "/api/reputation/latest": 1,
+        "/api/collections/options": 1,
+        "/ip-rights-dashboard": 1,
+        "/api/mercado-reputation/status": 1,
+        "/api/ai-appeal-records": 1,
+        "/api/access/catalog": 1,
+        "/api/access/roles": 1,
+        "/api/access/users": 1
+      },
+      "initial_non_read_requests": [],
+      "modules": [
+        {
+          "id": "overview",
+          "label": "总览",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 1.5,
+              "paintWaitMs": 14.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 120,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.699999999254942,
+              "paintWaitMs": 10.5,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 120,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "orders",
+          "label": "订单管理",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 16.699999999254942,
+              "paintWaitMs": 29.299999997019768,
+              "preloadHits": 2,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 495,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 3,
+              "paintWaitMs": 32.19999999925494,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 531,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/order-sync/status",
+                  "url": "http://console-audit.test/api/order-sync/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "inventory",
+          "label": "库存管理",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2.399999998509884,
+              "paintWaitMs": 28.099999997764826,
+              "preloadHits": 2,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 444,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.4000000022351742,
+              "paintWaitMs": 30.199999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 444,
+              "requests": [],
+              "errors": []
+            }
+          ],
+          "subviews": [
+            {
+              "view": "sku",
+              "synchronousMs": 0.6999999992549419,
+              "active": true,
+              "documentWidth": 1440,
+              "preloadHits": 3,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "view": "logs",
+              "synchronousMs": 0.6999999992549419,
+              "active": true,
+              "documentWidth": 1440,
+              "preloadHits": 1,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/inventory/shelves",
+                  "url": "http://console-audit.test/api/inventory/shelves?include_inactive=1",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "view": "shelves",
+              "synchronousMs": 0.7000000029802322,
+              "active": true,
+              "documentWidth": 1440,
+              "preloadHits": 0,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/inventory/shelves",
+                  "url": "http://console-audit.test/api/inventory/shelves?include_inactive=1",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "1688-products",
+          "label": "1688产品区",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2.699999999254942,
+              "paintWaitMs": 26.699999999254942,
+              "preloadHits": 3,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 197,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.400000002235174,
+              "paintWaitMs": 30.199999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 197,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/1688-products",
+                  "url": "http://console-audit.test/api/1688-products?limit=50&offset=0",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "ai-original-products",
+          "label": "AI原创产品",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 6.300000000745058,
+              "paintWaitMs": 33.70000000298023,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 433,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/ai-original-products",
+                  "url": "http://console-audit.test/api/ai-original-products?limit=500&include_total=0&include_cost_summary=0&target_platform=mercadolibre&search=&generator_salesperson=",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/ai-original-products/process/status",
+                  "url": "http://console-audit.test/api/ai-original-products/process/status",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-products/publish/status",
+                  "url": "http://console-audit.test/api/mercado-products/publish/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 3.199999999254942,
+              "paintWaitMs": 27.600000001490116,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 433,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/ai-original-products",
+                  "url": "http://console-audit.test/api/ai-original-products?limit=500&include_total=0&include_cost_summary=0&target_platform=mercadolibre&search=&generator_salesperson=",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/ai-original-products/process/status",
+                  "url": "http://console-audit.test/api/ai-original-products/process/status",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-products/publish/status",
+                  "url": "http://console-audit.test/api/mercado-products/publish/status",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/ai-original-products/cost-summary",
+                  "url": "http://console-audit.test/api/ai-original-products/cost-summary",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "mercado-collection",
+          "label": "美客多跟卖采集",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 5.199999999254942,
+              "paintWaitMs": 27.699999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 466,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-collection/items",
+                  "url": "http://console-audit.test/api/mercado-collection/items?search=&limit=100&offset=0&include_salesperson_options=1",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-management-categories",
+                  "url": "http://console-audit.test/api/mercado-management-categories",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 8.399999998509884,
+              "paintWaitMs": 20.699999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 466,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-collection/items",
+                  "url": "http://console-audit.test/api/mercado-collection/items?search=&limit=100&offset=0&include_salesperson_options=1",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "mercado-products",
+          "label": "产品列表",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 4.599999997764826,
+              "paintWaitMs": 24.899999998509884,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 441,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/zying-collection/categories",
+                  "url": "http://console-audit.test/api/zying-collection/categories",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-products/developers",
+                  "url": "http://console-audit.test/api/mercado-products/developers",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-products/publish/status",
+                  "url": "http://console-audit.test/api/mercado-products/publish/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 3.099999997764826,
+              "paintWaitMs": 29.699999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 441,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-products",
+                  "url": "http://console-audit.test/api/mercado-products?search=&limit=100&offset=0&include_total=0",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-products/developers",
+                  "url": "http://console-audit.test/api/mercado-products/developers",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-products/publish/status",
+                  "url": "http://console-audit.test/api/mercado-products/publish/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "weight-dimensions-records",
+          "label": "重量尺寸变更记录",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 3.199999999254942,
+              "paintWaitMs": 17.800000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 141,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/execution-agents",
+                  "url": "http://console-audit.test/api/execution-agents?capability=ai_weight_price",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/weight-dimensions-records/saved",
+                  "url": "http://console-audit.test/api/weight-dimensions-records/saved?date_from=2026-10-02T00%3A00&page_size=50",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.199999999254942,
+              "paintWaitMs": 29.100000001490116,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 141,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "mercado-shipping-standards",
+          "label": "美客多运费标准",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 1.5,
+              "paintWaitMs": 30.699999999254942,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 31,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.300000000745058,
+              "paintWaitMs": 30.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 31,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-shipping-rates",
+                  "url": "http://console-audit.test/api/mercado-shipping-rates?site_id=MLM",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "mercado-publish-records",
+          "label": "产品上架记录",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 5.800000000745058,
+              "paintWaitMs": 26.800000000745058,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 234,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 3.5,
+              "paintWaitMs": 24.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 234,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-publish-records",
+                  "url": "http://console-audit.test/api/mercado-publish-records?search=&status=&site_id=&group_name=&start_date=&end_date=&limit=500",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "appeal",
+          "label": "自动化 AI 申诉",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 16.399999998509884,
+              "paintWaitMs": 25,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 157,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/execution-agents",
+                  "url": "http://console-audit.test/api/execution-agents",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 4.100000001490116,
+              "paintWaitMs": 31.800000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 157,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/execution-agents",
+                  "url": "http://console-audit.test/api/execution-agents",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "tasks",
+          "label": "任务模块",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 6.699999999254942,
+              "paintWaitMs": 19.699999999254942,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 175,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/execution-agents",
+                  "url": "http://console-audit.test/api/execution-agents?capability=all",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/tasks/daily/status",
+                  "url": "http://console-audit.test/api/tasks/daily/status?include_logs=0&execution_target=agent",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.7000000029802322,
+              "paintWaitMs": 28.400000002235174,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 175,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/execution-agents",
+                  "url": "http://console-audit.test/api/execution-agents?capability=all",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/tasks/daily/status",
+                  "url": "http://console-audit.test/api/tasks/daily/status?include_logs=0&execution_target=agent",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "salesperson-stats",
+          "label": "业务员量统计",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 1.800000000745058,
+              "paintWaitMs": 31.899999998509884,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 37,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.5999999977648258,
+              "paintWaitMs": 31.199999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 37,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "store-analysis",
+          "label": "店铺分析",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2.5,
+              "paintWaitMs": 28.900000002235174,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 58,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-tokens",
+                  "url": "http://console-audit.test/api/mercado-tokens",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.9000000022351742,
+              "paintWaitMs": 31.5,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 58,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "order-analysis",
+          "label": "订单分析",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 9.900000002235174,
+              "paintWaitMs": 29.900000002235174,
+              "preloadHits": 2,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 172,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.199999999254942,
+              "paintWaitMs": 30.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 172,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "ai-video",
+          "label": "AI视频生成",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 3.300000000745058,
+              "paintWaitMs": 31.600000001490116,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 214,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.400000002235174,
+              "paintWaitMs": 30.900000002235174,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 214,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "store-operations",
+          "label": "店铺操作记录",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2.7000000029802322,
+              "paintWaitMs": 29.900000002235174,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 64,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.7000000029802322,
+              "paintWaitMs": 28.5,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 64,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/store-links/operation-logs",
+                  "url": "http://console-audit.test/api/store-links/operation-logs?limit=30&operation_type=&salesperson=&created_after=&created_before=",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "store-links",
+          "label": "店铺链接",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 11.399999998509884,
+              "paintWaitMs": 25.899999998509884,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 225,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/store-links/sync/status",
+                  "url": "http://console-audit.test/api/store-links/sync/status",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/store-links/bulk-update/status",
+                  "url": "http://console-audit.test/api/store-links/bulk-update/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 6,
+              "paintWaitMs": 18.599999997764826,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 225,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/store-links/sync/status",
+                  "url": "http://console-audit.test/api/store-links/sync/status",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/store-links/bulk-update/status",
+                  "url": "http://console-audit.test/api/store-links/bulk-update/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "size-charts",
+          "label": "尺码表管理",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 3.300000000745058,
+              "paintWaitMs": 31,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 2,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.6000000014901161,
+              "paintWaitMs": 24,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 2,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "clearance-alerts",
+          "label": "半托管清退告警",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2,
+              "paintWaitMs": 25.600000001490116,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 2,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.7999999970197678,
+              "paintWaitMs": 24,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 2,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "promotions",
+          "label": "活动管理",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 3.2999999970197678,
+              "paintWaitMs": 18.699999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 6,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.9000000022351742,
+              "paintWaitMs": 18.600000001490116,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 6,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "ad-analysis",
+          "label": "广告分析",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 3.600000001490116,
+              "paintWaitMs": 28.800000000745058,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 167,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-tokens",
+                  "url": "http://console-audit.test/api/mercado-tokens",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.600000001490116,
+              "paintWaitMs": 15.700000002980232,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 167,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "prohibited-listings",
+          "label": "禁限售列表",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 7.5,
+              "paintWaitMs": 31.800000000745058,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 147,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/prohibited-listings/sync/status",
+                  "url": "http://console-audit.test/api/prohibited-listings/sync/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.2000000029802322,
+              "paintWaitMs": 30.600000001490116,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 147,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/prohibited-listings/sync/status",
+                  "url": "http://console-audit.test/api/prohibited-listings/sync/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "store-tokens",
+          "label": "店铺授权",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2,
+              "paintWaitMs": 31.799999997019768,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 211,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-tokens",
+                  "url": "http://console-audit.test/api/mercado-tokens",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-tokens/authorization",
+                  "url": "http://console-audit.test/api/mercado-tokens/authorization",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-account-groups",
+                  "url": "http://console-audit.test/api/mercado-account-groups",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2,
+              "paintWaitMs": 30.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 211,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-applications",
+                  "url": "http://console-audit.test/api/mercado-applications",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-tokens",
+                  "url": "http://console-audit.test/api/mercado-tokens",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-tokens/authorization",
+                  "url": "http://console-audit.test/api/mercado-tokens/authorization",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-account-groups",
+                  "url": "http://console-audit.test/api/mercado-account-groups",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "pre-sale",
+          "label": "售前问答",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 3,
+              "paintWaitMs": 30,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 89,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 4.5,
+              "paintWaitMs": 30.100000001490116,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 89,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "customer-service",
+          "label": "售后处理",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 8.5,
+              "paintWaitMs": 29.700000002980232,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 101,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.899999998509884,
+              "paintWaitMs": 32.399999998509884,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 101,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "funds",
+          "label": "资金管理",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2.599999997764826,
+              "paintWaitMs": 30.800000000745058,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 68,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/funds/collect/status",
+                  "url": "http://console-audit.test/api/funds/collect/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.6000000014901161,
+              "paintWaitMs": 29.800000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 68,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/funds/collect/status",
+                  "url": "http://console-audit.test/api/funds/collect/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "ai-weight-price",
+          "label": "AI核重核价",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 1.0999999977648258,
+              "paintWaitMs": 30,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 1,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1,
+              "paintWaitMs": 30.599999997764826,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 1,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "zying-collection",
+          "label": "zying-collection",
+          "navigable": false,
+          "reason": "Retained internal page has no available sidebar entry."
+        },
+        {
+          "id": "risk-check",
+          "label": "侵权检测",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 5.699999999254942,
+              "paintWaitMs": 31.300000000745058,
+              "preloadHits": 3,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 239,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/risk-check/status",
+                  "url": "http://console-audit.test/api/risk-check/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.900000002235174,
+              "paintWaitMs": 30.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 239,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/risk-check/status",
+                  "url": "http://console-audit.test/api/risk-check/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "infringement-knowledge",
+          "label": "侵权知识库",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2.900000002235174,
+              "paintWaitMs": 33.100000001490116,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 248,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.4000000022351742,
+              "paintWaitMs": 30.700000002980232,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 248,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "infractions",
+          "label": "违规商品总览",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 0.8999999985098839,
+              "paintWaitMs": 30.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 76,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.2999999970197678,
+              "paintWaitMs": 28.899999998509884,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 76,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "ip-rights",
+          "label": "侵权和权利人总览",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2.699999999254942,
+              "paintWaitMs": 20.599999997764826,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 2,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.1000000014901161,
+              "paintWaitMs": 26.199999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 2,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "reputation",
+          "label": "声誉数据",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 4.199999999254942,
+              "paintWaitMs": 29.199999999254942,
+              "preloadHits": 2,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 100,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/collections/options",
+                  "url": "http://console-audit.test/api/collections/options",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.7999999970197678,
+              "paintWaitMs": 29.099999997764826,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 100,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "api-reputation",
+          "label": "API 声誉",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2.7999999970197678,
+              "paintWaitMs": 32.19999999925494,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 137,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-reputation/status",
+                  "url": "http://console-audit.test/api/mercado-reputation/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.9000000022351742,
+              "paintWaitMs": 29.5,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 137,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "ai-appeals",
+          "label": "自动化申诉记录",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2.399999998509884,
+              "paintWaitMs": 29.699999999254942,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 79,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2,
+              "paintWaitMs": 29.599999997764826,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 79,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "access",
+          "label": "人员与权限",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 3.199999999254942,
+              "paintWaitMs": 24,
+              "preloadHits": 3,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 121,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/access/organizations",
+                  "url": "http://console-audit.test/api/access/organizations",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 3.400000002235174,
+              "paintWaitMs": 22.100000001490116,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 121,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "yandex",
+          "label": "Yandex 店铺",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 3.399999998509884,
+              "paintWaitMs": 23.399999998509884,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 10,
+              "requests": [
+                {
+                  "method": "POST",
+                  "path": "/api/yandex-console/start",
+                  "url": "http://console-audit.test/api/yandex-console/start",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.899999998509884,
+              "paintWaitMs": 20.5,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 1440,
+              "documentWidth": 1440,
+              "moduleNodes": 10,
+              "requests": [
+                {
+                  "method": "POST",
+                  "path": "/api/yandex-console/start",
+                  "url": "http://console-audit.test/api/yandex-console/start",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        }
+      ],
+      "page_errors": [],
+      "console_errors": [],
+      "long_tasks": [
+        {
+          "start": 108.10000000149012,
+          "duration": 74
+        },
+        {
+          "start": 198.5,
+          "duration": 72
+        }
+      ],
+      "unsafe_requests": [
+        {
+          "method": "POST",
+          "path": "/api/yandex-console/start",
+          "url": "http://console-audit.test/api/yandex-console/start",
+          "type": "fetch"
+        },
+        {
+          "method": "POST",
+          "path": "/api/yandex-console/start",
+          "url": "http://console-audit.test/api/yandex-console/start",
+          "type": "fetch"
+        }
+      ],
+      "total_requests": {
+        "/api/overview/mercado-notices": 1,
+        "/api/access/organizations": 2,
+        "/api/execution-agents": 6,
+        "/api/services/health": 1,
+        "/api/account-integrations/balance": 1,
+        "/mercado/today": 1,
+        "/billing": 1,
+        "/api/ai-original-products/profiles": 1,
+        "/api/mercado-tokens": 6,
+        "/api/mercado/today/tasks": 1,
+        "/api/mercado/today/post-sale": 1,
+        "/api/mercado-account-groups": 3,
+        "/api/orders": 1,
+        "/api/order-sync/status": 2,
+        "/api/inventory/shelves": 3,
+        "/api/inventory/stocks": 1,
+        "/api/inventory/skus": 1,
+        "/api/inventory/sku-mappings": 1,
+        "/api/inventory/reconciliation": 1,
+        "/api/inventory/movements": 1,
+        "/api/1688-products": 2,
+        "/api/1688-products/options": 1,
+        "/api/mercado-management-categories": 2,
+        "/api/ai-original-products": 3,
+        "/api/ai-original-products/cost-summary": 2,
+        "/api/ai-original-products/process/status": 3,
+        "/api/mercado-products/publish/status": 5,
+        "/api/mercado-collection/items": 3,
+        "/api/mercado-products": 2,
+        "/api/mercado-shipping-rates": 2,
+        "/api/mercado-publish-records": 2,
+        "/api/yandex-console/status": 1,
+        "/api/appeal-phrases": 1,
+        "/api/tasks/daily/options": 1,
+        "/api/salesperson-stats": 1,
+        "/api/store-analysis": 1,
+        "/api/order-analysis/high-after-sales": 1,
+        "/api/order-analysis/high-profits": 1,
+        "/api/ai-videos/jobs": 1,
+        "/api/store-links/operation-logs": 2,
+        "/api/store-links": 1,
+        "/api/store-links/sync/status": 3,
+        "/api/store-links/bulk-update/status": 3,
+        "/api/ad-analysis": 1,
+        "/size-charts": 1,
+        "/api/prohibited-listings": 1,
+        "/api/prohibited-listings/sync/status": 3,
+        "/clearance-alerts": 1,
+        "/api/mercado-applications": 2,
+        "/api/funds/latest": 1,
+        "/promotions": 1,
+        "/api/funds/collect/status": 3,
+        "/api/risk-check/categories": 1,
+        "/ai-weight-price": 1,
+        "/api/risk-check/options": 1,
+        "/api/risk-check/results": 1,
+        "/api/risk-check/status": 3,
+        "/api/infringement-knowledge": 1,
+        "/infringement-dashboard": 1,
+        "/api/reputation/latest": 1,
+        "/api/collections/options": 2,
+        "/ip-rights-dashboard": 1,
+        "/api/mercado-reputation/status": 2,
+        "/api/ai-appeal-records": 1,
+        "/api/access/catalog": 1,
+        "/api/access/roles": 1,
+        "/api/access/users": 1,
+        "/api/zying-collection/categories": 1,
+        "/api/mercado-products/developers": 2,
+        "/api/weight-dimensions-records/saved": 1,
+        "/api/tasks/daily/status": 2,
+        "/api/mercado-tokens/authorization": 2,
+        "/api/yandex-console/start": 2
+      }
+    },
+    {
+      "width": 390,
+      "domNodes": 5907,
+      "navigation": {
+        "name": "http://console-audit.test/",
+        "entryType": "navigation",
+        "startTime": 0,
+        "duration": 242.90000000223517,
+        "navigationId": 9962,
+        "initiatorType": "navigation",
+        "deliveryType": "",
+        "nextHopProtocol": "",
+        "renderBlockingStatus": "non-blocking",
+        "contentType": "text/html",
+        "contentEncoding": "",
+        "workerStart": 0,
+        "workerRouterEvaluationStart": 0,
+        "workerCacheLookupStart": 0,
+        "workerMatchedSourceType": "",
+        "workerFinalSourceType": "",
+        "redirectStart": 0,
+        "redirectEnd": 0,
+        "fetchStart": 0.6999999992549419,
+        "domainLookupStart": 0.6999999992549419,
+        "domainLookupEnd": 0.6999999992549419,
+        "connectStart": 0.6999999992549419,
+        "secureConnectionStart": 0,
+        "connectEnd": 0.6999999992549419,
+        "requestStart": 0.6999999992549419,
+        "responseStart": 42.5,
+        "firstInterimResponseStart": 0,
+        "finalResponseHeadersStart": 0,
+        "responseEnd": 42.5,
+        "transferSize": 1963694,
+        "encodedBodySize": 1963394,
+        "decodedBodySize": 1963394,
+        "responseStatus": 200,
+        "serverTiming": [],
+        "unloadEventStart": 0,
+        "unloadEventEnd": 0,
+        "domInteractive": 212.90000000223517,
+        "domContentLoadedEventStart": 217.5,
+        "domContentLoadedEventEnd": 226.19999999925494,
+        "domComplete": 242.90000000223517,
+        "loadEventStart": 242.90000000223517,
+        "loadEventEnd": 242.90000000223517,
+        "type": "navigate",
+        "redirectCount": 0,
+        "activationStart": 0,
+        "criticalCHRestart": 0,
+        "notRestoredReasons": null,
+        "confidence": {
+          "randomizedTriggerRate": 0.4994798,
+          "value": "low"
+        }
+      },
+      "resources": [
+        {
+          "name": "http://console-audit.test/static/background-exports.js",
+          "decodedBodySize": 3620,
+          "duration": 8.699999999254942
+        },
+        {
+          "name": "http://console-audit.test/static/store-analysis.css?v=20260929-order-trend",
+          "decodedBodySize": 3003,
+          "duration": 9
+        },
+        {
+          "name": "http://console-audit.test/static/console-ui.css?v=20260930-mobile1",
+          "decodedBodySize": 14337,
+          "duration": 9.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/static/ai-original-products.css?v=20261008-generation-isolation",
+          "decodedBodySize": 14556,
+          "duration": 9.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/static/ai-original-workbench.css?v=20261007-clean-layout",
+          "decodedBodySize": 28506,
+          "duration": 9.5
+        },
+        {
+          "name": "http://console-audit.test/static/1688-products.css?v=20261002-product-management",
+          "decodedBodySize": 13678,
+          "duration": 9.800000000745058
+        },
+        {
+          "name": "http://console-audit.test/static/weight-dimensions-records.css?v=20260930-server-execution-1",
+          "decodedBodySize": 6157,
+          "duration": 9.800000000745058
+        },
+        {
+          "name": "http://console-audit.test/static/inventory-sku.css?v=20260925-1",
+          "decodedBodySize": 1840,
+          "duration": 9.899999998509884
+        },
+        {
+          "name": "http://console-audit.test/static/console-ui.js?v=20260915",
+          "decodedBodySize": 5952,
+          "duration": 10.099999997764826
+        },
+        {
+          "name": "http://console-audit.test/static/copy-anywhere.js?v=20260922",
+          "decodedBodySize": 11343,
+          "duration": 10.699999999254942
+        },
+        {
+          "name": "http://console-audit.test/static/appeal-polling.js?v=20261007-durable",
+          "decodedBodySize": 2710,
+          "duration": 10.899999998509884
+        },
+        {
+          "name": "http://console-audit.test/static/product-visibility.js?v=20261008-permissions",
+          "decodedBodySize": 1820,
+          "duration": 45
+        },
+        {
+          "name": "http://console-audit.test/static/ai-original-workbench.js?v=20261008-review-readback",
+          "decodedBodySize": 14477,
+          "duration": 51.80000000074506
+        },
+        {
+          "name": "http://console-audit.test/static/ai-original-products.js?v=20261008-review-readback",
+          "decodedBodySize": 108477,
+          "duration": 51.599999997764826
+        },
+        {
+          "name": "http://console-audit.test/static/ai-original-publish.css?v=20261003-publish",
+          "decodedBodySize": 10589,
+          "duration": 11.200000002980232
+        },
+        {
+          "name": "http://console-audit.test/static/ai-original-publish.js?v=20261003-publish",
+          "decodedBodySize": 30582,
+          "duration": 52.100000001490116
+        },
+        {
+          "name": "http://console-audit.test/static/1688-products.js?v=20261008-workflow-required-fields",
+          "decodedBodySize": 44052,
+          "duration": 52.600000001490116
+        },
+        {
+          "name": "http://console-audit.test/static/weight-dimensions-records.js?v=20261007-execution-recovery-1",
+          "decodedBodySize": 33981,
+          "duration": 53
+        },
+        {
+          "name": "http://console-audit.test/static/zeshun-theme.css?v=20261007-date-filters",
+          "decodedBodySize": 24384,
+          "duration": 13.899999998509884
+        },
+        {
+          "name": "http://console-audit.test/static/console-navigation.css?v=20261003",
+          "decodedBodySize": 2158,
+          "duration": 14
+        },
+        {
+          "name": "http://console-audit.test/static/console-workflow.css?v=20261007-order-filters",
+          "decodedBodySize": 5424,
+          "duration": 14.600000001490116
+        },
+        {
+          "name": "http://console-audit.test/static/console-performance.js?v=20261007-json-fix",
+          "decodedBodySize": 15992,
+          "duration": 14.800000000745058
+        },
+        {
+          "name": "http://console-audit.test/static/inventory-sku.js?v=20260925-1",
+          "decodedBodySize": 17499,
+          "duration": 53.100000001490116
+        },
+        {
+          "name": "http://console-audit.test/static/date-filter-display.js?v=20261008",
+          "decodedBodySize": 1723,
+          "duration": 53.399999998509884
+        },
+        {
+          "name": "http://console-audit.test/static/workbench-ui.js?v=20261008-list-feedback",
+          "decodedBodySize": 5908,
+          "duration": 53.5
+        },
+        {
+          "name": "http://console-audit.test/static/infringement-knowledge.css?v=20261006",
+          "decodedBodySize": 12337,
+          "duration": 14.899999998509884
+        },
+        {
+          "name": "http://console-audit.test/static/console-layout.css?v=20261004",
+          "decodedBodySize": 14020,
+          "duration": 15.699999999254942
+        },
+        {
+          "name": "http://console-audit.test/static/product-cards.css?v=20261007-tiles",
+          "decodedBodySize": 9071,
+          "duration": 17.699999999254942
+        },
+        {
+          "name": "http://console-audit.test/static/product-tiles.css?v=20261008-collection-alignment",
+          "decodedBodySize": 18880,
+          "duration": 18.899999998509884
+        },
+        {
+          "name": "http://console-audit.test/static/date-filter-controls.css?v=20261008",
+          "decodedBodySize": 1731,
+          "duration": 19
+        },
+        {
+          "name": "http://console-audit.test/static/images/zeshun-monogram-gold.png",
+          "decodedBodySize": 331286,
+          "duration": 25.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/static/date-filter-controls.js?v=20261008",
+          "decodedBodySize": 11957,
+          "duration": 55.5
+        },
+        {
+          "name": "http://console-audit.test/static/model-balance.css?v=20261001-2",
+          "decodedBodySize": 3538,
+          "duration": 25.600000001490116
+        },
+        {
+          "name": "http://console-audit.test/static/model-balance.js?v=20261001-2",
+          "decodedBodySize": 6690,
+          "duration": 55.600000001490116
+        },
+        {
+          "name": "http://console-audit.test/static/salesperson-stats.js?v=20261007-preload",
+          "decodedBodySize": 3525,
+          "duration": 22.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/static/store-analysis.js?v=20261007-preload",
+          "decodedBodySize": 18136,
+          "duration": 22.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/static/mercado-attribute-preflight.css?v=20261003",
+          "decodedBodySize": 977,
+          "duration": 27
+        },
+        {
+          "name": "http://console-audit.test/static/mercado-infringement.css?v=20261006",
+          "decodedBodySize": 7538,
+          "duration": 38.400000002235174
+        },
+        {
+          "name": "http://console-audit.test/static/collection-ai.js?v=20261003-lists",
+          "decodedBodySize": 5328,
+          "duration": 22.5
+        },
+        {
+          "name": "http://console-audit.test/static/order-management-details.js?v=20261007-api-freight",
+          "decodedBodySize": 22060,
+          "duration": 23.700000002980232
+        },
+        {
+          "name": "http://console-audit.test/static/console-navigation.js?v=20261007-preload",
+          "decodedBodySize": 10968,
+          "duration": 24.200000002980232
+        },
+        {
+          "name": "http://console-audit.test/static/console-workflow.js?v=20261007-order-filters",
+          "decodedBodySize": 11371,
+          "duration": 24.800000000745058
+        },
+        {
+          "name": "http://console-audit.test/static/mercado-attribute-preflight.js?v=20261003",
+          "decodedBodySize": 9152,
+          "duration": 27.200000002980232
+        },
+        {
+          "name": "http://console-audit.test/static/service-health.js?v=20260930",
+          "decodedBodySize": 3368,
+          "duration": 36.100000001490116
+        },
+        {
+          "name": "http://console-audit.test/static/wipo-sync.js?v=20261007",
+          "decodedBodySize": 14006,
+          "duration": 37
+        },
+        {
+          "name": "http://console-audit.test/static/infringement-knowledge.js?v=20261007",
+          "decodedBodySize": 26025,
+          "duration": 37.900000002235174
+        },
+        {
+          "name": "http://console-audit.test/static/mercado-infringement.js?v=20261007-preload",
+          "decodedBodySize": 41200,
+          "duration": 39.5
+        },
+        {
+          "name": "http://console-audit.test/static/console-preload.js?v=20261008-one-page",
+          "decodedBodySize": 13049,
+          "duration": 40
+        },
+        {
+          "name": "http://console-audit.test/static/action-center-preload.js?v=20261008",
+          "decodedBodySize": 910,
+          "duration": 52.100000001490116
+        },
+        {
+          "name": "http://console-audit.test/api/overview/mercado-notices",
+          "decodedBodySize": 229,
+          "duration": 2.099999997764826
+        },
+        {
+          "name": "http://console-audit.test/api/access/organizations",
+          "decodedBodySize": 229,
+          "duration": 2
+        },
+        {
+          "name": "http://console-audit.test/api/execution-agents",
+          "decodedBodySize": 229,
+          "duration": 2.600000001490116
+        },
+        {
+          "name": "http://console-audit.test/api/services/health",
+          "decodedBodySize": 352,
+          "duration": 2.399999998509884
+        },
+        {
+          "name": "http://console-audit.test/api/account-integrations/balance",
+          "decodedBodySize": 229,
+          "duration": 1.0999999977648258
+        },
+        {
+          "name": "http://console-audit.test/mercado/today",
+          "decodedBodySize": 229,
+          "duration": 2.800000000745058
+        },
+        {
+          "name": "http://console-audit.test/billing",
+          "decodedBodySize": 229,
+          "duration": 2.900000002235174
+        },
+        {
+          "name": "http://console-audit.test/api/ai-original-products/profiles",
+          "decodedBodySize": 229,
+          "duration": 3.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-tokens",
+          "decodedBodySize": 229,
+          "duration": 3.5
+        },
+        {
+          "name": "http://console-audit.test/static/images/zeshun-monogram-gold.png",
+          "decodedBodySize": 331286,
+          "duration": 6.400000002235174
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-tokens",
+          "decodedBodySize": 229,
+          "duration": 5.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/mercado/today/tasks?include_closed=0&salesperson=&group_name=&background=1",
+          "decodedBodySize": 229,
+          "duration": 5
+        },
+        {
+          "name": "http://console-audit.test/api/mercado/today/post-sale?salesperson=&group_name=&background=1",
+          "decodedBodySize": 229,
+          "duration": 5.100000001490116
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-account-groups",
+          "decodedBodySize": 229,
+          "duration": 1
+        },
+        {
+          "name": "http://console-audit.test/api/orders?country=&status=&group_name=&search=&remark_search=&start_date=&end_date=&origin=&freight_variance=&sort_by=ordered_at&sort_dir=desc&page=1&page_size=200",
+          "decodedBodySize": 229,
+          "duration": 0.8000000007450581
+        },
+        {
+          "name": "http://console-audit.test/api/order-sync/status",
+          "decodedBodySize": 352,
+          "duration": 1.2000000029802322
+        },
+        {
+          "name": "http://console-audit.test/api/inventory/shelves?include_inactive=1",
+          "decodedBodySize": 229,
+          "duration": 0.8999999985098839
+        },
+        {
+          "name": "http://console-audit.test/api/inventory/stocks?inbound_person=&inventory_owner=&search=&shelf_id=&stock_status=positive&page=1&page_size=50",
+          "decodedBodySize": 229,
+          "duration": 1.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/inventory/skus?include_inactive=1",
+          "decodedBodySize": 229,
+          "duration": 0.9000000022351742
+        },
+        {
+          "name": "http://console-audit.test/api/inventory/sku-mappings",
+          "decodedBodySize": 229,
+          "duration": 1
+        },
+        {
+          "name": "http://console-audit.test/api/inventory/reconciliation",
+          "decodedBodySize": 229,
+          "duration": 1
+        },
+        {
+          "name": "http://console-audit.test/api/inventory/movements?inbound_person=&inventory_owner=&search=&movement_type=&shelf_id=&page=1&page_size=50",
+          "decodedBodySize": 229,
+          "duration": 1
+        },
+        {
+          "name": "http://console-audit.test/api/1688-products?limit=50&offset=0",
+          "decodedBodySize": 229,
+          "duration": 1.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/1688-products/options",
+          "decodedBodySize": 229,
+          "duration": 1.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-management-categories",
+          "decodedBodySize": 229,
+          "duration": 1.2999999970197678
+        },
+        {
+          "name": "http://console-audit.test/api/ai-original-products?limit=500&include_cost_summary=0&target_platform=mercadolibre&search=&generator_salesperson=",
+          "decodedBodySize": 229,
+          "duration": 0.8000000007450581
+        },
+        {
+          "name": "http://console-audit.test/api/ai-original-products/cost-summary",
+          "decodedBodySize": 229,
+          "duration": 1.2000000029802322
+        },
+        {
+          "name": "http://console-audit.test/api/ai-original-products/process/status",
+          "decodedBodySize": 352,
+          "duration": 1.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-products/publish/status",
+          "decodedBodySize": 352,
+          "duration": 1.6000000014901161
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-collection/items?search=&limit=100&offset=0",
+          "decodedBodySize": 229,
+          "duration": 0.8000000007450581
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-products?search=&limit=100&offset=0&include_total=0",
+          "decodedBodySize": 229,
+          "duration": 1.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-shipping-rates?site_id=MLM",
+          "decodedBodySize": 229,
+          "duration": 1.699999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-publish-records?search=&status=&site_id=&group_name=&start_date=&end_date=&limit=500",
+          "decodedBodySize": 229,
+          "duration": 1.1000000014901161
+        },
+        {
+          "name": "http://console-audit.test/api/yandex-console/status",
+          "decodedBodySize": 352,
+          "duration": 1.699999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/appeal-phrases",
+          "decodedBodySize": 229,
+          "duration": 1.4000000022351742
+        },
+        {
+          "name": "http://console-audit.test/api/tasks/daily/options",
+          "decodedBodySize": 229,
+          "duration": 1.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/salesperson-stats?start_date=&end_date=",
+          "decodedBodySize": 229,
+          "duration": 1.1000000014901161
+        },
+        {
+          "name": "http://console-audit.test/api/store-analysis?start_date=2026-10-02&end_date=2026-10-08&metric=orders&category_level=2&salesperson=&group_name=&token_id=",
+          "decodedBodySize": 229,
+          "duration": 1.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/order-analysis/high-after-sales?sort_by=after_sale_quantity&sort_dir=desc&search=&date_from=2026-09-09T00%3A00&date_to=2026-10-08T20%3A14&limit=100",
+          "decodedBodySize": 229,
+          "duration": 1
+        },
+        {
+          "name": "http://console-audit.test/api/order-analysis/high-profits?sort_by=total_profit&sort_dir=desc&search=&date_from=2026-09-09T00%3A00&date_to=2026-10-08T20%3A14&limit=100",
+          "decodedBodySize": 229,
+          "duration": 1.2000000029802322
+        },
+        {
+          "name": "http://console-audit.test/api/ai-videos/jobs?limit=20&page=1",
+          "decodedBodySize": 229,
+          "duration": 1.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/store-links/operation-logs?limit=30&operation_type=&salesperson=&created_after=&created_before=",
+          "decodedBodySize": 229,
+          "duration": 1.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/store-links?search=&site_id=&group_name=&status=&promotion_applied=&advertising_enabled=&video_uploaded=&management_category_id=&mercado_category=&include_categories=0&sort_by=sold_quantity&sort_order=desc&sales_sort=desc&page=1&page_size=50&current_only=1",
+          "decodedBodySize": 229,
+          "duration": 1.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/store-links/sync/status",
+          "decodedBodySize": 352,
+          "duration": 1.4000000022351742
+        },
+        {
+          "name": "http://console-audit.test/api/store-links/bulk-update/status",
+          "decodedBodySize": 352,
+          "duration": 1.699999999254942
+        },
+        {
+          "name": "http://console-audit.test/size-charts?embedded=1",
+          "decodedBodySize": 0,
+          "duration": 6
+        },
+        {
+          "name": "http://console-audit.test/api/ad-analysis?force=0",
+          "decodedBodySize": 229,
+          "duration": 2.100000001490116
+        },
+        {
+          "name": "http://console-audit.test/api/prohibited-listings?page=1&page_size=100",
+          "decodedBodySize": 229,
+          "duration": 1.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/clearance-alerts?embedded=1",
+          "decodedBodySize": 0,
+          "duration": 13.699999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/prohibited-listings/sync/status",
+          "decodedBodySize": 352,
+          "duration": 2
+        },
+        {
+          "name": "http://console-audit.test/promotions?embedded=1",
+          "decodedBodySize": 0,
+          "duration": 5.5
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-applications",
+          "decodedBodySize": 229,
+          "duration": 1.7999999970197678
+        },
+        {
+          "name": "http://console-audit.test/api/funds/latest",
+          "decodedBodySize": 229,
+          "duration": 1.5
+        },
+        {
+          "name": "http://console-audit.test/api/funds/collect/status",
+          "decodedBodySize": 352,
+          "duration": 1.300000000745058
+        },
+        {
+          "name": "http://console-audit.test/ai-weight-price",
+          "decodedBodySize": 0,
+          "duration": 4.800000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/risk-check/categories",
+          "decodedBodySize": 229,
+          "duration": 1.3999999985098839
+        },
+        {
+          "name": "http://console-audit.test/api/risk-check/options",
+          "decodedBodySize": 229,
+          "duration": 1.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/risk-check/results?sources=product_list%2Ccollection_list%2Cpulled%2Czying&category=&risk_level=&search=&sort_by=risk_level&sort_dir=desc&limit=500",
+          "decodedBodySize": 229,
+          "duration": 1.5999999977648258
+        },
+        {
+          "name": "http://console-audit.test/api/risk-check/status",
+          "decodedBodySize": 352,
+          "duration": 1.1000000014901161
+        },
+        {
+          "name": "http://console-audit.test/api/infringement-knowledge?page=1&page_size=50",
+          "decodedBodySize": 229,
+          "duration": 1.9000000022351742
+        },
+        {
+          "name": "http://console-audit.test/infringement-dashboard?embedded=1",
+          "decodedBodySize": 0,
+          "duration": 4.400000002235174
+        },
+        {
+          "name": "http://console-audit.test/api/reputation/latest",
+          "decodedBodySize": 229,
+          "duration": 1.3999999985098839
+        },
+        {
+          "name": "http://console-audit.test/ip-rights-dashboard?embedded=1",
+          "decodedBodySize": 0,
+          "duration": 6.5
+        },
+        {
+          "name": "http://console-audit.test/api/collections/options",
+          "decodedBodySize": 229,
+          "duration": 2.600000001490116
+        },
+        {
+          "name": "http://console-audit.test/api/mercado-reputation/status",
+          "decodedBodySize": 352,
+          "duration": 1.5
+        },
+        {
+          "name": "http://console-audit.test/api/ai-appeal-records?limit=500&appeal_copy_mode=",
+          "decodedBodySize": 229,
+          "duration": 1.199999999254942
+        },
+        {
+          "name": "http://console-audit.test/api/access/catalog",
+          "decodedBodySize": 229,
+          "duration": 1.800000000745058
+        },
+        {
+          "name": "http://console-audit.test/api/access/roles",
+          "decodedBodySize": 229,
+          "duration": 1.1000000014901161
+        },
+        {
+          "name": "http://console-audit.test/api/access/users",
+          "decodedBodySize": 229,
+          "duration": 1.300000000745058
+        }
+      ],
+      "preload": {
+        "requests": 53,
+        "hits": 2,
+        "shared": 0,
+        "failures": 0,
+        "cached": 49,
+        "bytes": 12451,
+        "pending": 0,
+        "queued": 0,
+        "running": 0,
+        "foregroundReaders": 0,
+        "modules": [
+          "overview",
+          "orders",
+          "inventory",
+          "1688-products",
+          "ai-original-products",
+          "mercado-collection",
+          "mercado-products",
+          "weight-dimensions-records",
+          "mercado-shipping-standards",
+          "mercado-publish-records",
+          "yandex",
+          "appeal",
+          "tasks",
+          "salesperson-stats",
+          "store-analysis",
+          "order-analysis",
+          "window-anomalies",
+          "ai-video",
+          "store-operations",
+          "store-links",
+          "size-charts",
+          "clearance-alerts",
+          "promotions",
+          "ad-analysis",
+          "prohibited-listings",
+          "store-tokens",
+          "pre-sale",
+          "customer-service",
+          "funds",
+          "ai-weight-price",
+          "zying-collection",
+          "risk-check",
+          "infringement-knowledge",
+          "infractions",
+          "ip-rights",
+          "reputation",
+          "api-reputation",
+          "ai-appeals",
+          "access"
+        ]
+      },
+      "duplicateIds": [],
+      "initial_requests": {
+        "/api/overview/mercado-notices": 1,
+        "/api/access/organizations": 1,
+        "/api/execution-agents": 1,
+        "/api/services/health": 1,
+        "/api/account-integrations/balance": 1,
+        "/mercado/today": 1,
+        "/billing": 1,
+        "/api/ai-original-products/profiles": 1,
+        "/api/mercado-tokens": 2,
+        "/api/mercado/today/tasks": 1,
+        "/api/mercado/today/post-sale": 1,
+        "/api/mercado-account-groups": 1,
+        "/api/orders": 1,
+        "/api/order-sync/status": 1,
+        "/api/inventory/shelves": 1,
+        "/api/inventory/stocks": 1,
+        "/api/inventory/skus": 1,
+        "/api/inventory/sku-mappings": 1,
+        "/api/inventory/reconciliation": 1,
+        "/api/inventory/movements": 1,
+        "/api/1688-products": 1,
+        "/api/1688-products/options": 1,
+        "/api/mercado-management-categories": 1,
+        "/api/ai-original-products": 1,
+        "/api/ai-original-products/cost-summary": 1,
+        "/api/ai-original-products/process/status": 1,
+        "/api/mercado-products/publish/status": 1,
+        "/api/mercado-collection/items": 1,
+        "/api/mercado-products": 1,
+        "/api/mercado-shipping-rates": 1,
+        "/api/mercado-publish-records": 1,
+        "/api/yandex-console/status": 1,
+        "/api/appeal-phrases": 1,
+        "/api/tasks/daily/options": 1,
+        "/api/salesperson-stats": 1,
+        "/api/store-analysis": 1,
+        "/api/order-analysis/high-after-sales": 1,
+        "/api/order-analysis/high-profits": 1,
+        "/api/ai-videos/jobs": 1,
+        "/api/store-links/operation-logs": 1,
+        "/api/store-links": 1,
+        "/api/store-links/sync/status": 1,
+        "/api/store-links/bulk-update/status": 1,
+        "/api/ad-analysis": 1,
+        "/size-charts": 1,
+        "/api/prohibited-listings": 1,
+        "/api/prohibited-listings/sync/status": 1,
+        "/clearance-alerts": 1,
+        "/api/mercado-applications": 1,
+        "/promotions": 1,
+        "/api/funds/latest": 1,
+        "/api/funds/collect/status": 1,
+        "/ai-weight-price": 1,
+        "/api/risk-check/categories": 1,
+        "/api/risk-check/options": 1,
+        "/api/risk-check/results": 1,
+        "/api/risk-check/status": 1,
+        "/api/infringement-knowledge": 1,
+        "/infringement-dashboard": 1,
+        "/api/reputation/latest": 1,
+        "/api/collections/options": 1,
+        "/ip-rights-dashboard": 1,
+        "/api/mercado-reputation/status": 1,
+        "/api/ai-appeal-records": 1,
+        "/api/access/catalog": 1,
+        "/api/access/roles": 1,
+        "/api/access/users": 1
+      },
+      "initial_non_read_requests": [],
+      "modules": [
+        {
+          "id": "overview",
+          "label": "总览",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 0.6999999992549419,
+              "paintWaitMs": 4.100000001490116,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 120,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 0.5999999977648258,
+              "paintWaitMs": 17.199999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 120,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "orders",
+          "label": "订单管理",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 10.900000002235174,
+              "paintWaitMs": 16.200000002980232,
+              "preloadHits": 2,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 495,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 3.5,
+              "paintWaitMs": 27.5,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 531,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/order-sync/status",
+                  "url": "http://console-audit.test/api/order-sync/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "inventory",
+          "label": "库存管理",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2.099999997764826,
+              "paintWaitMs": 31.199999999254942,
+              "preloadHits": 2,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 444,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 4,
+              "paintWaitMs": 19.600000001490116,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 444,
+              "requests": [],
+              "errors": []
+            }
+          ],
+          "subviews": [
+            {
+              "view": "sku",
+              "synchronousMs": 1.300000000745058,
+              "active": true,
+              "documentWidth": 390,
+              "preloadHits": 3,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "view": "logs",
+              "synchronousMs": 2.599999997764826,
+              "active": true,
+              "documentWidth": 390,
+              "preloadHits": 1,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/inventory/shelves",
+                  "url": "http://console-audit.test/api/inventory/shelves?include_inactive=1",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "view": "shelves",
+              "synchronousMs": 0.8000000007450581,
+              "active": true,
+              "documentWidth": 390,
+              "preloadHits": 0,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/inventory/shelves",
+                  "url": "http://console-audit.test/api/inventory/shelves?include_inactive=1",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "1688-products",
+          "label": "1688产品区",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 3.5,
+              "paintWaitMs": 28,
+              "preloadHits": 3,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 197,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.899999998509884,
+              "paintWaitMs": 31,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 197,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/1688-products",
+                  "url": "http://console-audit.test/api/1688-products?limit=50&offset=0",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "ai-original-products",
+          "label": "AI原创产品",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 5.399999998509884,
+              "paintWaitMs": 29.899999998509884,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 433,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/ai-original-products",
+                  "url": "http://console-audit.test/api/ai-original-products?limit=500&include_total=0&include_cost_summary=0&target_platform=mercadolibre&search=&generator_salesperson=",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/ai-original-products/process/status",
+                  "url": "http://console-audit.test/api/ai-original-products/process/status",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-products/publish/status",
+                  "url": "http://console-audit.test/api/mercado-products/publish/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 3.699999999254942,
+              "paintWaitMs": 32,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 433,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/ai-original-products",
+                  "url": "http://console-audit.test/api/ai-original-products?limit=500&include_total=0&include_cost_summary=0&target_platform=mercadolibre&search=&generator_salesperson=",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/ai-original-products/process/status",
+                  "url": "http://console-audit.test/api/ai-original-products/process/status",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-products/publish/status",
+                  "url": "http://console-audit.test/api/mercado-products/publish/status",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/ai-original-products/cost-summary",
+                  "url": "http://console-audit.test/api/ai-original-products/cost-summary",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "mercado-collection",
+          "label": "美客多跟卖采集",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 4.5,
+              "paintWaitMs": 29.800000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 466,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-collection/items",
+                  "url": "http://console-audit.test/api/mercado-collection/items?search=&limit=100&offset=0&include_salesperson_options=1",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-management-categories",
+                  "url": "http://console-audit.test/api/mercado-management-categories",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 3.399999998509884,
+              "paintWaitMs": 31.5,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 466,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-collection/items",
+                  "url": "http://console-audit.test/api/mercado-collection/items?search=&limit=100&offset=0&include_salesperson_options=1",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "mercado-products",
+          "label": "产品列表",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2.399999998509884,
+              "paintWaitMs": 29.5,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 441,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/zying-collection/categories",
+                  "url": "http://console-audit.test/api/zying-collection/categories",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-products/developers",
+                  "url": "http://console-audit.test/api/mercado-products/developers",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-products/publish/status",
+                  "url": "http://console-audit.test/api/mercado-products/publish/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 3.099999997764826,
+              "paintWaitMs": 30.699999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 441,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-products",
+                  "url": "http://console-audit.test/api/mercado-products?search=&limit=100&offset=0&include_total=0",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-products/developers",
+                  "url": "http://console-audit.test/api/mercado-products/developers",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-products/publish/status",
+                  "url": "http://console-audit.test/api/mercado-products/publish/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "weight-dimensions-records",
+          "label": "重量尺寸变更记录",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2.199999999254942,
+              "paintWaitMs": 30.699999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 141,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/execution-agents",
+                  "url": "http://console-audit.test/api/execution-agents?capability=ai_weight_price",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/weight-dimensions-records/saved",
+                  "url": "http://console-audit.test/api/weight-dimensions-records/saved?date_from=2026-10-02T00%3A00&page_size=50",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.100000001490116,
+              "paintWaitMs": 31.899999998509884,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 141,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "mercado-shipping-standards",
+          "label": "美客多运费标准",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 1.3999999985098839,
+              "paintWaitMs": 31.199999999254942,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 31,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.300000000745058,
+              "paintWaitMs": 30.099999997764826,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 31,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-shipping-rates",
+                  "url": "http://console-audit.test/api/mercado-shipping-rates?site_id=MLM",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "mercado-publish-records",
+          "label": "产品上架记录",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 3,
+              "paintWaitMs": 31.699999999254942,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 234,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.400000002235174,
+              "paintWaitMs": 31.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 234,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-publish-records",
+                  "url": "http://console-audit.test/api/mercado-publish-records?search=&status=&site_id=&group_name=&start_date=&end_date=&limit=500",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "appeal",
+          "label": "自动化 AI 申诉",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 8.399999998509884,
+              "paintWaitMs": 32.899999998509884,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 157,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/execution-agents",
+                  "url": "http://console-audit.test/api/execution-agents",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 5,
+              "paintWaitMs": 20.199999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 157,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/execution-agents",
+                  "url": "http://console-audit.test/api/execution-agents",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "tasks",
+          "label": "任务模块",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 4.300000000745058,
+              "paintWaitMs": 26.5,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 175,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/execution-agents",
+                  "url": "http://console-audit.test/api/execution-agents?capability=all",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/tasks/daily/status",
+                  "url": "http://console-audit.test/api/tasks/daily/status?include_logs=0&execution_target=agent",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 5,
+              "paintWaitMs": 26.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 175,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/execution-agents",
+                  "url": "http://console-audit.test/api/execution-agents?capability=all",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/tasks/daily/status",
+                  "url": "http://console-audit.test/api/tasks/daily/status?include_logs=0&execution_target=agent",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "salesperson-stats",
+          "label": "业务员量统计",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 7.800000000745058,
+              "paintWaitMs": 16.5,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 37,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 3.300000000745058,
+              "paintWaitMs": 19.600000001490116,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 37,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "store-analysis",
+          "label": "店铺分析",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 4.300000000745058,
+              "paintWaitMs": 26.800000000745058,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 58,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-tokens",
+                  "url": "http://console-audit.test/api/mercado-tokens",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 4.400000002235174,
+              "paintWaitMs": 22.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 58,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "order-analysis",
+          "label": "订单分析",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 11.899999998509884,
+              "paintWaitMs": 17.399999998509884,
+              "preloadHits": 2,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 172,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 3.300000000745058,
+              "paintWaitMs": 27.800000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 172,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "ai-video",
+          "label": "AI视频生成",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 9.899999998509884,
+              "paintWaitMs": 21.5,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 214,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 5.900000002235174,
+              "paintWaitMs": 18.800000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 214,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "store-operations",
+          "label": "店铺操作记录",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 4.800000000745058,
+              "paintWaitMs": 27.700000002980232,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 64,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 5.099999997764826,
+              "paintWaitMs": 25.5,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 64,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/store-links/operation-logs",
+                  "url": "http://console-audit.test/api/store-links/operation-logs?limit=30&operation_type=&salesperson=&created_after=&created_before=",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "store-links",
+          "label": "店铺链接",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 9.299999997019768,
+              "paintWaitMs": 21,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 225,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/store-links/sync/status",
+                  "url": "http://console-audit.test/api/store-links/sync/status",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/store-links/bulk-update/status",
+                  "url": "http://console-audit.test/api/store-links/bulk-update/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 6.799999997019768,
+              "paintWaitMs": 19,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 225,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/store-links/sync/status",
+                  "url": "http://console-audit.test/api/store-links/sync/status",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/store-links/bulk-update/status",
+                  "url": "http://console-audit.test/api/store-links/bulk-update/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "size-charts",
+          "label": "尺码表管理",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 3.699999999254942,
+              "paintWaitMs": 30.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 2,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.1000000014901161,
+              "paintWaitMs": 28.199999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 2,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "clearance-alerts",
+          "label": "半托管清退告警",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 0.8000000007450581,
+              "paintWaitMs": 32.5,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 2,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 0.8000000007450581,
+              "paintWaitMs": 32.5,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 2,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "promotions",
+          "label": "活动管理",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 1,
+              "paintWaitMs": 30.5,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 6,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 0.8999999985098839,
+              "paintWaitMs": 30.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 6,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "ad-analysis",
+          "label": "广告分析",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 4.800000000745058,
+              "paintWaitMs": 28.199999999254942,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 167,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-tokens",
+                  "url": "http://console-audit.test/api/mercado-tokens",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 6.399999998509884,
+              "paintWaitMs": 29,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 167,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "prohibited-listings",
+          "label": "禁限售列表",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 7.400000002235174,
+              "paintWaitMs": 17.199999999254942,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 147,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/prohibited-listings/sync/status",
+                  "url": "http://console-audit.test/api/prohibited-listings/sync/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.300000000745058,
+              "paintWaitMs": 26.699999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 147,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/prohibited-listings/sync/status",
+                  "url": "http://console-audit.test/api/prohibited-listings/sync/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "store-tokens",
+          "label": "店铺授权",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 5.699999999254942,
+              "paintWaitMs": 24.699999999254942,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 211,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-tokens",
+                  "url": "http://console-audit.test/api/mercado-tokens",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-tokens/authorization",
+                  "url": "http://console-audit.test/api/mercado-tokens/authorization",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-account-groups",
+                  "url": "http://console-audit.test/api/mercado-account-groups",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 6.699999999254942,
+              "paintWaitMs": 20.5,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 211,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-applications",
+                  "url": "http://console-audit.test/api/mercado-applications",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-tokens",
+                  "url": "http://console-audit.test/api/mercado-tokens",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-tokens/authorization",
+                  "url": "http://console-audit.test/api/mercado-tokens/authorization",
+                  "type": "fetch"
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-account-groups",
+                  "url": "http://console-audit.test/api/mercado-account-groups",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "pre-sale",
+          "label": "售前问答",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 6.600000001490116,
+              "paintWaitMs": 26.700000002980232,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 89,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 6.299999997019768,
+              "paintWaitMs": 18.299999997019768,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 89,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "customer-service",
+          "label": "售后处理",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 13.099999997764826,
+              "paintWaitMs": 18.699999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 101,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 6.099999997764826,
+              "paintWaitMs": 23.799999997019768,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 101,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "funds",
+          "label": "资金管理",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2.7000000029802322,
+              "paintWaitMs": 24.900000002235174,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 68,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/funds/collect/status",
+                  "url": "http://console-audit.test/api/funds/collect/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.8999999985098839,
+              "paintWaitMs": 28,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 68,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/funds/collect/status",
+                  "url": "http://console-audit.test/api/funds/collect/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "ai-weight-price",
+          "label": "AI核重核价",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 0.9000000022351742,
+              "paintWaitMs": 30.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 1,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 0.8000000007450581,
+              "paintWaitMs": 29.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 1,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "zying-collection",
+          "label": "zying-collection",
+          "navigable": false,
+          "reason": "Retained internal page has no available sidebar entry."
+        },
+        {
+          "id": "risk-check",
+          "label": "侵权检测",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 4.600000001490116,
+              "paintWaitMs": 19.300000000745058,
+              "preloadHits": 3,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 239,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/risk-check/status",
+                  "url": "http://console-audit.test/api/risk-check/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 2.7999999970197678,
+              "paintWaitMs": 29,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 239,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/risk-check/status",
+                  "url": "http://console-audit.test/api/risk-check/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "infringement-knowledge",
+          "label": "侵权知识库",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 2.600000001490116,
+              "paintWaitMs": 29.700000002980232,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 248,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.300000000745058,
+              "paintWaitMs": 32.19999999925494,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 248,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "infractions",
+          "label": "违规商品总览",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 0.8999999985098839,
+              "paintWaitMs": 29.899999998509884,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 76,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 0.6999999992549419,
+              "paintWaitMs": 30.400000002235174,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 76,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "ip-rights",
+          "label": "侵权和权利人总览",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 1.1000000014901161,
+              "paintWaitMs": 29.900000002235174,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 2,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.300000000745058,
+              "paintWaitMs": 19.699999999254942,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 2,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "reputation",
+          "label": "声誉数据",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 8.399999998509884,
+              "paintWaitMs": 22.5,
+              "preloadHits": 2,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 100,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/collections/options",
+                  "url": "http://console-audit.test/api/collections/options",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 5.100000001490116,
+              "paintWaitMs": 24,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 100,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "api-reputation",
+          "label": "API 声誉",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 7.399999998509884,
+              "paintWaitMs": 33.69999999925494,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 137,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/mercado-reputation/status",
+                  "url": "http://console-audit.test/api/mercado-reputation/status",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 5.5,
+              "paintWaitMs": 17.800000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 137,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "ai-appeals",
+          "label": "自动化申诉记录",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 6.799999997019768,
+              "paintWaitMs": 21.899999998509884,
+              "preloadHits": 1,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 79,
+              "requests": [],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 3.400000002235174,
+              "paintWaitMs": 24.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 79,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "access",
+          "label": "人员与权限",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 4.800000000745058,
+              "paintWaitMs": 23.399999998509884,
+              "preloadHits": 3,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 121,
+              "requests": [
+                {
+                  "method": "GET",
+                  "path": "/api/access/organizations",
+                  "url": "http://console-audit.test/api/access/organizations",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.7999999970197678,
+              "paintWaitMs": 27.599999997764826,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 121,
+              "requests": [],
+              "errors": []
+            }
+          ]
+        },
+        {
+          "id": "yandex",
+          "label": "Yandex 店铺",
+          "navigable": true,
+          "visits": [
+            {
+              "visit": "first",
+              "synchronousMs": 1.800000000745058,
+              "paintWaitMs": 27.5,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 10,
+              "requests": [
+                {
+                  "method": "POST",
+                  "path": "/api/yandex-console/start",
+                  "url": "http://console-audit.test/api/yandex-console/start",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            },
+            {
+              "visit": "repeat",
+              "synchronousMs": 1.1000000014901161,
+              "paintWaitMs": 31.300000000745058,
+              "preloadHits": 0,
+              "sharedRequests": 0,
+              "active": true,
+              "viewportWidth": 390,
+              "documentWidth": 390,
+              "moduleNodes": 10,
+              "requests": [
+                {
+                  "method": "POST",
+                  "path": "/api/yandex-console/start",
+                  "url": "http://console-audit.test/api/yandex-console/start",
+                  "type": "fetch"
+                }
+              ],
+              "errors": []
+            }
+          ]
+        }
+      ],
+      "page_errors": [],
+      "console_errors": [],
+      "long_tasks": [],
+      "unsafe_requests": [
+        {
+          "method": "POST",
+          "path": "/api/yandex-console/start",
+          "url": "http://console-audit.test/api/yandex-console/start",
+          "type": "fetch"
+        },
+        {
+          "method": "POST",
+          "path": "/api/yandex-console/start",
+          "url": "http://console-audit.test/api/yandex-console/start",
+          "type": "fetch"
+        }
+      ],
+      "total_requests": {
+        "/api/overview/mercado-notices": 1,
+        "/api/access/organizations": 2,
+        "/api/execution-agents": 6,
+        "/api/services/health": 1,
+        "/api/account-integrations/balance": 1,
+        "/mercado/today": 1,
+        "/billing": 1,
+        "/api/ai-original-products/profiles": 1,
+        "/api/mercado-tokens": 6,
+        "/api/mercado/today/tasks": 1,
+        "/api/mercado/today/post-sale": 1,
+        "/api/mercado-account-groups": 3,
+        "/api/orders": 1,
+        "/api/order-sync/status": 2,
+        "/api/inventory/shelves": 3,
+        "/api/inventory/stocks": 1,
+        "/api/inventory/skus": 1,
+        "/api/inventory/sku-mappings": 1,
+        "/api/inventory/reconciliation": 1,
+        "/api/inventory/movements": 1,
+        "/api/1688-products": 2,
+        "/api/1688-products/options": 1,
+        "/api/mercado-management-categories": 2,
+        "/api/ai-original-products": 3,
+        "/api/ai-original-products/cost-summary": 2,
+        "/api/ai-original-products/process/status": 3,
+        "/api/mercado-products/publish/status": 5,
+        "/api/mercado-collection/items": 3,
+        "/api/mercado-products": 2,
+        "/api/mercado-shipping-rates": 2,
+        "/api/mercado-publish-records": 2,
+        "/api/yandex-console/status": 1,
+        "/api/appeal-phrases": 1,
+        "/api/tasks/daily/options": 1,
+        "/api/salesperson-stats": 1,
+        "/api/store-analysis": 1,
+        "/api/order-analysis/high-after-sales": 1,
+        "/api/order-analysis/high-profits": 1,
+        "/api/ai-videos/jobs": 1,
+        "/api/store-links/operation-logs": 2,
+        "/api/store-links": 1,
+        "/api/store-links/sync/status": 3,
+        "/api/store-links/bulk-update/status": 3,
+        "/api/ad-analysis": 1,
+        "/size-charts": 1,
+        "/api/prohibited-listings": 1,
+        "/api/prohibited-listings/sync/status": 3,
+        "/clearance-alerts": 1,
+        "/api/mercado-applications": 2,
+        "/promotions": 1,
+        "/api/funds/latest": 1,
+        "/api/funds/collect/status": 3,
+        "/ai-weight-price": 1,
+        "/api/risk-check/categories": 1,
+        "/api/risk-check/options": 1,
+        "/api/risk-check/results": 1,
+        "/api/risk-check/status": 3,
+        "/api/infringement-knowledge": 1,
+        "/infringement-dashboard": 1,
+        "/api/reputation/latest": 1,
+        "/api/collections/options": 2,
+        "/ip-rights-dashboard": 1,
+        "/api/mercado-reputation/status": 2,
+        "/api/ai-appeal-records": 1,
+        "/api/access/catalog": 1,
+        "/api/access/roles": 1,
+        "/api/access/users": 1,
+        "/api/zying-collection/categories": 1,
+        "/api/mercado-products/developers": 2,
+        "/api/weight-dimensions-records/saved": 1,
+        "/api/tasks/daily/status": 2,
+        "/api/mercado-tokens/authorization": 2,
+        "/api/yandex-console/start": 2
+      }
+    }
+  ],
+  "browser": "154.0.4258.62"
+}

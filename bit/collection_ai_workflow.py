@@ -1,5 +1,6 @@
 """Collection-check coordination shared by Agent, server Edge and legacy plugin."""
 from contextlib import contextmanager
+from erp.ai_usage_billing import bind_usage
 from erp import collection_ai_check as repository
 
 
@@ -92,6 +93,7 @@ def _step(service, run_id, action, payload, runtime_api_key=''):
 
 
 def start_server(service, run_id, runtime_api_key):
+    from bit import product_access
     import logging
     import threading
     from erp.ai_weight_price.collection_runner import run
@@ -106,5 +108,11 @@ def start_server(service, run_id, runtime_api_key):
             except Exception:
                 logging.exception('服务器 Edge 采集核重核价失败')
 
-    service.thread = threading.Thread(target=worker, name='collection-ai-edge', daemon=True)
+    actor_fields = {}
+    if actor and actor.get('id'):
+        actor_fields = {'actor_id': actor['id'],
+                        'actor_name': actor.get('display_name') or actor.get('username') or ''}
+    service.thread = threading.Thread(target=product_access.bind(bind_usage(worker, **actor_fields,
+        task_type='ai_weight_price', task_name='采集商品 AI 核重核价', task_id=run_id)),
+        name='collection-ai-edge', daemon=True)
     service.thread.start()

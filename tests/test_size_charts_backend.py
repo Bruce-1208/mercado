@@ -134,7 +134,121 @@ def test_requirements_uses_full_domain_and_ignores_unrelated_listing_requirement
     method, path, kwargs = clients[1].calls[-1]
     assert method == "POST" and path == "/domains/CBT-SNEAKERS/technical_specs"
     assert kwargs["params"] == {"section": "grids"}
-    assert kwargs["json_body"] == {"attributes": [draft()["attributes"][0]]}
+    assert kwargs["json_body"] == {"attributes": [{"id": "GENDER", "value_id": "1"}]}
+
+
+def test_output_mirror_cannot_erase_input_validation():
+    specs = {"input": {"attributes": [{"id": "GENDER", "tags": ["grid_template_required"],
+             "value_type": "list", "values": [{"id": "1", "name": "Man"}]}]},
+             "output": {"attributes": [{"id": "GENDER", "value_type": "list", "tags": []}]}}
+    field = extract_fields(specs)["template_fields"][0]
+    assert field["required"] and "grid_template_required" in field["tags"]
+    assert field["values"] == [{"id": "1", "name": "Man"}]
+
+
+def test_store_only_preview_defaults_to_all_verified_sites(service):
+    call, _, clients, _ = service
+    saved = call("create", draft())["template"]
+    preview = call("preview", {"template_id": saved["id"], "revision": 1, "token_ids": [1]})
+    assert preview["results"][0]["sites"] == ["MLB", "MLM"]
+    result = call("upload", {"preview_id": preview["preview_id"]})
+    assert result["succeeded"] == 1
+    assert clients[1].session.calls[0][2]["json"]["rows"][0]["sites"] == ["CBT", "MLB", "MLM"]
+
+
+def test_legacy_site_selection_also_covers_all_sites(service):
+    call, _, _, _ = service
+    _, preview = create_preview(call, targets=[{"token_id": 1, "site_id": "MLM"}])
+    assert preview["results"][0]["sites"] == ["MLB", "MLM"]
+
+
+def test_batch_seeds_once_and_keeps_local_edits(service):
+    from bit.size_chart_batch import batch_templates
+    call, storage, _, _ = service
+    first = batch_templates(storage, "org-a")
+    assert len(first) == 21
+    selected = first[0]
+    edited = call("update", {"template_id": selected["id"], "revision": 1,
+                           "template": {**selected, "name": "Edited reference"}})["template"]
+    second = batch_templates(storage, "org-a")
+    assert len(second) == 21 and len(storage.list_templates("org-a")) == 21
+    assert next(t for t in second if t["id"] == edited["id"])["name"] == "Edited reference"
+
+
+def test_reference_upgrade_does_not_replace_modified_waist_templates(service):
+    import json
+    from pathlib import Path
+    from bit.size_chart_batch import batch_templates
+    call, storage, _, _ = service
+    library = json.loads((Path(__file__).parents[1] / "bit" / "size-chart-builtins.json").read_text())
+    old = library["previous_templates"][0]
+    original = call("create", old)["template"]
+    custom = call("create", {**old, "name": "Custom brand measurements"})["template"]
+    batch_templates(storage, "org-a")
+    updated = storage.get_template("org-a", original["id"])
+    assert updated["revision"] == 2 and updated["standard_template"]["size_system"] == "alpha"
+    preserved = storage.get_template("org-a", custom["id"])
+    assert preserved["revision"] == 1 and preserved["rows"] == old["rows"]
+
+
+def test_reference_sleepwear_maps_body_chest_field_without_changing_measurements():
+    from bit.size_charts import _prepare_reference_template
+    source = {"standard_template": {"preset_id": "builtin_v1_women_pajamas", "size_system": "alpha"},
+              "attributes": [], "rows": [{"attributes": [{"id": "CHEST_CIRCUMFERENCE_FROM", "values": [
+                  {"name": "76 cm", "struct": {"number": 76, "unit": "cm"}}]}]}]}
+    requirements = {"template_fields": [], "row_fields": [{"id": "BUST_CIRCUMFERENCE_FROM", "tags": ["BODY_MEASURE"], "required": True}]}
+    prepared, notices, errors = _prepare_reference_template(source, requirements)
+    assert not errors
+    assert prepared["rows"][0]["attributes"][0]["id"] == "BUST_CIRCUMFERENCE_FROM"
+    assert prepared["rows"][0]["attributes"][0]["values"] == source["rows"][0]["attributes"][0]["values"]
+    assert source["rows"][0]["attributes"][0]["id"] == "CHEST_CIRCUMFERENCE_FROM"
+    assert any("胸围" in notice for notice in notices)
+
+
+def test_child_reference_omits_only_optional_neck_and_preserves_source():
+    from bit.size_charts import _prepare_reference_template
+    source = {"standard_template": {"preset_id": "builtin_v1_girls_tshirts", "size_system": "age"}, "attributes": [],
+              "rows": [{"attributes": [{"id": name, "values": [{"name": f"{value} cm", "struct": {"number": value, "unit": "cm"}}]}
+                                        for name, value in [("CHEST_CIRCUMFERENCE_FROM", 50), ("NECK_CIRCUMFERENCE_FROM", 24)]]}]}
+    requirements = {"template_fields": [], "row_fields": [{"id": "CHEST_CIRCUMFERENCE_FROM", "tags": ["BODY_MEASURE"], "required": True},
+                    {"id": "NECK_CIRCUMFERENCE_FROM", "tags": ["BODY_MEASURE"], "required": False}]}
+    prepared, notices, errors = _prepare_reference_template(source, requirements)
+    assert not errors and len(source["rows"][0]["attributes"]) == 2
+    assert [row["id"] for row in prepared["rows"][0]["attributes"]] == ["CHEST_CIRCUMFERENCE_FROM"]
+    assert any("30–70" in notice for notice in notices)
+
+
+def test_batch_scope_and_disabled_store_rejected_before_start(service, monkeypatch, tmp_path):
+    call, _, _, _ = service
+    monkeypatch.setenv("BIT_SIZE_CHART_TASK_ROOT", str(tmp_path / "tasks"))
+    for token_id in (2, 3):
+        with pytest.raises(ValueError):
+            call("batch-upload", {"token_ids": [token_id]})
+
+
+def test_batch_worker_retains_failures_and_continues(service, monkeypatch):
+    from bit import size_charts
+    from bit.size_chart_batch import run
+    _, storage, _, _ = service
+    templates = [{"id": 1, "revision": 1, "name": "First"}, {"id": 2, "revision": 1, "name": "Second"}]
+    def fake(action, payload, **kwargs):
+        if action == "preview":
+            if payload["template_id"] == 1:
+                return {"results": [{"status": "invalid", "errors": ["规格不支持"], "message": "规格不支持"}]}
+            return {"preview_id": "verified", "results": [{"status": "ready"}]}
+        return {"results": [{"status": "succeeded", "chart_id": "official-chart", "sites": ["MLB", "MLM"]}]}
+    monkeypatch.setattr(size_charts, "dispatch", fake)
+    class Tasks:
+        updates = []
+        def update(self, task_id, **updates): self.updates.append(updates)
+    class Stop:
+        def is_set(self): return False
+    tasks = Tasks()
+    result = run({"chart_db_path": str(storage.path), "organization_key": "org-a", "token_ids": [1],
+                  "templates": templates}, {"task_id": "batch"}, tasks, Stop())
+    assert result["completed"] == 2 and result["succeeded"] == 1 and result["failed"] == 1
+    assert result["status"] == "partial" and result["results"][0]["errors"] == ["规格不支持"]
+    assert result["results"][1]["chart_id"] == "official-chart"
 
 
 def test_multisite_upload_is_one_create_with_verified_parent_identity_and_wrapped_main(service):
@@ -506,3 +620,17 @@ def test_builtin_multistore_preview_preserves_reference_and_uploads_target_speci
         assert not any(field["id"] == "NECK_CIRCUMFERENCE_TO" for field in sent["rows"][0]["attributes"])
     assert store.get_template("org-a", saved["id"])["rows"] == source["rows"]
     assert preview["template_snapshot"]["standard_template"] == source["standard_template"]
+
+
+def test_options_use_saved_scoped_sites_without_remote_identity_calls(service):
+    call, _, clients, summaries = service
+    summaries[0].update(site_id="CBT", site_settings=[{"site_id": "MLM"}, {"site_id": "MLB"}])
+    result = call("options", allowed=[1])["stores"]
+    assert [row["id"] for row in result] == [1]
+    assert {row["site_id"] for row in result[0]["sites"]} == {"CBT", "MLM", "MLB"}
+    assert not any(client.calls for client in clients.values())
+    assert call("options", allowed=[])["stores"] == []
+    summaries[0].pop("site_id")
+    summaries[0].pop("site_settings")
+    missing = call("options", allowed=[1])["stores"][0]
+    assert missing["sites"] == [] and "更新店铺授权" in missing["message"]

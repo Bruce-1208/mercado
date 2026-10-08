@@ -1,8 +1,8 @@
 (function (root) {
     'use strict';
     const API = '/api/infringement-knowledge/wipo';
-    const STATUS_LABELS = {idle:'等待同步', running:'正在同步', success:'同步成功', error:'同步失败', failed:'同步失败', interrupted:'同步已中断', disabled:'自动更新已关闭'};
-    const COUNT_LABELS = {fetched:'拉取', unique:'去重后', inserted:'新增', updated:'更新', unchanged:'未变化', restored:'恢复', skipped_manual:'保留人工', skipped_deleted:'保留删除'};
+    const STATUS_LABELS = {idle:'等待同步', running:'正在同步', success:'同步成功', continuing:'等待续传', error:'同步失败', failed:'同步失败', interrupted:'同步已中断，进度已保留', disabled:'自动更新已关闭'};
+    const COUNT_LABELS = {fetched:'拉取', unique:'去重后', cached_download_bytes:'已缓存字节', archive_bytes:'文件总字节', processed:'已处理', total:'本批品牌', inserted:'新增黑名单', updated:'更新黑名单', historical_blacklisted:'历史转黑名单', unchanged:'未变化', restored:'恢复', skipped_manual:'保留人工', skipped_deleted:'保留删除'};
 
     function chinaToday(now = new Date()) {
         const parts = new Intl.DateTimeFormat('en-US', {timeZone:'Asia/Shanghai', year:'numeric', month:'2-digit', day:'2-digit'}).formatToParts(now);
@@ -19,7 +19,7 @@
     }
     function summaryLabel(summary) {
         if (!summary || !Object.keys(summary).length) return '尚无同步结果';
-        return Object.entries(COUNT_LABELS).map(([key, label]) => {
+        return Object.entries(COUNT_LABELS).filter(([key]) => !['cached_download_bytes', 'archive_bytes'].includes(key) || Object.hasOwn(summary, key)).map(([key, label]) => {
             const value = Number(summary[key] || 0);
             return `${label} ${Number.isFinite(value) && value >= 0 ? value.toLocaleString('zh-CN') : '—'}`;
         }).join(' · ');

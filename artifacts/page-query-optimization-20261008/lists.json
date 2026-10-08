@@ -1,0 +1,30 @@
+[
+  {
+    "query": "orders",
+    "seconds": 1.062,
+    "total": 6805,
+    "keys": [
+      "rows",
+      "total",
+      "page",
+      "page_size",
+      "pages",
+      "status_counts",
+      "country_counts",
+      "origin_counts",
+      "store_counts",
+      "salesperson_counts",
+      "group_counts",
+      "summary"
+    ]
+  },
+  {
+    "query": "products",
+    "seconds": 0.236,
+    "total": 1686531,
+    "keys": [
+      "total",
+      "rows"
+    ]
+  }
+]

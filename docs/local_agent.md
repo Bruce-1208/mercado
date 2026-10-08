@@ -1,5 +1,9 @@
 # 泽顺本机 Agent 部署说明
 
+Agent 的下载、注册、电脑列表、任务派发、任务控制和浏览器启动仅向企业管理员及超级管理员开放，普通成员即使拥有业务执行权限也不能使用 Agent。企业管理员仍只能操作本企业的 Agent；账号降为普通成员后，原注册凭证及 Agent 通信凭证失效。
+
+售后处理的“启动浏览器”向选定电脑下发 `open_store` 任务，由该电脑的 Agent 按授权店铺名实时匹配并启动本机比特浏览器窗口；页面区分排队、启动中、成功和失败。
+
 本机 Agent 用于让泽顺控制台把申诉、任务和智赢核重核价派发到指定 Windows 或 macOS 电脑。核重核价由 Agent 在本机通过 Playwright 驱动可见 Edge。Agent 是一个常驻的出站客户端，不开放本机 HTTP 端口，也不依赖浏览器的“本地网络访问”权限。
 
 ## 工作方式
@@ -36,6 +40,8 @@ Agent 默认数据目录在 Windows 为 `%LOCALAPPDATA%\Zeshun\MercadoLocalAgent
 
 Agent 1.2.7 在状态窗口增加“Agent 名称”和“保存名称”。名称支持 1–120 个字符，保存后本机立即显示，并在下次成功心跳时同步后台；断网期间保存的名称会在连接恢复后同步。名称写入 `agent-settings.json`，重启后继续使用，优先于启动参数、环境变量和安装包的默认名称。修改名称保留原有 Agent 身份和任务绑定。升级需要重新构建并替换 Agent 客户端，仅更新业务包不会新增此按钮。
 
+Agent 1.2.8 区分服务重启期间的连接错误、超时、HTTP 429/5xx 与明确的凭证拒绝。前者继续保留当前业务进程、日志和同一任务的心跳重试，不再因连续 12 分钟的暂时连接故障主动终止；连接恢复后仍执行服务端的停止指令。HTTP 401/403 会立即停止业务进程，未识别的控制响应异常仍保留 12 分钟保护。服务端现有任务租约和业务接口鉴权继续有效，长时间断线导致租约被回收时，重连仍会停止任务。该改动不会重放申诉或重启已经退出的业务进程。升级需要重新构建并替换 Agent 客户端；仅更新业务包不会更新这段通信逻辑。后台任务的部署和恢复范围见[后台任务重启保护](background_task_reliability.md)。
+
 ## 服务端部署
 
 公网服务器必须以 `server` 角色运行，并保持 `WORKBENCH_SECRET_KEY` 稳定：
@@ -64,6 +70,48 @@ py -3 -m pip install pyinstaller
 构建结果为 `dist\MercadoLocalAgent.exe`。Windows 版以 GUI 子系统构建，运行时只显示状态窗口，不创建常驻 CMD 窗口；任务日志仍会显示在状态窗口并写入 `agent.log`。将该文件连同服务器代码部署到公网服务器的同一路径后，控制台“下载本机 Agent”会自动把 EXE 放入 ZIP。也可以把 EXE 放在服务器其他持久化目录，并用 `BIT_LOCAL_AGENT_EXECUTABLE` 配置它的绝对路径。若服务器上没有该 EXE，控制台仍会生成 Python 源码版安装包，但目标电脑需要 Python 3 和完整项目运行依赖；源码版只适合测试。
 
 构建会一次性收集当前申诉业务所需的第三方 Python 运行库。普通 `.py` 逻辑变化由业务包自动更新；只有 Agent 通信协议改变或业务引入新的第三方依赖时，才需要重新构建 EXE。
+
+## 在 Mac 上更新 Windows Agent
+
+本项目支持在 Mac 上通过独立的 Wine + Windows x64 Python 环境构建 Windows EXE。PyInstaller 本身不支持跨系统编译，因此不要用原生 macOS Python 生成 Windows EXE。
+
+```bash
+# 首次安装环境；以后通常无需再次执行
+./build_local_agent_windows_on_mac.sh --setup
+
+# 检查变化并打包；未变化时跳过 EXE 重建
+./build_local_agent_windows_on_mac.sh
+
+# 需要时强制重建
+./build_local_agent_windows_on_mac.sh --force
+```
+
+环境保存在项目 `.tools/windows-agent/`，不会修改工作台的 macOS Python 环境。Apple Silicon 需要 Rosetta 2；本机已安装。Wine 及 Python 下载包均校验固定 SHA-256。Windows Python 使用官方 MSI 管理解包方式，避免安装器自定义步骤在 Wine 下崩溃。Windows 依赖清单为 `requirements-agent-windows.txt`，安装后的精确版本保存在 `.tools/windows-agent/installed-requirements.txt`。
+
+生成文件：
+
+- `dist/MercadoLocalAgent.exe`：供当前工作台的 Windows Agent 下载接口使用。
+- `dist/Zeshun-MercadoLocalAgent-update.zip`：供已注册 Windows 电脑覆盖更新，包含 EXE 和启动/安装/卸载/解除锁定脚本；不包含 `local-agent.json`，避免覆盖用户现有配置。
+- `dist/Zeshun-Agent-business.zip`：最新业务代码包，带原有版本和哈希校验机制。
+- `dist/windows-agent-build.json`：Agent 版本、业务版本、构建时间和文件 SHA-256。
+
+构建先在临时目录执行，再检查 x64 GUI EXE 格式、实际启动、Tk 窗口和关键运行依赖，并检查 ZIP。全部成功后原子替换 `dist` 内的文件，同时保留上一版 EXE 和更新 ZIP。构建失败或构建过程中检测到相关源码变化时保留旧包。测试环境为 Wine；业务浏览器操作仍需在目标 Windows 电脑验收。
+
+自动检查执行同一个命令：Agent 主程序、构建配置、依赖清单或业务导入模块变化时重建 EXE；普通业务逻辑变化仅更新业务 ZIP，在线 Agent 继续通过原有心跳自动下载业务代码。Windows EXE 仍需在电脑上退出旧 Agent 后覆盖更新；已安装守护任务的电脑先卸载守护任务，更新后重新安装。新电脑使用控制台带注册凭证的正式安装包。
+
+自动触发使用 macOS 原生 FSEvents 文件事件：仅在 Agent 源码、依赖、构建配置或业务包资源变化后执行打包；连续保存会合并为一次，空闲期间不执行检查或打包。没有定时任务。监听服务随当前用户登录启动，Mac 保持开机并登录即可，不需要 Codex 开启。日志位于 `.tools/windows-agent/watcher.log`。
+
+```bash
+# 安装并启动源码变化监听
+./setup_agent_auto_build.sh
+
+# 停止并移除自动触发（保留打包环境和产物）
+./setup_agent_auto_build.sh --uninstall
+```
+
+监听会忽略日志、数据文件、构建产物和打包环境自身的变动，避免构建循环。构建失败后等待下一次源码修改再重试，也可手动执行打包命令。环境安装和重建期间的下载会使用 macOS 已配置的系统代理。
+
+如果工作台设置了 `BIT_LOCAL_AGENT_EXECUTABLE`，该配置优先于默认的 `dist/MercadoLocalAgent.exe`；使用其他路径或其他服务器时，需要把验证后的 EXE 部署到实际配置的位置。
 
 ## 构建一次 macOS Agent
 
@@ -94,7 +142,7 @@ python3 -m pip install pyinstaller
 4. 如需取消登录启动，双击 `uninstall-agent.command`。LaunchAgent 输出位于 `~/Library/Logs/Zeshun/MercadoLocalAgent.log`。
 5. 保持 macOS 版比特浏览器客户端启动；无需启动 `bit_interface` 或完整 client 工作台。
 
-同一电脑重复启动 Agent 会由进程锁拦截。需要更改显示名称时，编辑安装目录的 `local-agent.json` 中 `name` 字段并重启任务。
+同一电脑重复启动 Agent 会由进程锁拦截。Agent 1.2.7 及以上版本可在 Windows 和 macOS 状态窗口的“Agent 名称”栏修改名称并点击“保存名称”，无需重启。名称会在下次成功心跳时同步控制台，重启后继续保留；修改名称不会改变电脑身份和任务绑定。已经在窗口保存过名称的电脑，以用户数据目录中的 `agent-settings.json` 为准，不再使用安装包 `local-agent.json` 的默认名称。
 
 需要更改连接的服务端时，在 Agent 图形窗口的“服务端地址”栏填写完整 URL 并保存，然后重启 Agent。HTTP 仅用于回环地址（或显式启用 `--allow-http` 的部署）；更换到另一套服务时，请从该服务端下载 Agent 安装包，让 Agent 使用对应的注册凭证。
 

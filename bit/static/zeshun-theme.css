@@ -596,3 +596,11 @@ body.zs-auth h1 {
         grid-template-columns: minmax(0, 1fr) 126px;
     }
 }
+
+/* Empty dates show the existing Chinese prompt or a clean calendar control. */
+input.zs-empty-date:not(:focus)::-webkit-datetime-edit {
+    opacity: 0;
+}
+input.zs-empty-date:not(:focus) {
+    color: transparent;
+}

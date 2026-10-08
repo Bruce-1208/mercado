@@ -1,0 +1,54 @@
+{
+  "viewport": 390,
+  "documentWidth": 390,
+  "documentClientWidth": 390,
+  "listWidth": 340,
+  "listScrollWidth": 340,
+  "columns": 1,
+  "cards": [
+    {
+      "x": 25,
+      "y": 1676.875,
+      "width": 340,
+      "height": 649.125
+    },
+    {
+      "x": 25,
+      "y": 2338,
+      "width": 340,
+      "height": 668.625
+    },
+    {
+      "x": 25,
+      "y": 3018.625,
+      "width": 340,
+      "height": 649.125
+    },
+    {
+      "x": 25,
+      "y": 3679.75,
+      "width": 340,
+      "height": 649.125
+    },
+    {
+      "x": 25,
+      "y": 4340.875,
+      "width": 340,
+      "height": 649.125
+    },
+    {
+      "x": 25,
+      "y": 5002,
+      "width": 340,
+      "height": 649.125
+    }
+  ],
+  "cardOverflow": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ]
+}

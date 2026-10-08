@@ -165,7 +165,8 @@ def test_zying_detail_snapshot_is_upserted_as_third_product_source():
     assert stored_snapshot["zying_net_proceeds_usd"] == "22"
     assert "IF(`source_type` = 'zying'" in upsert_sql
     assert "zying" in store.PRODUCT_SOURCE_TYPES
-    assert row[24:] == ("121658", "张三")
+    assert row[24:26] == ("121658", "张三")
+    assert row[-4:] == ("wuhan-zeshun", None, "", "enterprise")
     assert "`product_developer_name`" in upsert_sql
 
 
@@ -508,10 +509,18 @@ def test_existing_schema_still_installs_refresh_indexes_once(monkeypatch):
     assert indexes == [
         (store.COLLECTION_TABLE, "(`profitability_updated_at`, `id`)"),
         (store.PRODUCT_TABLE, "(`profitability_updated_at`, `id`)"),
+        (store.PRODUCT_TABLE, "(`source_item_id`, `organization_key`)"),
+        (store.PRODUCT_TABLE, "(`last_publish_token_id`)"),
     ]
 
 
-def test_missing_listing_ratio_triggers_schema_migration(monkeypatch):
+@pytest.mark.parametrize("missing_column", [
+    (store.MANAGEMENT_CATEGORY_TABLE, "listing_ratio_percent"),
+    *[(table, column)
+      for table in (store.COLLECTION_TABLE, store.PRODUCT_TABLE)
+      for column, _definition in store.INFRINGEMENT_RESULT_COLUMN_DEFINITIONS],
+])
+def test_missing_required_column_triggers_schema_migration(monkeypatch, missing_column):
     class SchemaCursor(_FakeCursor):
         columns = set()
 
@@ -537,7 +546,7 @@ def test_missing_listing_ratio_triggers_schema_migration(monkeypatch):
     cursor = SchemaCursor()
     store._migrate_collection_tables(cursor)
     assert store._collection_schema_is_current(cursor)
-    cursor.columns.remove((store.MANAGEMENT_CATEGORY_TABLE, "listing_ratio_percent"))
+    cursor.columns.remove(missing_column)
     assert not store._collection_schema_is_current(cursor)
     monkeypatch.setattr(store, "_schema_ready", False)
     store.ensure_collection_tables(cursor)
@@ -657,8 +666,9 @@ def test_dimension_only_store_link_sync_does_not_relabel_weight_as_actual():
     )
     assert "products.`weight_basis` = 'mercado_remote_update'" in weight_sql
     assert "products.`shipping_fee_usd` = NULL" in weight_sql
-    assert "products.`net_proceeds_usd` = NULL" in weight_sql
-    assert "products.`profitability_source` = 'mercado_remote_edit_pending'" in weight_sql
+    guard = "LOWER(TRIM(COALESCE(products.`profitability_source`, ''))) <> 'purchase_cost_ratio'"
+    assert f"products.`net_proceeds_usd` = IF({guard}, NULL, products.`net_proceeds_usd`)" in weight_sql
+    assert f"products.`profitability_source` = IF({guard}, 'mercado_remote_edit_pending', products.`profitability_source`)" in weight_sql
 
 
 def test_product_review_status_validates_and_updates_selected_rows():
@@ -720,7 +730,8 @@ def test_product_content_update_validates_persists_and_invalidates_profitability
     }
     assert "`description_text` = %s" in product_sql
     assert "`volumetric_weight_kg` = CASE" in product_sql
-    assert "`net_proceeds_usd` = IF(`source_type` = 'zying'" in product_sql
+    guard = "LOWER(TRIM(COALESCE(`profitability_source`, ''))) <> 'purchase_cost_ratio'"
+    assert f"`net_proceeds_usd` = IF({guard}, IF(`source_type` = 'zying', `net_proceeds_usd`, NULL), `net_proceeds_usd`)" in product_sql
     assert params[-1] == 9
     assert "c.`price` = p.`price`" in collection_sql
     assert "c.`profitability_updated_at` = NULL" in collection_sql
@@ -828,11 +839,13 @@ def test_bulk_collection_measurement_update_mirrors_products_atomically():
     }
     assert "`weight_basis` = 'manual_edit'" in collection_sql
     assert "`volumetric_weight_kg` = CASE" in collection_sql
-    assert "`profitability_updated_at` = NULL" in collection_sql
+    guard = "LOWER(TRIM(COALESCE(`profitability_source`, ''))) <> 'purchase_cost_ratio'"
+    assert f"`profitability_updated_at` = IF({guard}, NULL, `profitability_updated_at`)" in collection_sql
     assert params[-2:] == (7, 8)
     assert "p.`weight_g` = c.`weight_g`" in product_sql
     assert "p.`volumetric_weight_kg` = c.`volumetric_weight_kg`" in product_sql
-    assert "p.`profitability_updated_at` = NULL" in product_sql
+    product_guard = "LOWER(TRIM(COALESCE(p.`profitability_source`, ''))) <> 'purchase_cost_ratio'"
+    assert f"p.`profitability_updated_at` = IF({product_guard}, NULL, p.`profitability_updated_at`)" in product_sql
     assert product_params == (7, 8)
     assert connection.committed is True
 
@@ -875,7 +888,7 @@ def test_pulled_store_link_is_mirrored_as_publish_ready_unreviewed_product():
         if "ON DUPLICATE KEY UPDATE" in query
     )
     values = rows[0]
-    snapshot = json.loads(values[-2])
+    snapshot = json.loads(values[-6])
     assert result == {"count": 1, "skipped": 0}
     assert values[1:4] == ("pulled", "unreviewed", "MLM1234567890")
     assert values[5:9] == (
@@ -958,6 +971,45 @@ def test_collection_save_calculates_usd_price_from_fixed_database_rate():
     assert params[16] == "2026-09-12T00:00:00.000+00:00"
 
 
+@pytest.mark.parametrize("weight, expected_net", [(600, 7.71), (None, None)])
+def test_plugin_collection_saves_official_freight_and_net_atomically(weight, expected_net):
+    from erp.mercadolibre_shipping_rate_cards import OFFICIAL_SHIPPING_RATE_CARD_TABLE
+
+    connection = _FakeConnection()
+    original_fetchall = connection.fake_cursor.fetchall
+
+    def fetchall():
+        if f"FROM `{OFFICIAL_SHIPPING_RATE_CARD_TABLE}`" in connection.fake_cursor.queries[-1][0]:
+            return [{
+                "site_id": "MLM", "rate_kind": "above_threshold",
+                "weight_min_g": 500, "weight_max_g": 600,
+                "shipping_amount_usd": 7.16, "exchange_rate_to_usd": .05,
+                "refreshed_at": "2026-10-08 08:00:00",
+            }]
+        return original_fetchall()
+
+    connection.fake_cursor.fetchall = fetchall
+    store.upsert_collection_items(12, [{
+        "source_item_id": "MLM3016972321", "title": "Plugin product",
+        "price": 350, "currency_id": "MXN", "weight_g": weight,
+        "weight_basis": "server_actual", "volumetric_weight_kg": 9,
+        # Reference values supplied by the plugin must not become saved net.
+        "net_proceeds_usd": 100, "commission_amount_usd": 80,
+    }], connection_factory=lambda: connection)
+    sql, params = next(
+        (query, params) for query, params in connection.fake_cursor.queries
+        if query.startswith(f"INSERT INTO `{store.COLLECTION_TABLE}`")
+    )
+    columns = re.findall(r"`([^`]+)`", sql.split(" VALUES ", 1)[0])[1:]
+    saved = dict(zip(columns, params))
+    assert saved["net_proceeds_usd"] == expected_net
+    assert saved["shipping_fee_usd"] == (7.16 if weight else None)
+    assert saved["commission_amount_usd"] == (2.63 if weight else None)
+    assert saved["billable_weight_g"] == weight
+    assert "`net_proceeds_usd`, VALUES(`net_proceeds_usd`))" in sql
+    assert connection.committed
+
+
 def test_recollection_replaces_stale_profitability_and_weight_basis_atomically():
     connection = _FakeConnection()
     store.upsert_collection_items(
@@ -1002,7 +1054,7 @@ def test_volumetric_fallback_upsert_clears_fake_actual_weight():
         if "ON DUPLICATE KEY UPDATE" in query
     )
     assert "'plugin_volumetric_fallback' ) THEN NULL" in upsert_sql
-    assert params[-7] == "partial"
+    assert params[-11] == "partial"
 
 
 def test_collection_unique_index_is_scoped_to_each_task():
@@ -1010,9 +1062,9 @@ def test_collection_unique_index_is_scoped_to_each_task():
     assert store._ensure_collection_task_unique_index(legacy) is True
     migration_sql = [query for query, _params in legacy.queries]
     assert any("DROP INDEX `uniq_erp_meli_collection_item`" in query for query in migration_sql)
-    assert any("(`task_id`, `source_item_id`)" in query for query in migration_sql)
+    assert any("(`organization_key`, `task_id`, `source_item_id`)" in query for query in migration_sql)
 
-    current = _IndexCursor(["task_id", "source_item_id"])
+    current = _IndexCursor(["organization_key", "task_id", "source_item_id"])
     assert store._ensure_collection_task_unique_index(current) is False
     assert not any("ALTER TABLE" in query for query, _params in current.queries)
 
@@ -1230,7 +1282,7 @@ def test_product_list_filters_zying_category_and_product_developer():
     )
     assert "plugin_snapshot.zying_category" in count_sql
     assert "plugin_snapshot.zying_category_id" in count_sql
-    assert "`product_developer_id` = %s" in count_sql
+    assert "TRIM(COALESCE(`product_developer_id`, '')) = %s" in count_sql
     assert params == (
         "圆佑同步/家电类", "%圆佑同步/家电类%", "圆佑同步/家电类",
         "121658", "121658",
@@ -1530,7 +1582,7 @@ def test_product_owner_filter_applies_before_pagination(field, path):
     assert len(queries) == 2
     for sql, params in queries:
         assert path in sql
-        assert "%张三%" in params
+        assert ("张三" if field == "generator_salesperson" else "%张三%") in params
     assert queries[-1][1][-2:] == (50, 50)
 
 
@@ -1557,3 +1609,127 @@ def test_product_list_closes_connection_on_query_timeout(caplog):
         store.list_product_items(connection_factory=lambda: connection)
     assert connection.closed
     assert "'count':" in caplog.text
+
+
+@pytest.mark.parametrize('filters,pinned', [({}, True), ({'source_type': 'zying'}, False), ({'token_ids': [7]}, False), ({'token_ids': []}, False)])
+def test_product_total_pins_narrow_index_only_without_filters(monkeypatch, filters, pinned):
+    connection = _FakeConnection()
+    monkeypatch.setattr(store, 'ensure_collection_tables', lambda cursor: None)
+    store.list_product_items(connection_factory=lambda: connection, **filters)
+    count_sql, params = next((sql, params) for sql, params in connection.fake_cursor.queries if 'COUNT(*) AS total' in sql)
+    assert ('FORCE INDEX (`idx_erp_meli_product_added`)' in count_sql) is pinned
+    if filters.get('token_ids'):
+        assert 'own_records' in count_sql and 'own_links' in count_sql
+        assert params == (7, 7, 7, 500, 0)
+        assert len(connection.fake_cursor.queries) == 1
+    if filters.get('token_ids') == []:
+        assert '1 = 0' in count_sql
+
+
+@pytest.mark.parametrize('table,listing', [
+    (store.PRODUCT_TABLE, store.list_product_items),
+    (store.COLLECTION_TABLE, store.list_collection_items),
+])
+def test_list_materializes_only_ids_before_loading_full_page(table, listing):
+    connection = _FakeConnection()
+    with patch.object(store, 'ensure_collection_tables'):
+        listing(search='sample', limit=100, offset=200,
+                connection_factory=lambda: connection)
+    sql, params = connection.fake_cursor.queries[-1]
+    assert f'(SELECT `id` FROM `{table}` WHERE' in sql
+    assert 'ORDER BY `id` DESC LIMIT %s OFFSET %s) AS page_ids' in sql
+    assert f'INNER JOIN `{table}` ON `{table}`.`id` = page_ids.`id`' in sql
+    assert f'SELECT * FROM `{table}`' not in sql
+    assert params == ('%sample%', '%sample%', 100, 200)
+
+
+def test_pending_review_publish_records_are_saved_and_filterable():
+    connection = _FakeConnection(update_rowcount=1)
+    with patch.object(store, "ensure_collection_tables"):
+        store.update_product_publish_state(9, status="pending_review", store_name="Shop", token_id=7,
+                                           connection_factory=lambda: connection)
+        store.update_product_publish_record(12, status="pending_review", failure_reason="侵权待审核",
+                                            connection_factory=lambda: connection)
+        store.list_product_publish_records(status="pending_review", connection_factory=lambda: connection)
+    queries = connection.fake_cursor.queries
+    assert any("last_publish_status" in sql and "pending_review" in params for sql, params in queries)
+    assert any("UPDATE" in sql and "侵权待审核" in params for sql, params in queries)
+    assert any("records.`status` = %s" in sql and "pending_review" in params for sql, params in queries)
+    assert "pending_review" not in store.PRODUCT_PUBLISH_RETRYABLE_STATUSES
+
+
+@pytest.mark.parametrize('tokens,source,expected', [
+    ([7], '', 3), ([8], '', 1), ([7, 8, 7], '', 4),
+    ([], '', 0), ([7], 'zying', 2), ([999], '', 0),
+])
+def test_product_scope_union_preserves_all_ownership_paths(monkeypatch, tokens, source, expected):
+    """Execute the generated predicate, including overlaps and foreign stores."""
+    import sqlite3
+    connection = _FakeConnection()
+    monkeypatch.setattr(store, 'ensure_collection_tables', lambda cursor: None)
+    store.list_product_items(token_ids=tokens, source_type=source,
+                             connection_factory=lambda: connection)
+    sql, params = next((sql, params) for sql, params in connection.fake_cursor.queries
+                       if 'COUNT(*) AS total' in sql)
+    combined = sql.startswith('WITH authorized_products AS (')
+    if combined:
+        union = sql[len('WITH authorized_products AS ('):sql.index(') SELECT /*+')]
+        count_sql = f'SELECT COUNT(*) AS total FROM ({union}) AS authorized_products'
+        count_params = params[:-2]
+    else:
+        count_sql, count_params = sql, params
+    with sqlite3.connect(':memory:') as db:
+        db.executescript('''
+            CREATE TABLE erp_mercadolibre_products
+                (id INTEGER, source_item_id TEXT, last_publish_token_id INTEGER, source_type TEXT);
+            CREATE TABLE erp_mercadolibre_publish_records (product_item_id INTEGER, token_id INTEGER);
+            CREATE TABLE erp_mercadolibre_store_links (item_id TEXT, token_id INTEGER);
+            INSERT INTO erp_mercadolibre_products VALUES
+                (1,'A',7,'zying'),(2,'B',NULL,'zying'),(3,'C',NULL,'pulled'),
+                (4,'D',8,'zying'),(5,'E',NULL,'zying');
+            INSERT INTO erp_mercadolibre_publish_records VALUES (1,7),(2,7),(2,7),(99,7);
+            INSERT INTO erp_mercadolibre_store_links VALUES ('A',7),('C',7),('C',7),('D',8);
+        ''')
+        assert db.execute(count_sql.replace('%s', '?'), count_params).fetchone()[0] == expected
+    if tokens:
+        assert 'EXISTS' not in sql
+        assert sql.count(' UNION ') == 2
+        page_sql, page_params = next((query, values) for query, values in connection.fake_cursor.queries
+                                     if 'AS page_ids' in query)
+        if combined:
+            assert len(connection.fake_cursor.queries) == 1
+            assert 'SELECT `id` FROM authorized_products ORDER BY `id` DESC LIMIT %s OFFSET %s' in page_sql
+        else:
+            assert sql.split(' WHERE ', 1)[1] in page_sql
+        assert page_params[:-2] == count_params
+
+
+def test_collection_salesperson_filter_is_exact_and_applies_before_pagination():
+    connection = _FakeConnection()
+    store.list_collection_items(
+        salesperson="  业务甲_%'  ", exclude_added=True,
+        include_salesperson_options=True, limit=20, offset=40,
+        connection_factory=lambda: connection,
+    )
+    count_sql, count_params = next(
+        (sql, params) for sql, params in connection.fake_cursor.queries
+        if sql.startswith("SELECT /*+ MAX_EXECUTION_TIME(8000) */ COUNT(*)")
+    )
+    assert "EXISTS (SELECT 1 FROM" in count_sql
+    assert "collection_task.`created_by`" in count_sql
+    assert "'浏览器插件：'" in count_sql
+    assert "= %s" in count_sql
+    assert count_params == ("业务甲_%'",)
+    row_sql, row_params = next(
+        (sql, params) for sql, params in connection.fake_cursor.queries
+        if sql.startswith("SELECT /*+ MAX_EXECUTION_TIME(8000) */") and "COUNT(*)" not in sql
+    )
+    assert "EXISTS (SELECT 1 FROM" in row_sql
+    assert row_params == ("业务甲_%'", 20, 40)
+    directory_sql, directory_params = next(
+        (sql, params) for sql, params in connection.fake_cursor.queries
+        if sql.startswith("SELECT DISTINCT") and "AS salesperson" in sql
+    )
+    assert "item.`added_to_products` = 0" in directory_sql
+    assert "LIMIT" not in directory_sql and "= %s" not in directory_sql
+    assert directory_params is None

@@ -50,6 +50,8 @@ def get_account_balance_overview(user_id, settings, get_api_key, *, force=False)
     """
     providers = []
     for provider, info in PROVIDER_BALANCE_INFO.items():
+        if provider == "deepseek":
+            continue  # Retired credentials are retained but no longer queried automatically.
         if not settings.get(f'{provider}_configured'):
             continue
         if provider == 'deepseek':

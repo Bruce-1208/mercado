@@ -97,6 +97,8 @@ def test_forwarded_identity_requires_internal_authentication(monkeypatch):
 
 
 def test_history_endpoint_requires_platform_admin(monkeypatch):
+    from bit import weight_dimensions_audit
+    monkeypatch.setattr(weight_dimensions_audit, 'ensure_history_backfilled', lambda: None)
     from bit import bit_interface as workbench
     app = workbench.app
     app.config.update(TESTING=True, SECRET_KEY='test')
@@ -138,9 +140,12 @@ def test_history_endpoint_requires_platform_admin(monkeypatch):
 def test_operation_type_includes_existing_http_and_worker_records(action, path, method, category):
     audit.record(action, 'completed', {'context': {'path': path, 'method': method}})
     rows = audit.history(operation_type=category)
-    assert len(rows) == 1
-    assert rows[0]['operation_type'] == category
-    assert rows[0]['action'] == action
+    if category == 'query':
+        assert rows == []
+    else:
+        assert len(rows) == 1
+        assert rows[0]['operation_type'] == category
+        assert rows[0]['action'] == action
     for other_type in audit.OPERATION_TYPES:
         if other_type != category:
             assert audit.history(operation_type=other_type) == []

@@ -1,4 +1,4 @@
-"""Fail-closed, per-product accounting for text-only official DeepSeek Flash.
+"""Fail-closed, per-product accounting for text-only official DeepSeek Flash and Qwen3.7-Flash.
 
 Prices were verified against the Chinese (CNY) pricing page on 2026-10-03.
 Reservations use peak cache-miss rates and a conservative UTF-8 byte bound,
@@ -17,11 +17,22 @@ import threading
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Callable, Iterable
-from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 
 MODEL = "deepseek-flash"
+QWEN_MODEL = "qwen3.7-flash"
+QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+QWEN_PRICING_SOURCE = "https://help.aliyun.com/zh/model-studio/qwen3-7-flash"
+
+def qwen_rates(prompt_tokens):
+    """Conservative billing: cache discounts omitted; tiers use total input."""
+    if prompt_tokens <= 32_000:
+        return (200, 200, 800)
+    if prompt_tokens <= 256_000:
+        return (600, 600, 2400)
+    return (1200, 1200, 4800)
+
 PRICING_SOURCE = "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/"
 PRICING_VERIFIED_ON = "2026-10-03"
 BEIJING = ZoneInfo("Asia/Shanghai")
@@ -140,13 +151,17 @@ class BudgetedChat:
                  transport: Callable | None = None, now: Callable | None = None,
                  before_request: Callable | None = None, cap_yuan="0.03",
                  offpeak_only: bool = True, min_output_tokens: int = 128,
-                 enforce_cap: bool = True):
+                 enforce_cap: bool = True, model: str = MODEL):
+        if model not in {MODEL, QWEN_MODEL}:
+            raise ValueError("Unsupported accounting model")
+        self.model = model
+        self.is_qwen = model == QWEN_MODEL
         self._lock = threading.RLock()
         self._on_update = on_update
         self._transport = transport
         self._now = now or (lambda: datetime.now(BEIJING))
         self._before_request = before_request
-        self.offpeak_only = offpeak_only
+        self.offpeak_only = offpeak_only and not self.is_qwen
         self.enforce_cap = enforce_cap
         self.min_output_tokens = max(1, int(min_output_tokens))
         requested_cap = min(DEFAULT_CAP, _nano(cap_yuan))
@@ -160,11 +175,12 @@ class BudgetedChat:
             self._ledger["revision"] = self._int(self._ledger.get("revision", 0))
             self._ledger["cap_nano"] = min(requested_cap, self._int(self._ledger["cap_nano"]))
             for entry in self._ledger["calls"]:
+                entry.setdefault("model", self._ledger.get("model", MODEL))
                 self._int(entry["reserved_nano"])
                 if entry["state"] == "complete":
                     self._int(entry["cost_nano"])
                 elif entry["state"] in {"pending", "unknown"}:
-                    self._ledger["blocked_reason"] = "上次调用费用尚未确认，已保留预算；请核对 DeepSeek 账单后人工处理。"
+                    self._ledger["blocked_reason"] = "上次调用费用尚未确认，已保留预算；请核对模型供应商账单后人工处理。"
                     self._ledger["blocked_kind"] = "usage_unknown"
                 else:
                     raise ValueError("invalid call state")
@@ -196,14 +212,15 @@ class BudgetedChat:
         snapshot = copy.deepcopy(self._ledger)
         spent, reserved = self._totals()
         snapshot.update({
-            "currency": "CNY", "model": MODEL, "cap_yuan": _yuan(snapshot["cap_nano"]),
+            "currency": "CNY", "model": self.model, "cap_yuan": _yuan(snapshot["cap_nano"]),
             "spent_yuan": _yuan(spent), "reserved_yuan": _yuan(reserved),
             "remaining_yuan": self.remaining_yuan if self.enforce_cap else None,
             "budget_limit_enabled": self.enforce_cap,
             "total_tokens": sum(e.get("prompt_tokens", 0) + e.get("completion_tokens", 0)
                                 for e in snapshot["calls"] if e["state"] == "complete"),
             "status": "blocked" if snapshot.get("blocked_reason") else "ready",
-            "pricing_verified_on": PRICING_VERIFIED_ON, "pricing_source": PRICING_SOURCE,
+            "pricing_verified_on": "2026-10-06" if self.is_qwen else PRICING_VERIFIED_ON,
+            "pricing_source": QWEN_PRICING_SOURCE if self.is_qwen else PRICING_SOURCE,
         })
         for entry in snapshot["calls"]:
             entry["reserved_yuan"] = _yuan(entry["reserved_nano"])
@@ -237,19 +254,21 @@ class BudgetedChat:
     def _call(self, messages, temperature, max_tokens, response_format, api_key, base_url, timeout):
         # Do not let custom gateways apply unverified tariffs. Always provide
         # the validated URL explicitly so environment defaults cannot override.
-        base_url = str(base_url or "https://api.deepseek.com").strip().rstrip("/")
-        parsed = urlsplit(base_url)
-        if (parsed.scheme != "https" or parsed.netloc != "api.deepseek.com"
-                or parsed.path not in {"", "/v1"} or parsed.query or parsed.fragment):
-            self._block("当前商品生成模式仅支持 DeepSeek 官方接口，请使用 https://api.deepseek.com。", "unsupported_provider")
+        expected_url = QWEN_BASE_URL if self.is_qwen else "https://api.deepseek.com"
+        base_url = str(base_url or expected_url).strip().rstrip("/")
+        allowed = {expected_url} if self.is_qwen else {expected_url, expected_url + "/v1"}
+        if base_url not in allowed:
+            self._block("当前商品生成模式仅支持对应模型官方接口。", "unsupported_provider")
+        if self.is_qwen and not str(api_key or "").strip():
+            raise ValueError("缺少百炼 API Key，请在集成与凭证设置中配置。")
         messages = list(messages)
         bound = prompt_token_bound(messages, response_format)
-        requested_output = min(384_000, int(max_tokens if max_tokens is not None else 2000))
+        requested_output = min(131_072 if self.is_qwen else 384_000, int(max_tokens if max_tokens is not None else 2000))
         if requested_output < 1:
             raise ValueError("max_tokens must be positive")
         fingerprint = hashlib.sha256(json.dumps({
             "messages": messages, "temperature": temperature, "max_tokens": requested_output,
-            "response_format": response_format, "model": MODEL,
+            "response_format": response_format, "model": self.model,
         }, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         cached = self._ledger["cache"].get(fingerprint)
         if isinstance(cached, str):
@@ -270,16 +289,18 @@ class BudgetedChat:
                 kind="wait_offpeak")
         spent, reserved = self._totals()
         remaining = self._ledger["cap_nano"] - spent - reserved
-        input_reserve = bound * PEAK_RATES[1]
-        output_limit = (min(requested_output, (remaining - input_reserve) // PEAK_RATES[2])
+        reserve_rates = qwen_rates(bound) if self.is_qwen else PEAK_RATES
+        input_reserve = bound * reserve_rates[1]
+        output_limit = (min(requested_output, (remaining - input_reserve) // reserve_rates[2])
                         if self.enforce_cap else requested_output)
         if output_limit < min(self.min_output_tokens, requested_output):
             self._block("本商品剩余预算不足，已停止自动生成；请人工补齐内容。", "budget_exhausted")
         entry = {
             "state": "pending", "started_at": started.isoformat(),
+            "model": self.model, "pricing_source": QWEN_PRICING_SOURCE if self.is_qwen else PRICING_SOURCE,
             "request_hash": fingerprint, "prompt_token_bound": bound,
             "max_tokens": output_limit,
-            "reserved_nano": input_reserve + output_limit * PEAK_RATES[2],
+            "reserved_nano": input_reserve + output_limit * reserve_rates[2],
         }
         self._ledger["calls"].append(entry)
         self._save()  # MUST succeed before even creating the paid request.
@@ -288,7 +309,7 @@ class BudgetedChat:
             if transport is None:
                 from AI_Agent.deepseek import chat_deepseek_with_usage
                 transport = chat_deepseek_with_usage
-            result = transport(messages=messages, model=MODEL, temperature=temperature,
+            result = transport(messages=messages, model=self.model, temperature=temperature,
                                max_tokens=output_limit, response_format=response_format,
                                api_key=api_key, base_url=base_url, thinking=False,
                                timeout=timeout if timeout is not None else 120,
@@ -303,20 +324,21 @@ class BudgetedChat:
             if not isinstance(result, dict) or not isinstance(result.get("content"), str):
                 raise ValueError("invalid response")
             hit, miss, completion = _usage_counts(result.get("usage"))
-            returned_model = str(result.get("model") or MODEL).lower()
-            if "flash" not in returned_model or "pro" in returned_model:
+            returned_model = str(result.get("model") or self.model).lower()
+            if ((self.is_qwen and returned_model not in {QWEN_MODEL, "qwen3.7-flash-2026-07-15"})
+                    or (not self.is_qwen and ("flash" not in returned_model or "pro" in returned_model))):
                 raise ValueError("unexpected billed model")
         except (TypeError, ValueError) as exc:
             entry["state"] = "unknown"
             entry["error_type"] = type(exc).__name__
             self._block("模型未返回可靠 Token 用量，已保留本次预算并停止重试；请核对账单后人工处理。", "usage_unknown")
         offpeak = _interval_offpeak(started, ended)
-        rates = OFFPEAK_RATES if offpeak else PEAK_RATES
+        rates = qwen_rates(hit + miss) if self.is_qwen else (OFFPEAK_RATES if offpeak else PEAK_RATES)
         cost = hit * rates[0] + miss * rates[1] + completion * rates[2]
         entry.update({"state": "complete", "ended_at": ended.isoformat(),
                       "prompt_tokens": hit + miss, "completion_tokens": completion,
                       "cache_hit_tokens": hit, "cache_miss_tokens": miss,
-                      "cost_nano": cost, "rate_period": "offpeak" if offpeak else "peak",
+                      "cost_nano": cost, "rate_period": "standard" if self.is_qwen else ("offpeak" if offpeak else "peak"),
                       "finish_reason": result.get("finish_reason")})
         if hit + miss > bound or completion > output_limit or cost > entry["reserved_nano"]:
             self._block("接口报告用量超过预留上限，已记录费用并停止后续调用；请人工核对。", "usage_bound_exceeded")

@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>今日必办 · 泽顺运营中心</title>
+  <script src="{{ url_for('static', filename='action-center-preload.js') }}?v=20261009-preload-batch" data-account="{{ [current_user.organization_key or '', current_user.id or current_user.username or ''] | tojson | forceescape }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='employee-tasks.css') }}">
   <style>
     :root{font-family:Inter,"Microsoft YaHei",system-ui,sans-serif;color:#172033;background:#f3f6fb;font-synthesis:none}
@@ -23,8 +24,9 @@
     @media(max-width:900px){.metrics{grid-template-columns:repeat(2,1fr)}.task-controls{grid-template-columns:1fr 1fr}.task-controls textarea{grid-column:1/-1}.event{grid-template-columns:1fr 1fr}.event-error{grid-column:1/-1}}
     @media(max-width:560px){.shell{padding:18px 12px 40px}.top{align-items:flex-start;flex-direction:column}h1{font-size:24px}.metrics{gap:8px}.metric{padding:13px}.metric strong{font-size:21px}.panel{padding:13px}.task-head{display:block}.task-controls{grid-template-columns:1fr}.task-controls textarea{grid-column:auto}.event{grid-template-columns:1fr}.event-error{grid-column:auto}}
   </style>
-<link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261004-responsive">
-    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261004-responsive"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261007-date-filters">
+<script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261007"></script>
+    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261007-date-filters"></script>
 </head>
 <body class="zs-standalone">
   <main class="shell">
@@ -34,14 +36,21 @@
     </header>
     <div class="error" id="error"></div>
     <section class="panel toolbar" aria-label="店铺内容筛选">
-      <label>业务员 <select id="salesperson"><option value="">全部业务员</option></select></label>
+      <label>成员（业务员） <select id="salesperson"><option value="">全部业务员</option></select></label>
       <label>店铺组 <select id="group_name"><option value="">全部店铺组</option></select></label>
-      <span class="hint">筛选采购、运营待办、权利人案件及通知记录。</span>
+      <span class="hint">筛选采购、运营待办、权利人案件及通知记录。统计仅针对当前店铺页。自动记住本账号的成员和店铺组选择。</span>
     </section>
+    <section class="panel toolbar" id="store-pagination" aria-label="店铺分页"></section>
     {% include '_employee_tasks_panel.html' %}
     <section class="panel">
-      <div class="heading"><h2>采购必办（<span id="purchase-count">—</span>）</h2><span class="hint">按订单创建时间计算；处理明细追加到订单备注。</span></div>
+      <div class="heading"><h2>采购必办（<span id="purchase-count">—</span>）</h2><span class="hint">按订单创建时间计算：满 48 小时无物流号、满 168 小时未在途、满 30 天未交付告警；处理明细追加到订单备注。</span></div>
       <div class="task-list" id="purchase-tasks"><div class="empty">正在读取采购必办…</div></div>
+      <div class="toolbar" id="purchase-tasks-pagination" aria-label="内容分页"></div>
+    </section>
+    <section class="panel">
+      <div class="heading"><h2>待回复售后消息（<span id="post-sale-count">—</span>）</h2><span class="hint">不限消息日期；已回复会话不显示，已读未回复仍显示。</span></div>
+      <div class="task-list" id="post-sale-tasks"><div class="empty">正在核对售后回复状态…</div></div>
+      <div class="toolbar" id="post-sale-tasks-pagination" aria-label="内容分页"></div>
     </section>
     <section class="metrics">
       <div class="metric"><span>待处理</span><strong id="count-open">—</strong></div>
@@ -52,14 +61,17 @@
       <div class="heading"><h2>待回复权利人（<span id="rights-count">—</span>）</h2><span class="hint">时间均为北京时间（UTC+8）；按回复截止时间排序，每小时自动刷新。</span></div>
       {% if can_execute %}<p class="hint">优先直接回复；需要浏览器处理时，在回复弹窗内选择电脑并打开对应店铺。</p>{% endif %}
       <div class="task-list" id="rights-cases"><div class="empty">正在读取待回复案件…</div></div>
+      <div class="toolbar" id="rights-cases-pagination" aria-label="内容分页"></div>
     </section>
     <section class="panel">
       <div class="heading"><h2>运营待办</h2><div class="toolbar"><select id="filter"><option value="active">未完成</option><option value="all">全部状态</option><option value="overdue">已逾期</option><option value="urgent">高优先级 / 紧急</option></select><span class="hint" id="generated-at"></span></div></div>
       <div class="task-list" id="tasks"><div class="empty">正在读取待办…</div></div>
+      <div class="toolbar" id="tasks-pagination" aria-label="内容分页"></div>
     </section>
     <section class="panel">
       <div class="heading"><h2>通知处理记录</h2><span class="hint">失败或死信可以从这里重放；重复通知按事件 ID 去重。</span></div>
       <div id="events"><div class="empty">正在读取通知记录…</div></div>
+      <div class="toolbar" id="events-pagination" aria-label="内容分页"></div>
     </section>
   </main>
   <div class="toast" id="toast"></div>
@@ -67,24 +79,57 @@
   <dialog id="rights-dialog" style="width:min(680px,92vw);border:1px solid #d0d5dd;border-radius:14px;padding:24px">
     <h2 style="margin-top:0">回复权利人</h2>
     <div id="rights-context" class="task-details"></div>
-    <div class="toolbar" style="margin-bottom:12px"><label>回复电脑 <select id="rights-agent" aria-label="权利人回复 Agent"><option value="">选择在线 Agent</option></select></label><button class="button" id="rights-agent-refresh" type="button">刷新电脑</button></div>
+    <div class="toolbar" {% if current_user.role_key not in ['enterprise_admin', 'super_admin'] %}hidden{% endif %} style="margin-bottom:12px"><label>回复电脑 <select id="rights-agent" aria-label="权利人回复 Agent"><option value="">选择在线 Agent</option></select></label><button class="button" id="rights-agent-refresh" type="button">刷新电脑</button></div>
     <p id="rights-message" role="status" style="white-space:pre-wrap"></p>
     <form id="rights-form">
       <label for="rights-text">回复内容（按原文发送，请使用权利人可理解的语言）</label>
       <textarea id="rights-text" required maxlength="10000" rows="7" style="width:100%;margin:8px 0 14px;font:inherit"></textarea>
       <label for="rights-document">证明附件（PDF、JPG、PNG，最多 5 MB）</label>
       <input id="rights-document" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:block;margin:8px 0 18px">
-      <div class="toolbar"><button class="button primary" id="rights-submit" type="submit">提交回复</button><button class="button" id="rights-browser" type="button">在对应店铺中处理</button><button class="button" id="rights-close" type="button">关闭</button></div>
+      <div class="toolbar"><button class="button primary" id="rights-submit" type="submit">提交回复</button><button class="button" {% if current_user.role_key not in ['enterprise_admin', 'super_admin'] %}hidden{% endif %} id="rights-browser" type="button">在对应店铺中处理</button><button class="button" id="rights-close" type="button">关闭</button></div>
     </form>
   </dialog>
+  <script>window.canAccessAgents = {{ (current_user.role_key in ['enterprise_admin', 'super_admin'])|tojson }};</script>
   <script src="{{ url_for('static', filename='rights-holder-reply.js') }}?v=20261003-agent-picker" defer></script>
   {% endif %}
   <script src="{{ url_for('static', filename='employee-tasks.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='action-center-batch.js') }}?v=20261009"></script>
   <script>
     const canExecute = {{ can_execute | tojson }};
     const autoRefreshMs = 60 * 60 * 1000;
+    let postSaleRows = [];
     let actionData = {rows: [], events: []};
-    let loadInProgress = false;
+    let storePage = 1, eventPage = 1;
+    const contentPages = {};
+    function pageRows(key, rows) {
+      const pages=Math.max(1, Math.ceil(rows.length/20));
+      const page=contentPages[key]=Math.min(contentPages[key]||1,pages);
+      const pager=$(key+'-pagination');
+      if(pager) pager.innerHTML=rows.length>20?`<span class="hint">共 ${rows.length} 条 · 第 ${page}/${pages} 页</span><button class="button" ${page===1?'disabled':''} onclick="changeContentPage('${key}',-1)">上一页</button><button class="button" ${page===pages?'disabled':''} onclick="changeContentPage('${key}',1)">下一页</button>`:'';
+      return rows.slice((page-1)*20,page*20);
+    }
+    function changeContentPage(key, delta) {
+      contentPages[key]=(contentPages[key]||1)+delta;
+      if(key==='post-sale-tasks') renderPostSaleRows(); else renderTasks();
+    }
+    function changeStorePage(delta) {
+      if(typeof window !== 'undefined') window.TodayBatch?.clear();
+      storePage=Math.max(1,storePage+delta); eventPage=1;
+      for(const key in contentPages) delete contentPages[key];
+      actionData={rows:[],events:[],pending:true}; renderTasks(); renderEvents();
+      loadData();
+    }
+    function renderPagination() {
+      const p=actionData.store_pagination;
+      if(p) {
+        storePage=p.page;
+        $('store-pagination').innerHTML=`<span>全部授权范围共 ${p.total} 个店铺 · 每页 ${p.page_size} 个 · 第 ${p.page}/${p.pages} 页</span><button class="button" ${p.page===1?'disabled':''} onclick="changeStorePage(-1)">上一页店铺</button><button class="button" ${p.page===p.pages?'disabled':''} onclick="changeStorePage(1)">下一页店铺</button>`;
+      }
+      const e=actionData.event_pagination;
+      if(e) $('events-pagination').innerHTML=`<span class="hint">共 ${e.total} 条 · 第 ${e.page}/${e.pages} 页</span><button class="button" ${e.page===1?'disabled':''} onclick="eventPage--;loadData(false,true)">上一页</button><button class="button" ${e.page>=e.pages?'disabled':''} onclick="eventPage++;loadData(false,true)">下一页</button>`;
+    }
+    let loadGeneration = 0;
+    let taskRefreshTimer = null;
     let lastLoadedAt = 0;
     const $ = id => document.getElementById(id);
     function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
@@ -99,24 +144,26 @@
     function localInput(value) { if (!value) return ''; const date=beijingDate(value); return Number.isNaN(date.getTime())?'':new Date(date.getTime()+8*3600000).toISOString().slice(0,16); }
     function dateLabel(value) { if(!value) return '未设置'; const date=beijingDate(value); return Number.isNaN(date.getTime())?String(value):date.toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})+'（北京时间）'; }
     function statusLabel(status) { return ({open:'待处理',in_progress:'处理中',resolved:'已完成',pending:'排队中',retry:'等待重试',dead:'死信',processing:'处理中',done:'已处理'})[status] || status || '—'; }
+    function taskTopicLabel(topic) { return ({purchase_order_missing_24h:'采购订单号缺失',purchase_tracking_missing_48h:'48 小时无物流号',order_not_in_transit_7d:'168 小时未在途',order_not_delivered_30d:'30 天未交付',procurement_tracking_stalled:'采购物流异常',shipment_deadline_check:'发货时限检查'})[topic] || topic || '业务提醒'; }
     function taskCard(task) {
       const overdue=Boolean(task.overdue), resolved=task.status==='resolved', priority=task.priority||'normal';
       const logs=(task.logs||[]).map(log=>`<li><b>${escapeHtml(log.actor||'系统')}</b> · ${escapeHtml(dateLabel(log.created_at))} · ${escapeHtml(log.note||log.action||'')}</li>`).join('');
       const classes=['task',overdue?'overdue':'',priority==='urgent'?'urgent':'',resolved?'resolved':''].filter(Boolean).join(' ');
       return `<article class="${classes}" data-task-id="${Number(task.id)}">
-        <div class="task-head"><div><div class="task-title">${escapeHtml(task.title)}</div><div class="task-meta"><span class="tag">${escapeHtml(task.store_name||`店铺 #${task.token_id||'—'}`)}</span><span class="tag">${escapeHtml(task.topic||'业务提醒')}</span><span class="tag ${overdue?'red':priority==='urgent'?'amber':''}">${overdue?'已逾期 · ':''}${escapeHtml(statusLabel(task.status))}</span><span class="tag ${priority==='urgent'?'red':priority==='high'?'amber':''}">${escapeHtml(priority==='urgent'?'紧急':priority==='high'?'高优先级':'普通')}</span><span class="tag">处理时限：${escapeHtml(dateLabel(task.due_at))}</span></div></div><a href="${escapeHtml(safeHref(task.entry_url))}">打开处理入口 →</a></div>
+        <div class="task-head"><div><div class="task-title">${escapeHtml(task.title)}</div><div class="task-meta"><span class="tag">${escapeHtml(task.store_name||`店铺 #${task.token_id||'—'}`)}</span><span class="tag">${escapeHtml(taskTopicLabel(task.topic))}</span><span class="tag ${overdue?'red':priority==='urgent'?'amber':''}">${overdue?'已逾期 · ':''}${escapeHtml(statusLabel(task.status))}</span><span class="tag ${priority==='urgent'?'red':priority==='high'?'amber':''}">${escapeHtml(priority==='urgent'?'紧急':priority==='high'?'高优先级':'普通')}</span><span class="tag">处理时限：${escapeHtml(dateLabel(task.due_at))}</span></div></div><a href="${escapeHtml(safeHref(task.entry_url))}">打开处理入口 →</a></div>
         <div class="task-details">${escapeHtml(task.details||task.resource||'请打开处理入口核实平台当前状态。')}</div>
         ${canExecute?`<div class="task-controls"><input data-role="owner" maxlength="100" value="${escapeHtml(task.owner||'')}" placeholder="负责人"><input data-role="due" type="datetime-local" value="${escapeHtml(localInput(task.due_at))}"><select data-role="status"><option value="open" ${task.status==='open'?'selected':''}>待处理</option><option value="in_progress" ${task.status==='in_progress'?'selected':''}>处理中</option><option value="resolved" ${resolved?'selected':''}>已完成</option></select><textarea data-role="note" maxlength="2000" placeholder="填写本次处理记录；标记完成时请说明结果"></textarea><button class="button primary" type="button" onclick="saveTask(${Number(task.id)},this)">保存记录</button></div>`:''}
         <details class="history"><summary>处理记录（${(task.logs||[]).length}）</summary><ol>${logs||'<li>暂无处理记录</li>'}</ol></details>
       </article>`;
     }
-    const purchaseTopics = new Set(['purchase_order_missing_24h','purchase_tracking_missing_48h','order_not_in_transit_7d','procurement_tracking_stalled']);
+    const purchaseTopics = new Set(['purchase_order_missing_24h','purchase_tracking_missing_48h','order_not_in_transit_7d','order_not_delivered_30d','procurement_tracking_stalled']);
     function renderTasks() {
       const rights=actionData.rights_holder_replies||[];
+      pageRows('rights-cases',rights);
       $('rights-count').textContent=rights.length;
-      $('rights-cases').innerHTML=rights.length?rights.map((row,index)=>`<article class="task urgent">
+      $('rights-cases').innerHTML=rights.length?pageRows('rights-cases',rights).map((row)=>`<article class="task urgent">
         <div class="task-head"><div><div class="task-title">${escapeHtml(row.rights_holder||'权利人待回复')}</div>
-        <div class="task-meta"><span class="tag">${escapeHtml(row.store_name||'')} · ${escapeHtml(row.site_id||'')}</span><span class="tag amber">回复截止：${escapeHtml(dateLabel(row.due_at))}</span></div></div>${canExecute?`<button class="button" type="button" data-rights-index="${index}">去回复权利人</button>`:''}</div>
+        <div class="task-meta"><span class="tag">${escapeHtml(row.store_name||'')} · ${escapeHtml(row.site_id||'')}</span><span class="tag amber">回复截止：${escapeHtml(dateLabel(row.due_at))}</span></div></div>${canExecute?`<button class="button" type="button" data-rights-index="${rights.indexOf(row)}">去回复权利人</button>`:''}</div>
         <div class="task-details">${escapeHtml(row.title||row.item_id||'')}\n商品：${escapeHtml(row.item_id||'—')} · 案件：${escapeHtml(row.infraction_id||'—')}\n${escapeHtml(row.infraction_reason||'')}\n最近同步：${escapeHtml(dateLabel(row.last_checked_at))}</div>
       </article>`).join(''):'<div class="empty">当前店铺范围内没有待回复的权利人案件。</div>';
       const filter=$('filter').value; let rows=actionData.rows||[];
@@ -124,43 +171,122 @@
       if(filter==='overdue') rows=rows.filter(row=>row.overdue&&row.status!=='resolved');
       if(filter==='urgent') rows=rows.filter(row=>['urgent','high'].includes(row.priority)&&row.status!=='resolved');
       const purchaseRows=rows.filter(row=>purchaseTopics.has(row.topic));
-      $('purchase-count').textContent=purchaseRows.length;
-      $('purchase-tasks').innerHTML=purchaseRows.length?purchaseRows.map(taskCard).join(''):'<div class="empty">当前筛选下没有采购必办。</div>';
+      pageRows('purchase-tasks',purchaseRows);
+      $('purchase-count').textContent=actionData.pending?'核对中':purchaseRows.length;
+      $('purchase-tasks').innerHTML=purchaseRows.length?pageRows('purchase-tasks',purchaseRows).map(taskCard).join(''):`<div class="empty">${actionData.pending?'正在后台计算采购必办…':'当前筛选下没有采购必办。'}</div>`;
       rows=rows.filter(row=>!purchaseTopics.has(row.topic));
-      $('tasks').innerHTML=rows.length?rows.map(taskCard).join(''):'<div class="empty">当前筛选下没有待办。收到新通知或刷新订单、活动数据后，相关异常会出现在这里。</div>';
+      pageRows('tasks',rows);
+      $('tasks').innerHTML=rows.length?pageRows('tasks',rows).map(taskCard).join(''):'<div class="empty">当前筛选下没有待办。收到新通知或刷新订单、活动数据后，相关异常会出现在这里。</div>';
       const open=(actionData.rows||[]).filter(row=>row.status!=='resolved');
-      $('count-open').textContent=open.length;
-      $('count-overdue').textContent=open.filter(row=>row.overdue).length;
-      $('count-urgent').textContent=open.filter(row=>['urgent','high'].includes(row.priority)).length;
-      $('generated-at').textContent=actionData.generated_at?`更新于 ${actionData.generated_at}`:'';
+      $('count-open').textContent=actionData.pending?'—':open.length;
+      $('count-overdue').textContent=actionData.pending?'—':open.filter(row=>row.overdue).length;
+      $('count-urgent').textContent=actionData.pending?'—':open.filter(row=>['urgent','high'].includes(row.priority)).length;
+      if (typeof window !== 'undefined') {
+        window.TodayBatch?.render('purchase-tasks', purchaseRows);
+        window.TodayBatch?.render('tasks', rows);
+        window.TodayBatch?.render('rights-cases', rights);
+      }
+      $('generated-at').textContent=actionData.refreshing?'正在后台核对订单告警…':actionData.generated_at?`更新于 ${actionData.generated_at}`:'';
     }
     function renderEvents() {
       const rows=actionData.events||[];
       if(!rows.length){$('events').innerHTML='<div class="empty">暂无通知记录</div>';return;}
       $('events').innerHTML=rows.map(event=>`<div class="event"><span>${escapeHtml(dateLabel(event.received_at))}</span><span><b>${escapeHtml(statusLabel(event.status))}</b><div class="small">${Number(event.attempts||0)} 次处理</div></span><span>${escapeHtml(event.topic||'')}<div class="small">${escapeHtml(event.store_name||'')}</div></span><code>${escapeHtml(event.resource||'')}</code><span>${event.last_error?`<div class="event-error">${escapeHtml(event.last_error)}</div>`:''}${canExecute&&['retry','dead'].includes(event.status)?`<button class="button" type="button" onclick="replayEvent(${Number(event.id)},this)">重放</button>`:''}</span></div>`).join('');
     }
-    async function loadData() {
-      if (loadInProgress) return;
-      loadInProgress = true;
+    function renderPostSaleRows() {
+      const container=$('post-sale-tasks');
+      container.innerHTML=pageRows('post-sale-tasks',postSaleRows).map(row=>`<article class="task urgent"><div class="task-title">售后消息待回复 · ${escapeHtml(row.store_name)}</div><div class="task-meta">Pack ${escapeHtml(row.pack_id)} · ${escapeHtml(dateLabel(row.latest_at))}</div><div class="task-details">${escapeHtml(row.text)}</div><a href="/?tab=customer-service">打开售后处理 →</a></article>`).join('');
+      if(typeof window !== 'undefined') window.TodayBatch?.render('post-sale-tasks', postSaleRows);
+    }
+    let postSaleGeneration = 0;
+    const postSaleRequests = new Map();
+    let postSaleTimer = null;
+    let postSaleKey = null;
+    async function loadPostSale(force = false) {
+      if (postSaleTimer !== null) clearTimeout(postSaleTimer);
+      const generation = ++postSaleGeneration;
+
+      try {
+        const params=new URLSearchParams({salesperson:$('salesperson').value,group_name:$('group_name').value});
+        if(typeof storePage !== 'undefined' && storePage>1) params.set('store_page',storePage);
+        const key=params.toString();
+        if (postSaleKey !== key) {
+          $('post-sale-count').textContent='—';
+          $('post-sale-tasks').innerHTML='<div class="empty">正在读取售后消息…</div>';
+          postSaleKey = key;
+        }
+        params.set('background', '1');
+        if (force) params.set('refresh', '1');
+        if(!postSaleRequests.has(key)) {
+          const pending=(async () => {
+            const url=`/api/mercado/today/post-sale?${params}`;
+            const preloaded=typeof window !== 'undefined' && await window.takeTodayPreload?.(url);
+            const response=preloaded || await fetch(url,{credentials:'same-origin'});
+            const payload=preloaded ? preloaded.payload : await response.json();
+            if(!response.ok||payload.status!=='success') throw new Error(payload.message||'售后消息读取失败');
+            if (typeof window !== 'undefined') window.rememberTodaySnapshot?.(url, {ok:true, payload});
+            return payload;
+          })().finally(() => postSaleRequests.delete(key));
+          postSaleRequests.set(key,pending);
+        }
+        const payload=await postSaleRequests.get(key);
+        if(generation!==postSaleGeneration) return;
+        const rows=payload.data.rows||[], errors=payload.data.errors||[];
+        if (typeof postSaleRows !== 'undefined') postSaleRows=rows;
+        if(typeof pageRows==='function') pageRows('post-sale-tasks',rows);
+        $('post-sale-count').textContent=payload.data.pending?'核对中':rows.length+(errors.length?'（部分）':'');
+        const refreshing=Boolean(payload.data.refreshing);
+        const freshness=payload.data.checked_at?`最近核对：${escapeHtml(dateLabel(payload.data.checked_at))}。`:'';
+        $('post-sale-tasks').innerHTML=`<div class="hint">${freshness}${refreshing?'正在后台核对最新回复状态…':''}</div>`+(errors.length?`<div class="event-error">部分会话未能核实，列表可能不完整：${errors.slice(0,5).map(escapeHtml).join('；')}</div>`:'')+
+          (rows.length?(typeof pageRows==='function'?pageRows('post-sale-tasks',rows):rows).map(row=>`<article class="task urgent"><div class="task-head"><div><div class="task-title">售后消息待回复</div><div class="task-meta"><span class="tag">${escapeHtml(row.store_name)}</span><span class="tag">Pack ${escapeHtml(row.pack_id)}</span><span class="tag">${escapeHtml(dateLabel(row.latest_at))}</span></div></div><a href="/?tab=customer-service">打开售后处理 →</a></div><div class="task-details">${escapeHtml(row.text)}</div></article>`).join(''):errors.length||payload.data.pending?'':'<div class="empty">当前店铺范围内没有未回复的售后消息。</div>');
+        if(typeof window !== 'undefined') window.TodayBatch?.render('post-sale-tasks', rows);
+        if (refreshing && (typeof document === 'undefined' || !document.hidden)) postSaleTimer=setTimeout(() => loadPostSale(), 3000);
+      } catch(error) {
+        if(generation===postSaleGeneration) $('post-sale-tasks').innerHTML=`<div class="event-error">读取失败：${escapeHtml(error.message||error)}</div>`;
+      }
+    }
+    async function loadData(force = false, poll = false) {
+      if (taskRefreshTimer !== null) clearTimeout(taskRefreshTimer);
+      force = force === true;
+      if(force && typeof window !== 'undefined') window.clearTodaySnapshots?.();
+      const generation = ++loadGeneration;
+      if (!poll) loadPostSale(force);
       $('error').style.display='none'; $('refresh').disabled=true;
       try {
         const includeClosed=$('filter').value==='all';
         const params=new URLSearchParams({include_closed:includeClosed?'1':'0',salesperson:$('salesperson').value,group_name:$('group_name').value});
-        const response=await fetch(`/api/mercado/today/tasks?${params}`,{credentials:'same-origin'}); const payload=await response.json();
+        if(storePage>1) params.set('store_page',storePage);
+        if(eventPage>1) params.set('event_page',eventPage);
+        params.set('background', '1');
+        if (force) params.set('refresh', '1');
+        const url=`/api/mercado/today/tasks?${params}`;
+        const preloaded=typeof window !== 'undefined' && await window.takeTodayPreload?.(url);
+        const response=preloaded || await fetch(url,{credentials:'same-origin'});
+        const payload=preloaded ? preloaded.payload : await response.json();
+        if (generation !== loadGeneration) return;
         if(!response.ok||payload.status!=='success') throw new Error(payload.message||`请求失败 (${response.status})`);
+        if (typeof window !== 'undefined') window.rememberTodaySnapshot?.(url, {ok:true, payload});
         actionData=payload.data||{rows:[],events:[]};
         for(const [key,label] of [['salesperson','全部业务员'],['group_name','全部店铺组']]) {
           const select=$(key), value=select.value;
-          select.innerHTML=`<option value="">${label}</option>`+(actionData.filter_options?.[key]||[]).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join(''); select.value=value;
+          const options=actionData.filter_options?.[key]||[];
+          // Keep a remembered selection visible even if its store access was removed.
+          select.innerHTML=`<option value="">${label}</option>`+options.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('')+
+            (value && !options.includes(value)?`<option value="${escapeHtml(value)}">${escapeHtml(value)}（当前范围不可用）</option>`:'');
+          select.value=value;
         }
-        renderTasks(); renderEvents(); lastLoadedAt=Date.now();
-      } catch(error) { $('error').textContent=`加载失败：${error.message||error}`; $('error').style.display='block'; $('purchase-count').textContent='—'; $('purchase-tasks').innerHTML='<div class="empty">暂时无法读取采购必办，请稍后重试。</div>'; $('tasks').innerHTML='<div class="empty">暂时无法读取待办，请稍后重试。</div>'; $('rights-count').textContent='—'; $('rights-cases').innerHTML='<div class="empty">暂时无法读取待回复案件，请稍后重试。</div>'; }
-      finally {loadInProgress=false; $('refresh').disabled=false;}
+        renderTasks(); renderEvents(); renderPagination();
+        if(typeof window !== 'undefined') window.TodayBatch?.render('events', actionData.events||[]);
+        if(actionData.errors?.length) { $('error').textContent='部分内容未能核实：'+actionData.errors.join('；'); $('error').style.display='block'; }
+        lastLoadedAt=Date.now();
+        if (actionData.refreshing && !document.hidden) taskRefreshTimer=setTimeout(() => loadData(false, true), 3000);
+      } catch(error) { if (generation !== loadGeneration) return; $('error').textContent=`加载失败：${error.message||error}`; $('error').style.display='block'; $('purchase-count').textContent='—'; $('purchase-tasks').innerHTML='<div class="empty">暂时无法读取采购必办，请稍后重试。</div>'; $('tasks').innerHTML='<div class="empty">暂时无法读取待办，请稍后重试。</div>'; $('rights-count').textContent='—'; $('rights-cases').innerHTML='<div class="empty">暂时无法读取待回复案件，请稍后重试。</div>'; }
+      finally {if (generation === loadGeneration) $('refresh').disabled=false;}
     }
     async function saveTask(id,button) {
       const card=button.closest('[data-task-id]'); const body={owner:card.querySelector('[data-role=owner]').value,status:card.querySelector('[data-role=status]').value,due_at:card.querySelector('[data-role=due]').value||null,note:card.querySelector('[data-role=note]').value};
       button.disabled=true;
-      try { const response=await fetch(`/api/mercado/today/tasks/${id}`,{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const result=await response.json(); if(!response.ok||result.status!=='success') throw new Error(result.message||'保存失败'); showToast('处理记录已保存'); await loadData(); }
+      try { const response=await fetch(`/api/mercado/today/tasks/${id}`,{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const result=await response.json(); if(!response.ok||result.status!=='success') throw new Error(result.message||'保存失败'); showToast('处理记录已保存'); if(typeof window !== 'undefined') window.clearTodaySnapshots?.(); await loadData(false,true); }
       catch(error){showToast(error.message||'保存失败');} finally{button.disabled=false;}
     }
     async function replayEvent(id,button) {
@@ -168,11 +294,26 @@
       try {const response=await fetch(`/api/mercado/today/events/${id}/replay`,{method:'POST',credentials:'same-origin'});const result=await response.json();if(!response.ok||result.status!=='success')throw new Error(result.message||'重放失败');showToast('通知已加入重试队列');await loadData();}
       catch(error){showToast(error.message||'重放失败');}finally{button.disabled=false;}
     }
-    for(const key of ['salesperson','group_name']) $(key).addEventListener('change',loadData);
-    $('refresh').addEventListener('click',loadData); $('filter').addEventListener('change',loadData); loadData();
+    if(typeof window !== 'undefined' && window.todayFilterPreferences) {
+      const saved=window.todayFilterPreferences.read();
+      for(const filterKey of ['salesperson','group_name']) if(saved[filterKey]) {
+        $(filterKey).innerHTML+=`<option value="${escapeHtml(saved[filterKey])}">${escapeHtml(saved[filterKey])}</option>`;
+        $(filterKey).value=saved[filterKey];
+      }
+    }
+    for(const key of ['salesperson','group_name']) $(key).addEventListener('change',()=>{
+      if(typeof window !== 'undefined') window.todayFilterPreferences?.save({salesperson:$('salesperson').value,group_name:$('group_name').value});
+      if(typeof window !== 'undefined') window.TodayBatch?.clear();
+      storePage=1;eventPage=1;for(const key in contentPages) delete contentPages[key];loadData();
+    });
+    $('refresh').addEventListener('click',() => loadData(true)); $('filter').addEventListener('change',()=>{for(const key in contentPages) delete contentPages[key];loadData();}); loadData();
     setInterval(() => { if (!document.hidden) loadData(); }, autoRefreshMs);
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && Date.now() - lastLoadedAt >= autoRefreshMs) loadData();
+      if (!document.hidden && Date.now()-lastLoadedAt>30000) loadData();
+      else {
+        if (postSaleTimer !== null) clearTimeout(postSaleTimer);
+        if (taskRefreshTimer !== null) clearTimeout(taskRefreshTimer);
+      }
     });
   </script>
 </body>

@@ -52,7 +52,9 @@ bit/logs/*_history.json
 
 # Persistent store-link audit journal (contains operational data).
 runtime_logs/store_link_operations.sqlite3*
+runtime_logs/store-link-remote-update.sqlite3*
 
 # Private upstream session/runtime and shared product cache
 .data/mercado-product-data/
 .private/
+.tools/windows-agent/

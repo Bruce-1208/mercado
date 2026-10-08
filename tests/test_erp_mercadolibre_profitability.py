@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -697,6 +698,36 @@ class _DatabaseRateCard:
     def match(self, **quote):
         self.quotes.append(quote)
         return {"shipping_amount_usd": 6.4}
+
+
+@pytest.mark.parametrize("source_type, source", [
+    (None, "fixed_commission_15_pct"),
+    ("collected", "official_shipping_rate_card_refresh_pending"),
+])
+def test_fixed_collection_backfill_uses_card_fx_when_conversion_api_is_unavailable(source_type, source):
+    class Card(_DatabaseRateCard):
+        def match(self, **quote):
+            self.quotes.append(quote)
+            return {
+                "shipping_amount_usd": 6.4,
+                "exchange_rate_to_usd": .05,
+                "refreshed_at": "2026-10-08 08:00:00",
+            }
+
+    card = Card()
+    client = MercadoProfitabilityClient({}, cache_store=False, shipping_rate_store=card)
+    with patch.object(client, "_get", side_effect=AssertionError("No API required")):
+        result = client.estimate({
+            "source_item_id": "MLM3016972321", "title": "Product",
+            "price": 350, "currency_id": "MXN", "weight_g": 600,
+            "weight_basis": "server_actual",
+            "profitability_source": source, "source_type": source_type,
+        })
+    assert result["sale_price_usd"] == 17.5
+    assert result["commission_amount_usd"] == 2.63
+    assert result["shipping_fee_usd"] == 6.4
+    assert result["net_proceeds_usd"] == 8.47
+    assert result["profitability_error"] == ""
 
 
 def test_cached_commission_and_rate_card_need_no_live_store_or_official_request():

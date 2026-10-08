@@ -36,6 +36,78 @@ def test_pause_mail_retries_until_email_sent_and_survives_restart(tmp_path):
     assert len(calls) == 2
 
 
+@pytest.mark.parametrize('confirmed', [{'sent': True}, {'deduplicated': True}])
+def test_pause_mail_pending_waits_for_confirmation(tmp_path, confirmed):
+    s = service(tmp_path)
+    s.store.set_state('circuit', {'reason': '请完成人机验证', 'at': 100})
+    calls = []
+    def sender(*args):
+        calls.append(args)
+        return {'pending': True} if len(calls) == 1 else confirmed
+
+    check_pauses(s.store, 'secret', now=400, sender=sender)
+    notice = s.store.state('pause_email')
+    assert notice['pending'] and not notice['sent']
+    assert notice['error'] == ''
+    assert [event['level'] for event in s.store.logs()] == ['INFO']
+    check_pauses(s.store, 'secret', now=430, sender=sender)
+    assert len(calls) == 1
+    check_pauses(s.store, 'secret', now=460, sender=sender)
+    notice = s.store.state('pause_email')
+    assert notice['sent'] and not notice['pending']
+    assert notice['error'] == ''
+    check_pauses(s.store, 'secret', now=520, sender=sender)
+    assert len(calls) == 2
+    assert [event['level'] for event in s.store.logs()] == ['INFO']
+
+
+def test_pause_mail_persistent_pending_does_not_repeat_logs(tmp_path):
+    s = service(tmp_path)
+    s.store.set_state('circuit', {'reason': '请完成人机验证', 'at': 100})
+    calls = []
+    def sender(*args):
+        calls.append(args)
+        return {'pending': True}
+
+    check_pauses(s.store, 'secret', now=400, sender=sender)
+    restarted = service(tmp_path)
+    check_pauses(restarted.store, 'secret', now=460, sender=sender)
+    check_pauses(restarted.store, 'secret', now=520, sender=sender)
+    assert len(calls) == 3
+    notice = restarted.store.state('pause_email')
+    assert notice['pending'] and not notice['sent']
+    assert notice['attempted_at'] == 520
+    assert notice['error'] == ''
+    assert [event['level'] for event in restarted.store.logs()] == ['INFO']
+
+
+def test_pause_mail_real_failure_after_pending_is_retried(tmp_path):
+    s = service(tmp_path)
+    s.store.set_state('circuit', {'reason': '请完成人机验证', 'at': 100})
+    calls = []
+    def sender(*args):
+        calls.append(args)
+        if len(calls) == 1:
+            return {'pending': True}
+        if len(calls) == 2:
+            raise OSError('SMTP temporarily down')
+        return {'sent': True}
+
+    check_pauses(s.store, 'secret', now=400, sender=sender)
+    check_pauses(s.store, 'secret', now=460, sender=sender)
+    notice = s.store.state('pause_email')
+    assert not notice['pending'] and not notice['sent']
+    assert notice['error'] == 'SMTP temporarily down'
+    events = s.store.logs()
+    assert [event['level'] for event in events] == ['INFO', 'ERROR']
+    assert 'SMTP temporarily down' in events[-1]['message']
+    check_pauses(s.store, 'secret', now=490, sender=sender)
+    assert len(calls) == 2
+    check_pauses(s.store, 'secret', now=520, sender=sender)
+    assert len(calls) == 3
+    assert s.store.state('pause_email')['sent']
+
+
 def test_late_login_open_preserves_confirmation(tmp_path):
     s = service(tmp_path)
     s.store.set_state('login', {'confirmed': True, 'confirmed_at': 50})

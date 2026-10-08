@@ -46,6 +46,15 @@ def configure_execution_context(job, job_path=None):
     os.environ["BIT_EXECUTION_AGENT_NAME"] = agent_name
     os.environ["BIT_EXECUTION_HOSTNAME"] = hostname
     os.environ["BIT_EXECUTION_JOB_ID"] = str(job.get("job_id") or "").strip()
+    # Serializable ownership also reaches spawned browser/process workers.
+    actor = payload.get("actor") if isinstance(payload.get("actor"), dict) else {}
+    os.environ["AI_BILLING_ACTOR_ID"] = str(job.get("created_by_id") or actor.get("id") or 0)
+    os.environ["AI_BILLING_ACTOR_NAME"] = str(job.get("created_by_name") or actor.get("display_name") or actor.get("username") or "")
+    os.environ["AI_BILLING_ORGANIZATION_KEY"] = str(actor.get("organization_key") or payload.get("organization_key") or "wuhan-zeshun")
+    if job_path is not None:
+        # Keep pending charges alongside Agent jobs across downloaded releases.
+        data_dir = Path(job_path).resolve().parents[2]
+        os.environ["AI_USAGE_BILLING_PATH"] = str(data_dir / "ai_usage_billing.sqlite3")
     if job_path is not None and not os.environ.get("BIT_RUNTIME_LOCK_DIR"):
         path = Path(job_path).resolve()
         # Agent jobs live in <data_dir>/jobs/<job_id>/job.json. Keep locks and
@@ -75,8 +84,8 @@ def run_appeal(payload, stop_event):
     shensu_kwargs = {"loop_count": loop_count, "stop_event": stop_event}
     if appeal_copy_mode == "AI话术模式":
         shensu_kwargs["appeal_copy_mode"] = appeal_copy_mode
-        shensu_kwargs["deepseek_api_key"] = str(
-            payload.get("deepseek_api_key") or ""
+        shensu_kwargs["dashscope_api_key"] = str(
+            payload.get("dashscope_api_key") or ""
         )
     for chunk in bit_interface.shensu_logic(
         name,
@@ -102,10 +111,10 @@ def run_open_store(payload, stop_event):
     from bit.mercado_rights_reply import RIGHTS_URL
 
     destination = payload.get("destination") or "reputation"
-    if destination not in {"reputation", "rights_holder"}:
+    if destination not in {"reputation", "rights_holder", "claims"}:
         raise ValueError("不支持的店铺页面")
-    page_name = "权利人回复" if destination == "rights_holder" else "声誉"
-    target_url = RIGHTS_URL if destination == "rights_holder" else bit_interface.bit_reputation_info.REPUTATION_URL
+    page_name = {"rights_holder": "权利人回复", "claims": "售后处理", "reputation": "声誉"}[destination]
+    target_url = "" if destination == "claims" else (RIGHTS_URL if destination == "rights_holder" else bit_interface.bit_reputation_info.REPUTATION_URL)
 
     _write_log(f"本机 Agent 正在打开店铺{page_name}页：{token_record.get('display_name') or token_record.get('nickname') or token_id}\n")
     result = bit_interface._open_mercado_claim_browser(
@@ -114,6 +123,8 @@ def run_open_store(payload, stop_event):
         target_url=target_url,
         token_record=token_record,
     )
+    if destination == "claims":
+        result["claim_id"] = str(payload.get("claim_id") or "")
     return {
         "status": "success",
         "message": f"已打开 {result['shop_name']} 的{page_name}页面",
@@ -437,6 +448,8 @@ def main(argv=None):
             json.dumps(sanitized_job, ensure_ascii=False), encoding="utf-8"
         )
     configure_execution_context(job, job_path)
+    from erp.ai_usage_billing import resume_outbox
+    resume_outbox()
     stop_event = threading.Event()
     threading.Thread(
         target=_watch_cancel,
@@ -466,11 +479,7 @@ def main(argv=None):
                 json.dumps(result, ensure_ascii=False), encoding="utf-8",
             )
         elif job_type == "reputation_browser_sync":
-            from bit.reputation_browser_sync import collect
-            result = collect((job.get("payload") or {}).get("configs") or [], stop_event)
-            Path(args.job_file).with_name("result.json").write_text(
-                json.dumps(result, ensure_ascii=False), encoding="utf-8",
-            )
+            raise RuntimeError("声誉浏览器同步已停用，请通过 API 更新声誉")
         elif job_type == "ai_weight_price":
             job_file = Path(args.job_file)
             result = run_ai_weight_price(job, stop_event, job_file)
@@ -483,10 +492,10 @@ def main(argv=None):
             raise ValueError(f"不支持的 Agent 任务类型：{job_type}")
         return 2 if stop_event.is_set() else 0
     except Exception as exc:
-        if job_type == "open_store":
+        if job_type in {"open_store", "zying_order_sync"}:
             try:
                 job_path.with_name("result.json").write_text(
-                    json.dumps({"status": "error", "message": str(exc)}, ensure_ascii=False),
+                    json.dumps({"status": "error", "message": str(exc), "worker_error": str(exc)}, ensure_ascii=False),
                     encoding="utf-8",
                 )
             except OSError:
@@ -494,6 +503,19 @@ def main(argv=None):
         _write_log(f"本机 Agent 业务执行失败：{exc}\n")
         traceback.print_exc()
         return 2 if stop_event.is_set() else 1
+    finally:
+        from erp.ai_usage_billing import flush_outbox
+        try:
+            deadline = time.monotonic() + 8
+            delivery = flush_outbox(max_seconds=6, timeout=(2, 4))
+            while delivery.get("busy") and time.monotonic() < deadline:
+                time.sleep(0.1)
+                delivery = flush_outbox(max_seconds=6, timeout=(2, 4))
+            if delivery.get("pending") or delivery.get("busy"):
+                _write_log("AI 用量待同步，已保存在本机，下次运行时继续补传。")
+        except Exception:
+            # The durable outbox is picked up by the next Agent job.
+            _write_log("AI 用量待同步，已保存在本机，联网后继续补传。")
 
 
 if __name__ == "__main__":

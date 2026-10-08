@@ -19,7 +19,9 @@ function setup() {
     window: {confirm(message) { confirmations.push(message); return true; }},
     fetch: async (url, options) => {
       requests.push({url, body: JSON.parse(options.body)});
-      return {ok: true, json: async () => ({status: 'success'})};
+      return {ok: true, json: async () => ({status: 'success', data: {
+        id: Number(url.split('/').pop()), ...JSON.parse(options.body),
+      }})};
     },
   });
   const run = code => vm.runInContext(code, context);
@@ -36,7 +38,7 @@ function setup() {
         attributes: [{id: 'MATERIAL', value_name: 'Plastic'}], image_generation_method: 'ai_image_edit'
       }};
     aiOriginalRows = [ready, {...ready, id: 2, review_status: 'unreviewed'},
-      {...ready, id: 3, ai_original: {...ready.ai_original, attributes: []}}];
+      {...ready, id: 3, review_status: 'unreviewed', ai_original: {...ready.ai_original, attributes: []}}];
     aiOriginalSelected = new Set([1, 2, 3]);
     aiOriginalSelectedSiteIds = () => ['MLM'];
     loadAiOriginalPublishStatus = () => {};
@@ -101,7 +103,7 @@ test('status filtering removes hidden selections, including after switching back
   assert.deepEqual(Array.from(run('[...aiOriginalSelected]')), [1]);
 });
 
-test('bulk approval saves current inputs before sending review status', async () => {
+test('bulk approval saves current inputs and review status atomically', async () => {
   const {run, requests} = setup();
   run(`aiOriginalSelected = new Set([1]);
     aiOriginalRows[0].weight_g = null;
@@ -111,11 +113,9 @@ test('bulk approval saves current inputs before sending review status', async ()
     document.getElementById('ai-original-review-status').value = 'approved';
     loadAiOriginalProducts = async () => {};`);
   await run('updateSelectedAiOriginalReviewStatus()');
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 1);
   assert.equal(requests[0].url, '/api/ai-original-products/1');
-  assert.deepEqual(requests[0].body, {weight_g: 250, net_proceeds_usd: 3.25});
-  assert.equal(requests[1].url, '/api/mercado-products/review-status');
-  assert.deepEqual(requests[1].body.product_item_ids, [1]);
+  assert.deepEqual(requests[0].body, {weight_g: 250, net_proceeds_usd: 3.25, category_id: '', review_status: 'approved'});
 });
 
 test('cleared input prevents approval even when saved data is valid', async () => {
@@ -137,7 +137,7 @@ test('parameter save failure prevents bulk approval', async () => {
     fetch = async () => ({ok: false, json: async () => ({message: '保存失败'})});`);
   await run('updateSelectedAiOriginalReviewStatus()');
   assert.equal(requests.length, 0);
-  assert.match(nodes.get('ai-original-task-status').textContent, /产品 1 参数保存失败/);
+  assert.match(nodes.get('ai-original-task-status').textContent, /失败 1 件：产品 1：保存失败/);
   assert.equal(run('aiOriginalReviewRunning'), false);
 });
 
@@ -148,12 +148,13 @@ test('five page states do not alter the AI generation result', () => {
   assert.equal(run('aiOriginalProductStatus(aiOriginalRows[2])'), 'incomplete');
   for (const field of ['package_length_cm', 'package_width_cm', 'package_height_cm', 'weight_g', 'net_proceeds_usd']) {
     run(`var original = aiOriginalRows[0]; var changed = {...original, ${field}: null};`);
-    assert.equal(run('aiOriginalProductStatus(changed)'), 'incomplete', field);
+    assert.equal(run('aiOriginalProductStatus(changed)'), 'approved', field);
+    assert.equal(run('aiOriginalProductStatus({...changed, review_status:"unreviewed"})'), 'incomplete', field);
     assert.equal(run('aiOriginalPlatformStatus(changed)'), 'completed', field);
     assert.equal(run('aiOriginalListingChecks(changed).every(check => check.ok)'), true, field);
   }
-  assert.equal(run(`aiOriginalProductStatus({...original, ai_status:'failed', weight_g:null})`), 'failed');
-  assert.equal(run(`aiOriginalProductStatus({...original, ai_status:'processing'})`), 'unreviewed');
+  assert.equal(run(`aiOriginalProductStatus({...original, ai_status:'failed', weight_g:null, review_status:'unreviewed'})`), 'failed');
+  assert.equal(run(`aiOriginalProductStatus({...original, ai_status:'processing', review_status:'unreviewed'})`), 'unreviewed');
   for (const review of ['suspected', 'infringing', 'risk']) {
     assert.equal(run(`aiOriginalProductStatus({...original, ai_status:'failed', review_status:'${review}'})`), 'suspected');
   }
@@ -161,7 +162,7 @@ test('five page states do not alter the AI generation result', () => {
 
 test('counts, filter and selection agree on the same five statuses', () => {
   const {run, nodes} = setup();
-  run(`aiOriginalRows.push({...aiOriginalRows[0], id:4, ai_status:'failed'},
+  run(`aiOriginalRows.push({...aiOriginalRows[0], id:4, ai_status:'failed', review_status:'unreviewed'},
       {...aiOriginalRows[0], id:5, review_status:'suspected'});
     decorateAiOriginalWorkbench();`);
   for (const status of ['approved', 'unreviewed', 'failed', 'incomplete', 'suspected']) {

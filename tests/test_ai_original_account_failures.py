@@ -1,4 +1,5 @@
 """Regressions for real account failures and the publish retry SQL."""
+from contextlib import nullcontext
 import ast
 import concurrent.futures
 import json
@@ -25,9 +26,9 @@ def test_account_preflight(status, available, match):
                                json=lambda: {'is_available': available})
     if match:
         with pytest.raises(original.OriginalModelAccountError, match=match):
-            original.check_original_model_account(api_key='test', http_get=get)
+            original.check_original_model_account(api_key='test', base_url='https://api.deepseek.com', http_get=get)
     else:
-        original.check_original_model_account(api_key='test', http_get=get)
+        original.check_original_model_account(api_key='test', base_url='https://api.deepseek.com', http_get=get)
     assert calls == ['https://api.deepseek.com/user/balance']
 
 
@@ -41,10 +42,10 @@ def test_preflight_network_failure_is_not_reported_as_insufficient_balance():
     def get(*a, **k):
         raise requests.Timeout('timeout')
     with pytest.raises(original.OriginalModelAccountError, match='无法核验'):
-        original.check_original_model_account(api_key='test', http_get=get)
+        original.check_original_model_account(api_key='test', base_url='https://api.deepseek.com', http_get=get)
 
 
-def test_account_failure_stops_remaining_products_and_model_calls(monkeypatch):
+def test_account_failure_is_recorded_independently_for_remaining_products(monkeypatch):
     node = next(n for n in ast.parse(Path('bit/bit_interface.py').read_text()).body
                 if isinstance(n, ast.FunctionDef) and n.name == '_run_ai_original_task')
     saved = []
@@ -59,22 +60,25 @@ def test_account_failure_stops_remaining_products_and_model_calls(monkeypatch):
     def prepare(row, **kwargs):
         attempted.append(row['id'])
         kwargs['chat']([])
+    from erp import ai_original_cost_control as scheduling
+    monkeypatch.setattr(scheduling, 'product_generation_lock', lambda pid: nullcontext(lambda: None))
     monkeypatch.setattr(original, '_listing_json_chat', lambda **kw: model)
     monkeypatch.setattr(original, 'prepare_ai_original_product', prepare)
     namespace = dict(json=json, logging=logging,
         ThreadPoolExecutor=concurrent.futures.ThreadPoolExecutor,
         as_completed=concurrent.futures.as_completed,
         _ai_original_task_lock=threading.Lock(), _ai_original_task_state=state,
+        db_get_mercado_product_items_by_ids=lambda ids: [{'id': ids[0], 'source_type': 'ai_original'}],
         db_update_ai_original_product=lambda pid, changes: saved.append(pid))
     exec(compile(ast.Module(body=[node], type_ignores=[]), '<worker>', 'exec'), namespace)
     namespace['_run_ai_original_task']([{'id': i} for i in range(1, 5)], workers=1)
-    assert attempted == [1]
-    assert saved == [1, 1]
-    assert calls == [1]
+    assert attempted == [1, 2, 3, 4]
+    assert saved == [1, 1, 2, 2, 3, 3, 4, 4]
+    assert calls == [1, 1, 1, 1]
     assert state['running'] is False
     assert state['processed_count'] == 4
-    assert '余额不足' in state['message']
-    assert sorted(r['status'] for r in state['results']) == ['failed', 'skipped', 'skipped', 'skipped']
+    assert all('余额不足' in result['message'] for result in state['results'])
+    assert sorted(r['status'] for r in state['results']) == ['failed', 'failed', 'failed', 'failed']
 
 
 def test_retry_query_interpolates_with_real_pymysql(monkeypatch):

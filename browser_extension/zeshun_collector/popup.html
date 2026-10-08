@@ -13,7 +13,7 @@
       <h1>泽顺插件</h1>
       <p>商品采集工作台</p>
     </div>
-    <span class="version">v1.8.42 · 未发货订单识别修复</span>
+      <span class="version">v1.8.62</span>
   </header>
   <main>
     <div class="account-card">
@@ -22,13 +22,34 @@
     </div>
     <nav class="mode-tabs" aria-label="插件功能">
       <button id="product-mode" class="mode-tab active" type="button">美客多采集</button>
-      <button id="yandex-mode" class="mode-tab" type="button">Yandex采集</button>
-      <button id="zying-mode" class="mode-tab" type="button">智赢产品采集</button>
+      <button id="appeal-mode" class="mode-tab" type="button">自动化申诉</button>
+      <button id="yandex-mode" class="mode-tab" type="button" hidden>Yandex采集</button>
+      <button id="zying-mode" class="mode-tab" type="button">智赢产品同步</button>
+      <button id="zying-order-mode" class="mode-tab" type="button">智赢订单同步</button>
       <button id="zying-infringement-mode" class="mode-tab" type="button">智赢查侵权</button>
       <button id="weight-price-mode" class="mode-tab" type="button" hidden>核重核价</button>
       <button id="weight-dimensions-mode" class="mode-tab" type="button" hidden>重量尺寸</button>
-      <button id="purchase-mode" class="mode-tab" type="button">订单物流</button>
+      <button id="purchase-mode" class="mode-tab" type="button">物流号同步</button>
     </nav>
+    <div id="zying-order-panel" class="mode-panel" hidden>
+      <section class="page-card">
+        <div class="page-card-heading"><span>智赢订单同步</span><span class="platform-badge zying">智赢</span></div>
+        <label class="zying-field">订单开始日期（北京时间）<input id="zying-order-date-start" type="date" required></label>
+        <label class="zying-field">订单结束日期（含当天）<input id="zying-order-date-end" type="date" required></label>
+        <p class="product-batch-help">同步日期范围内全部美客多订单的采购单号、物流号和人民币成本。登录智赢后点击“确定登录”；空单号保留已有值。</p>
+        <div class="zying-actions">
+          <button id="zying-order-start" class="primary" type="button" disabled>启动同步并打开智赢</button>
+          <button id="zying-order-open" class="secondary" type="button" hidden>打开智赢</button>
+        </div>
+        <div class="zying-actions">
+          <button id="zying-order-confirm" class="primary" type="button" disabled>确定登录并开始同步</button>
+          <button id="zying-order-stop" class="secondary" type="button" disabled>结束任务</button>
+        </div>
+        <div id="zying-order-status" class="status" role="status" aria-live="polite">选择下单日期范围后启动同步</div>
+        <div id="zying-order-summary" class="purchase-summary">已处理 0 / 0 · 成功 0 · 跳过 0 · 失败 0</div>
+        <div id="zying-order-results" class="purchase-results"></div>
+      </section>
+    </div>
     <div id="product-panel" class="mode-panel">
       <section class="page-card product-batch-card">
         <div class="page-card-heading"><span>美客多批量采集</span><span class="platform-badge mercado">Internacional</span></div>
@@ -57,7 +78,7 @@
         <div id="product-zying-status" class="plugin-login-status checking" role="status">泽顺数据服务：等待检查</div>
         <div class="zying-grid">
           <label>采集数量<input id="product-max-items" type="number" min="1" max="500" step="1" value="20"></label>
-          <label>采集模式
+          <label class="collection-mode-field">采集模式
             <select id="product-concurrency-mode">
               <option value="normal" selected>普通模式（默认 5 个采集进程）</option>
               <option value="gentle">缓和模式（单进程）</option>
@@ -67,7 +88,9 @@
           <label>最低销量<input id="product-min-sales" type="number" min="0" step="1" placeholder="不限"></label>
           <label>最高销量<input id="product-max-sales" type="number" min="0" step="1" placeholder="不限"></label>
         </div>
+        <details class="collection-help"><summary>采集规则与运行说明</summary>
         <p class="product-batch-help">每个采集通道成功后默认休息 3 秒，可调整；普通模式并发执行，单件超时后继续下一件，遇到限频自动停止且不自动重试。每件商品由泽顺后台读取销量和发货方式，无需安装或登录智赢插件。只采集自发货、半托管；海外仓、本土仓、全托管和未识别商品一律不采集。Internacional 未生效时仍按泽顺后台信息逐件筛选。</p>
+        </details>
         <div class="zying-actions">
           <button id="product-batch-start" class="primary" type="button" disabled>启动批量采集</button>
           <button id="product-batch-stop" class="danger" type="button" disabled>停止</button>
@@ -121,7 +144,7 @@
         <button id="zying-refresh" class="secondary inline-action" type="button">读取当前网页分类与开发</button>
         <div class="zying-grid">
           <label>起始产品编号（可选）<input id="zying-start-product-id" type="text" inputmode="numeric" maxlength="64" placeholder="留空则从分类首件开始"></label>
-          <label>最多产品<input id="zying-max-items" type="number" min="1" max="10000" required value="100"></label>
+          <label>最多产品<input id="zying-max-items" type="number" min="1" step="1" required value="100"></label>
         </div>
         <label class="zying-field">智赢来源分类
           <select id="zying-category"><option value="">全部分类</option></select>
@@ -138,7 +161,7 @@
         </div>
         <p class="product-batch-help">在所选分类的当前排序中，从起始产品编号（含）继续，最多读取指定数量；留空则从分类首件开始。数据库已有编号会直接跳过。</p>
         <div class="zying-actions">
-          <button id="zying-start" class="primary" type="button" disabled>启动产品采集</button>
+          <button id="zying-start" class="primary" type="button" disabled>启动产品同步</button>
           <button id="zying-stop" class="danger" type="button" disabled>结束</button>
         </div>
         <div id="zying-task-status" class="zying-task-status">等待启动</div>
@@ -150,7 +173,7 @@
       <section class="page-card zying-card">
         <div class="page-card-heading">
           <span>智赢产品查侵权</span>
-          <span class="platform-badge zying">DeepSeek</span>
+          <span class="platform-badge zying">千问</span>
         </div>
         <div id="zying-infringement-page-status" class="status">请打开并登录智赢产品列表页。</div>
         <button id="zying-infringement-open-login" class="secondary inline-action" type="button">打开智赢网页版登录页面</button>
@@ -165,7 +188,7 @@
         <label class="zying-field">产品开发
           <select id="zying-infringement-developer"><option value="">全部产品开发</option></select>
         </label>
-        <p class="product-batch-help">在所选分类的待审核列表中，从起始产品编号（含）继续，最多审核指定数量。标题固定每 20 个交给 DeepSeek；写回前会再次确认状态。</p>
+        <p class="product-batch-help">在所选分类的待审核列表中，从起始产品编号（含）继续，最多审核指定数量。标题固定每 20 个交给 千问；写回前会再次确认状态。</p>
         <div class="zying-actions">
           <button id="zying-infringement-start" class="primary" type="button" disabled>启动查侵权</button>
           <button id="zying-infringement-stop" class="danger" type="button" disabled>结束</button>
@@ -233,7 +256,7 @@
     <div id="purchase-panel" class="mode-panel" hidden>
       <section class="page-card purchase-card">
         <div class="page-card-heading">
-          <span>采购订单物流同步</span>
+          <span>物流号同步</span>
           <span class="platform-badge purchase">插件登录态</span>
         </div>
         <label for="purchase-date-start">美客多订单开始日期（北京时间）</label>
@@ -253,13 +276,49 @@
         <div id="purchase-results" class="purchase-results"></div>
       </section>
     </div>
+    <div id="appeal-panel" class="mode-panel" hidden>
+      <section class="page-card appeal-card">
+        <div class="page-card-heading"><span>自动化申诉</span><span class="platform-badge mercado">当前店铺</span></div>
+        <p class="product-batch-help">使用当前浏览器已登录的美客多店铺。打开店铺后台，读取店铺后选择站点和申诉内容。</p>
+        <label class="zying-field">当前店铺网页
+          <select id="appeal-tab"><option value="">请打开当前店铺的美客多后台</option></select>
+        </label>
+        <button id="appeal-refresh" class="link-button" type="button">刷新店铺网页</button>
+        <div id="appeal-shop" class="plugin-login-status" role="status" aria-live="polite">开始后将直接打开当前店铺的声誉页面</div>
+        <fieldset class="appeal-picker"><legend>申诉站点</legend><div id="appeal-sites"></div></fieldset>
+        <fieldset class="appeal-picker" id="appeal-forms"><legend>申诉内容</legend>
+          <label><input type="checkbox" value="延误" checked>延误</label>
+          <label><input type="checkbox" value="侵权">侵权</label>
+          <label><input type="checkbox" value="禁限售">禁限售</label>
+          <label><input type="checkbox" value="取消率">取消率</label>
+          <label><input type="checkbox" value="投诉">投诉</label>
+        </fieldset>
+        <div class="zying-grid">
+          <label class="zying-field">客服模式<select id="appeal-customer-mode"><option value="AI客服">AI 客服</option><option value="人工客服">人工客服</option></select></label>
+          <label class="zying-field">话术模式<select id="appeal-copy-mode"><option value="普通模式">普通模式</option><option value="AI话术模式">AI 话术模式</option></select></label>
+          <label class="zying-field">循环次数<select id="appeal-loop-count"><option value="1">1 次</option><option value="10" selected>10 次</option><option value="20">20 次</option><option value="50">50 次</option><option value="permanent">永久</option></select></label>
+        </div>
+        <p id="appeal-copy-hint" class="product-batch-help" hidden>使用泽顺账号在集成设置中保存的模型 Token；侵权和禁限售每组最多 3 个产品。</p>
+        <label class="zying-field">临时自定义话术<textarea id="appeal-message" maxlength="10000" rows="3" placeholder="留空时沿用申诉话术库；填写后用于本次任务"></textarea></label>
+        <div class="zying-actions">
+          <button id="appeal-start" class="primary" type="button" disabled>启动当前店铺申诉</button>
+          <button id="appeal-stop" class="danger" type="button" disabled>停止</button>
+        </div>
+        <div id="appeal-status" class="zying-task-status" role="status" aria-live="polite">等待启动</div>
+        <div id="appeal-summary" class="zying-summary">已处理 0 · 已发送 0 · 失败 0</div>
+        <pre id="appeal-log" class="zying-log">暂无申诉日志</pre>
+        <button id="appeal-open-records" class="link-button" type="button">打开申诉记录</button>
+      </section>
+    </div>
     <div id="result" class="result" hidden></div>
-    <div class="support-line"><span>支持</span><b>Mercado Libre</b><i>·</i><b>Yandex</b><i>·</i><b>1688</b><i>·</i><b>智赢</b></div>
+    <div class="support-line"><span>支持</span><b>Mercado Libre</b><i>·</i><span id="yandex-support" hidden><b>Yandex</b><i>·</i></span><b>1688</b><i>·</i><b>智赢</b></div>
   </main>
   <footer>
     <button id="open-console" class="secondary" type="button">打开泽顺控制台</button>
     <button id="settings" class="secondary" type="button">设置</button>
   </footer>
   <script src="popup.js"></script>
+  <script src="zying-order-popup.js"></script>
+  <script src="appeal-popup.js"></script>
 </body>
 </html>

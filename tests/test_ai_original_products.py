@@ -259,6 +259,23 @@ def test_prepare_persists_white_image_before_invalid_copy_response(tmp_path):
     )]
 
 
+def _record_infringement_check(row, risk_level=0):
+    """A completed fake screening of the current content, independent of ordinary approval."""
+    from bit.infringement_state import content_hash, knowledge_version
+    checked_at = "2026-09-22 12:00:00"
+    row["infringement_risk_level"] = risk_level
+    row["infringement_checked_at"] = checked_at
+    row["infringement_check_json"] = json.dumps({
+        "risk_level": risk_level, "check_status": "completed",
+        "content_hash": content_hash(row, "title_image"),
+        "rule_version": knowledge_version([]), "detection_scope": "title_image",
+        "checked_at": checked_at, "model_version": "offline-vision-fixture",
+        "image_method": "vision", "image_checked": True,
+        "keywords": ["Example"] if risk_level else [], "reason": "Offline screening fixture",
+    })
+    return row
+
+
 def _ai_row():
     prepared = {
         "status": "completed",
@@ -283,7 +300,7 @@ def _ai_row():
         ],
         "main_image_url": "http://127.0.0.1:5000/api/ai-original-products/images/1688-123-ai-white.jpg",
     }
-    return {
+    return _record_infringement_check({
         "id": 8,
         "source_type": "ai_original",
         "source_item_id": "1688123",
@@ -307,7 +324,7 @@ def _ai_row():
             "source": {"id": "CBT123", "site_id": "CBT", "pictures": [{"source": prepared["main_image_url"]}]},
             "description": {"plain_text": prepared["description_es"]},
         }),
-    }
+    })
 
 
 def test_publish_preparation_uses_portuguese_only_for_brazil():
@@ -355,19 +372,29 @@ def test_ai_original_publish_accepts_free_local_white_background():
     snapshot = json.loads(row["source_snapshot_json"])
     snapshot["ai_original"]["image_generation_method"] = "local_background_removal"
     row["source_snapshot_json"] = json.dumps(snapshot)
+    _record_infringement_check(row)
 
     assert product_publish_issues(row) == []
 
 
-def test_ai_original_publish_does_not_require_infringement_check():
+def test_ai_original_publish_requires_infringement_check_despite_ordinary_approval():
     row = _ai_row()
     row["infringement_risk_level"] = None
     row["infringement_checked_at"] = None
+    row["infringement_check_json"] = None
+    assert row["review_status"] == "approved"
+    assert "侵权尚未检测" in product_publish_issues(row)
+
+    _record_infringement_check(row, risk_level=1)
+    assert "侵权检测为疑似风险，需人工复核" in product_publish_issues(row)
+
+    _record_infringement_check(row, risk_level=0)
     assert product_publish_issues(row) == []
 
-    row["infringement_risk_level"] = 1
-    row["infringement_checked_at"] = "2026-09-22 12:00:00"
-    assert product_publish_issues(row) == []
+    snapshot = json.loads(row["source_snapshot_json"])
+    snapshot["ai_original"]["title_pt"] = "Título alterado após a triagem"
+    row["source_snapshot_json"] = json.dumps(snapshot)
+    assert "侵权检测结果已失效，请重新检测" in product_publish_issues(row)
 
 
 def test_workbench_exposes_ai_original_module_and_batch_actions():
@@ -488,6 +515,9 @@ def test_batch_continues_after_one_product_initial_save_fails(monkeypatch, seria
         saved_changes.append(changes)
         return {}
 
+    from contextlib import nullcontext
+    from erp import ai_original_cost_control as scheduling
+    monkeypatch.setattr(scheduling, 'product_generation_lock', lambda pid: nullcontext(lambda: None))
     monkeypatch.setattr(original, 'prepare_ai_original_product', lambda *a, **kw: {
         'title': 'Organizador', 'description_text': 'Description',
         'main_image_url': '/image.jpg', 'source_snapshot_json': '{}' if serialized_snapshot else {},
@@ -498,6 +528,7 @@ def test_batch_continues_after_one_product_initial_save_fails(monkeypatch, seria
                      as_completed=concurrent.futures.as_completed,
                      _ai_original_task_lock=threading.Lock(),
                      _ai_original_task_state=state,
+                     db_get_mercado_product_items_by_ids=lambda ids: [{'id': ids[0], 'source_type': 'ai_original'}],
                      db_update_ai_original_product=save)
     exec(compile(ast.Module(body=[node], type_ignores=[]), '<worker>', 'exec'), namespace)
     namespace['_run_ai_original_task']([{'id': 1}, {'id': 2}], workers=1, generated_by='李四')
@@ -543,8 +574,8 @@ def test_chat_forwards_explicit_thinking_without_changing_default(monkeypatch):
     monkeypatch.setattr(deepseek, '_get_client', lambda **kw: client)
     deepseek.chat_deepseek([], thinking=False)
     deepseek.chat_deepseek([])
-    assert calls[0]['extra_body'] == {'thinking': {'type': 'disabled'}}
-    assert 'extra_body' not in calls[1]
+    assert calls[0]['extra_body'] == {'enable_thinking': False}
+    assert calls[1]['extra_body'] == {'enable_thinking': False}
 
 
 @pytest.mark.parametrize("variations, expected", [
@@ -784,3 +815,51 @@ def test_copy_accepts_single_product_envelope():
     result = generate_marketplace_copy({'title': '收纳盒'}, chat=lambda *a, **kw: json.dumps(payload))
     assert result['title_es'] == payload['product']['title_es']
     assert result['title_pt'] == payload['product']['title_pt']
+
+
+def test_same_url_image_revision_survives_resume_and_changes_after_regeneration(tmp_path, monkeypatch):
+    import hashlib
+    from erp import ai_original_products as original
+    Image = pytest.importorskip('PIL.Image')
+    image_path = tmp_path / '1688-123-ai-white.jpg'
+    image_url = '/api/ai-original-products/images/1688-123-ai-white.jpg'
+    calls, color = [], ['blue']
+    fixture = _ai_row()
+    prepared = json.loads(fixture['source_snapshot_json'])['ai_original']
+    copy = {field: prepared[field] for field in (
+        'title_es', 'title_pt', 'description_es', 'description_pt', 'attributes',
+    )}
+
+    def generated_image(*args, **kwargs):
+        calls.append(color[0])
+        Image.new('RGB', (8, 8), color[0]).save(image_path, format='JPEG')
+        return image_url, 'local_background_removal', str(image_path)
+
+    monkeypatch.setattr(original, '_prepare_original_image', generated_image)
+    monkeypatch.setattr(original, 'generate_marketplace_copy', lambda *args, **kwargs: copy)
+    fixture['source_snapshot_json'] = {'original_1688': {
+        'source_1688_item_id': '123', 'title': '普通收纳盒',
+        'main_image_url': 'https://cbu01.alicdn.com/original.jpg',
+        'images': ['https://cbu01.alicdn.com/original.jpg'],
+    }}
+    first = prepare_ai_original_product(fixture, image_dir=tmp_path)
+    first_revision = first['ai_original']['image_content_revision']
+    assert first_revision == hashlib.sha256(image_path.read_bytes()).hexdigest()
+
+    resume_snapshot = json.loads(first['source_snapshot_json'])
+    resume_snapshot['ai_original']['status'] = 'failed'
+    fixture['source_snapshot_json'] = resume_snapshot
+    resumed = prepare_ai_original_product(fixture, image_dir=tmp_path)
+    assert resumed['main_image_url'] == first['main_image_url']
+    assert resumed['ai_original']['image_content_revision'] == first_revision
+    assert calls == ['blue']
+
+    color[0] = 'red'
+    fixture['source_snapshot_json'] = json.loads(resumed['source_snapshot_json'])
+    fixture['source_snapshot_json']['ai_original']['status'] = 'failed'
+    fixture['source_snapshot_json']['ai_original']['preparation']['image_ready'] = False
+    regenerated = prepare_ai_original_product(fixture, image_dir=tmp_path)
+    assert regenerated['main_image_url'] == first['main_image_url']
+    assert regenerated['ai_original']['image_content_revision'] != first_revision
+    assert regenerated['ai_original']['image_content_revision'] == hashlib.sha256(image_path.read_bytes()).hexdigest()
+    assert calls == ['blue', 'red']

@@ -105,6 +105,26 @@ test('single edits send only changed fields and display saved overrides includin
   assert.equal(h.get('products-1688-edit-dialog').open, false);
 });
 
+test('saving source net closes immediately while AI products refresh in the background', async () => {
+  const h = harness();
+  h.run(`let aiRefreshes = 0;
+    loadAiOriginalProducts = async options => {
+      if (!options.preserveTaskStatus) throw new Error('task status must be preserved');
+      if (products1688Rows[0].net_proceeds_usd !== 15) throw new Error('source save is missing');
+      if (document.getElementById('products-1688-edit-dialog').open) throw new Error('dialog must already be closed');
+      aiRefreshes++;
+      return new Promise(() => {});
+    };`);
+  h.run('products1688OpenEdit(17)');
+  h.get('products-1688-edit-net_proceeds_usd').value = '15';
+  await h.run('products1688SaveEdit()');
+  assert.equal(h.run('aiRefreshes'), 1);
+  assert.equal(h.get('products-1688-edit-dialog').open, false);
+  assert.equal(h.get('products-1688-edit-save').disabled, false);
+  assert.equal(h.calls.filter(call => call.options.method !== 'PATCH').length, 0);
+  assert.equal(h.get('products-1688-status').textContent, '商品资料已保存');
+});
+
 test('invalid numeric typing cannot accidentally clear existing data and failed saves remain editable', async () => {
   const h = harness((url, options) => options.method === 'PATCH'
     ? {ok: false, status: 400, json: async () => ({status: 'error', message: '资料保存失败'})} : null);
@@ -135,7 +155,7 @@ test('positive finite numeric validation rejects zero, negative and infinity wit
   }
 });
 
-test('a saved authoritative row is retained when the following list refresh fails', async () => {
+test('a saved authoritative row needs no source list refresh even when the read service is unavailable', async () => {
   const h = harness(url => url.startsWith('/api/1688-products?')
     ? {ok: false, status: 503, json: async () => ({status: 'error', message: '读取服务暂不可用'})} : null);
   h.run('products1688OpenEdit(17)');
@@ -143,7 +163,44 @@ test('a saved authoritative row is retained when the following list refresh fail
   await h.run('products1688SaveEdit()');
   assert.equal(h.run('products1688Rows.length'), 1);
   assert.equal(h.run('products1688SourceValue(products1688Rows[0], "price")'), 18);
-  assert.match(h.get('products-1688-status').textContent, /已保存.*列表刷新失败.*读取服务暂不可用/);
+  assert.equal(h.get('products-1688-status').textContent, '商品资料已保存');
+  assert.equal(h.calls.length, 1);
+});
+
+test('AI refresh failure cannot turn a committed save into an edit failure', async () => {
+  const h = harness();
+  h.run(`let syncWarnings = [];
+    console = {warn: (...args) => syncWarnings.push(args)};
+    loadAiOriginalProducts = () => { throw new Error('AI unavailable'); };`);
+  h.run('products1688OpenEdit(17)');
+  h.get('products-1688-edit-price').value = '18';
+  await h.run('products1688SaveEdit()');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.get('products-1688-edit-dialog').open, false);
+  assert.equal(h.get('products-1688-status').textContent, '商品资料已保存');
+  assert.equal(h.run('syncWarnings.length'), 1);
+  assert.doesNotMatch(h.get('products-1688-edit-message').textContent, /保存失败/);
+});
+
+test('a list started before persistence cannot overwrite the saved row', async () => {
+  let finishList;
+  let listCalls = 0;
+  const h = harness(url => {
+    if (url.startsWith('/api/1688-products?') && ++listCalls === 1) {
+      return new Promise(resolve => { finishList = () => resolve(response({rows: [row()], total: 1})); });
+    }
+    return null;
+  });
+  const oldList = h.run('load1688Products()');
+  h.run('products1688OpenEdit(17)');
+  h.get('products-1688-edit-price').value = '18';
+  await h.run('products1688SaveEdit()');
+  assert.equal(h.get('products-1688-edit-dialog').open, false);
+  finishList();
+  await oldList;
+  assert.equal(h.run('products1688SourceValue(products1688Rows[0], "price")'), 18);
+  assert.equal(listCalls, 2);
+  assert.equal(h.run('products1688Loading'), false);
 });
 
 test('a committed category change remains visible when the following list refresh fails', async () => {
@@ -187,4 +244,89 @@ test('save busy state prevents duplicate PATCH calls and closing before completi
   h.run('window.getSelection = () => ({toString: () => "selected text"})');
   h.run('products1688RowClick({target: {closest: () => null}}, 17)');
   assert.equal(h.get('products-1688-edit-dialog').open, false);
+});
+
+test('workflow transfer accepts valid items and leaves missing source fields selected', () => {
+  const h = harness();
+  h.run(`
+    var workflowWrites = [], workflowMessages = [], workflowOpened = 0;
+    var aiOriginalSelected = new Set();
+    localStorage.setItem = (key, value) => workflowWrites.push([key, value]);
+    products1688OpenAiWorkflow = () => workflowOpened++;
+    products1688SetStatus = (...args) => workflowMessages.push(args);
+    products1688Rows = [
+      {...products1688Rows[0], id: 1},
+      {...products1688Rows[0], id: 2, source_1688_overrides: {weight_g: null}},
+      {...products1688Rows[0], id: 3, source_1688_overrides: {net_proceeds_usd: null}},
+      {...products1688Rows[0], id: 4, source_weight_g: 0},
+      {...products1688Rows[0], id: 5, net_proceeds_usd: 'NaN'}
+    ];
+    products1688Selected = new Set([1, 2, 3, 4, 5]);
+    products1688SendSelectedToWorkflow();
+  `);
+  assert.equal(h.run('JSON.stringify([...aiOriginalSelected])'), '[1]');
+  assert.equal(h.run('JSON.stringify([...products1688Selected])'), '[2,3,4,5]');
+  assert.equal(h.run('workflowWrites[0][1]'), '[1]');
+  assert.equal(h.run('workflowOpened'), 1);
+  assert.equal(h.run('workflowMessages.at(-1)[1]'), 'partial');
+  assert.match(h.run('workflowMessages.at(-1)[0]'), /已转入 1 件.*未通过 4 件.*重量.*净收益/);
+});
+
+test('all invalid transfers and single editor entry stay in the 1688 area', async () => {
+  const h = harness();
+  h.run(`
+    var workflowOpened = 0, workflowWrites = 0, workflowMessages = [];
+    localStorage.setItem = () => workflowWrites++;
+    products1688OpenAiWorkflow = () => workflowOpened++;
+    products1688SetStatus = (...args) => workflowMessages.push(args);
+    products1688Rows[0].source_1688_overrides = {weight_g: null, net_proceeds_usd: ''};
+    products1688Selected = new Set([17]);
+    products1688SendSelectedToWorkflow();
+  `);
+  await h.run('products1688OpenAiEditor(17)');
+  assert.equal(h.run('workflowOpened'), 0);
+  assert.equal(h.run('workflowWrites'), 0);
+  assert.equal(h.run('products1688Selected.size'), 1);
+  assert.equal(h.run('workflowMessages.at(-1)[1]'), 'error');
+});
+
+test('positive source overrides allow transfer despite missing raw values', () => {
+  const h = harness();
+  h.run(`products1688Rows[0].source_weight_g = null;
+    products1688Rows[0].net_proceeds_usd = null;
+    products1688Rows[0].source_1688_overrides = {weight_g: '250', net_proceeds_usd: '5'};`);
+  assert.equal(h.run('products1688WorkflowIssue(products1688Rows[0])'), '');
+});
+
+test('slow filter metadata never blocks rows and concurrent loads share metadata', async () => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const h = harness(async url => {
+    if (url === '/api/1688-products/options' || url === '/api/mercado-management-categories') await gate;
+  });
+  const loaded = h.run('load1688Products()');
+  await Promise.race([loaded, new Promise((_, reject) => setTimeout(() => reject(new Error('rows waited for metadata')), 500))]);
+  assert.match(h.get('products-1688-status').textContent, /已加载 1 件/);
+  await h.run('load1688Products(false)');
+  assert.equal(h.calls.filter(call => call.url === '/api/1688-products/options').length, 1);
+  release();
+  await h.run('products1688OptionsPromise');
+  await h.run('load1688Products(false)');
+  assert.equal(h.calls.filter(call => call.url === '/api/1688-products/options').length, 1);
+  h.run('products1688OptionsLoadedAt = Date.now() - PRODUCTS_1688_OPTIONS_TTL_MS - 1');
+  await h.run('load1688Products(false)');
+  assert.equal(h.calls.filter(call => call.url === '/api/1688-products/options').length, 2);
+});
+
+test('failed metadata can retry without discarding loaded products', async () => {
+  let fail = true;
+  const h = harness(url => fail && url === '/api/1688-products/options'
+    ? {ok: false, status: 500, json: async () => ({message: '选项暂不可用'})} : null);
+  await h.run('load1688Products()');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(h.get('products-1688-status').textContent, /已加载.*选项暂不可用/);
+  assert.equal(h.run('products1688Rows.length'), 1);
+  fail = false;
+  await h.run('load1688Products()');
+  assert.equal(h.calls.filter(call => call.url === '/api/1688-products/options').length, 2);
 });

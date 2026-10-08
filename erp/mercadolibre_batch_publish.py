@@ -14,6 +14,8 @@ from typing import Any, Callable, Iterable, Mapping
 
 import requests
 
+from erp.ai_usage_billing import bind_usage
+
 from erp.ai_original_products import WHITE_BACKGROUND_METHODS
 from erp.mercadolibre_attribute_rules import (
     extract_listing_attributes_from_detail,
@@ -170,11 +172,14 @@ def _row_references(rows: Iterable[Mapping[str, Any]]) -> str:
     return "、".join(visible) + suffix
 
 
-def product_publish_issues(product_row: Mapping[str, Any]) -> list[str]:
+def product_publish_issues(product_row: Mapping[str, Any], *, defer_infringement: bool = False, site_id: str | None = None) -> list[str]:
     """Return every local reason that prevents a product from being published."""
 
     row = dict(product_row or {})
     issues: list[str] = []
+    from bit.infringement_publish import publication_issues
+    if not defer_infringement:
+        issues.extend(publication_issues(row, site_id))
     if str(row.get("source_type") or "").strip().lower() == "ai_original":
         raw_snapshot = row.get("source_snapshot_json") or {}
         if not isinstance(raw_snapshot, Mapping):
@@ -262,13 +267,18 @@ def product_publish_issues(product_row: Mapping[str, Any]) -> list[str]:
     return issues
 
 
-def validate_publishable_products(product_rows: Iterable[Mapping[str, Any]]) -> None:
+def validate_publishable_products(product_rows: Iterable[Mapping[str, Any]], *, defer_infringement: bool = False, site_id: str | None = None) -> None:
     """Reject a batch before any remote publication can be created."""
 
     rows = [dict(row) for row in product_rows or []]
     if not rows:
         raise ValueError("请至少勾选一个产品")
     issues: list[str] = []
+    from bit.infringement_publish import publication_issues
+    if not defer_infringement:
+        for row in rows:
+            for issue in publication_issues(row, site_id):
+                issues.append(f"{issue}：{_row_references([row])}")
     unapproved = [row for row in rows if row.get("review_status") != "approved"]
     if unapproved:
         issues.append(
@@ -597,7 +607,7 @@ def _complete_ai_publication_attributes(row, prepared_listing, client, *, chat=N
         api_key=api_key, model=model, base_url=base_url,
     )
     if missing:
-        raise ValueError('DeepSeek 已尝试补全，仍缺少有依据的必填属性：'
+        raise ValueError('千问 已尝试补全，仍缺少有依据的必填属性：'
                          + ', '.join(a['id'] for a in missing) + '；请在商品编辑中补充对应资料')
     _validate_required_attributes(attributes, schema, variations)
     return {**source, 'attributes': attributes}, description
@@ -633,13 +643,14 @@ def publish_product_batch(
     ai_completion_options: Mapping[str, Any] | None = None,
     prepared_drafts: Mapping[str, Any] | None = None,
     retry_drafts: Mapping[str, Any] | None = None,
+    infringement_preflight: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     rows = [dict(row) for row in product_rows or []]
     if not rows:
         raise ValueError("请至少勾选一个产品")
     regular_rows = [row for row in rows if str(row.get("source_type") or "").lower() != "ai_original"]
     if regular_rows:
-        validate_publishable_products(regular_rows)
+        validate_publishable_products(regular_rows, defer_infringement=True, site_id=site_id)
     quantity = int(quantity)
     if quantity < 1 or quantity > 9999:
         raise ValueError("上架库存必须在 1-9999 之间")
@@ -701,7 +712,7 @@ def publish_product_batch(
     worker_local = threading.local()
     result_lock = threading.Lock()
     result_slots: list[dict[str, Any] | None] = [None] * len(rows)
-    published = failed = completed = 0
+    published = failed = pending_review = completed = 0
     account_listing_blocked = threading.Event()
     account_listing_block_reason = ""
     batch_started = time.perf_counter()
@@ -729,7 +740,7 @@ def publish_product_batch(
         row: Mapping[str, Any],
         item_result: dict[str, Any],
     ) -> None:
-        nonlocal published, failed, completed
+        nonlocal published, failed, pending_review, completed
         with result_lock:
             result_slots[index] = item_result
             for stage, duration in dict(item_result.get("timings") or {}).items():
@@ -742,6 +753,8 @@ def publish_product_batch(
             completed += 1
             if item_result["status"] == "published":
                 published += 1
+            elif item_result["status"] == "pending_review":
+                pending_review += 1
             else:
                 failed += 1
             progress = {
@@ -751,6 +764,7 @@ def publish_product_batch(
                 "source_item_id": str(row.get("source_item_id") or ""),
                 "published_count": published,
                 "failed_count": failed,
+                "pending_review_count": pending_review,
                 "worker_count": worker_count,
                 "average_stage_seconds": {
                     stage: round(total / max(1, completed), 4)
@@ -772,8 +786,10 @@ def publish_product_batch(
         is_ai_original = str(row.get("source_type") or "").strip().lower() == "ai_original"
         pricing_metadata = {}
         try:
+            from bit.infringement_publish import validate_publication
+            validate_publication(row, site_id)
             if is_ai_original:
-                issues = product_publish_issues(row)
+                issues = product_publish_issues(row, site_id=site_id)
                 if issues:
                     raise ValueError("、".join(issues))
             publish_net_proceeds = discounted_net_proceeds_usd(
@@ -815,6 +831,8 @@ def publish_product_batch(
                     row, prepared_listing, worker_client(), **dict(ai_completion_options or {})
                 )
             def checkpoint_draft(draft):
+                if infringement_preflight:
+                    infringement_preflight(row, draft, site_id)
                 # Checkpoint failure must stop before the remote create call.
                 # Do not use save_record(), which deliberately swallows errors
                 # only for post-publication bookkeeping.
@@ -896,6 +914,8 @@ def publish_product_batch(
                 ),
             }
         except Exception as exc:
+            from bit.infringement_publish import InfringementReviewRequired
+            outcome = "pending_review" if isinstance(exc, InfringementReviewRequired) else "failed"
             message = str(exc)[:2000]
             lower_message = message.lower()
             if any(
@@ -915,7 +935,7 @@ def publish_product_batch(
             try:
                 update_state(
                     product_id,
-                    status="failed",
+                    status=outcome,
                     store_name=store_name,
                     token_id=int(token_id),
                     error_message=message,
@@ -928,7 +948,7 @@ def publish_product_batch(
                 message = f"{message}；保存失败状态时出错: {state_exc}"[:2000]
             save_record(
                 record_id,
-                status="failed",
+                status=outcome,
                 failure_reason=message,
                 result={
                     "net_proceeds_calculation": pricing_metadata,
@@ -944,7 +964,7 @@ def publish_product_batch(
                 "record_id": record_id,
                 "product_id": product_id,
                 "source_item_id": source_item_id,
-                "status": "failed",
+                "status": outcome,
                 "preflight": getattr(exc, "preflight_report", None),
                 "published_item_id": "",
                 "timings": {"total": round(time.perf_counter() - item_started, 4)},
@@ -961,7 +981,8 @@ def publish_product_batch(
         thread_name_prefix="mercado-publish",
     ) as executor:
         futures = [
-            executor.submit(publish_one, index, row)
+            executor.submit(bind_usage(publish_one, task_type="ai_original",
+                            task_name="AI 上架属性补全", task_id=str(batch_id or "")), index, row)
             for index, row in enumerate(rows[1:], start=1)
         ]
         for future in as_completed(futures):
@@ -986,6 +1007,7 @@ def publish_product_batch(
         "requested_count": len(rows),
         "published_count": published,
         "failed_count": failed,
+        "pending_review_count": pending_review,
         "elapsed_seconds": round(elapsed_seconds, 3),
         "items_per_minute": round(
             len(results) / elapsed_seconds * 60, 2

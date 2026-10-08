@@ -29,6 +29,8 @@ from urllib.parse import quote, urlsplit
 import requests
 from werkzeug.datastructures import FileStorage
 
+from erp.ai_usage_billing import bind_usage, current_usage_context, record_usage
+
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 AI_VIDEO_EXTENSIONS = {".mp4", ".mov"}
@@ -394,6 +396,7 @@ def _public_job(job: dict) -> dict:
         if key not in {
             "provider_task_id", "output_filename", "fingerprint",
             "credential_owner_id",
+            "ai_usage_context",
         }
     }
     from bit.video_reviews import records
@@ -884,6 +887,8 @@ def create_job(uploads, form: dict) -> dict:
             "provider_task_id": "",
             "provider_attempts": [],
             "credential_owner_id": credential_owner_id,
+            "ai_usage_context": {key: value for key, value in current_usage_context().items()
+                                 if key in {"organization_key", "account_scope", "actor_id", "actor_name", "salesperson"}},
             "created_by_name": str(form.get("created_by_name") or "").strip()[:64],
             "output_filename": "",
             "published": [],
@@ -1444,6 +1449,7 @@ def _submit_provider(job: dict, provider: str) -> str:
             "提交视频任务时连接中断，远端结果未知；为避免重复计费，未自动切换备用模型"
         ) from exc
     payload = _response_json(response, "视频模型")
+    _record_provider_tokens(job, provider, "", payload)
     # Some Beijing workspaces reject the dedicated video route even though the
     # same key is accepted by the regional DashScope route. This explicit 400
     # means no task was created, so a single retry cannot double bill.
@@ -1463,6 +1469,7 @@ def _submit_provider(job: dict, provider: str) -> str:
                 "切换百炼共享地址后连接中断，远端结果未知；为避免重复计费，未自动重试"
             ) from exc
         payload = _response_json(response, "视频模型")
+        _record_provider_tokens(job, provider, "", payload)
         if response.ok:
             job["provider_endpoint_base"] = shared_base
     if response.status_code == 408 or response.status_code >= 500:
@@ -1482,6 +1489,29 @@ def _submit_provider(job: dict, provider: str) -> str:
             _video_provider_error(payload, "视频模型提交失败", provider)
         )
     return task_id
+
+
+def _record_provider_tokens(job, provider, task_id, payload):
+    """Keep paid video usage even when validation/download subsequently fails."""
+    if not isinstance(payload, dict) or not payload.get("usage"):
+        return
+    job = job or {}
+    output = payload.get("output") or {}
+    if not isinstance(output, dict):
+        output = {}
+    usage_fields = {**(job.get("ai_usage_context") or {}),
+                    "task_type": "ai_video", "task_name": "AI 商品视频生成",
+                    "task_id": job.get("id") or task_id,
+                    "request_id": task_id or payload.get("id") or output.get("task_id") or payload.get("request_id") or ""}
+    if _job_owner(job):
+        usage_fields["actor_id"] = _job_owner(job)
+    if job.get("created_by_name"):
+        usage_fields["actor_name"] = job["created_by_name"]
+    record_usage(payload, model=payload.get("model") or job.get("model") or
+                 (job.get("models") or {}).get(provider) or "",
+                 provider=provider,
+                 base_url=_seedance_endpoint_base(job) if provider == SEEDANCE_PROVIDER else _wan_endpoint_base(job),
+                 **usage_fields)
 
 
 def _query_provider(task_id: str, provider: str, job=None) -> dict:
@@ -1507,6 +1537,9 @@ def _query_provider(task_id: str, provider: str, job=None) -> dict:
         ) from exc
     if not isinstance(payload, dict):
         raise _ProviderStateUncertainError("视频任务查询返回了无效数据")
+    status = _normalized_provider_result(provider, payload)["status"]
+    if not response.ok or status in {"SUCCEEDED", "FAILED", "CANCELED", "CANCELLED", "UNKNOWN"}:
+        _record_provider_tokens(job, provider, task_id, payload)
     if not response.ok:
         raise _ProviderStateUncertainError(_video_provider_error(payload, "视频任务查询失败", provider))
     return payload
@@ -2008,7 +2041,7 @@ def _start_worker(job_id: str) -> bool:
             return False
         _active_workers.add(job_id)
     thread = threading.Thread(
-        target=_run_worker,
+        target=bind_usage(_run_worker, task_type="ai_video", task_name="AI 商品视频生成", task_id=job_id),
         args=(job_id,),
         name=f"ai-video-{job_id[:8]}",
         daemon=True,

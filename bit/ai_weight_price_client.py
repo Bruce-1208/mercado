@@ -14,7 +14,7 @@ import uuid
 
 from erp.ai_weight_price.config import selection_params
 from erp.ai_weight_price.image_first import highest_priced_variant
-from erp.ai_weight_price.models import erp_value_equal, number, parse_weight_evidence
+from erp.ai_weight_price.models import erp_value_equal, number, parse_weight_evidence, supplier_dimensions_evidence
 from erp.ai_weight_price.pricing import usd_cost
 
 
@@ -407,10 +407,19 @@ def detail(service, payload):
     if not raw_weight and detail_data.get("weight_g") not in (None, ""):
         raw_weight = f"{detail_data.get('weight_g')}g"
     weight = parse_weight_evidence(raw_weight)
+    dimensions = supplier_dimensions_evidence(selected, detail_data)
+    dimensions_notice = ""
+    if not dimensions:
+        dimensions_notice = "1688未读取到完整包装尺寸，保留智赢原尺寸"
+    elif any(number(side) > 60 for side in dimensions.split("x")):
+        dimensions_notice = f"1688包装尺寸 {dimensions} cm 单边超过60 cm，保留智赢原尺寸"
     key = task["erp_goods_id"]
+    service.store.log(dimensions_notice or f"1688包装尺寸已核查：{dimensions} cm", key)
     task = service.store.update(
         key,
         stage="matched",
+        supplier_dimensions_cm=dimensions,
+        dimensions_notice=dimensions_notice,
         supplier_url=detail_data.get("url") or payload.get("url") or "",
         supplier_sku_id=selected.get("id"),
         supplier_sku=selected.get("label") or "",
@@ -432,7 +441,11 @@ def detail(service, payload):
     changes = {"net_income_usd": pricing["net_income_usd"]}
     if weight is not None:
         changes["weight_g"] = str(number(weight))
+    if dimensions and not dimensions_notice:
+        changes["dimensions_cm"] = dimensions
     reason = "图片匹配成功，已读取1688最高最终变体价格"
+    if task.get("source_type") != "mercado_collection":
+        reason += "；" + (dimensions_notice or f"已核查包装尺寸 {dimensions} cm")
     task = service.store.update(key, net_income_usd=pricing["net_income_usd"], pricing=pricing,
                                 decision_status="success", decision_reason=reason,
                                 planned_changes={} if task.get("source_type") == "mercado_collection" else {**changes, "review_status": "通过"})
@@ -477,6 +490,7 @@ def writeback(service, payload):
         raise ValueError("智赢保存前后回读的商品编号与任务不一致")
     if str(before.get("review_status") or "").replace(" ", "") != "待审核":
         raise ValueError("智赢商品不是待审核状态，禁止回写")
+    changes = {**changes, "review_status": "通过"}
     attempt = {
         "before": before,
         "intent": {**changes, "at": time.time()},
@@ -487,7 +501,10 @@ def writeback(service, payload):
     service.store.update(key, stage="writing", erp_before=before, erp_after=actual,
                          write_verified=False, write_intent=changes, write_history=history)
     try:
-        for field, expected in changes.items():
+        expected_fields = dict(changes)
+        if "dimensions_cm" in before and "dimensions_cm" not in changes:
+            expected_fields["dimensions_cm"] = before["dimensions_cm"]
+        for field, expected in expected_fields.items():
             if field == "review_status":
                 if str(actual.get(field) or "").replace(" ", "") != str(expected).replace(" ", ""):
                     raise ValueError("智赢审核状态保存回读不一致")

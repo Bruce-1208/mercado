@@ -62,7 +62,7 @@ test('failure cards explain required recovery and saved partial steps without dr
 
 test('recovery text distinguishes category and required attribute work', () => {
   const {run} = setup();
-  assert.match(run('aiOriginalRecoveryMessage({ai_original: {workflow_status:"needs_category"}})'), /待人工选类/);
+  assert.match(run('aiOriginalRecoveryMessage({ai_original: {workflow_status:"needs_category"}})'), /待重试选类.*AI 会根据标题和描述/);
   assert.match(run('aiOriginalRecoveryMessage({ai_original: {workflow_status:"needs_attributes"}})'), /待补充必填属性/);
   assert.equal(run('aiOriginalRecoveryMessage({ai_original: {status:"completed"}})'), '');
 });

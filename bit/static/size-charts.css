@@ -16,3 +16,9 @@
 .sc-template-settings{border:1px solid var(--zs-stroke);border-radius:9px;padding:0 16px 16px}.sc-template-settings:not([open]){padding-bottom:0}.sc-template-settings>summary{padding:14px 0}.sc-standards{order:4}
 
 .sc-builtin-label{display:block;font-size:12px;margin-bottom:7px}.sc-builtin-select{width:100%;border:1px solid var(--zs-stroke)}.sc-builtin-actions{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap}.sc-builtin-grid th,.sc-builtin-grid td{padding:11px 14px;white-space:nowrap}.sc-builtin-grid tbody tr:nth-child(even){background:#f8fafc}.sc-builtins .sc-panel-heading{flex-wrap:wrap}.sc-result .sc-adaptation-note{color:#925510}.sc-builtins .sc-grid td:first-child,.sc-builtins .sc-grid th:first-child{width:auto;color:var(--zs-heading)}
+.sc-batch { margin-bottom: 24px; }
+.sc-batch progress { width: 100%; height: 12px; margin: 16px 0; accent-color: #2563eb; }
+.sc-batch #sc-batch-results { max-height: 520px; overflow-y: auto; }
+.sc-batch #sc-batch-stores { max-height: 280px; overflow-y: auto; }
+.sc-batch .sc-target-card { display: block; cursor: pointer; }
+.sc-batch .sc-target-card > input { margin-right: 8px; }

@@ -259,6 +259,10 @@ class MercadoPromotionsClient:
                 self.client._refresh_access_token()
                 refreshed = True
                 continue
+            if response.status_code >= 500:
+                raise MercadoAPIError(
+                    f"{method} {path} 网关或平台异常 ({response.status_code})，结果未知；请先同步官方状态，禁止直接重试"
+                )
             if not response.ok:
                 raise MercadoAPIError(
                     f"{method} {path} 失败 ({response.status_code}): {response.text[:1000]}"

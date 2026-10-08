@@ -1,4 +1,6 @@
 import json
+from bit.order_warehouses import normalize_warehouse
+from bit.knowledge_organization import organization as knowledge_organization
 import hashlib
 import os
 import re
@@ -514,6 +516,7 @@ def _ensure_infringement_knowledge_table(cursor):
         CREATE TABLE IF NOT EXISTS `infringement_knowledge` (
             `id` BIGINT NOT NULL AUTO_INCREMENT,
             `brand_name` VARCHAR(255) NOT NULL,
+            `organization_key` VARCHAR(64) NOT NULL DEFAULT 'wuhan-zeshun',
             `list_type` VARCHAR(16) NOT NULL,
             `notes` VARCHAR(2000) NULL,
             `source_type` VARCHAR(16) NOT NULL DEFAULT 'manual',
@@ -523,7 +526,7 @@ def _ensure_infringement_knowledge_table(cursor):
             `updated_at` DATETIME NOT NULL,
             `deleted_at` DATETIME NULL,
             PRIMARY KEY (`id`),
-            UNIQUE KEY `uniq_infringement_knowledge_brand` (`brand_name`),
+            UNIQUE KEY `uniq_knowledge_org_brand` (`organization_key`, `brand_name`),
             KEY `idx_infringement_knowledge_type` (`list_type`, `deleted_at`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
@@ -546,13 +549,29 @@ def _ensure_infringement_knowledge_table(cursor):
         "source_detail",
         "VARCHAR(1000) NULL AFTER `evidence_count`",
     )
+    _ensure_column(cursor, "infringement_knowledge", "organization_key",
+                   "VARCHAR(64) NOT NULL DEFAULT 'wuhan-zeshun'")
+    # One ALTER atomically replaces the old global uniqueness constraint.
+    cursor.execute("SHOW INDEX FROM `infringement_knowledge` WHERE `Key_name` IN "
+                   "('uniq_infringement_knowledge_brand', 'uniq_knowledge_org_brand')")
+    indexes = {row["Key_name"] for row in cursor.fetchall() or []}
+    changes = []
+    if "uniq_infringement_knowledge_brand" in indexes:
+        changes.append("DROP INDEX `uniq_infringement_knowledge_brand`")
+    if "uniq_knowledge_org_brand" not in indexes:
+        changes.append("ADD UNIQUE KEY `uniq_knowledge_org_brand` (`organization_key`, `brand_name`)")
+    if changes:
+        cursor.execute("ALTER TABLE `infringement_knowledge` " + ", ".join(changes))
+    from bit.infringement_knowledge_store import ensure_metadata_schema
+    ensure_metadata_schema(cursor, _ensure_column)
 
 
-# Historical automatic imports stored black/white decisions. Read them as
-# unreviewed evidence without migrating or erasing the original records.
+# WIPO blacklists are effective automatically. Other automatic imports remain
+# unreviewed evidence until a person chooses their disposition.
 _KNOWLEDGE_EFFECTIVE_TYPE_SQL = (
     "CASE WHEN COALESCE(NULLIF(`source_type`, ''), 'manual') = 'manual' "
-    "THEN `list_type` ELSE 'pending' END"
+    "THEN `list_type` WHEN `source_type` = 'wipo' AND `list_type` = 'blacklist' "
+    "THEN 'blacklist' ELSE 'pending' END"
 )
 _KNOWLEDGE_EFFECTIVE_SOURCE_SQL = (
     "CASE WHEN `source_type` = 'analysis' AND LEFT(`source_detail`, 10) = 'global_ip:' "
@@ -562,6 +581,7 @@ _KNOWLEDGE_EFFECTIVE_SOURCE_SQL = (
 
 def _serialize_infringement_knowledge_row(row):
     from bit.bit_infringement_knowledge import effective_list_type, list_type_label
+    from bit.infringement_knowledge_store import serialize_metadata
 
     result = dict(row or {})
     result["id"] = int(result.get("id") or 0)
@@ -577,7 +597,7 @@ def _serialize_infringement_knowledge_row(row):
         if result.get(key) is not None:
             result[key] = str(result[key])
     result.pop("deleted_at", None)
-    return result
+    return serialize_metadata(result)
 
 
 def list_infringement_knowledge(list_type="", search="", limit=2000, after_id=None,
@@ -627,16 +647,17 @@ def list_infringement_knowledge(list_type="", search="", limit=2000, after_id=No
                                AS `whitelist`,
                            SUM(CASE WHEN {_KNOWLEDGE_EFFECTIVE_TYPE_SQL} = 'blacklist' THEN 1 ELSE 0 END)
                                AS `blacklist`,
+                           SUM(CASE WHEN {_KNOWLEDGE_EFFECTIVE_TYPE_SQL} = 'borderline' THEN 1 ELSE 0 END) AS `borderline`,
                            SUM(CASE WHEN {_KNOWLEDGE_EFFECTIVE_TYPE_SQL} = 'pending' THEN 1 ELSE 0 END)
                                AS `pending`
                     FROM `infringement_knowledge`
-                    WHERE `deleted_at` IS NULL
-                    """
+                    WHERE `organization_key` = %s AND `deleted_at` IS NULL
+                    """, (knowledge_organization(),)
                 )
                 summary_row = cursor.fetchone() or {}
 
-            conditions = ["`deleted_at` IS NULL"]
-            parameters = []
+            conditions = ["`organization_key` = %s", "`deleted_at` IS NULL"]
+            parameters = [knowledge_organization()]
             if normalized_type:
                 conditions.append(f"({_KNOWLEDGE_EFFECTIVE_TYPE_SQL}) = %s")
                 parameters.append(normalized_type)
@@ -644,9 +665,9 @@ def list_infringement_knowledge(list_type="", search="", limit=2000, after_id=No
                 conditions.append(f"({_KNOWLEDGE_EFFECTIVE_SOURCE_SQL}) = %s")
                 parameters.append(source_type)
             if search:
-                conditions.append("(`brand_name` LIKE %s OR `notes` LIKE %s)")
+                conditions.append("(`brand_name` LIKE %s OR `notes` LIKE %s OR `aliases_json` LIKE %s OR `source_detail` LIKE %s)")
                 keyword = f"%{search}%"
-                parameters.extend((keyword, keyword))
+                parameters.extend((keyword, keyword, keyword, keyword))
             if page_mode:
                 cursor.execute(
                     f"SELECT COUNT(*) AS `total` FROM `infringement_knowledge` "
@@ -666,7 +687,9 @@ def list_infringement_knowledge(list_type="", search="", limit=2000, after_id=No
                 f"""
                 SELECT `id`, `brand_name`, `list_type`, `notes`, `source_type`,
                        `evidence_count`, `source_detail`,
-                       `created_at`, `updated_at`
+                       `aliases_json`, `scope_json`, `valid_until`, `rule_version`,
+                       `original_source_type`, `reviewed_by`, `reviewed_at`,
+                       `created_at`, `updated_at`, `organization_key`
                 FROM `infringement_knowledge`
                 WHERE {' AND '.join(conditions)}
                 ORDER BY {ordering}
@@ -688,7 +711,7 @@ def list_infringement_knowledge(list_type="", search="", limit=2000, after_id=No
         else:
             result["summary"] = {
                 key: int(summary_row.get(key) or 0)
-                for key in ("total", "whitelist", "blacklist", "pending")
+                for key in ("total", "whitelist", "blacklist", "pending", "borderline")
             }
         if page_mode:
             result.update(filtered_total=filtered_total, page=page, page_size=page_size,
@@ -702,18 +725,19 @@ def list_infringement_knowledge(list_type="", search="", limit=2000, after_id=No
 
 
 def create_infringement_knowledge(record):
-    from bit.bit_infringement_knowledge import normalize_knowledge_record
+    from bit.infringement_knowledge_store import prepare_manual_record, save_manual_metadata
 
-    normalized = normalize_knowledge_record(record)
+    normalized = prepare_manual_record(record)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
             _ensure_infringement_knowledge_table(cursor)
+            connection.begin()
             cursor.execute(
-                "SELECT `id`, `deleted_at` FROM `infringement_knowledge` "
-                "WHERE `brand_name` = %s LIMIT 1",
-                (normalized["brand_name"],),
+                "SELECT * FROM `infringement_knowledge` "
+                "WHERE `organization_key` = %s AND `brand_name` = %s LIMIT 1 FOR UPDATE",
+                (knowledge_organization(), normalized["brand_name"]),
             )
             existing = cursor.fetchone()
             if existing and existing.get("deleted_at") is None:
@@ -740,8 +764,8 @@ def create_infringement_knowledge(record):
                     """
                     INSERT INTO `infringement_knowledge` (
                         `brand_name`, `list_type`, `notes`, `source_type`,
-                        `evidence_count`, `created_at`, `updated_at`
-                    ) VALUES (%s, %s, %s, 'manual', 0, %s, %s)
+                        `evidence_count`, `created_at`, `updated_at`, `organization_key`
+                    ) VALUES (%s, %s, %s, 'manual', 0, %s, %s, %s)
                     """,
                     (
                         normalized["brand_name"],
@@ -749,11 +773,14 @@ def create_infringement_knowledge(record):
                         normalized["notes"],
                         now,
                         now,
+                        knowledge_organization(),
                     ),
                 )
                 record_id = int(cursor.lastrowid)
+            version = save_manual_metadata(cursor, record_id, normalized, existing, now,
+                                           "restore" if existing else "create")
         connection.commit()
-        return {"id": record_id}
+        return {"id": record_id, "rule_version": version}
     except pymysql.err.IntegrityError as exc:
         connection.rollback()
         raise ValueError("该品牌已存在于侵权知识库") from exc
@@ -766,6 +793,7 @@ def create_infringement_knowledge(record):
 
 def update_infringement_knowledge(record_id, record):
     from bit.bit_infringement_knowledge import normalize_knowledge_record
+    from bit.infringement_knowledge_store import prepare_manual_record, save_manual_metadata
 
     try:
         record_id = int(record_id)
@@ -779,13 +807,16 @@ def update_infringement_knowledge(record_id, record):
     try:
         with connection.cursor() as cursor:
             _ensure_infringement_knowledge_table(cursor)
+            connection.begin()
             cursor.execute(
-                "SELECT `id` FROM `infringement_knowledge` "
-                "WHERE `id` = %s AND `deleted_at` IS NULL",
-                (record_id,),
+                "SELECT * FROM `infringement_knowledge` "
+                "WHERE `organization_key` = %s AND `id` = %s AND `deleted_at` IS NULL FOR UPDATE",
+                (knowledge_organization(), record_id),
             )
-            if not cursor.fetchone():
+            existing = cursor.fetchone()
+            if not existing:
                 raise ValueError("知识库记录不存在")
+            normalized = prepare_manual_record(record, existing)
             cursor.execute(
                 """
                 UPDATE `infringement_knowledge`
@@ -801,8 +832,9 @@ def update_infringement_knowledge(record_id, record):
                     record_id,
                 ),
             )
+            version = save_manual_metadata(cursor, record_id, normalized, existing, now)
         connection.commit()
-        return {"id": record_id}
+        return {"id": record_id, "rule_version": version}
     except pymysql.err.IntegrityError as exc:
         connection.rollback()
         raise ValueError("该品牌已存在于侵权知识库") from exc
@@ -813,7 +845,8 @@ def update_infringement_knowledge(record_id, record):
         connection.close()
 
 
-def delete_infringement_knowledge(record_id):
+def delete_infringement_knowledge(record_id, actor=""):
+    from bit.infringement_knowledge_store import append_history
     try:
         record_id = int(record_id)
     except (TypeError, ValueError) as exc:
@@ -825,16 +858,25 @@ def delete_infringement_knowledge(record_id):
     try:
         with connection.cursor() as cursor:
             _ensure_infringement_knowledge_table(cursor)
+            connection.begin()
+            cursor.execute("SELECT * FROM `infringement_knowledge` WHERE `organization_key` = %s AND `id` = %s AND `deleted_at` IS NULL FOR UPDATE", (knowledge_organization(), record_id))
+            existing = cursor.fetchone()
+            if not existing:
+                raise ValueError("知识库记录不存在")
             cursor.execute(
                 """
                 UPDATE `infringement_knowledge`
-                SET `deleted_at` = %s, `source_type` = 'manual', `updated_at` = %s
+                    SET `deleted_at` = %s, `source_type` = 'manual', `updated_at` = %s,
+                        `rule_version` = `rule_version` + 1
                 WHERE `id` = %s AND `deleted_at` IS NULL
                 """,
                 (now, now, record_id),
             )
             if cursor.rowcount == 0:
                 raise ValueError("知识库记录不存在")
+            append_history(cursor, record_id, existing,
+                           {**existing, "deleted_at": now, "rule_version": int(existing.get("rule_version") or 1) + 1},
+                           "delete", actor, now)
         connection.commit()
         return {"id": record_id}
     except Exception:
@@ -845,12 +887,12 @@ def delete_infringement_knowledge(record_id):
 
 
 def bulk_create_infringement_knowledge(records):
-    from bit.bit_infringement_knowledge import normalize_knowledge_record
+    from bit.infringement_knowledge_store import prepare_manual_record, save_manual_metadata
 
     normalized_records = []
     seen = set()
     for record in records or ():
-        normalized = normalize_knowledge_record(record)
+        normalized = prepare_manual_record(record)
         key = normalized["brand_name"].casefold()
         if key not in seen:
             seen.add(key)
@@ -866,11 +908,12 @@ def bulk_create_infringement_knowledge(records):
     try:
         with connection.cursor() as cursor:
             _ensure_infringement_knowledge_table(cursor)
+            connection.begin()
             for normalized in normalized_records:
                 cursor.execute(
-                    "SELECT `id`, `deleted_at` FROM `infringement_knowledge` "
-                    "WHERE `brand_name` = %s LIMIT 1",
-                    (normalized["brand_name"],),
+                    "SELECT * FROM `infringement_knowledge` "
+                    "WHERE `organization_key` = %s AND `brand_name` = %s LIMIT 1 FOR UPDATE",
+                    (knowledge_organization(), normalized["brand_name"]),
                 )
                 existing = cursor.fetchone()
                 if existing and existing.get("deleted_at") is None:
@@ -892,14 +935,15 @@ def bulk_create_infringement_knowledge(records):
                             int(existing["id"]),
                         ),
                     )
+                    save_manual_metadata(cursor, int(existing["id"]), normalized, existing, now, "restore")
                     restored += 1
                     continue
                 cursor.execute(
                     """
                     INSERT INTO `infringement_knowledge` (
                         `brand_name`, `list_type`, `notes`, `source_type`,
-                        `evidence_count`, `created_at`, `updated_at`
-                    ) VALUES (%s, %s, %s, 'manual', 0, %s, %s)
+                        `evidence_count`, `created_at`, `updated_at`, `organization_key`
+                    ) VALUES (%s, %s, %s, 'manual', 0, %s, %s, %s)
                     """,
                     (
                         normalized["brand_name"],
@@ -907,8 +951,10 @@ def bulk_create_infringement_knowledge(records):
                         normalized["notes"],
                         now,
                         now,
+                        knowledge_organization(),
                     ),
                 )
+                save_manual_metadata(cursor, int(cursor.lastrowid), normalized, None, now, "create")
                 inserted += 1
         connection.commit()
         return {
@@ -934,6 +980,15 @@ def get_infringement_knowledge_analysis_sources(
     except (TypeError, ValueError) as exc:
         raise ValueError("自动分析条数必须是有效整数") from exc
 
+    org = knowledge_organization()
+    token_org = "COALESCE(NULLIF(t.`organization_key`, 'default'), 'wuhan-zeshun')"
+    infraction_scope = (
+        "EXISTS (SELECT 1 FROM `mercado_store_tokens` t WHERE " + token_org + " = %s "
+        "AND (t.`display_name` = `infraction`.`店铺名` OR t.`nickname` = `infraction`.`店铺名`)) "
+        "AND NOT EXISTS (SELECT 1 FROM `mercado_store_tokens` t WHERE " + token_org + " <> %s "
+        "AND (t.`display_name` = `infraction`.`店铺名` OR t.`nickname` = `infraction`.`店铺名`))"
+    )
+    active_scope = ("`token_id` IN (SELECT t.`id` FROM `mercado_store_tokens` t WHERE " + token_org + " = %s)")
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
@@ -941,46 +996,46 @@ def get_infringement_knowledge_analysis_sources(
 
             ensure_store_link_table(cursor)
             cursor.execute(
-                """
+                f"""
                 SELECT CAST(`编号` AS CHAR) AS `item_id`, MAX(`标题`) AS `title`
                 FROM `infraction`
-                WHERE `编号` IS NOT NULL AND `编号` <> ''
+                WHERE {infraction_scope} AND `编号` IS NOT NULL AND `编号` <> ''
                   AND `标题` IS NOT NULL AND `标题` <> ''
                 GROUP BY `编号`
                 ORDER BY MAX(`提交时间`) DESC
                 LIMIT %s
                 """,
-                (infraction_limit,),
+                (org, org, infraction_limit),
             )
             infraction_rows = list(cursor.fetchall() or [])
             cursor.execute(
-                """
+                f"""
                 SELECT `item_id`, `title`, COALESCE(`sold_quantity`, 0) AS `sold_quantity`
                 FROM `erp_mercadolibre_store_links`
-                WHERE `is_current` = 1 AND `status` = 'active'
+                WHERE {active_scope} AND `is_current` = 1 AND `status` = 'active'
                   AND COALESCE(`sold_quantity`, 0) > 0
                   AND `title` IS NOT NULL AND `title` <> ''
                 ORDER BY COALESCE(`sold_quantity`, 0) DESC, `id` DESC
                 LIMIT %s
                 """,
-                (active_limit,),
+                (org, active_limit),
             )
             active_rows = list(cursor.fetchall() or [])
             cursor.execute(
-                """
+                f"""
                 SELECT COUNT(DISTINCT `编号`) AS `total`
                 FROM `infraction`
-                WHERE `编号` IS NOT NULL AND `编号` <> ''
-                """
+                WHERE {infraction_scope} AND `编号` IS NOT NULL AND `编号` <> ''
+                """, (org, org)
             )
             infraction_total = int((cursor.fetchone() or {}).get("total") or 0)
             cursor.execute(
-                """
+                f"""
                 SELECT COUNT(*) AS `total`
                 FROM `erp_mercadolibre_store_links`
-                WHERE `is_current` = 1 AND `status` = 'active'
+                WHERE {active_scope} AND `is_current` = 1 AND `status` = 'active'
                   AND COALESCE(`sold_quantity`, 0) > 0
-                """
+                """, (org,)
             )
             active_total = int((cursor.fetchone() or {}).get("total") or 0)
         connection.commit()
@@ -996,6 +1051,7 @@ def get_infringement_knowledge_analysis_sources(
 
 def upsert_analyzed_infringement_knowledge(records):
     from bit.bit_infringement_knowledge import normalize_knowledge_record
+    from bit.infringement_knowledge_store import record_import_evidence
 
     normalized_records = []
     seen = set()
@@ -1030,9 +1086,9 @@ def upsert_analyzed_infringement_knowledge(records):
                     """
                     SELECT `id`, `list_type`, `source_type`, `source_detail`, `deleted_at`
                     FROM `infringement_knowledge`
-                    WHERE `brand_name` = %s LIMIT 1 FOR UPDATE
+                    WHERE `organization_key` = %s AND `brand_name` = %s LIMIT 1 FOR UPDATE
                     """,
-                    (normalized["brand_name"],),
+                    (knowledge_organization(), normalized["brand_name"]),
                 )
                 existing = cursor.fetchone()
                 if existing:
@@ -1071,8 +1127,8 @@ def upsert_analyzed_infringement_knowledge(records):
                     """
                     INSERT INTO `infringement_knowledge` (
                         `brand_name`, `list_type`, `notes`, `source_type`,
-                        `evidence_count`, `source_detail`, `created_at`, `updated_at`
-                    ) VALUES (%s, %s, %s, 'analysis', %s, %s, %s, %s)
+                        `evidence_count`, `source_detail`, `created_at`, `updated_at`, `organization_key`
+                    ) VALUES (%s, %s, %s, 'analysis', %s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE `id` = `id`
                     """,
                     (
@@ -1083,9 +1139,11 @@ def upsert_analyzed_infringement_knowledge(records):
                         normalized["source_detail"],
                         now,
                         now,
+                        knowledge_organization(),
                     ),
                 )
                 inserted += int(cursor.rowcount > 0)
+            record_import_evidence(cursor, normalized_records, "analysis", now)
         connection.commit()
         return {
             "total": len(normalized_records),
@@ -1114,7 +1172,7 @@ def _normalize_wipo_knowledge_records(records):
         normalized = normalize_knowledge_record({
             **record,
             "brand_name": unicodedata.normalize("NFKC", str(record.get("brand_name") or "")),
-            "list_type": "pending",
+            "list_type": "blacklist",
         })
         try:
             normalized["evidence_count"] = max(0, int(record.get("evidence_count") or 0))
@@ -1131,8 +1189,7 @@ def _normalize_wipo_knowledge_records(records):
         if not isinstance(detail, dict):
             detail = {"detail": str(detail)}
         detail = dict(detail)
-        # Only the two supported WIPO adapters may label their provenance;
-        # callers cannot bypass human review through feed fields.
+        # Only the two supported WIPO adapters may label their provenance.
         if detail.get("source") != "WIPO Madrid Monitor":
             detail["source"] = "WIPO Global Brand Database"
         for field, aliases in {
@@ -1227,7 +1284,8 @@ def _wipo_knowledge_source_detail(detail, existing=None):
 
 
 def upsert_wipo_infringement_knowledge(records):
-    """Import unreviewed WIPO evidence while protecting manual and deleted records."""
+    """Import WIPO brands into the blacklist, preserving manual and deleted records."""
+    from bit.infringement_knowledge_store import record_import_evidence
     normalized_records = _normalize_wipo_knowledge_records(records)
     empty_result = {"total": 0, "inserted": 0, "updated": 0, "unchanged": 0, "restored": 0, "skipped_manual": 0, "skipped_deleted": 0}
     if not normalized_records:
@@ -1255,10 +1313,11 @@ def upsert_wipo_infringement_knowledge(records):
                         FROM ({incoming}) AS incoming
                         INNER JOIN `infringement_knowledge` AS existing
                             ON existing.`brand_name` = incoming.`brand_name`
+                            AND existing.`organization_key` = %s
                         ORDER BY existing.`id`
                         FOR UPDATE
                         """,
-                        tuple(row["brand_name"] for row in batch),
+                        (*[row["brand_name"] for row in batch], knowledge_organization()),
                     )
                     existing_rows = {
                         int(row["input_index"]): row for row in (cursor.fetchall() or [])
@@ -1275,7 +1334,7 @@ def upsert_wipo_infringement_knowledge(records):
                         elif str(existing.get("source_type") or "manual") == "manual":
                             result["skipped_manual"] += 1
                             continue
-                        elif (existing.get("list_type") == "pending"
+                        elif (existing.get("list_type") == "blacklist"
                               and existing.get("source_type") == "wipo"
                               and str(existing.get("source_detail") or "") == detail):
                             result["unchanged"] += 1
@@ -1284,23 +1343,24 @@ def upsert_wipo_infringement_knowledge(records):
                             result["updated"] += 1
                         writes.append((
                             normalized["brand_name"], normalized["notes"],
-                            normalized["evidence_count"], detail, now, now,
+                            normalized["evidence_count"], detail, now, now, knowledge_organization(),
                         ))
                     if writes:
                         cursor.executemany(
                             """
                             INSERT INTO `infringement_knowledge` (
                                 `brand_name`, `list_type`, `notes`, `source_type`,
-                                `evidence_count`, `source_detail`, `created_at`, `updated_at`
-                            ) VALUES (%s, 'pending', %s, 'wipo', %s, %s, %s, %s)
+                                `evidence_count`, `source_detail`, `created_at`, `updated_at`, `organization_key`
+                            ) VALUES (%s, 'blacklist', %s, 'wipo', %s, %s, %s, %s, %s)
                             ON DUPLICATE KEY UPDATE
-                                `list_type` = IF(`deleted_at` IS NULL AND COALESCE(NULLIF(`source_type`, ''), 'manual') <> 'manual', 'pending', `list_type`),
+                                `list_type` = IF(`deleted_at` IS NULL AND COALESCE(NULLIF(`source_type`, ''), 'manual') <> 'manual', 'blacklist', `list_type`),
                                 `source_detail` = IF(`deleted_at` IS NULL AND COALESCE(NULLIF(`source_type`, ''), 'manual') <> 'manual', VALUES(`source_detail`), `source_detail`),
                                 `updated_at` = IF(`deleted_at` IS NULL AND COALESCE(NULLIF(`source_type`, ''), 'manual') <> 'manual', VALUES(`updated_at`), `updated_at`),
                                 `source_type` = IF(`deleted_at` IS NULL AND COALESCE(NULLIF(`source_type`, ''), 'manual') <> 'manual', 'wipo', `source_type`)
                             """,
                             writes,
                         )
+                record_import_evidence(cursor, normalized_records, "wipo", now)
             connection.commit()
             return result
         except Exception as exc:
@@ -1311,6 +1371,54 @@ def upsert_wipo_infringement_knowledge(records):
             raise
         finally:
             connection.close()
+
+
+def migrate_wipo_blacklist():
+    """Promote this enterprise's historical WIPO imports; safe to replay after restart."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for attempt in range(3):
+        connection = pymysql.connect(**config)
+        try:
+            with connection.cursor() as cursor:
+                _ensure_infringement_knowledge_table(cursor)
+                connection.begin()
+                cursor.execute(
+                    """
+                    UPDATE `infringement_knowledge`
+                    SET `list_type` = 'blacklist', `updated_at` = %s
+                    WHERE `organization_key` = %s
+                      AND `source_type` = 'wipo'
+                      AND `deleted_at` IS NULL
+                      AND COALESCE(`list_type`, '') <> 'blacklist'
+                    """,
+                    (now, knowledge_organization()),
+                )
+                updated = int(cursor.rowcount)
+            connection.commit()
+            return updated
+        except Exception as exc:
+            connection.rollback()
+            if (isinstance(exc, pymysql.err.OperationalError) and exc.args
+                    and exc.args[0] in (1205, 1213) and attempt < 2):
+                continue
+            raise
+        finally:
+            connection.close()
+
+
+def get_infringement_knowledge_detail(record_id):
+    from bit.infringement_knowledge_store import get_detail
+    return get_detail(record_id)
+
+
+def get_infringement_knowledge_products(record_id, limit=50, token_ids=None):
+    from bit.infringement_knowledge_store import get_products
+    return get_products(record_id, limit=limit, token_ids=token_ids)
+
+
+def submit_infringement_knowledge_candidate(record, actor=""):
+    from bit.infringement_knowledge_store import submit_candidate
+    return submit_candidate(record, actor=actor)
 
 
 def _parse_number(value):
@@ -1682,6 +1790,32 @@ def _merge_reputation_snapshot_rows(
     return list(merged_rows.values())
 
 
+def _merge_reputation_api_warning(current, previous):
+    """保留最近一次 API 告警；失败保留正文并明确标记未刷新。"""
+    prefix = "告警 API 读取失败，以下为上次记录：\n"
+    previous_text = str(previous or "").strip()
+    if previous_text.startswith(prefix):
+        previous_text = previous_text[len(prefix):]
+    if current is None:
+        return prefix + previous_text if previous_text else "告警 API 暂无法获取"
+
+    def occurred(text):
+        try:
+            value = datetime.fromisoformat(str(text).splitlines()[0].replace("Z", "+00:00"))
+            return value if value.tzinfo is not None else None
+        except (ValueError, IndexError):
+            return None
+
+    previous_date = occurred(previous_text)
+    current_date = occurred(current)
+    if previous_date is not None and (
+        (current_date is not None and previous_date > current_date)
+        or str(current).startswith("暂无 API 告警")
+    ):
+        return previous_text
+    return current
+
+
 def _preserve_reputation_account_status(rows, previous_status_by_target):
     """API 未明确确认正常时，保留上次已知的更精确封禁期限。"""
     confirmed_normal_statuses = {"正常", "active", "enabled", "ok"}
@@ -1821,8 +1955,10 @@ def inset_reputation_info(
                     ))
                     if previous_traffic not in (None, ""):
                         row[11] = previous_traffic
-                if row[9] is None:
-                    row[9] = previous_warnings_by_target.get((str(row[0]).strip(), str(row[1]).strip())) or "尚未浏览器同步"
+                if not preserve_account_status or row[9] is None:
+                    row[9] = _merge_reputation_api_warning(row[9], previous_warnings_by_target.get(
+                        (str(row[0]).strip(), str(row[1]).strip())
+                    ))
                 extras = row[12:15] if len(row) >= 15 else ["", None, None]
                 seven_day_orders = _parse_seven_day_orders(row[15]) if len(row) > 15 else None
                 row = row[:12] + extras + [submit_time, seven_day_orders]
@@ -2580,11 +2716,14 @@ def _ensure_mercado_synced_orders_table(cursor):
             `freight_source` VARCHAR(32) NULL,
             `freight_checked_at` DATETIME NULL,
             `quoted_freight_usd` DECIMAL(20, 4) NULL,
+            `quoted_freight_local` DECIMAL(20, 4) NULL,
+            `quoted_freight_currency_id` VARCHAR(16) NULL,
             `quoted_freight_weight_g` DECIMAL(20, 4) NULL,
             `quoted_freight_source` VARCHAR(64) NULL,
             `quoted_freight_checked_at` DATETIME NULL,
             `workflow_status` VARCHAR(32) NULL,
             `purchase_order` VARCHAR(255) NULL,
+            `transfer_warehouse` VARCHAR(32) NOT NULL DEFAULT 'shahu',
             `purchase_tracking` VARCHAR(255) NULL,
             `platform_tracking_number` VARCHAR(255) NULL,
             `shipping_deadline` DATETIME NULL,
@@ -2607,6 +2746,7 @@ def _ensure_mercado_synced_orders_table(cursor):
     )
     _ensure_column(cursor, "mercado_synced_orders", "workflow_status", "VARCHAR(32) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "purchase_order", "VARCHAR(255) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "transfer_warehouse", "VARCHAR(32) NOT NULL DEFAULT 'shahu'")
     _ensure_column(cursor, "mercado_synced_orders", "purchase_tracking", "VARCHAR(255) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "platform_tracking_number", "VARCHAR(255) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "shipping_deadline", "DATETIME NULL")
@@ -2622,6 +2762,8 @@ def _ensure_mercado_synced_orders_table(cursor):
     _ensure_column(cursor, "mercado_synced_orders", "freight_source", "VARCHAR(32) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "freight_checked_at", "DATETIME NULL")
     _ensure_column(cursor, "mercado_synced_orders", "quoted_freight_usd", "DECIMAL(20, 4) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "quoted_freight_local", "DECIMAL(20, 4) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "quoted_freight_currency_id", "VARCHAR(16) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "quoted_freight_weight_g", "DECIMAL(20, 4) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "quoted_freight_source", "VARCHAR(64) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "quoted_freight_checked_at", "DATETIME NULL")
@@ -2643,6 +2785,7 @@ def _ensure_mercado_shipment_costs_table(cursor):
             `token_id` BIGINT NOT NULL,
             `seller_cost` DECIMAL(20, 4) NULL,
             `currency_id` VARCHAR(16) NULL,
+            `shipment_status` VARCHAR(32) NULL,
             `payload_json` LONGTEXT NULL,
             `last_error` TEXT NULL,
             `checked_at` DATETIME NOT NULL,
@@ -2651,6 +2794,7 @@ def _ensure_mercado_shipment_costs_table(cursor):
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
+    _ensure_column(cursor, "mercado_shipment_costs", "shipment_status", "VARCHAR(32) NULL")
 
 
 def _ensure_mercado_order_logs_table(cursor):
@@ -2756,6 +2900,59 @@ def _mercado_effective_status_detail(order):
             (order or {}).get("_shipment_last_updated") or ""
         ).strip(),
     }
+
+
+_MERCADO_SHIPPED_STATUSES = {"shipped", "delivered", "not_delivered", "returning", "returned"}
+_MERCADO_SHIPPED_WORKFLOWS = {"已发-在途中", "已发-异常", "交付", "问题-物流退件", "取消-发货后"}
+_MERCADO_API_FREIGHT_SOURCES = {"shipment_costs", "order_shipping_cost"}
+
+
+def _mercado_order_has_shipped(row):
+    if str(row.get("status") or "").lower() in _MERCADO_SHIPPED_STATUSES:
+        return True
+    if row.get("workflow_status") in _MERCADO_SHIPPED_WORKFLOWS:
+        return True
+    for key, status_key in (("status_detail", "shipment_status"), ("raw_json", "_shipment_status")):
+        payload = row.get(key) or {}
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except (TypeError, ValueError):
+                payload = {}
+        if isinstance(payload, dict) and str(payload.get(status_key) or "").lower() in _MERCADO_SHIPPED_STATUSES:
+            return True
+    return False
+
+
+def _mercado_shipped_sql(alias="synced"):
+    statuses = ",".join(f"'{value}'" for value in sorted(_MERCADO_SHIPPED_STATUSES))
+    workflows = ",".join(f"'{value}'" for value in sorted(_MERCADO_SHIPPED_WORKFLOWS))
+    return (
+        f"(LOWER(COALESCE({alias}.`status`, '')) IN ({statuses}) "
+        f"OR COALESCE({alias}.`workflow_status`, '') IN ({workflows}) "
+        f"OR LOWER(JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID({alias}.`status_detail`) "
+        f"THEN {alias}.`status_detail` ELSE '{{}}' END, '$.shipment_status'))) IN ({statuses}) "
+        f"OR LOWER(JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID({alias}.`raw_json`) "
+        f"THEN {alias}.`raw_json` ELSE '{{}}' END, '$._shipment_status'))) IN ({statuses}))"
+    )
+
+
+def _mercado_order_api_quote(order, amount_currency_id):
+    shipping = order.get("shipping") if isinstance(order.get("shipping"), dict) else {}
+    raw_cost = order.get("shipping_cost")
+    if raw_cost is None:
+        raw_cost = shipping.get("cost")
+    try:
+        amount = Decimal(str(raw_cost)) if raw_cost is not None else None
+        if amount is not None and (not amount.is_finite() or amount < 0):
+            amount = None
+    except (InvalidOperation, TypeError, ValueError):
+        amount = None
+    currency = str(
+        order.get("shipping_cost_currency_id") or shipping.get("currency_id")
+        or order.get("currency_id") or amount_currency_id or ""
+    ).upper() if amount is not None else ""
+    return amount, currency
 
 
 def _mercado_https_url(value):
@@ -2892,16 +3089,7 @@ def upsert_mercado_synced_orders(token_record, orders):
                     site_id,
                     str(order.get("currency_id") or first_item.get("currency_id") or "").upper(),
                 )
-                raw_freight = (
-                    order.get("shipping_cost")
-                    if order.get("shipping_cost") is not None
-                    else shipping.get("cost") or 0
-                )
-                try:
-                    has_order_freight = Decimal(str(raw_freight or 0)) > 0
-                except (InvalidOperation, TypeError, ValueError):
-                    raw_freight = 0
-                    has_order_freight = False
+                quoted_freight, quoted_currency = _mercado_order_api_quote(order, amount_currency_id)
                 order_image_url = str(
                     product.get("sku_image_url")
                     or product.get("secure_thumbnail")
@@ -2927,9 +3115,7 @@ def upsert_mercado_synced_orders(token_record, orders):
                         str(product.get("id") or ""), title,
                         order_image_url,
                         quantity, sale_fee, "order_item_quantity",
-                        raw_freight, amount_currency_id if has_order_freight else "",
-                        "order_shipping_cost" if has_order_freight else "",
-                        now if has_order_freight else None,
+                        None, "", "", None,
                         json.dumps(order, ensure_ascii=False, separators=(",", ":")),
                         now, now, amount_currency_id,
                         "marketplace_item" if order_image_url else "",
@@ -2937,6 +3123,10 @@ def upsert_mercado_synced_orders(token_record, orders):
                         "",
                         now if str(order.get("_shipment_status") or "").strip() else None,
                         "",
+                        quoted_freight if quoted_currency == "USD" else None,
+                        quoted_freight, quoted_currency,
+                        "order_shipping_cost" if quoted_freight is not None else "",
+                        now if quoted_freight is not None else None,
                     )
                 )
             cursor.executemany(
@@ -2950,11 +3140,14 @@ def upsert_mercado_synced_orders(token_record, orders):
                     `freight_source`, `freight_checked_at`, `raw_json`, `first_synced_at`,
                     `synced_at`, `amount_currency_id`, `image_source`, `image_checked_at`,
                     `image_last_error`, `shipment_status_checked_at`,
-                    `shipment_status_last_error`
+                    `shipment_status_last_error`, `quoted_freight_usd`,
+                    `quoted_freight_local`, `quoted_freight_currency_id`,
+                    `quoted_freight_source`, `quoted_freight_checked_at`
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s
                 ) ON DUPLICATE KEY UPDATE
                     `token_id` = VALUES(`token_id`), `shop_name` = VALUES(`shop_name`),
                     `seller_id` = VALUES(`seller_id`), `site_id` = VALUES(`site_id`),
@@ -3007,6 +3200,26 @@ def upsert_mercado_synced_orders(token_record, orders):
                         WHEN COALESCE(VALUES(`freight_source`), '') <> ''
                             THEN VALUES(`freight_checked_at`)
                         ELSE `freight_checked_at` END,
+                    `quoted_freight_usd` = CASE
+                        WHEN COALESCE(`quoted_freight_source`, '') IN ('shipment_costs', 'order_shipping_cost')
+                            THEN `quoted_freight_usd`
+                        ELSE VALUES(`quoted_freight_usd`) END,
+                    `quoted_freight_local` = CASE
+                        WHEN COALESCE(`quoted_freight_source`, '') IN ('shipment_costs', 'order_shipping_cost')
+                            THEN `quoted_freight_local`
+                        ELSE VALUES(`quoted_freight_local`) END,
+                    `quoted_freight_currency_id` = CASE
+                        WHEN COALESCE(`quoted_freight_source`, '') IN ('shipment_costs', 'order_shipping_cost')
+                            THEN `quoted_freight_currency_id`
+                        ELSE VALUES(`quoted_freight_currency_id`) END,
+                    `quoted_freight_checked_at` = CASE
+                        WHEN COALESCE(`quoted_freight_source`, '') IN ('shipment_costs', 'order_shipping_cost')
+                            THEN `quoted_freight_checked_at`
+                        ELSE VALUES(`quoted_freight_checked_at`) END,
+                    `quoted_freight_source` = CASE
+                        WHEN COALESCE(`quoted_freight_source`, '') IN ('shipment_costs', 'order_shipping_cost')
+                            THEN `quoted_freight_source`
+                        ELSE VALUES(`quoted_freight_source`) END,
                     `raw_json` = VALUES(`raw_json`),
                     `synced_at` = VALUES(`synced_at`)
                 """,
@@ -3161,7 +3374,7 @@ def list_mercado_shipment_cost_cache(shipping_ids):
 
 
 def save_mercado_shipment_costs(token_id, entries):
-    """Cache official shipment costs and allocate each shipment across its orders."""
+    """Save API quotes; record actual costs only after the shipment has shipped."""
     token_id = int(token_id or 0)
     normalized = []
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -3172,6 +3385,8 @@ def save_mercado_shipment_costs(token_id, entries):
         raw_cost = (entry or {}).get("seller_cost")
         try:
             seller_cost = Decimal(str(raw_cost)) if raw_cost is not None else None
+            if seller_cost is not None and not seller_cost.is_finite():
+                seller_cost = None
         except (InvalidOperation, TypeError, ValueError):
             seller_cost = None
         if seller_cost is not None and seller_cost < 0:
@@ -3181,6 +3396,9 @@ def save_mercado_shipment_costs(token_id, entries):
             "shipping_id": shipping_id,
             "seller_cost": seller_cost,
             "currency_id": str((entry or {}).get("currency_id") or "").strip().upper(),
+            "shipment_status": str((entry or {}).get("shipment_status") or "").strip().lower(),
+            "from_cache": bool((entry or {}).get("from_cache")),
+            "update_actual": (entry or {}).get("update_actual", True),
             "payload_json": json.dumps(
                 payload if isinstance(payload, (dict, list)) else {},
                 ensure_ascii=False,
@@ -3200,18 +3418,39 @@ def save_mercado_shipment_costs(token_id, entries):
     try:
         with connection.cursor() as cursor:
             _ensure_mercado_synced_orders_table(cursor)
+            placeholders = ",".join(["%s"] * len(normalized))
+            cursor.execute(
+                f"SELECT `order_id`, `shipping_id`, `status`, `workflow_status`, "
+                f"`status_detail`, `raw_json`, `quoted_freight_source`, "
+                f"`quoted_freight_local`, `quoted_freight_usd`, "
+                f"COALESCE(`total_amount`, 0) AS `weight` "
+                f"FROM `mercado_synced_orders` WHERE `token_id` = %s "
+                f"AND `shipping_id` IN ({placeholders}) "
+                f"ORDER BY `shipping_id`, `order_id`",
+                [token_id, *[row["shipping_id"] for row in normalized]],
+            )
+            grouped = {}
+            for order in cursor.fetchall():
+                grouped.setdefault(str(order["shipping_id"]), []).append(order)
+            for row in normalized:
+                if not row["shipment_status"] and not row["from_cache"] and not row["last_error"]:
+                    orders = grouped.get(row["shipping_id"], [])
+                    if any(_mercado_order_has_shipped(order) for order in orders):
+                        row["shipment_status"] = "shipped"
             cursor.executemany(
                 """
                 INSERT INTO `mercado_shipment_costs` (
                     `shipping_id`, `token_id`, `seller_cost`, `currency_id`,
-                    `payload_json`, `last_error`, `checked_at`
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    `payload_json`, `last_error`, `checked_at`, `shipment_status`
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     `token_id` = VALUES(`token_id`),
                     `seller_cost` = COALESCE(VALUES(`seller_cost`), `seller_cost`),
                     `currency_id` = COALESCE(NULLIF(VALUES(`currency_id`), ''), `currency_id`),
                     `payload_json` = CASE WHEN VALUES(`seller_cost`) IS NOT NULL
                         THEN VALUES(`payload_json`) ELSE `payload_json` END,
+                    `shipment_status` = CASE WHEN VALUES(`seller_cost`) IS NOT NULL
+                        THEN VALUES(`shipment_status`) ELSE `shipment_status` END,
                     `last_error` = VALUES(`last_error`),
                     `checked_at` = VALUES(`checked_at`)
                 """,
@@ -3220,6 +3459,7 @@ def save_mercado_shipment_costs(token_id, entries):
                         row["shipping_id"], token_id, row["seller_cost"],
                         row["currency_id"], row["payload_json"], row["last_error"],
                         row["checked_at"],
+                        row["shipment_status"],
                     )
                     for row in normalized
                 ],
@@ -3230,20 +3470,12 @@ def save_mercado_shipment_costs(token_id, entries):
                 if row["seller_cost"] is not None and row["currency_id"]
             }
             updates = []
+            quote_updates = []
             if successful:
-                placeholders = ",".join(["%s"] * len(successful))
-                cursor.execute(
-                    f"SELECT `order_id`, `shipping_id`, COALESCE(`total_amount`, 0) AS `weight` "
-                    f"FROM `mercado_synced_orders` WHERE `token_id` = %s "
-                    f"AND `shipping_id` IN ({placeholders}) "
-                    f"ORDER BY `shipping_id`, `order_id`",
-                    [token_id, *successful.keys()],
-                )
-                grouped = {}
-                for row in cursor.fetchall():
-                    grouped.setdefault(str(row["shipping_id"]), []).append(row)
                 quantum = Decimal("0.0001")
                 for shipping_id, orders in grouped.items():
+                    if shipping_id not in successful:
+                        continue
                     cost_row = successful[shipping_id]
                     seller_cost = cost_row["seller_cost"]
                     weights = [max(Decimal("0"), Decimal(str(row.get("weight") or 0))) for row in orders]
@@ -3261,22 +3493,50 @@ def save_mercado_shipment_costs(token_id, entries):
                             max(Decimal("0"), seller_cost - allocated),
                         )
                         allocated += share
-                        updates.append((
-                            share, cost_row["currency_id"], cost_row["checked_at"],
-                            str(order["order_id"]), token_id,
-                        ))
+                        has_shipped = _mercado_order_has_shipped(order)
+                        has_api_quote = (
+                            order.get("quoted_freight_source") in _MERCADO_API_FREIGHT_SOURCES
+                            and (order.get("quoted_freight_local") is not None
+                                 or order.get("quoted_freight_usd") is not None)
+                        )
+                        if not has_shipped or not has_api_quote:
+                            quote_updates.append((
+                                share if cost_row["currency_id"] == "USD" else None,
+                                share, cost_row["currency_id"], cost_row["checked_at"],
+                                str(order["order_id"]), token_id,
+                            ))
+                        if cost_row["update_actual"]:
+                            if not has_shipped:
+                                updates.append((None, "", "", None, str(order["order_id"]), token_id))
+                            elif cost_row["shipment_status"] in _MERCADO_SHIPPED_STATUSES:
+                                updates.append((
+                                    share, cost_row["currency_id"], "shipment_costs", cost_row["checked_at"],
+                                    str(order["order_id"]), token_id,
+                                ))
+                if quote_updates:
+                    cursor.executemany(
+                        """
+                        UPDATE `mercado_synced_orders`
+                        SET `quoted_freight_usd` = %s, `quoted_freight_local` = %s,
+                            `quoted_freight_currency_id` = %s,
+                            `quoted_freight_source` = 'shipment_costs',
+                            `quoted_freight_weight_g` = NULL, `quoted_freight_checked_at` = %s
+                        WHERE `order_id` = %s AND `token_id` = %s
+                        """,
+                        quote_updates,
+                    )
                 if updates:
                     cursor.executemany(
                         """
                         UPDATE `mercado_synced_orders`
                         SET `freight` = %s, `freight_currency_id` = %s,
-                            `freight_source` = 'shipment_costs', `freight_checked_at` = %s
+                            `freight_source` = %s, `freight_checked_at` = %s
                         WHERE `order_id` = %s AND `token_id` = %s
                         """,
                         updates,
                     )
         connection.commit()
-        return {"shipments": len(normalized), "orders": len(updates)}
+        return {"shipments": len(normalized), "orders": len({row[-2] for row in [*quote_updates, *updates]})}
     except Exception:
         connection.rollback()
         raise
@@ -3291,7 +3551,7 @@ def list_mercado_pending_shipment_costs(token_id, limit=200):
         with connection.cursor() as cursor:
             _ensure_mercado_synced_orders_table(cursor)
             cursor.execute(
-                """
+                f"""
                 SELECT synced.`shipping_id`, MAX(synced.`date_created`) AS `latest_order_at`
                 FROM `mercado_synced_orders` AS synced
                 LEFT JOIN `mercado_shipment_costs` AS costs
@@ -3305,6 +3565,13 @@ def list_mercado_pending_shipment_costs(token_id, limit=200):
                           AND costs.`checked_at` < DATE_SUB(NOW(), INTERVAL 6 HOUR)
                       )
                       OR costs.`checked_at` < CURDATE()
+                      OR (
+                          {_mercado_shipped_sql()}
+                          AND COALESCE(costs.`shipment_status`, '')
+                              NOT IN ('shipped','delivered','not_delivered','returning','returned')
+                          AND (COALESCE(costs.`last_error`, '') = ''
+                               OR costs.`checked_at` < DATE_SUB(NOW(), INTERVAL 6 HOUR))
+                      )
                   )
                 GROUP BY synced.`shipping_id`
                 ORDER BY `latest_order_at` DESC
@@ -3325,7 +3592,7 @@ def list_mercado_pending_shipment_cost_rows(limit=200):
             _ensure_mercado_synced_orders_table(cursor)
             _ensure_mercado_store_tokens_table(cursor)
             cursor.execute(
-                """
+                f"""
                 SELECT synced.`token_id`, synced.`shipping_id`,
                        MAX(synced.`date_created`) AS `latest_order_at`
                 FROM `mercado_synced_orders` AS synced
@@ -3345,6 +3612,13 @@ def list_mercado_pending_shipment_cost_rows(limit=200):
                           AND costs.`checked_at` < DATE_SUB(NOW(), INTERVAL 6 HOUR)
                       )
                       OR costs.`checked_at` < CURDATE()
+                      OR (
+                          {_mercado_shipped_sql()}
+                          AND COALESCE(costs.`shipment_status`, '')
+                              NOT IN ('shipped','delivered','not_delivered','returning','returned')
+                          AND (COALESCE(costs.`last_error`, '') = ''
+                               OR costs.`checked_at` < DATE_SUB(NOW(), INTERVAL 6 HOUR))
+                      )
                   )
                 GROUP BY synced.`token_id`, synced.`shipping_id`
                 ORDER BY `latest_order_at` DESC
@@ -3401,28 +3675,13 @@ def list_mercado_after_sale_order_contexts(token_id, resource_ids):
     if len(identifiers) > 200:
         raise ValueError("单次最多补全 200 条售后订单")
 
-    placeholders = ",".join(["%s"] * len(identifiers))
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
             _ensure_mercado_synced_orders_table(cursor)
-            cursor.execute(
-                f"""
-                SELECT `order_id`, `shop_name`, `site_id`, `country`, `status`,
-                       `status_label`, `date_created`, `last_updated`, `shipping_id`,
-                       `buyer_name`, `title`, `image_url`, `raw_json`
-                FROM `mercado_synced_orders`
-                WHERE `token_id` = %s
-                  AND (
-                      `order_id` IN ({placeholders})
-                      OR `shipping_id` IN ({placeholders})
-                      OR JSON_UNQUOTE(JSON_EXTRACT(`raw_json`, '$.pack_id'))
-                         IN ({placeholders})
-                  )
-                ORDER BY `last_updated` DESC, `order_id` DESC
-                """,
-                [int(token_id), *identifiers, *identifiers, *identifiers],
-            )
+            from bit.order_lookup_sql import context_lookup
+            sql, params = context_lookup(identifiers, token_id)
+            cursor.execute(sql, params)
             rows = []
             for row in cursor.fetchall() or ():
                 context = dict(row or {})
@@ -3441,15 +3700,68 @@ def list_mercado_after_sale_order_contexts(token_id, resource_ids):
         connection.close()
 
 
+def _list_zying_sync_identifiers(start_at, end_exclusive, store_ids, allowed_store_ids,
+                                salespeople, page, page_size, sort_dir):
+    """Read only sync keys, without finance, facets, SKU assets or temporary tables."""
+    clauses = ["synced.`order_id` NOT LIKE 'yandex:%%'"]
+    params = []
+    for bound, operator in ((start_at, ">="), (end_exclusive, "<")):
+        if bound:
+            clauses.append(f"synced.`date_created` {operator} %s")
+            params.append((bound - timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S"))
+    for ids in (store_ids, allowed_store_ids):
+        if ids is not None:
+            values = sorted({int(value) for value in ids})
+            if not values:
+                return {"rows": [], "total": 0, "page": page, "page_size": page_size}
+            clauses.append("synced.`token_id` IN (" + ",".join(["%s"] * len(values)) + ")")
+            params.extend(values)
+    if salespeople:
+        names = [name for name in salespeople if name != "__unassigned__"]
+        scope = ["COALESCE(site_settings.`salesperson`, '') = ''"] if "__unassigned__" in salespeople else []
+        if names:
+            scope.append("site_settings.`salesperson` IN (" + ",".join(["%s"] * len(names)) + ")")
+            params.extend(names)
+        clauses.append("(" + " OR ".join(scope) + ")")
+    source = ("FROM `mercado_synced_orders` AS synced "
+              "INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id` "
+              "LEFT JOIN `mercado_store_site_settings` AS site_settings "
+              "ON site_settings.`token_id` = synced.`token_id` AND site_settings.`site_id` = synced.`site_id` "
+              "WHERE " + " AND ".join(clauses))
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            _ensure_mercado_store_tokens_table(cursor)
+            _ensure_mercado_store_site_settings_table(cursor)
+            connection.commit()
+            cursor.execute("SELECT COUNT(*) AS `total` " + source, params)
+            total = int((cursor.fetchone() or {}).get("total") or 0)
+            cursor.execute(
+                "SELECT synced.`order_id` AS `id`, "
+                "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, '$.pack_id')), 'null') AS `order_number`, "
+                "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, '$.pack_id')), 'null'), '') AS `pack_id` "
+                + source + f" ORDER BY synced.`date_created` {sort_dir}, synced.`order_id` {sort_dir} LIMIT %s OFFSET %s",
+                [*params, page_size, (page - 1) * page_size])
+            return {"rows": list(cursor.fetchall()), "total": total, "page": page, "page_size": page_size}
+    finally:
+        connection.close()
+
+
 def list_orders(
     country="", status="", salesperson="", group_name="", search="", start_date="", end_date="",
-    origin="", freight_variance="", page=1, page_size=200, store_ids=None, salespeople=None,
+    origin="", freight_variance="", page=1, page_size=50, store_ids=None, salespeople=None,
     freight_checked_from="", freight_checked_to="", remark_search="",
-    sort_by="ordered_at", sort_dir="desc", allowed_store_ids=None,
+    sort_by="ordered_at", sort_dir="desc", allowed_store_ids=None, transfer_warehouse=None,
+    include_summary=True, summary_only=False, sync_identifiers_only=False,
 ):
     """分页查询当前已授权店铺的 Token 同步订单。"""
+    if summary_only:
+        include_summary = True
+    if transfer_warehouse is not None:
+        transfer_warehouse = normalize_warehouse(transfer_warehouse)
     page = max(1, int(page or 1))
-    page_size = max(10, min(200, int(page_size or 200)))
+    page_size = max(10, min(2000 if sync_identifiers_only else 200, int(page_size or 50)))
     country, status, salesperson, group_name, search = (
         str(value or "").strip()
         for value in (country, status, salesperson, group_name, search)
@@ -3502,6 +3814,15 @@ def list_orders(
         normalized_salespeople.append(name)
     if len(normalized_salespeople) > 100:
         raise ValueError("单次最多筛选 100 个业务员")
+
+    if sync_identifiers_only:
+        if (country or status or group_name or search or remark_search or origin or freight_variance or
+                freight_checked_from or freight_checked_to or transfer_warehouse is not None or
+                summary_only or sort_by != "ordered_at"):
+            raise ValueError("智赢订单编号查询仅支持日期、店铺和业务员筛选")
+        return _list_zying_sync_identifiers(start_at, end_exclusive,
+            normalized_store_ids or None, allowed_store_ids, normalized_salespeople,
+            page, page_size, sort_sql_dir)
 
     def build_where(
         include_country=True, include_status=True, include_origin=True,
@@ -3581,9 +3902,9 @@ def list_orders(
                     f"AND {quoted} - {actual} > 0.01"
                 )
             elif freight_variance == "pending_actual":
-                clauses.append(f"{actual} IS NULL")
+                clauses.append(f"{column('freight_local')} IS NULL")
             elif freight_variance == "pending_quote":
-                clauses.append(f"{quoted} IS NULL")
+                clauses.append(f"{column('quoted_freight_local')} IS NULL")
         if start_at:
             clauses.append(f"{column('ordered_at')} >= %s")
             params.append(start_at.strftime("%Y-%m-%d %H:%M:%S"))
@@ -3676,30 +3997,41 @@ def list_orders(
                 "ELSE current_rate.`rate` END"
             )
             cny_rate_sql = "COALESCE(cny_daily_rate.`rate`, cny_current_rate.`rate`)"
-            usd_amount_sql = f"synced.`total_amount` * ({rate_sql})"
+            usd_amount_sql = f"CASE WHEN synced.`site_id` = 'YANDEX' THEN NULL ELSE synced.`total_amount` * ({rate_sql}) END"
             fee_usd_sql = "CASE WHEN synced.`site_id` = 'YANDEX' THEN NULL ELSE COALESCE(synced.`sale_fee`, 0) END"
+            shipped_sql = _mercado_shipped_sql()
             freight_local_sql = (
-                "CASE WHEN COALESCE(synced.`freight_source`, '') <> '' "
-                "OR COALESCE(synced.`freight`, 0) > 0 THEN synced.`freight` "
-                "WHEN CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, "
-                "'$.shipping_cost')), 'null') AS DECIMAL(20, 4)) > 0 "
-                "THEN CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, "
-                "'$.shipping_cost')), 'null') AS DECIMAL(20, 4)) ELSE NULL END"
+                f"CASE WHEN {shipped_sql} "
+                "AND synced.`freight_source` = 'shipment_costs' "
+                "AND actual_costs.`shipping_id` IS NOT NULL "
+                "THEN synced.`freight` ELSE NULL END"
             )
             freight_currency_sql = (
-                f"CASE WHEN COALESCE(synced.`freight_source`, '') <> '' "
-                f"OR COALESCE(synced.`freight`, 0) > 0 "
+                f"CASE WHEN ({freight_local_sql}) IS NOT NULL "
                 f"THEN UPPER(COALESCE(NULLIF(synced.`freight_currency_id`, ''), "
-                f"{currency_sql})) WHEN ({freight_local_sql}) IS NOT NULL "
-                f"THEN {currency_sql} ELSE NULL END"
+                f"{currency_sql})) ELSE NULL END"
             )
             freight_usd_sql = (
                 f"CASE WHEN ({freight_local_sql}) IS NULL THEN NULL "
                 f"WHEN ({freight_currency_sql}) = 'USD' THEN ({freight_local_sql}) "
                 f"ELSE ({freight_local_sql}) * ({rate_sql}) END"
             )
+            quoted_local_sql = (
+                "CASE WHEN synced.`quoted_freight_source` IN ('shipment_costs', 'order_shipping_cost') "
+                "THEN COALESCE(synced.`quoted_freight_local`, synced.`quoted_freight_usd`) ELSE NULL END"
+            )
+            quoted_currency_sql = (
+                "UPPER(COALESCE(NULLIF(synced.`quoted_freight_currency_id`, ''), 'USD'))"
+            )
+            quoted_usd_sql = (
+                f"CASE WHEN ({quoted_local_sql}) IS NULL THEN NULL "
+                f"WHEN ({quoted_currency_sql}) = 'USD' THEN ({quoted_local_sql}) "
+                f"WHEN ({quoted_currency_sql}) = ({currency_sql}) THEN ({quoted_local_sql}) * ({rate_sql}) "
+                "ELSE NULL END"
+            )
             balance_usd_sql = (
-                f"({usd_amount_sql}) - ({fee_usd_sql}) - ({freight_usd_sql})"
+                f"({usd_amount_sql}) - ({fee_usd_sql}) "
+                f"- COALESCE(({freight_usd_sql}), ({quoted_usd_sql}))"
             )
             cny_income_sql = f"({usd_amount_sql}) * ({cny_rate_sql})"
             source_sql = f"""
@@ -3725,7 +4057,7 @@ def list_orders(
                            0 AS `refund`, ROUND({cny_income_sql}, 2) AS `income`,
                            synced.`paid_amount` AS `paid_amount_usd`,
                            COALESCE(synced.`purchase_cost`, 0) AS `cost`, synced.`purchase_order`,
-                           synced.`purchase_tracking`, synced.`logistics_company`,
+                           synced.`purchase_tracking`, synced.`logistics_company`, synced.`transfer_warehouse`,
                            synced.`platform_tracking_number`,
                            DATE_ADD(synced.`shipping_deadline`, INTERVAL 8 HOUR)
                                AS `shipping_deadline`,
@@ -3739,15 +4071,18 @@ def list_orders(
                            ({freight_local_sql}) AS `freight_local`,
                            ({freight_currency_sql}) AS `freight_currency_id`,
                            synced.`freight_source`, synced.`freight_checked_at`,
-                           synced.`quoted_freight_usd`,
+                           ROUND({quoted_usd_sql}, 2) AS `quoted_freight_usd`,
+                           ({quoted_local_sql}) AS `quoted_freight_local`,
+                           ({quoted_currency_sql}) AS `quoted_freight_currency_id`,
                            synced.`quoted_freight_weight_g`,
                            synced.`quoted_freight_source`,
                            synced.`quoted_freight_checked_at`,
-                           ROUND(({freight_usd_sql}) - synced.`quoted_freight_usd`, 2)
+                           ROUND(({freight_usd_sql}) - ({quoted_usd_sql}), 2)
                                AS `freight_variance_usd`,
                            ROUND({freight_usd_sql}, 2) AS `actual_freight_usd`,
                            CASE WHEN ({freight_local_sql}) IS NULL THEN 1 ELSE 0 END
                                AS `freight_missing`,
+                           CASE WHEN {shipped_sql} THEN 0 ELSE 1 END AS `freight_pending_shipment`,
                            synced.`order_remark`, synced.`status_detail` AS `remark`,
                            synced.`country`,
                            synced.`buyer_name` AS `buyer`, {currency_sql} AS `currency_id`,
@@ -3805,6 +4140,10 @@ def list_orders(
                     FROM `tmp_mercado_order_page` AS selected_page
                     STRAIGHT_JOIN `mercado_synced_orders` AS synced ON synced.`order_id` = selected_page.`id`
                     INNER JOIN {unified_stores} AS stores ON stores.`id` = synced.`token_id`
+                    LEFT JOIN `mercado_shipment_costs` AS actual_costs
+                      ON actual_costs.`shipping_id` = synced.`shipping_id`
+                     AND actual_costs.`token_id` = synced.`token_id`
+                     AND actual_costs.`shipment_status` IN ('shipped','delivered','not_delivered','returning','returned')
                     LEFT JOIN `mercado_store_site_settings` AS site_settings
                       ON site_settings.`token_id` = synced.`token_id`
                      AND site_settings.`site_id` = synced.`site_id`
@@ -3836,6 +4175,9 @@ def list_orders(
                 """
             remark_column = "synced.`order_remark`," if search or remark_search else ""
             source_date_clauses, source_date_params = [], []
+            if transfer_warehouse is not None:
+                source_date_clauses.append("synced.`transfer_warehouse` = %s")
+                source_date_params.append(transfer_warehouse)
             if start_at:
                 source_date_clauses.append("synced.`date_created` >= %s")
                 source_date_params.append((start_at - timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S"))
@@ -3850,6 +4192,50 @@ def list_orders(
                 else:
                     source_date_clauses.append("1 = 0")
             source_date_where = " WHERE " + " AND ".join(source_date_clauses) if source_date_clauses else ""
+            filter_quote_usd_sql = (
+                f"CASE WHEN ({quoted_currency_sql}) = 'USD' THEN ({quoted_local_sql}) ELSE NULL END"
+            )
+            filter_actual_usd_sql = (
+                f"CASE WHEN ({freight_currency_sql}) = 'USD' THEN ({freight_local_sql}) ELSE NULL END"
+            )
+            if freight_variance in {"different", "different_any", "actual_higher", "actual_lower"}:
+                # Comparison filters run before the page's shared rate joins.
+                # Resolve rates here only when a comparison actually needs them.
+                filter_rate_sql = (
+                    f"CASE WHEN {currency_sql} = 'USD' THEN 1 "
+                    f"WHEN ({order_rate_sql}) IS NOT NULL THEN ({order_rate_sql}) "
+                    "ELSE COALESCE((SELECT historical_rate.`rate` "
+                    f"FROM `{DAILY_EXCHANGE_RATE_TABLE}` AS historical_rate "
+                    f"WHERE historical_rate.`from_currency_id` = {currency_sql} "
+                    "AND historical_rate.`to_currency_id` = 'USD' "
+                    f"AND historical_rate.`rate_date` <= {order_date_sql} "
+                    "ORDER BY historical_rate.`rate_date` DESC LIMIT 1), "
+                    f"(SELECT filter_rate.`rate` FROM `{EXCHANGE_RATE_TABLE}` AS filter_rate "
+                    f"WHERE filter_rate.`from_currency_id` = {currency_sql} "
+                    "AND filter_rate.`to_currency_id` = 'USD' LIMIT 1)) END"
+                )
+                filter_quote_usd_sql = (
+                    f"CASE WHEN ({quoted_currency_sql}) = 'USD' THEN ({quoted_local_sql}) "
+                    f"WHEN ({quoted_currency_sql}) = {currency_sql} "
+                    f"THEN ({quoted_local_sql}) * ({filter_rate_sql}) ELSE NULL END"
+                )
+                filter_actual_usd_sql = (
+                    f"CASE WHEN ({freight_currency_sql}) = 'USD' THEN ({freight_local_sql}) "
+                    f"WHEN ({freight_currency_sql}) = {currency_sql} "
+                    f"THEN ({freight_local_sql}) * ({filter_rate_sql}) ELSE NULL END"
+                )
+            # The interactive page needs exact counts/facets but not a full
+            # financial aggregation. Detail pricing still uses the real joins.
+            needs_filter_finance = include_summary or sort_by not in {"ordered_at", "cost"} or bool(freight_variance)
+            filter_freight_local = freight_local_sql if needs_filter_finance else "NULL"
+            filter_freight_currency = freight_currency_sql if needs_filter_finance else "NULL"
+            filter_cost_join = """
+                    LEFT JOIN `mercado_shipment_costs` AS actual_costs
+                      ON actual_costs.`shipping_id` = synced.`shipping_id`
+                     AND actual_costs.`token_id` = synced.`token_id`
+                     AND actual_costs.`shipment_status` IN ('shipped','delivered','not_delivered','returning','returned')
+            """ if needs_filter_finance else ""
+            filter_store_join = "STRAIGHT_JOIN" if not source_date_clauses else "INNER JOIN"
             filter_source_sql = f"""
                 (
                     SELECT synced.`order_id` AS `id`,
@@ -3869,25 +4255,19 @@ def list_orders(
                            COALESCE(synced.`total_amount`, 0) AS `total_amount`,
                            COALESCE(synced.`paid_amount`, 0) AS `paid_amount`,
                            CASE WHEN synced.`site_id` = 'YANDEX' THEN NULL ELSE COALESCE(synced.`sale_fee`, 0) END AS `sale_fee`,
-                           CASE WHEN COALESCE(synced.`freight_source`, '') <> ''
-                                      OR COALESCE(synced.`freight`, 0) > 0
-                                THEN synced.`freight` ELSE NULL END AS `freight_local`,
-                           UPPER(COALESCE(NULLIF(synced.`freight_currency_id`, ''),
-                                          {currency_sql})) AS `freight_currency_id`,
-                           CASE WHEN COALESCE(synced.`freight_source`, '') = ''
-                                      AND COALESCE(synced.`freight`, 0) = 0
+                           ({filter_freight_local}) AS `freight_local`,
+                           ({filter_freight_currency}) AS `freight_currency_id`,
+                           CASE WHEN ({filter_freight_local}) IS NULL
                                 THEN 1 ELSE 0 END AS `freight_missing`,
-                           synced.`quoted_freight_usd`,
-                           CASE
-                               WHEN UPPER(COALESCE(synced.`freight_currency_id`, '')) = 'USD'
-                                    AND (COALESCE(synced.`freight_source`, '') <> ''
-                                         OR COALESCE(synced.`freight`, 0) > 0)
-                               THEN synced.`freight` ELSE NULL
-                           END AS `actual_freight_usd`,
+                           ({quoted_local_sql}) AS `quoted_freight_local`,
+                           ({quoted_currency_sql}) AS `quoted_freight_currency_id`,
+                           ({filter_quote_usd_sql}) AS `quoted_freight_usd`,
+                           ({filter_actual_usd_sql if needs_filter_finance else "NULL"}) AS `actual_freight_usd`,
                            COALESCE(synced.`purchase_cost`, 0) AS `purchase_cost`
                     FROM `mercado_synced_orders` AS synced
-                    INNER JOIN {unified_stores} AS stores
+                    {filter_store_join} {unified_stores} AS stores
                       ON stores.`id` = synced.`token_id`
+                    {filter_cost_join}
                     LEFT JOIN `mercado_store_site_settings` AS site_settings
                       ON site_settings.`token_id` = synced.`token_id`
                      AND site_settings.`site_id` = synced.`site_id`
@@ -3973,7 +4353,7 @@ def list_orders(
                 "COALESCE(cny_daily_rate.`rate`, cny_current_rate.`rate`)"
             )
             summary_amount_sql = (
-                f"scoped.`total_amount` * ({summary_rate_sql})"
+                f"CASE WHEN scoped.`data_origin` = 'yandex' THEN NULL ELSE scoped.`total_amount` * ({summary_rate_sql}) END"
             )
             summary_freight_rate_sql = (
                 "CASE WHEN scoped.`freight_currency_id` = 'USD' THEN 1 "
@@ -3982,45 +4362,56 @@ def list_orders(
             summary_freight_sql = (
                 f"scoped.`freight_local` * ({summary_freight_rate_sql})"
             )
+            summary_quoted_freight_sql = (
+                "CASE WHEN scoped.`quoted_freight_currency_id` = 'USD' "
+                "THEN scoped.`quoted_freight_local` "
+                "WHEN scoped.`quoted_freight_currency_id` = scoped.`currency_id` "
+                f"THEN scoped.`quoted_freight_local` * ({summary_rate_sql}) ELSE NULL END"
+            )
+            summary_balance_freight_sql = (
+                f"COALESCE(({summary_freight_sql}), ({summary_quoted_freight_sql}))"
+            )
             summary_income_sql = (
                 f"({summary_amount_sql}) * ({summary_cny_rate_sql})"
             )
-            cursor.execute(
-                f"SELECT COALESCE(SUM(ROUND({summary_amount_sql}, 2)),0) AS `amount`, "
-                f"COALESCE(SUM(ROUND(scoped.`sale_fee`, 2)),0) AS `fee`, "
-                f"COALESCE(SUM(ROUND({summary_freight_sql}, 2)),0) AS `freight`, "
-                f"COALESCE(SUM(ROUND(({summary_amount_sql}) - scoped.`sale_fee` "
-                f"- ({summary_freight_sql}), 2)),0) AS `balance`, "
-                f"COALESCE(SUM(ROUND({summary_income_sql}, 2)),0) AS `income`, "
-                f"COALESCE(SUM(scoped.`purchase_cost`),0) AS `cost`, "
-                f"COALESCE(SUM(CASE WHEN scoped.`data_origin` = 'yandex' THEN NULL ELSE ROUND(({summary_income_sql}) - scoped.`purchase_cost`, 2) END),0) "
-                f"AS `profit`, "
-                f"SUM(CASE WHEN scoped.`data_origin` = 'yandex' THEN 1 ELSE 0 END) AS `settlement_missing_count`, "
-                f"COALESCE(SUM(CASE WHEN scoped.`currency_id` = 'USD' "
-                f"OR ({summary_order_rate_sql}) IS NOT NULL OR daily_rate.`rate` IS NOT NULL "
-                f"OR current_rate.`rate` IS NOT NULL THEN 0 ELSE 1 END),0) "
-                f"AS `exchange_rate_missing_count`, "
-                f"COALESCE(SUM(CASE WHEN cny_daily_rate.`rate` IS NOT NULL "
-                f"OR cny_current_rate.`rate` IS NOT NULL THEN 0 ELSE 1 END),0) "
-                f"AS `cny_exchange_rate_missing_count`, "
-                f"COALESCE(SUM(scoped.`freight_missing`),0) AS `freight_missing_count` "
-                f"FROM {order_filter_table} AS scoped "
-                f"LEFT JOIN {rate_key_table} AS rate_keys "
-                f"ON rate_keys.`currency_id` = scoped.`currency_id` "
-                f"AND rate_keys.`order_date` = scoped.`order_date` "
-                f"LEFT JOIN `{DAILY_EXCHANGE_RATE_TABLE}` AS daily_rate "
-                f"ON daily_rate.`id` = rate_keys.`daily_rate_id` "
-                f"LEFT JOIN `{EXCHANGE_RATE_TABLE}` AS current_rate "
-                f"ON current_rate.`from_currency_id` = scoped.`currency_id` "
-                f"AND current_rate.`to_currency_id` = 'USD' "
-                f"LEFT JOIN `{DAILY_EXCHANGE_RATE_TABLE}` AS cny_daily_rate "
-                f"ON cny_daily_rate.`id` = rate_keys.`cny_daily_rate_id` "
-                f"LEFT JOIN `{EXCHANGE_RATE_TABLE}` AS cny_current_rate "
-                f"ON cny_current_rate.`from_currency_id` = 'USD' "
-                f"AND cny_current_rate.`to_currency_id` = 'CNY'{summary_where_sql}",
-                summary_params,
-            )
-            summary = {key: json_value(value or 0) for key, value in (cursor.fetchone() or {}).items()}
+            summary = None
+            if include_summary:
+                cursor.execute(
+                    f"SELECT COALESCE(SUM(ROUND({summary_amount_sql}, 2)),0) AS `amount`, "
+                    f"COALESCE(SUM(ROUND(scoped.`sale_fee`, 2)),0) AS `fee`, "
+                    f"COALESCE(SUM(ROUND({summary_freight_sql}, 2)),0) AS `freight`, "
+                    f"COALESCE(SUM(ROUND(({summary_amount_sql}) - scoped.`sale_fee` "
+                    f"- ({summary_balance_freight_sql}), 2)),0) AS `balance`, "
+                    f"COALESCE(SUM(ROUND({summary_income_sql}, 2)),0) AS `income`, "
+                    f"COALESCE(SUM(scoped.`purchase_cost`),0) AS `cost`, "
+                    f"COALESCE(SUM(CASE WHEN scoped.`data_origin` = 'yandex' THEN NULL ELSE ROUND(({summary_income_sql}) - scoped.`purchase_cost`, 2) END),0) "
+                    f"AS `profit`, "
+                    f"SUM(CASE WHEN scoped.`data_origin` = 'yandex' THEN 1 ELSE 0 END) AS `settlement_missing_count`, "
+                    f"COALESCE(SUM(CASE WHEN scoped.`data_origin` = 'yandex' OR scoped.`currency_id` = 'USD' "
+                    f"OR ({summary_order_rate_sql}) IS NOT NULL OR daily_rate.`rate` IS NOT NULL "
+                    f"OR current_rate.`rate` IS NOT NULL THEN 0 ELSE 1 END),0) "
+                    f"AS `exchange_rate_missing_count`, "
+                    f"COALESCE(SUM(CASE WHEN scoped.`data_origin` = 'yandex' OR cny_daily_rate.`rate` IS NOT NULL "
+                    f"OR cny_current_rate.`rate` IS NOT NULL THEN 0 ELSE 1 END),0) "
+                    f"AS `cny_exchange_rate_missing_count`, "
+                    f"COALESCE(SUM(scoped.`freight_missing`),0) AS `freight_missing_count` "
+                    f"FROM {order_filter_table} AS scoped "
+                    f"LEFT JOIN {rate_key_table} AS rate_keys "
+                    f"ON rate_keys.`currency_id` = scoped.`currency_id` "
+                    f"AND rate_keys.`order_date` = scoped.`order_date` "
+                    f"LEFT JOIN `{DAILY_EXCHANGE_RATE_TABLE}` AS daily_rate "
+                    f"ON daily_rate.`id` = rate_keys.`daily_rate_id` "
+                    f"LEFT JOIN `{EXCHANGE_RATE_TABLE}` AS current_rate "
+                    f"ON current_rate.`from_currency_id` = scoped.`currency_id` "
+                    f"AND current_rate.`to_currency_id` = 'USD' "
+                    f"LEFT JOIN `{DAILY_EXCHANGE_RATE_TABLE}` AS cny_daily_rate "
+                    f"ON cny_daily_rate.`id` = rate_keys.`cny_daily_rate_id` "
+                    f"LEFT JOIN `{EXCHANGE_RATE_TABLE}` AS cny_current_rate "
+                    f"ON cny_current_rate.`from_currency_id` = 'USD' "
+                    f"AND cny_current_rate.`to_currency_id` = 'CNY'{summary_where_sql}",
+                    summary_params,
+                )
+                summary = {key: json_value(value or 0) for key, value in (cursor.fetchone() or {}).items()}
 
             status_where, status_params = build_where(include_status=False)
             cursor.execute(
@@ -4086,6 +4477,9 @@ def list_orders(
                 str(row["group_name"]): int(row["count"]) for row in cursor.fetchall()
             }
 
+            if summary_only:
+                return {"total": total, "summary": summary, "rows": [], "summary_pending": False}
+
             offset = (page - 1) * page_size
             # Limit the indexed, narrow rows before calculating page details.
             page_table = "`tmp_mercado_order_page`"
@@ -4094,7 +4488,7 @@ def list_orders(
             sort_expressions = {
                 "ordered_at": "scoped.`ordered_at`",
                 "amount": f"ROUND({summary_amount_sql}, 2)",
-                "balance": f"ROUND({summary_amount_sql} - scoped.`sale_fee` - ({summary_freight_sql}), 2)",
+                "balance": f"ROUND({summary_amount_sql} - scoped.`sale_fee` - ({summary_balance_freight_sql}), 2)",
                 "cost": "scoped.`purchase_cost`",
                 "profit": f"CASE WHEN scoped.`data_origin` = 'yandex' THEN NULL ELSE ROUND({summary_income_sql} - scoped.`purchase_cost`, 2) END",
                 "profit_rate": (
@@ -4121,7 +4515,7 @@ def list_orders(
             cursor.execute(
                 f"CREATE TEMPORARY TABLE {page_table} AS "
                 f"SELECT scoped.`id` FROM {order_filter_table} AS scoped "
-                f"{page_sort_joins}{page_where_sql} "
+                f"{page_sort_joins if sort_by not in {'ordered_at', 'cost'} else ''}{page_where_sql} "
                 f"ORDER BY {sort_expressions[sort_by]} {sort_sql_dir}, "
                 f"scoped.`ordered_at` DESC, scoped.`id` DESC LIMIT %s OFFSET %s",
                 [*page_params, page_size, offset],
@@ -4222,6 +4616,10 @@ def list_orders(
                 if row.get("data_origin") == "yandex":
                     row["product_url"] = ""
                     row["paid_amount_usd"] = None
+                    row["amount"] = row["income"] = None
+                    from bit.yandex_order_sync import display_prices
+                    payload = json.loads(raw_orders.get(order_id, "{}"))
+                    row["yandex_prices"] = display_prices(payload.get("yandex_order") or {}, payload.get("yandex_finance"))
                     row["fee"] = row["balance"] = row["profit"] = None
                     for item in row["sku_items"]:
                         item["product_url"] = ""
@@ -4233,7 +4631,7 @@ def list_orders(
                 "origin_counts": origin_counts, "store_counts": store_counts,
                 "salesperson_counts": salesperson_counts,
                 "group_counts": group_counts,
-                "summary": summary,
+                "summary": summary, "summary_pending": not include_summary,
             }
     finally:
         connection.close()
@@ -4539,202 +4937,72 @@ def get_mercado_order_weight_quote(order_ids):
 
 
 def refresh_mercado_order_quoted_freight(limit=200):
-    """Calculate weight-table quotes independently of actual shipment costs."""
-
+    """Replace historical weight-table quotes with saved official API costs."""
     limit = max(1, min(1000, int(limit or 200)))
-    from erp.mercadolibre_store_link_store import (
-        STORE_LINK_TABLE,
-        ensure_store_link_table,
-    )
-
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
             _ensure_mercado_synced_orders_table(cursor)
-            ensure_store_link_table(cursor)
-            connection.commit()
             cursor.execute(
                 """
-                SELECT `token_id`, `shipping_id`, MAX(`date_created`) AS `latest_order_at`
-                FROM `mercado_synced_orders`
-                WHERE COALESCE(`shipping_id`, '') <> ''
-                  AND (
-                      `quoted_freight_checked_at` IS NULL
-                      OR `quoted_freight_checked_at` < CURDATE()
+                SELECT costs.*
+                FROM `mercado_shipment_costs` AS costs
+                WHERE costs.`seller_cost` IS NOT NULL
+                  AND COALESCE(costs.`currency_id`, '') <> ''
+                  AND EXISTS (
+                      SELECT 1 FROM `mercado_synced_orders` AS synced
+                      WHERE synced.`shipping_id` = costs.`shipping_id`
+                        AND synced.`token_id` = costs.`token_id`
+                        AND (COALESCE(synced.`quoted_freight_source`, '')
+                                 NOT IN ('shipment_costs', 'order_shipping_cost')
+                             OR (synced.`quoted_freight_local` IS NULL
+                                 AND synced.`quoted_freight_usd` IS NULL))
                   )
-                GROUP BY `token_id`, `shipping_id`
-                ORDER BY `latest_order_at` DESC
+                ORDER BY costs.`checked_at` DESC
                 LIMIT %s
                 """,
                 (limit,),
             )
-            candidates = [dict(row or {}) for row in (cursor.fetchall() or [])]
-            if not candidates:
-                return {
-                    "requested": 0,
-                    "quoted_shipments": 0,
-                    "missing_shipments": 0,
-                    "updated_orders": 0,
-                }
-
-            group_clauses = []
-            group_params = []
-            for candidate in candidates:
-                group_clauses.append("(`token_id` = %s AND `shipping_id` = %s)")
-                group_params.extend((
-                    int(candidate["token_id"]),
-                    str(candidate["shipping_id"]),
-                ))
-            cursor.execute(
-                """
-                SELECT `order_id`, `token_id`, `shipping_id`, `site_id`,
-                       `total_amount`, `product_id`, `title`, `quantity`, `raw_json`
-                FROM `mercado_synced_orders`
-                WHERE """ + " OR ".join(group_clauses) + " "
-                "ORDER BY `token_id`, `shipping_id`, `order_id`",
-                group_params,
-            )
-            order_rows = [dict(row or {}) for row in (cursor.fetchall() or [])]
-
-            product_ids_by_token = {}
-            for order_row in order_rows:
-                token_id = str(order_row.get("token_id") or "")
-                sku_items = _mercado_order_sku_items(order_row.get("raw_json") or "{}")
-                product_ids = {
-                    str(item.get("product_id") or "")
-                    for item in sku_items
-                    if str(item.get("product_id") or "")
-                }
-                if order_row.get("product_id"):
-                    product_ids.add(str(order_row["product_id"]))
-                product_ids_by_token.setdefault(token_id, set()).update(product_ids)
-
-            asset_clauses = []
-            asset_params = []
-            for token_id, product_ids in product_ids_by_token.items():
-                if not product_ids:
-                    continue
-                asset_clauses.append(
-                    "(`token_id` = %s AND `item_id` IN ("
-                    + ",".join(["%s"] * len(product_ids))
-                    + "))"
-                )
-                asset_params.extend([int(token_id), *sorted(product_ids)])
-            product_assets = {}
-            if asset_clauses:
-                cursor.execute(
-                    f"""
-                    SELECT `token_id`, `item_id`, `site_id`, `title`, `seller_sku`,
-                           `weight_g`, `volumetric_weight_kg`
-                    FROM `{STORE_LINK_TABLE}`
-                    WHERE `is_current` = 1 AND ({' OR '.join(asset_clauses)})
-                    """,
-                    asset_params,
-                )
-                product_assets = {
-                    (str(row.get("token_id") or ""), str(row.get("item_id") or "")): dict(row)
-                    for row in (cursor.fetchall() or [])
-                }
+            candidates = [dict(row) for row in (cursor.fetchall() or [])]
     finally:
         connection.close()
-
-    from erp.mercadolibre_shipping_rate_cards import OfficialShippingRateCardStore
-
-    rate_rows = (OfficialShippingRateCardStore().list_rates() or {}).get("rows") or []
-    grouped_orders = {}
-    for order_row in order_rows:
-        key = (
-            str(order_row.get("token_id") or ""),
-            str(order_row.get("shipping_id") or ""),
-        )
-        grouped_orders.setdefault(key, []).append(order_row)
-
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    updates = []
-    quoted_shipments = missing_shipments = 0
-    quantum = Decimal("0.0001")
-    for group_rows in grouped_orders.values():
-        quote = _build_mercado_order_weight_quote(
-            group_rows,
-            product_assets,
-            rate_matcher=lambda **values: _match_mercado_official_rate_rows(
-                rate_rows, **values
-            ),
-        )
-        quoted_amount = quote.get("shipping_amount_usd")
-        if quoted_amount is None:
-            missing_shipments += 1
-            source = "weight_missing" if not quote.get("weight_complete") else "rate_missing"
-        else:
-            quoted_shipments += 1
-            source = "official_weight_rate_card"
-        weight_by_order = {}
-        for item in quote.get("sku_items") or ():
-            order_id = str(item.get("order_id") or "")
-            raw_weight = item.get("total_actual_weight_g")
-            if raw_weight is not None:
-                weight_by_order[order_id] = (
-                    weight_by_order.get(order_id, Decimal("0"))
-                    + Decimal(str(raw_weight))
-                )
-        allocation_weights = [
-            max(Decimal("0"), Decimal(str(row.get("total_amount") or 0)))
-            for row in group_rows
-        ]
-        allocation_total = sum(allocation_weights, Decimal("0"))
-        allocated = Decimal("0")
-        quoted_decimal = (
-            Decimal(str(quoted_amount)) if quoted_amount is not None else None
-        )
-        for index, order_row in enumerate(group_rows):
-            share = None
-            if quoted_decimal is not None:
-                if index == len(group_rows) - 1:
-                    share = quoted_decimal - allocated
-                elif allocation_total > 0:
-                    share = (
-                        quoted_decimal * allocation_weights[index] / allocation_total
-                    ).quantize(quantum)
-                else:
-                    share = (quoted_decimal / len(group_rows)).quantize(quantum)
-                allocated += share
-            order_id = str(order_row.get("order_id") or "")
-            updates.append((
-                share,
-                weight_by_order.get(order_id),
-                source,
-                now,
-                order_id,
-                int(order_row.get("token_id") or 0),
-            ))
-
-    save_connection = pymysql.connect(**config)
-    try:
-        with save_connection.cursor() as cursor:
-            if updates:
-                cursor.executemany(
-                    """
-                    UPDATE `mercado_synced_orders`
-                    SET `quoted_freight_usd` = %s,
-                        `quoted_freight_weight_g` = %s,
-                        `quoted_freight_source` = %s,
-                        `quoted_freight_checked_at` = %s
-                    WHERE `order_id` = %s AND `token_id` = %s
-                    """,
-                    updates,
-                )
-        save_connection.commit()
-    except Exception:
-        save_connection.rollback()
-        raise
-    finally:
-        save_connection.close()
+    grouped = {}
+    for row in candidates:
+        payload = row.get("payload_json") or {}
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except (TypeError, ValueError):
+                payload = {}
+        grouped.setdefault(int(row["token_id"]), []).append({
+            **row, "payload": payload,
+            "from_cache": True, "update_actual": False,
+        })
+    updated_orders = 0
+    for token_id, entries in grouped.items():
+        updated_orders += save_mercado_shipment_costs(token_id, entries)["orders"]
     return {
-        "requested": len(candidates),
-        "quoted_shipments": quoted_shipments,
-        "missing_shipments": missing_shipments,
-        "updated_orders": len(updates),
+        "requested": len(candidates), "quoted_shipments": len(candidates),
+        "missing_shipments": 0, "updated_orders": updated_orders,
     }
+
+
+def get_mercado_order_access_contexts(order_ids):
+    ids = list(dict.fromkeys(str(value or "").strip() for value in order_ids or []))
+    if not ids or any(not value or len(value) > 64 for value in ids) or len(ids) > 500:
+        raise ValueError("请选择有效的订单，单次最多 500 个")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            connection.commit()
+            cursor.execute(
+                "SELECT `order_id`, `token_id`, `transfer_warehouse` FROM `mercado_synced_orders` "
+                "WHERE `order_id` IN (" + ",".join(["%s"] * len(ids)) + ")", ids,
+            )
+            return [dict(row) for row in cursor.fetchall() or []]
+    finally:
+        connection.close()
 
 
 def get_mercado_purchase_tracking_orders(order_ids, *, all_orders=False, date_start=None, date_end=None, missing_tracking=False):
@@ -4809,8 +5077,16 @@ def bulk_update_mercado_orders(
     operator_id=None,
     operator_name="",
     allowed_token_ids=None,
+    purchase_net_proceeds_ratio=None,
+    transfer_warehouse=None,
+    allowed_warehouse=None,
 ):
     """批量更新当前授权店铺订单的处理状态和采购信息。"""
+    from bit import purchase_net_proceeds
+
+    net_proceeds_ratio = purchase_net_proceeds.normalize_ratio(purchase_net_proceeds_ratio)
+    if net_proceeds_ratio is not None:
+        purchase_net_proceeds.validate_purchase_cost(purchase_cost)
     normalized_ids = []
     for value in order_ids or []:
         order_id = str(value or "").strip()
@@ -4822,6 +5098,15 @@ def bulk_update_mercado_orders(
         raise ValueError("单次最多操作 500 个订单")
 
     assignments, values, requested_changes = [], [], {}
+    if allowed_warehouse is not None:
+        allowed_warehouse = normalize_warehouse(allowed_warehouse)
+    if transfer_warehouse is not None:
+        transfer_warehouse = normalize_warehouse(transfer_warehouse)
+        if allowed_warehouse is not None and transfer_warehouse != allowed_warehouse:
+            raise ValueError("仓库人员只能操作绑定仓库的订单，不能更换转运商")
+        assignments.append("synced.`transfer_warehouse` = %s")
+        values.append(transfer_warehouse)
+        requested_changes["transfer_warehouse"] = transfer_warehouse
     if workflow_status is not None:
         workflow_status = str(workflow_status or "").strip()
         if workflow_status and workflow_status not in ORDER_WORKFLOW_STATUSES:
@@ -4860,8 +5145,12 @@ def bulk_update_mercado_orders(
                 cost_value = Decimal(cost_text)
             except InvalidOperation as exc:
                 raise ValueError("采购成本必须是有效数字") from exc
+            if not cost_value.is_finite():
+                raise ValueError("采购成本必须是有效数字")
             if cost_value < 0:
                 raise ValueError("采购成本不能小于 0")
+            if net_proceeds_ratio is not None:
+                cost_value = purchase_net_proceeds.validate_purchase_cost(cost_value)
         else:
             cost_value = None
         assignments.append("synced.`purchase_cost` = %s")
@@ -4895,6 +5184,7 @@ def bulk_update_mercado_orders(
     field_labels = {
         "workflow_status": "订单状态",
         "purchase_order": "采购订单号",
+        "transfer_warehouse": "转运商",
         "purchase_tracking": "物流号",
         "logistics_company": "物流公司",
         "purchase_cost": "采购成本",
@@ -4920,10 +5210,21 @@ def bulk_update_mercado_orders(
             _ensure_mercado_store_tokens_table(cursor)
             from bit.yandex_order_sync import store_source_sql
             unified_stores = store_source_sql(cursor)
+            if net_proceeds_ratio is not None:
+                # MySQL DDL can commit implicitly; finish all ERP migrations
+                # before locking orders or writing the atomic update/audit.
+                purchase_net_proceeds.prepare_schema(cursor)
+            if net_proceeds_ratio is not None or allowed_warehouse is not None:
+                # Finish schema/backfill work before the business transaction.
+                # DBUtils can recycle a connection at maxusage outside an
+                # explicit transaction, which would release these row locks.
+                connection.commit()
+                connection.begin()
+            sync_order_fields = ", synced.`title`, synced.`quantity`, synced.`raw_json`" if net_proceeds_ratio is not None else ""
             cursor.execute(
                 f"SELECT synced.`order_id`, synced.`token_id`, synced.`status`, synced.`workflow_status`, synced.`purchase_order`, "
                 f"synced.`purchase_tracking`, synced.`logistics_company`, synced.`purchase_cost`, "
-                f"synced.`order_remark`, synced.`purchase_remark` FROM `mercado_synced_orders` AS synced "
+                f"synced.`order_remark`, synced.`purchase_remark`, synced.`transfer_warehouse`{sync_order_fields} FROM `mercado_synced_orders` AS synced "
                 f"INNER JOIN {unified_stores} AS stores ON stores.`id` = synced.`token_id` "
                 f"WHERE synced.`order_id` IN ({placeholders}) FOR UPDATE",
                 normalized_ids,
@@ -4934,6 +5235,11 @@ def bulk_update_mercado_orders(
                 accessible = {str(row["order_id"]) for row in before_rows if int(row["token_id"]) in allowed}
                 if any(order_id not in accessible for order_id in normalized_ids):
                     raise ValueError("所选订单不存在或无权修改")
+            if allowed_warehouse is not None:
+                accessible = {str(row["order_id"]) for row in before_rows
+                              if row.get("transfer_warehouse") == allowed_warehouse}
+                if any(order_id not in accessible for order_id in normalized_ids):
+                    raise ValueError("所选订单不存在或不属于绑定仓库")
             for before in before_rows:
                 current = order_effective_status(before)
                 if workflow_status == "转运-已出库" and current != "转运-待出库":
@@ -4941,6 +5247,14 @@ def bulk_update_mercado_orders(
                 if workflow_status == "转运-待出库" and current not in {"转运-待收货", "审核-已审核"}:
                     raise ValueError("只有待收货或已审核订单可以申请出库")
             matched = len(before_rows)
+            net_proceeds_sync = None
+            if net_proceeds_ratio is not None:
+                if matched != len(normalized_ids):
+                    raise ValueError("所选订单不存在或无权修改")
+                net_proceeds_sync = purchase_net_proceeds.synchronize(
+                    cursor, before_rows, requested_changes["purchase_cost"],
+                    net_proceeds_ratio, allowed_token_ids,
+                )
             cursor.execute(
                 f"UPDATE `mercado_synced_orders` AS synced "
                 f"INNER JOIN {unified_stores} AS stores ON stores.`id` = synced.`token_id` "
@@ -4953,7 +5267,7 @@ def bulk_update_mercado_orders(
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             procurement_fields = {
                 "purchase_order", "purchase_tracking", "logistics_company",
-                "purchase_cost", "purchase_remark",
+                "purchase_cost", "purchase_remark", "transfer_warehouse",
             }
             for before in before_rows:
                 row_changes = dict(requested_changes)
@@ -5012,6 +5326,26 @@ def bulk_update_mercado_orders(
                     json.dumps(after_payload, ensure_ascii=False, separators=(",", ":")),
                     now,
                 ))
+            if net_proceeds_sync is not None:
+                for detail in net_proceeds_sync["results"]:
+                    matched_targets = detail["product_matched"] + detail["store_link_matched"]
+                    log_rows.append((
+                        detail["order_id"], "purchase_net_proceeds_updated",
+                        "采购成本同步净收益" if matched_targets else "采购成本同步净收益（无同名产品或链接）",
+                        int(operator_id) if str(operator_id or "").isdigit() else None,
+                        str(operator_name or "").strip()[:100] or "系统",
+                        json.dumps({"net_proceeds_sync": {
+                            "label": "采购成本同步净收益", "before": None,
+                            "after": f"成本的 {detail['ratio']}% · USD {detail['net_proceeds_usd']} · "
+                                     f"产品 {detail['product_matched']} / 链接 {detail['store_link_matched']}",
+                        }}, ensure_ascii=False, separators=(",", ":")),
+                        json.dumps({"targets": [{
+                            "target_type": target["target_type"], "id": target["id"],
+                            "net_proceeds_usd": target["old_net_proceeds_usd"],
+                        } for target in detail["targets"]]}, ensure_ascii=False, separators=(",", ":")),
+                        json.dumps({"net_proceeds_sync": detail}, ensure_ascii=False, separators=(",", ":")),
+                        now,
+                    ))
             if log_rows:
                 cursor.executemany(
                     """
@@ -5023,7 +5357,15 @@ def bulk_update_mercado_orders(
                     log_rows,
                 )
         connection.commit()
-        return {"matched": matched, "changed": changed}
+        result = {"matched": matched, "changed": changed}
+        if net_proceeds_sync is not None:
+            try:
+                purchase_net_proceeds.invalidate_caches()
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception("采购净收益已保存，刷新店铺链接缓存失败")
+            result["net_proceeds_sync"] = net_proceeds_sync
+        return result
     except Exception:
         connection.rollback()
         raise
@@ -5657,12 +5999,14 @@ def list_mercado_order_print_candidates(
     include_previously_printed=False,
     limit=0,
 ):
-    """List printable API orders while excluding successfully generated labels.
+    """List printable API orders while excluding completed or uncertain charges.
 
     ``include_previously_printed`` is only used for a store's first run.  At
     that point legacy browser printing cannot be matched to individual order
     IDs, so the caller deliberately falls back to all printable orders inside
-    the configured safety window (72 hours by default).
+    the configured safety window (72 hours by default). Wallet evidence of a
+    generated label or a pending reservation is always excluded, including on
+    that first run: a missing operation log must never cause another charge.
     """
 
     token_id = int(token_id)
@@ -5711,6 +6055,43 @@ def list_mercado_order_print_candidates(
         with connection.cursor() as cursor:
             _ensure_mercado_synced_orders_table(cursor)
             _ensure_mercado_store_tokens_table(cursor)
+            # Wallet tables are optional on legacy installations. Check their
+            # schema without running wallet DDL on every automatic print scan.
+            cursor.execute(
+                "SELECT TABLE_NAME AS table_name, COLUMN_NAME AS column_name "
+                "FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (%s, %s)",
+                ("workbench_print_request_orders", "workbench_print_requests"),
+            )
+            wallet_columns = {}
+            for row in cursor.fetchall() or []:
+                wallet_columns.setdefault(row["table_name"], set()).add(row["column_name"])
+            details_columns = wallet_columns.get("workbench_print_request_orders", set())
+            requests_columns = wallet_columns.get("workbench_print_requests", set())
+            if {"order_id", "printed_at"}.issubset(details_columns):
+                # Settlement persists printed_at before the operation log is
+                # written, making it authoritative when logging later fails.
+                where.append(
+                    "NOT EXISTS ("
+                    "SELECT 1 FROM `workbench_print_request_orders` AS print_details "
+                    "WHERE print_details.`order_id` = synced.`order_id` "
+                    "AND print_details.`printed_at` IS NOT NULL"
+                    ")"
+                )
+            if {"request_id", "order_id"}.issubset(details_columns) and {
+                "request_id", "status"
+            }.issubset(requests_columns):
+                # A reserved request may already have contacted Mercado. Its
+                # final accounting must be confirmed before any new debit.
+                where.append(
+                    "NOT EXISTS ("
+                    "SELECT 1 FROM `workbench_print_request_orders` AS pending_details "
+                    "INNER JOIN `workbench_print_requests` AS pending_requests "
+                    "ON pending_requests.`request_id` = pending_details.`request_id` "
+                    "WHERE pending_details.`order_id` = synced.`order_id` "
+                    "AND pending_requests.`status` = 'reserved'"
+                    ")"
+                )
             limit_sql = " LIMIT %s" if limit else ""
             query_params = list(params)
             if limit:
@@ -6906,6 +7287,7 @@ def save_weight_dimensions_records(rows, refresh=False, enrich_only=False):
     inserted = 0
     inserted_order_numbers = []
     enriched = 0
+    audit_rows = []
     try:
         with connection.cursor() as cursor:
             _ensure_weight_dimensions_record_table(cursor)
@@ -6939,6 +7321,7 @@ def save_weight_dimensions_records(rows, refresh=False, enrich_only=False):
                              json.dumps(previous, ensure_ascii=False, default=str), order_number),
                         )
                         enriched += 1
+                        audit_rows.append(previous)
                     continue
                 logs = row.pop("execution_logs", [])
                 # These internal identifiers are needed for execution after a DB read.
@@ -6967,6 +7350,7 @@ def save_weight_dimensions_records(rows, refresh=False, enrich_only=False):
                             (str(row.get("time") or "")[:64],
                              json.dumps(previous, ensure_ascii=False, default=str), order_number),
                         )
+                        audit_rows.append(previous)
                         continue
                 cursor.execute(
                     "INSERT IGNORE INTO `zying_weight_dimensions_records` "
@@ -6979,7 +7363,10 @@ def save_weight_dimensions_records(rows, refresh=False, enrich_only=False):
                 if int(cursor.rowcount or 0):
                     inserted += 1
                     inserted_order_numbers.append(order_number)
+                    audit_rows.append({**row, "execution_logs": logs})
         connection.commit()
+        from bit.weight_dimensions_audit import mirror_saved_records
+        mirror_saved_records(audit_rows)
         return {
             "inserted": inserted,
             "duplicates": max(0, len(rows) - inserted - enriched),
@@ -7391,6 +7778,8 @@ def append_weight_dimensions_record_log(order_number, log_entry, record_updates=
                  json.dumps(logs, ensure_ascii=False, default=str), str(order_number or "").strip()),
             )
         connection.commit()
+        from bit.weight_dimensions_audit import mirror_saved_records
+        mirror_saved_records([{**record, "order_number": str(order_number or "").strip(), "execution_logs": logs}])
         return {"record": record, "execution_logs": logs}
     except BaseException:
         connection.rollback()
@@ -7399,7 +7788,122 @@ def append_weight_dimensions_record_log(order_number, log_entry, record_updates=
         connection.close()
 
 
+def recover_weight_dimensions_record_executions():
+    """Recover server executions only after acquiring the startup scheduler lock.
+
+    A persisted intermediate state does not prove a marketplace write failed or
+    succeeded. Keep its audit history and require readback before another write.
+    This must not run during ordinary refreshes or while server tasks are live.
+    """
+    interrupted_statuses = {"执行中", "重量尺寸已更新", "重量已更新"}
+    active_agent_statuses = {"排队中", "执行中", "进行中"}
+    counts = {"interrupted": 0, "normalized_failures": 0, "skipped_invalid": 0}
+    audit_rows = []
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_weight_dimensions_record_table(cursor)
+            # Guard JSON extraction so an unrelated malformed old snapshot does
+            # not stop startup or cause us to discard its original audit data.
+            snapshot_sql = "IF(JSON_VALID(`record_json`), `record_json`, '{}')"
+            zeshun_sql = f"JSON_UNQUOTE(JSON_EXTRACT({snapshot_sql}, '$._zeshun_status'))"
+            zying_sql = f"JSON_UNQUOTE(JSON_EXTRACT({snapshot_sql}, '$._zying_status'))"
+            overall_sql = f"JSON_UNQUOTE(JSON_EXTRACT({snapshot_sql}, '$.execution_status'))"
+            cursor.execute(
+                "SELECT `order_number`, `record_json`, `execution_logs_json` "
+                "FROM `zying_weight_dimensions_records` WHERE "
+                f"({zeshun_sql} IN (%s, %s, %s) OR "
+                f"({zeshun_sql} = %s AND {overall_sql} = %s)) "
+                f"AND COALESCE({zying_sql}, '') NOT IN (%s, %s, %s) FOR UPDATE",
+                ("执行中", "重量尺寸已更新", "重量已更新", "失败", "执行中",
+                 "排队中", "执行中", "进行中"),
+            )
+            for saved in cursor.fetchall() or ():
+                try:
+                    record = json.loads(saved.get("record_json") or "{}")
+                    logs = json.loads(saved.get("execution_logs_json") or "[]")
+                except (TypeError, ValueError):
+                    counts["skipped_invalid"] += 1
+                    continue
+                if not isinstance(record, dict) or not isinstance(logs, list):
+                    counts["skipped_invalid"] += 1
+                    continue
+                if record.get("_zying_status") in active_agent_statuses:
+                    continue
+                status = record.get("_zeshun_status")
+                if status in interrupted_statuses:
+                    message = (
+                        "服务中断，泽顺更新未返回完整完成确认；"
+                        "请先回读美客多商品当前重量尺寸和净收益，再重新执行核对"
+                    )
+                    previous_error = str(record.get("execution_error") or "").strip()
+                    if previous_error:
+                        message = f"{previous_error}；{message}"
+                    record["_zeshun_status"] = "已中断"
+                    record["execution_status"] = "已中断"
+                    record["execution_error"] = message
+                    log_status = "已中断"
+                    count_key = "interrupted"
+                elif status == "失败" and record.get("execution_status") == "执行中":
+                    record["execution_status"] = "失败"
+                    message = "泽顺执行已有失败结果，已修正残留的执行中状态"
+                    if record.get("execution_error"):
+                        message += f"：{record['execution_error']}"
+                    log_status = "失败"
+                    count_key = "normalized_failures"
+                else:
+                    continue
+                execution_id = next((
+                    str(entry.get("execution_id") or "")
+                    for entry in reversed(logs)
+                    if isinstance(entry, dict) and entry.get("execution_id")
+                    and (entry.get("action") in {"zeshun", "combined"}
+                         or entry.get("stage") in {"同名链接", "美客多链接", "净收益"})
+                ), "")
+                logs.append({
+                    "time": datetime.now().isoformat(timespec="seconds"),
+                    "stage": "任务恢复", "status": log_status, "message": message,
+                    "order_number": str(saved.get("order_number") or ""),
+                    "execution_id": execution_id, "action": "zeshun", "operator": "system",
+                })
+                cursor.execute(
+                    "UPDATE `zying_weight_dimensions_records` SET "
+                    "`record_json` = %s, `execution_logs_json` = %s WHERE `order_number` = %s",
+                    (json.dumps(record, ensure_ascii=False, default=str),
+                     json.dumps(logs, ensure_ascii=False, default=str), saved.get("order_number")),
+                )
+                counts[count_key] += 1
+                audit_rows.append({**record, "order_number": saved.get("order_number"), "execution_logs": logs})
+        connection.commit()
+        from bit.weight_dimensions_audit import mirror_saved_records
+        mirror_saved_records(audit_rows)
+        return counts
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def insert_zying_product_info(product_list):
+    """Persist snapshots, retrying only rolled-back lock conflicts."""
+    # Materialize once so generators can be replayed after a full rollback.
+    records = list(product_list or ())
+    for attempt in range(3):
+        try:
+            return _insert_zying_product_info_once(records)
+        except pymysql.OperationalError as exc:
+            if not exc.args or exc.args[0] not in (1205, 1213) or attempt == 2:
+                raise
+            print(
+                f"智赢产品同步：数据库暂时被其他任务锁定，已回滚本批快照，"
+                f"正在重试（{attempt + 1}/2）",
+                flush=True,
+            )
+            time.sleep(0.5 * (attempt + 1))
+
+
+def _insert_zying_product_info_once(product_list):
     """创建智赢产品表，并将本次采集结果作为快照批量写入。"""
     connection = pymysql.connect(**config)
     try:
@@ -7498,7 +8002,8 @@ def insert_zying_product_info(product_list):
 
 
 def get_existing_zying_product_ids(product_ids):
-    """返回已存在于智赢产品表的产品编号。"""
+    """仅跳过已保存关键数据及采集业务员的智赢产品。"""
+    from erp.mercadolibre_collection_store import zying_captured_metrics
     normalized_ids = []
     seen_ids = set()
     for value in product_ids or ():
@@ -7519,7 +8024,7 @@ def get_existing_zying_product_ids(product_ids):
                 placeholders = ", ".join(["%s"] * len(batch))
                 cursor.execute(
                     f"""
-                    SELECT DISTINCT `产品编号`
+                    SELECT DISTINCT `产品编号`, `上架快照`
                     FROM `zying_product`
                     WHERE `产品编号` IN ({placeholders})
                       AND `上架快照` IS NOT NULL
@@ -7527,11 +8032,24 @@ def get_existing_zying_product_ids(product_ids):
                     """,
                     tuple(batch),
                 )
-                existing_ids.update(
-                    str(row.get("产品编号") or "").strip()
-                    for row in (cursor.fetchall() or ())
-                    if str(row.get("产品编号") or "").strip()
-                )
+                for row in cursor.fetchall() or ():
+                    try:
+                        snapshot = json.loads(row.get("上架快照") or "{}")
+                    except (TypeError, ValueError):
+                        continue
+                    if not isinstance(snapshot, dict):
+                        continue
+                    metrics = zying_captured_metrics(snapshot)
+                    plugin = snapshot.get("plugin_snapshot") or {}
+                    plugin = plugin if isinstance(plugin, dict) else {}
+                    salesperson = str(plugin.get("salesperson") or plugin.get("created_by") or "").strip()
+                    complete = metrics["net_proceeds_usd"] is not None and all(
+                        metrics[field] is not None and metrics[field] > 0
+                        for field in ("weight_g", "package_length_cm", "package_width_cm", "package_height_cm")
+                    )
+                    product_id = str(row.get("产品编号") or "").strip()
+                    if product_id and complete and salesperson:
+                        existing_ids.add(product_id)
             return existing_ids
     finally:
         connection.close()
@@ -8346,6 +8864,9 @@ def get_ai_appeal_records(limit=100, appeal_copy_mode=""):
                     or "未记录"
                 )
                 row["record_scope"] = str(raw_record.get("record_scope") or "")
+                for scope_key in ("token_id", "organization_key", "seller_id", "task_id", "round_number", "user_id"):
+                    if scope_key in raw_record:
+                        row[scope_key] = raw_record[scope_key]
             return {"total": len(rows), "rows": rows}
     finally:
         connection.close()
@@ -8730,7 +9251,7 @@ def _ensure_infringement_risk_checks_table(cursor):
             `group_name` VARCHAR(100) NULL,
             `token_id` BIGINT NULL,
             `account_name` VARCHAR(255) NULL,
-            `risk_level` TINYINT NOT NULL,
+            `risk_level` TINYINT NULL,
             `keywords` VARCHAR(1024) NULL,
             `reason` VARCHAR(1000) NULL,
             `checked_at` DATETIME NOT NULL,
@@ -8741,6 +9262,24 @@ def _ensure_infringement_risk_checks_table(cursor):
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
+
+    for column, definition in (
+        ("content_hash", "VARCHAR(64) NULL"), ("rule_version", "VARCHAR(64) NULL"),
+        ("detection_scope", "VARCHAR(32) NOT NULL DEFAULT 'title'"),
+        ("model_version", "VARCHAR(128) NULL"),
+        ("check_status", "VARCHAR(16) NOT NULL DEFAULT 'completed'"),
+        ("check_error", "VARCHAR(1000) NULL"), ("details_json", "LONGTEXT NULL"),
+        ("manual_decision", "VARCHAR(16) NULL"), ("review_reason", "VARCHAR(2000) NULL"),
+        ("reviewed_by", "VARCHAR(128) NULL"), ("reviewed_at", "DATETIME NULL"),
+        ("review_expires_at", "DATETIME NULL"), ("review_content_hash", "VARCHAR(64) NULL"),
+        ("review_site_ids", "TEXT NULL"), ("review_evidence_ref", "VARCHAR(2000) NULL"),
+        ("review_history_json", "LONGTEXT NULL"),
+    ):
+        _ensure_column(cursor, "infringement_risk_checks", column, definition)
+    cursor.execute("SHOW COLUMNS FROM `infringement_risk_checks` LIKE 'risk_level'")
+    risk_column = cursor.fetchone() or {}
+    if risk_column.get("Null") == "NO":
+        cursor.execute("ALTER TABLE `infringement_risk_checks` MODIFY COLUMN `risk_level` TINYINT NULL")
 
 
 def _backfill_legacy_zying_risk_checks(cursor):
@@ -8795,12 +9334,50 @@ def get_infringement_risk_candidates(
     salesperson=None,
     group_name=None,
     token_ids=None,
+    items=None,
+    detection_scope="title",
+    rule_version=None,
+    _stream=False,
+):
+    """Read compact candidates; internal result scans may consume them lazily.
+
+    List-returning callers must narrow very large selections instead of
+    retaining millions of snapshots in a worker. No silent truncation.
+    """
+    records = _iter_infringement_risk_candidates(
+        hours=hours, limit=limit, zying_category=zying_category,
+        include_checked=include_checked, sources=sources, salesperson=salesperson,
+        group_name=group_name, token_ids=token_ids, items=items,
+        detection_scope=detection_scope, rule_version=rule_version,
+    )
+    if _stream:
+        return records
+    from bit.bounded_records import collect_bounded
+    return collect_bounded(records)
+
+
+def _iter_infringement_risk_candidates(
+    hours=0,
+    limit=0,
+    zying_category=None,
+    include_checked=False,
+    sources=None,
+    salesperson=None,
+    group_name=None,
+    token_ids=None,
+    items=None,
+    detection_scope="title",
+    rule_version=None,
 ):
     """Read a unified candidate stream from the four workbench product sources."""
     from erp.mercadolibre_collection_store import ensure_collection_tables
     from erp.mercadolibre_store_link_store import ensure_store_link_table
+    from bit.infringement_state import canonical_record, normalize_items, result_state
 
-    selected_sources = _normalize_risk_sources(sources)
+    selected_items = normalize_items(items)
+    selected_sources = _normalize_risk_sources(
+        [item["source_type"] for item in selected_items] if selected_items else sources
+    )
     hours = max(0, int(hours or 0))
     limit = max(0, int(limit or 0))
     category = str(zying_category or "").strip()
@@ -8820,7 +9397,7 @@ def get_infringement_risk_candidates(
         if hours else None
     )
     connection = pymysql.connect(**config)
-    rows = []
+    emitted = 0
     try:
         with connection.cursor() as cursor:
             _ensure_infringement_risk_checks_table(cursor)
@@ -8834,40 +9411,88 @@ def get_infringement_risk_candidates(
                 _backfill_legacy_zying_risk_checks(cursor)
 
             def fetch(source_type, select_sql, where, params):
-                checked_clause = "" if include_checked else " AND checked.`id` IS NULL"
+                nonlocal emitted
+                if limit and emitted >= limit:
+                    return
+                item_clause = ""
+                item_params = []
+                if selected_items:
+                    item_params = [item["row_id"] for item in selected_items if item["source_type"] == source_type]
+                    if not item_params:
+                        return
+                    item_clause = f" AND {where[1]} IN ({', '.join(['%s'] * len(item_params))})"
                 sql = f"""
                     SELECT {select_sql}, checked.`risk_level`, checked.`keywords`,
-                           checked.`reason`, checked.`checked_at`
+                           checked.`reason`, checked.`checked_at`, checked.`content_hash`,
+                           checked.`rule_version`, checked.`detection_scope`, checked.`model_version`,
+                           checked.`check_status`, checked.`check_error`, checked.`details_json`,
+                           checked.`manual_decision`, checked.`review_reason`, checked.`reviewed_by`,
+                           checked.`reviewed_at`, checked.`review_expires_at`, checked.`review_content_hash`,
+                           checked.`review_site_ids`, checked.`review_evidence_ref`, checked.`review_history_json`
                     FROM {where[0]}
                     LEFT JOIN `infringement_risk_checks` AS checked
                       ON checked.`source_type` = %s
                      AND checked.`source_row_id` = {where[1]}
-                    WHERE {where[2]}{checked_clause}
+                    WHERE {where[2]}{item_clause} AND {where[1]} > %s
                     ORDER BY {where[1]} ASC
                 """
-                query_params = [source_type, *params]
-                if limit:
-                    sql += " LIMIT %s"
-                    query_params.append(limit)
-                cursor.execute(sql, tuple(query_params))
-                source_rows = [dict(row) for row in (cursor.fetchall() or [])]
-                for row in source_rows:
-                    row["source_type"] = source_type
-                    row["source_row_id"] = int(row.get("source_row_id") or 0)
-                    row["row_id"] = row["source_row_id"]
-                    row["record_key"] = f"{source_type}:{row['source_row_id']}"
-                rows.extend(source_rows)
+                after_id = 0
+                while True:
+                    page_size = min(200, limit - emitted) if limit else 200
+                    query_params = [source_type, *params, *item_params, after_id, page_size]
+                    cursor.execute(sql + " LIMIT %s", tuple(query_params))
+                    source_rows = cursor.fetchall() or []
+                    if not source_rows:
+                        break
+                    next_id = int(source_rows[-1].get("source_row_id") or 0)
+                    if next_id <= after_id:
+                        raise ValueError("侵权候选商品分页游标未前进")
+                    after_id = next_id
+                    for raw in source_rows:
+                        row = dict(raw)
+                        row["source_type"] = source_type
+                        row["source_row_id"] = int(row.get("source_row_id") or 0)
+                        row["row_id"] = row["source_row_id"]
+                        row["record_key"] = f"{source_type}:{row['source_row_id']}"
+                        try:
+                            details = json.loads(row.get("details_json") or "{}")
+                        except (TypeError, ValueError):
+                            details = {}
+                        if isinstance(details, dict):
+                            for name, value in details.items():
+                                if name not in {"title", "title_es", "title_pt", "main_image_url", "site_id",
+                                                "category_id", "category_name", "product_category", "management_category_id",
+                                                "source_snapshot_json", "ai_copy_json", "image_content_revision", "image_generation_method"}:
+                                    row.setdefault(name, value)
+                        row = canonical_record(row)
+                        row["risk_status"] = result_state(row, rule_version, detection_scope)
+                        if include_checked or row["risk_status"] != "completed":
+                            # Canonical fields contain everything needed by hashes,
+                            # reviews and screening; raw source payloads are not results.
+                            for name in ("source_snapshot_json", "plugin_snapshot_json", "source_json",
+                                         "ai_copy_json", "infringement_check_json", "details_json",
+                                         "review_history_json"):
+                                row.pop(name, None)
+                            emitted += 1
+                            yield row
+                            if limit and emitted >= limit:
+                                return
+
+                    if len(source_rows) < page_size:
+                        break
 
             if "product_list" in selected_sources:
-                conditions = ["products.`source_type` = 'collected'"]
+                conditions = ["1 = 1"]
                 params = []
                 if since:
                     conditions.append("products.`added_at` >= %s")
                     params.append(since)
-                fetch(
+                yield from fetch(
                     "product_list",
                     "products.`id` AS `source_row_id`, products.`source_item_id` AS `product_id`, "
                     "products.`main_image_url`, products.`title`, products.`category_name` AS `product_category`, "
+                    "products.`category_name`, products.`category_id`, products.`management_category_id`, "
+                    "products.`source_snapshot_json`, products.`infringement_check_json`, "
                     "'' AS `zying_category_id`, '' AS `zying_category`, '' AS `salesperson`, "
                     "'' AS `group_name`, NULL AS `token_id`, '' AS `account_name`, products.`added_at` AS `submitted_at`",
                     ("`erp_mercadolibre_products` AS products", "products.`id`", " AND ".join(conditions)),
@@ -8879,10 +9504,13 @@ def get_infringement_risk_candidates(
                 if since:
                     conditions.append("collection_items.`collected_at` >= %s")
                     params.append(since)
-                fetch(
+                yield from fetch(
                     "collection_list",
                     "collection_items.`id` AS `source_row_id`, collection_items.`source_item_id` AS `product_id`, "
                     "collection_items.`main_image_url`, collection_items.`title`, collection_items.`category_name` AS `product_category`, "
+                    "collection_items.`category_name`, collection_items.`category_id`, collection_items.`management_category_id`, "
+                    "collection_items.`infringement_check_json`, collection_items.`ai_copy_json`, "
+                    "collection_items.`plugin_snapshot_json`, collection_items.`source_json`, "
                     "'' AS `zying_category_id`, '' AS `zying_category`, '' AS `salesperson`, "
                     "'' AS `group_name`, NULL AS `token_id`, '' AS `account_name`, collection_items.`collected_at` AS `submitted_at`",
                     ("`erp_mercadolibre_collection_items` AS collection_items", "collection_items.`id`", " AND ".join(conditions)),
@@ -8903,10 +9531,11 @@ def get_infringement_risk_candidates(
                 if groups:
                     conditions.append(f"settings.`group_name` IN ({', '.join(['%s'] * len(groups))})")
                     params.extend(groups)
-                fetch(
+                yield from fetch(
                     "pulled",
                     "links.`id` AS `source_row_id`, links.`item_id` AS `product_id`, "
                     "links.`thumbnail_url` AS `main_image_url`, links.`title`, links.`category_id` AS `product_category`, "
+                    "links.`category_id`, links.`site_id`, "
                     "'' AS `zying_category_id`, '' AS `zying_category`, COALESCE(settings.`salesperson`, '') AS `salesperson`, "
                     "COALESCE(settings.`group_name`, '') AS `group_name`, links.`token_id`, links.`store_name` AS `account_name`, "
                     "links.`last_synced_at` AS `submitted_at`",
@@ -8924,7 +9553,7 @@ def get_infringement_risk_candidates(
                 if category:
                     conditions.append("(zying.`智赢分类编号` = %s OR zying.`智赢产品分类` = %s OR zying.`智赢产品分类` LIKE %s)")
                     params.extend((category, category, f"%/{category}"))
-                fetch(
+                yield from fetch(
                     "zying",
                     "zying.`id` AS `source_row_id`, zying.`产品编号` AS `product_id`, "
                     "zying.`主图链接` AS `main_image_url`, zying.`标题` AS `title`, zying.`产品分类` AS `product_category`, "
@@ -8935,7 +9564,6 @@ def get_infringement_risk_candidates(
                     params,
                 )
         connection.commit()
-        return rows[:limit] if limit else rows
     finally:
         connection.close()
 
@@ -8946,6 +9574,8 @@ def update_infringement_product_risks(results):
     zying_results = []
     linked_list_results = {"product_list": [], "collection_list": []}
     linked_product_sources = {"pulled": [], "zying": []}
+    list_metadata = {"product_list": [], "collection_list": []}
+    source_metadata = {"pulled": [], "zying": []}
     checked_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for result in results or ():
         if not isinstance(result, dict):
@@ -8953,14 +9583,22 @@ def update_infringement_product_risks(results):
         source_type = str(result.get("source_type") or "").strip().lower()
         try:
             source_row_id = int(result.get("source_row_id", result.get("row_id")))
-            risk_level = int(result.get("risk_level"))
+            risk_level = None if result.get("check_status") == "failed" else int(result.get("risk_level"))
         except (TypeError, ValueError):
             continue
-        if source_type not in INFRINGEMENT_RISK_SOURCE_TYPES or source_row_id <= 0 or risk_level not in {0, 1, 2}:
+        if source_type not in INFRINGEMENT_RISK_SOURCE_TYPES or source_row_id <= 0 or risk_level not in {None, 0, 1, 2}:
             continue
-        keywords = result.get("keywords") or []
+        keywords = result.get("keywords") or [] if risk_level else []
         if not isinstance(keywords, str):
             keywords = ", ".join(str(value).strip() for value in keywords if str(value or "").strip())
+        metadata = {
+            name: value for name, value in result.items()
+            if not name.startswith("review") and name != "manual_decision"
+            and not name.startswith("infringement_")
+            and name not in {"source_snapshot_json", "ai_copy_json", "details_json", "api_key", "risk_status"}
+        }
+        metadata.update(risk_level=risk_level, keywords=keywords, check_status=result.get("check_status") or "completed")
+        details_json = json.dumps(metadata, ensure_ascii=False, default=str)
         normalized.append((
             source_type, source_row_id, str(result.get("product_id") or "")[:128],
             str(result.get("title") or "")[:1024], str(result.get("main_image_url") or ""),
@@ -8969,7 +9607,13 @@ def update_infringement_product_risks(results):
             str(result.get("salesperson") or "")[:100], str(result.get("group_name") or "")[:100],
             int(result.get("token_id")) if str(result.get("token_id") or "").isdigit() else None,
             str(result.get("account_name") or "")[:255], risk_level, str(keywords)[:1024] or None,
-            str(result.get("reason") or "")[:1000], checked_at,
+            str(result.get("reason") or "")[:1000], result.get("checked_at") or checked_at,
+            str(result.get("content_hash") or "")[:64] or None,
+            str(result.get("rule_version") or "")[:64] or None,
+            str(result.get("detection_scope") or "title")[:32],
+            str(result.get("model_version") or "")[:128] or None,
+            result.get("check_status") or "completed", str(result.get("error") or "")[:1000] or None,
+            details_json,
         ))
         if source_type in linked_list_results:
             linked_list_results[source_type].append(
@@ -8981,7 +9625,9 @@ def update_infringement_product_risks(results):
                     source_row_id,
                 )
             )
+            list_metadata[source_type].append((details_json, source_row_id))
         if source_type in linked_product_sources:
+            source_metadata[source_type].append((details_json, str(result.get("product_id") or "")[:32]))
             linked_product_sources[source_type].append(
                 (
                     risk_level,
@@ -8991,7 +9637,7 @@ def update_infringement_product_risks(results):
                     str(result.get("product_id") or "")[:32],
                 )
             )
-        if source_type == "zying":
+        if source_type == "zying" and risk_level is not None:
             zying_results.append({"row_id": source_row_id, "risk_level": risk_level, "keywords": keywords})
     if not normalized:
         return 0
@@ -9024,6 +9670,13 @@ def update_infringement_product_risks(results):
                             """,
                             rows,
                         )
+                        cursor.executemany(
+                            f"""UPDATE `{table}` SET `infringement_check_json` =
+                                JSON_MERGE_PATCH(CASE WHEN JSON_VALID(`infringement_check_json`)
+                                    THEN `infringement_check_json` ELSE '{{}}' END, %s)
+                                WHERE `id` = %s""",
+                            list_metadata[source_type],
+                        )
                 for source_type, rows in linked_product_sources.items():
                     if rows:
                         cursor.executemany(
@@ -9038,14 +9691,23 @@ def update_infringement_product_risks(results):
                             """,
                             rows,
                         )
+                        cursor.executemany(
+                            f"""UPDATE `{PRODUCT_TABLE}` SET `infringement_check_json` =
+                                JSON_MERGE_PATCH(CASE WHEN JSON_VALID(`infringement_check_json`)
+                                    THEN `infringement_check_json` ELSE '{{}}' END, %s)
+                                WHERE `source_type` = '{source_type}' AND `source_item_id` = %s""",
+                            source_metadata[source_type],
+                        )
             cursor.executemany(
                 """
                 INSERT INTO `infringement_risk_checks` (
                     `source_type`, `source_row_id`, `product_id`, `title`, `main_image_url`,
                     `product_category`, `zying_category_id`, `zying_category`, `salesperson`,
                     `group_name`, `token_id`, `account_name`, `risk_level`, `keywords`,
-                    `reason`, `checked_at`
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    `reason`, `checked_at`, `content_hash`, `rule_version`, `detection_scope`,
+                    `model_version`, `check_status`, `check_error`, `details_json`
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                          %s, %s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     `product_id` = VALUES(`product_id`), `title` = VALUES(`title`),
                     `main_image_url` = VALUES(`main_image_url`),
@@ -9055,7 +9717,11 @@ def update_infringement_product_risks(results):
                     `salesperson` = VALUES(`salesperson`), `group_name` = VALUES(`group_name`),
                     `token_id` = VALUES(`token_id`), `account_name` = VALUES(`account_name`),
                     `risk_level` = VALUES(`risk_level`), `keywords` = VALUES(`keywords`),
-                    `reason` = VALUES(`reason`), `checked_at` = VALUES(`checked_at`)
+                    `reason` = VALUES(`reason`), `checked_at` = VALUES(`checked_at`),
+                    `content_hash` = VALUES(`content_hash`), `rule_version` = VALUES(`rule_version`),
+                    `detection_scope` = VALUES(`detection_scope`), `model_version` = VALUES(`model_version`),
+                    `check_status` = VALUES(`check_status`), `check_error` = VALUES(`check_error`),
+                    `details_json` = VALUES(`details_json`)
                 """,
                 normalized,
             )
@@ -9070,74 +9736,212 @@ def update_infringement_product_risks(results):
     return len(normalized)
 
 
-def get_infringement_risk_results(
-    zying_category=None, risk_level=None, search="", sort_by="risk_level",
-    sort_dir="desc", limit=1000, sources=None,
-):
-    selected_sources = _normalize_risk_sources(sources or INFRINGEMENT_RISK_SOURCE_TYPES)
-    risk = str(risk_level if risk_level is not None else "").strip().lower()
-    keyword = str(search or "").strip()[:200]
-    limit = max(0, int(limit or 0))
-    sort_columns = {
-        "row_id": "`source_row_id`", "product_id": "`product_id`", "title": "`title`",
-        "zying_category": "`zying_category`", "risk_level": "`risk_level`",
-        "keywords": "`keywords`", "submitted_at": "`checked_at`",
-    }
-    order_column = sort_columns.get(str(sort_by or "").strip(), "`risk_level`")
-    order_direction = "ASC" if str(sort_dir or "").strip().lower() == "asc" else "DESC"
-    where = [f"`source_type` IN ({', '.join(['%s'] * len(selected_sources))})"]
-    params = list(selected_sources)
-    if risk in {"0", "1", "2"}:
-        where.append("`risk_level` = %s")
-        params.append(int(risk))
-    elif risk == "unchecked":
-        where.append("1 = 0")
-    category = str(zying_category or "").strip()
-    if category:
-        where.append("(`zying_category_id` = %s OR `zying_category` = %s OR `zying_category` LIKE %s)")
-        params.extend((category, category, f"%/{category}"))
-    if keyword:
-        pattern = f"%{keyword}%"
-        where.append("(`product_id` LIKE %s OR `title` LIKE %s OR `keywords` LIKE %s OR `account_name` LIKE %s)")
-        params.extend((pattern, pattern, pattern, pattern))
-    where_sql = " AND ".join(where)
+INFRINGEMENT_CHECK_METADATA_COLUMNS = (
+    "content_hash", "rule_version", "detection_scope", "model_version", "check_status",
+    "check_error", "details_json", "manual_decision", "review_reason", "reviewed_by",
+    "reviewed_at", "review_expires_at", "review_content_hash", "review_site_ids", "review_evidence_ref",
+    "review_history_json",
+)
+
+
+def copy_infringement_check_metadata(cursor, source_type, target_type, mappings):
+    """Copy version and human-review fields while a list move is in its transaction."""
+    if source_type not in INFRINGEMENT_RISK_SOURCE_TYPES or target_type not in INFRINGEMENT_RISK_SOURCE_TYPES:
+        raise ValueError("商品来源无效")
+    pairs = [(int(target), int(source)) for source, target in mappings if int(source) > 0 and int(target) > 0]
+    if pairs:
+        assignments = ", ".join(f"target.`{name}` = source.`{name}`" for name in INFRINGEMENT_CHECK_METADATA_COLUMNS)
+        cursor.executemany(
+            f"UPDATE `infringement_risk_checks` AS target INNER JOIN `infringement_risk_checks` AS source "
+            f"ON source.`source_type` = '{source_type}' AND source.`source_row_id` = %s "
+            f"SET {assignments} WHERE target.`source_type` = '{target_type}' AND target.`source_row_id` = %s",
+            [(source_id, target_id) for target_id, source_id in pairs],
+        )
+
+
+def update_infringement_risk_review(items, decision, reason, reviewer, expires_at=None,
+                                    site_ids=None, evidence_ref="", rule_version=None):
+    """Save a human disposition for a current item snapshot, independently of AI results."""
+    from bit.infringement_state import content_hash, normalize_items
+    selected = normalize_items(items)
+    decision = str(decision or "").strip()
+    if decision not in {"", "allow", "block"}:
+        raise ValueError("人工处置只能是放行、拦截或撤销")
+    reason = str(reason or "").strip()
+    if decision and not reason:
+        raise ValueError("人工复核必须填写原因")
+    reviewer = str(reviewer or "").strip()
+    if not reviewer:
+        raise ValueError("人工复核必须记录操作人")
+    sites = list(dict.fromkeys(str(value).strip().upper() for value in site_ids or [] if str(value).strip()))
+    if len(reason) > 2000 or len(str(evidence_ref or "")) > 2000:
+        raise ValueError("复核原因或证据链接过长")
+    if expires_at:
+        try:
+            expiry = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+            if expiry.tzinfo:
+                expiry = expiry.astimezone(timezone.utc).replace(tzinfo=None)
+        except ValueError:
+            raise ValueError("放行有效期格式无效") from None
+        if expiry <= datetime.now(timezone.utc).replace(tzinfo=None):
+            raise ValueError("放行有效期必须晚于当前时间")
+        expires_at = expiry.strftime("%Y-%m-%d %H:%M:%S")
+    current = get_infringement_risk_candidates(items=selected, include_checked=True, rule_version=rule_version)
+    if len(current) != len(selected):
+        raise ValueError("部分商品不存在或已移出当前列表，请刷新后重试")
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    review_rows = []
+    list_json = {"collection_list": [], "product_list": []}
+    saved = []
+    for row in current:
+        review = {
+            "manual_decision": decision or None, "review_reason": reason,
+            "reviewed_by": reviewer[:128], "reviewed_at": now,
+            "review_expires_at": expires_at, "review_site_ids": sites,
+            "review_evidence_ref": str(evidence_ref or ""),
+            "review_content_hash": content_hash(row, "title_image"),
+        }
+        history = list(row.get("review_history") or [])[-99:]
+        history.append({**review, "previous_decision": row.get("manual_decision"), "at": now})
+        review["review_history"] = history
+        review_rows.append((row["source_type"], row["source_row_id"], row.get("product_id"), row.get("title"),
+                            row.get("main_image_url"), row.get("product_category"), now,
+                            decision or None, reason, reviewer[:128], now, expires_at,
+                            review["review_content_hash"], json.dumps(sites), str(evidence_ref or ""), json.dumps(history, ensure_ascii=False, default=str)))
+        if row["source_type"] in list_json:
+            list_json[row["source_type"]].append((json.dumps(review, ensure_ascii=False, default=str), row["source_row_id"]))
+        saved.append({**row, **review})
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
             _ensure_infringement_risk_checks_table(cursor)
-            if "zying" in selected_sources:
-                _ensure_zying_product_table(cursor)
-                _backfill_legacy_zying_risk_checks(cursor)
-            cursor.execute(
-                f"""SELECT COUNT(*) AS `total`,
-                    SUM(`risk_level` = 0) AS `risk_0`, SUM(`risk_level` = 1) AS `risk_1`,
-                    SUM(`risk_level` = 2) AS `risk_2` FROM `infringement_risk_checks`
-                    WHERE {where_sql}""",
-                tuple(params),
+            if any(list_json.values()):
+                from erp.mercadolibre_collection_store import ensure_collection_tables
+                ensure_collection_tables(cursor)
+            cursor.executemany(
+                """INSERT INTO `infringement_risk_checks` (`source_type`, `source_row_id`, `product_id`, `title`,
+                    `main_image_url`, `product_category`, `checked_at`, `manual_decision`, `review_reason`,
+                    `reviewed_by`, `reviewed_at`, `review_expires_at`, `review_content_hash`, `review_site_ids`, `review_evidence_ref`, `review_history_json`)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE `manual_decision` = VALUES(`manual_decision`),
+                    `review_reason` = VALUES(`review_reason`), `reviewed_by` = VALUES(`reviewed_by`),
+                    `reviewed_at` = VALUES(`reviewed_at`), `review_expires_at` = VALUES(`review_expires_at`),
+                    `review_content_hash` = VALUES(`review_content_hash`), `review_site_ids` = VALUES(`review_site_ids`),
+                    `review_evidence_ref` = VALUES(`review_evidence_ref`),
+                    `review_history_json` = VALUES(`review_history_json`)""", review_rows,
             )
-            counts = cursor.fetchone() or {}
-            sql = f"""SELECT `source_type`, `source_row_id` AS `row_id`, `product_id`, `title`,
-                `main_image_url`, `product_category`, `zying_category_id`, `zying_category`,
-                `salesperson`, `group_name`, `token_id`, `account_name`,
-                CAST(`risk_level` AS CHAR) AS `risk_level`, `keywords`, `reason`,
-                `checked_at` AS `submitted_at`, `checked_at` AS `collected_at`
-                FROM `infringement_risk_checks` WHERE {where_sql}
-                ORDER BY {order_column} {order_direction}, `id` DESC"""
-            row_params = list(params)
-            if limit:
-                sql += " LIMIT %s"
-                row_params.append(limit)
-            cursor.execute(sql, tuple(row_params))
-            result = {
-                "total": int(counts.get("total") or 0), "risk_0": int(counts.get("risk_0") or 0),
-                "risk_1": int(counts.get("risk_1") or 0), "risk_2": int(counts.get("risk_2") or 0),
-                "unchecked": 0, "rows": cursor.fetchall(),
-                "sort_by": str(sort_by or "risk_level"), "sort_dir": order_direction.lower(),
-            }
+            for source, rows in list_json.items():
+                if rows:
+                    table = "erp_mercadolibre_products" if source == "product_list" else "erp_mercadolibre_collection_items"
+                    cursor.executemany(
+                        f"UPDATE `{table}` SET `infringement_check_json` = JSON_MERGE_PATCH("
+                        f"CASE WHEN JSON_VALID(`infringement_check_json`) THEN `infringement_check_json` ELSE '{{}}' END, %s) WHERE `id` = %s", rows,
+                    )
         connection.commit()
-        return result
+    except Exception:
+        connection.rollback()
+        raise
     finally:
         connection.close()
+    return {"updated": len(saved), "rows": saved}
+
+
+def get_infringement_risk_results(
+    zying_category=None, risk_level=None, search="", sort_by="risk_level",
+    sort_dir="desc", limit=1000, sources=None, items=None, rule_version=None,
+    detection_scope=None, page=None,
+):
+    """Read live snapshots, including unchecked and invalidated results."""
+    if (page is not None and sort_by == "row_id" and not items
+            and not zying_category and risk_level in (None, "") and not search):
+        from bit.infringement_result_page import references
+        from erp.mercadolibre_collection_store import ensure_collection_tables
+        from erp.mercadolibre_store_link_store import ensure_store_link_table
+        selected_sources = _normalize_risk_sources(sources or INFRINGEMENT_RISK_SOURCE_TYPES)
+        page = max(1, int(page))
+        page_size = max(1, min(200, int(limit or 50)))
+        connection = pymysql.connect(**config)
+        try:
+            with connection.cursor() as cursor:
+                if set(selected_sources) & {"product_list", "collection_list"}:
+                    ensure_collection_tables(cursor)
+                if "pulled" in selected_sources:
+                    ensure_store_link_table(cursor)
+                if "zying" in selected_sources:
+                    _ensure_zying_product_table(cursor)
+                refs, total = references(cursor, selected_sources, page, page_size, sort_dir)
+        finally:
+            # Release this connection before the live-state reader acquires one.
+            connection.close()
+        result = get_infringement_risk_results(
+            sources=selected_sources, items=refs, limit=page_size,
+            sort_by="row_id", sort_dir=sort_dir, rule_version=rule_version,
+            detection_scope=detection_scope,
+        ) if refs else {"rows": [], "total": 0, "unchecked": 0, "risk_0": 0, "risk_1": 0, "risk_2": 0}
+        by_key = {(row["source_type"], row["row_id"]): row for row in result["rows"]}
+        result["rows"] = [by_key[(ref["source_type"], ref["row_id"])] for ref in refs
+                          if (ref["source_type"], ref["row_id"]) in by_key]
+        result.update(total=total, page=page, page_size=page_size,
+                      pages=max(1, (total + page_size - 1) // page_size), summary_scope="page")
+        return result
+    from bit.infringement_state import knowledge_version, result_state, review_is_current
+    if rule_version is None:
+        knowledge = []
+        after_id = 0
+        while True:
+            page = list_infringement_knowledge(limit=5000, after_id=after_id) or {}
+            knowledge.extend(page.get("rows") or [])
+            if not page.get("has_more"):
+                break
+            next_id = int(page.get("next_after_id") or 0)
+            if next_id <= after_id:
+                raise ValueError("知识库分页游标无效")
+            after_id = next_id
+        rule_version = knowledge_version(knowledge)
+    rows = get_infringement_risk_candidates(
+        sources=sources or INFRINGEMENT_RISK_SOURCE_TYPES, items=items,
+        zying_category=zying_category, include_checked=True, rule_version=rule_version,
+        detection_scope=detection_scope or "title", _stream=True,
+    )
+    needle = str(search or "").strip().casefold()
+    sort_key = sort_by if sort_by in {"row_id", "product_id", "title", "zying_category", "risk_level", "keywords", "submitted_at", "checked_at"} else "risk_level"
+    def key(row):
+        value = row.get(sort_key)
+        return int(value if value is not None else -1) if sort_key in {"risk_level", "row_id"} else str(value or "")
+    summary = dict.fromkeys(("total", "risk_0", "risk_1", "risk_2", "unchecked", "stale", "failed"), 0)
+    def matching_rows():
+        wanted = str(risk_level if risk_level is not None else "").strip().lower()
+        for row in rows:
+            state = result_state(row, rule_version, detection_scope)
+            row["risk_status"] = state
+            row["review_current"] = review_is_current(row)
+            if needle and not any(needle in str(row.get(name) or "").casefold() for name in ("product_id", "title", "keywords", "account_name")):
+                continue
+            if wanted in {"unchecked", "stale", "failed"} and state != wanted:
+                continue
+            if wanted in {"0", "1", "2"} and (state != "completed" or str(row.get("risk_level")) != wanted):
+                continue
+            for name in ("checked_at", "reviewed_at", "review_expires_at"):
+                if row.get(name) is not None:
+                    row[name] = str(row[name])
+            row["submitted_at"] = row.get("checked_at") or row.get("submitted_at")
+            summary["total"] += 1
+            if state == "completed" and row.get("risk_level") in {0, 1, 2}:
+                summary[f"risk_{row['risk_level']}"] += 1
+            elif state in {"unchecked", "stale", "failed"}:
+                summary[state] += 1
+            yield row
+
+    from bit.bounded_records import select_bounded
+    try:
+        selected = select_bounded(matching_rows(), limit=limit, key=key,
+                                  reverse=str(sort_dir).lower() != "asc")
+    finally:
+        if hasattr(rows, "close"):
+            rows.close()
+    summary.update(rows=selected, sort_by=sort_key,
+                   sort_dir="asc" if str(sort_dir).lower() == "asc" else "desc")
+    return summary
 
 
 def list_infringement_risk_scope_options():
@@ -9824,12 +10628,17 @@ def _mercado_token_summary(row, now=None):
 
 
 def upsert_mercado_store_token(record):
+    salesperson = str(record.get("authorization_salesperson") or "").strip()
+    if len(salesperson) > 100:
+        raise ValueError("业务员不能超过 100 个字符")
     token = _mercado_token_record(record)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
             _ensure_mercado_store_tokens_table(cursor)
+            if salesperson:
+                _ensure_mercado_store_site_settings_table(cursor)
             cursor.execute(
                 "SELECT `id`, `display_name`, `meli_user_id` "
                 "FROM `mercado_store_tokens` "
@@ -9890,6 +10699,23 @@ def upsert_mercado_store_token(record):
                     values + (now,),
                 )
                 token_id = cursor.lastrowid
+            if salesperson:
+                # Existing assignments are deliberate; only claim unassigned stores.
+                cursor.execute(
+                    "SELECT `salesperson` FROM `mercado_store_site_settings` "
+                    "WHERE `token_id` = %s AND TRIM(COALESCE(`salesperson`, '')) <> ''",
+                    (token_id,),
+                )
+                if not cursor.fetchall():
+                    for site_id in MERCADO_CONFIGURABLE_SITES:
+                        cursor.execute(
+                            "INSERT INTO `mercado_store_site_settings` "
+                            "(`token_id`, `site_id`, `salesperson`, `created_at`, `updated_at`) "
+                            "VALUES (%s, %s, %s, %s, %s) "
+                            "ON DUPLICATE KEY UPDATE `salesperson` = VALUES(`salesperson`), "
+                            "`updated_at` = VALUES(`updated_at`)",
+                            (token_id, site_id, salesperson, now, now),
+                        )
         connection.commit()
         return get_mercado_store_token_summary(token_id)
     except Exception:
@@ -10652,9 +11478,30 @@ def finish_mercado_notification_event(event_id, *, error=""):
         connection.close()
 
 
-def list_mercado_operator_tasks(*, token_ids=None, organization_key="", include_closed=False, limit=300):
+def list_mercado_today_work_states(*, token_ids, organization_key=""):
+    ids = sorted({int(value) for value in token_ids or []})
+    if not ids:
+        return []
+    clauses = ["`source` = 'today_work_status'", f"`token_id` IN ({','.join(['%s'] * len(ids))})"]
+    params = list(ids)
+    if organization_key:
+        clauses.append("`organization_key` = %s")
+        params.append(organization_key)
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_action_center_tables(cursor)
+            cursor.execute("SELECT `task_key`, `status`, `source` FROM `mercado_operator_tasks` WHERE "
+                           + " AND ".join(clauses), tuple(params))
+            return [dict(row) for row in cursor.fetchall() or ()]
+    finally:
+        connection.close()
+
+
+def list_mercado_operator_tasks(*, token_ids=None, organization_key="", include_closed=False, limit=300, offset=0):
     ids = sorted({int(value) for value in token_ids or () if int(value or 0) > 0}) if token_ids is not None else []
     limit = max(1, min(int(limit or 300), 1000))
+    offset = max(0, int(offset or 0))
     clauses, params = [], []
     if organization_key:
         clauses.append("t.`organization_key` = %s")
@@ -10675,16 +11522,16 @@ def list_mercado_operator_tasks(*, token_ids=None, organization_key="", include_
             _ensure_mercado_action_center_tables(cursor)
             cursor.execute(
                 f"""
-                SELECT t.`id`, t.`organization_key`, t.`token_id`, t.`event_id`, t.`source`, t.`topic`,
+                SELECT t.`id`, t.`task_key`, t.`organization_key`, t.`token_id`, t.`event_id`, t.`source`, t.`topic`,
                        t.`resource`, t.`title`, t.`details`, t.`entry_url`, t.`priority`, t.`due_at`,
                        t.`owner`, t.`status`, t.`resolution`, t.`created_at`, t.`updated_at`,
                        COALESCE(NULLIF(s.`display_name`, ''), s.`nickname`, CONCAT('店铺 #', t.`token_id`)) AS `store_name`
                 FROM `mercado_operator_tasks` AS t
                 LEFT JOIN `mercado_store_tokens` AS s ON s.`id` = t.`token_id`
                 {where}
-                ORDER BY (t.`status` = 'resolved') ASC, t.`due_at` ASC, t.`id` DESC LIMIT %s
+                ORDER BY (t.`status` = 'resolved') ASC, t.`due_at` ASC, t.`id` DESC LIMIT %s OFFSET %s
                 """,
-                (*params, limit),
+                (*params, limit, offset),
             )
             rows = [dict(row or {}) for row in (cursor.fetchall() or ())]
             for row in rows:
@@ -10751,7 +11598,7 @@ def get_mercado_operator_task(task_id):
         connection.close()
 
 
-def list_mercado_notification_events(*, token_ids=None, organization_key="", limit=100):
+def list_mercado_notification_events(*, token_ids=None, organization_key="", limit=100, offset=0):
     ids = sorted({int(value) for value in token_ids or () if int(value or 0) > 0}) if token_ids is not None else []
     limit = max(1, min(int(limit or 100), 500))
     clauses, params = [], []
@@ -10777,16 +11624,18 @@ def list_mercado_notification_events(*, token_ids=None, organization_key="", lim
                 FROM `mercado_notification_events` AS n
                 LEFT JOIN `mercado_store_tokens` AS s ON s.`id` = n.`token_id`
                 {where}
-                ORDER BY n.`received_at` DESC, n.`id` DESC LIMIT %s
+                ORDER BY n.`received_at` DESC, n.`id` DESC LIMIT %s OFFSET %s
                 """,
-                (*params, limit),
+                (*params, limit, max(0, int(offset or 0))),
             )
             rows = [dict(row or {}) for row in (cursor.fetchall() or ())]
             for row in rows:
                 for key in ("received_at", "processed_at"):
                     if row.get(key) is not None:
                         row[key] = str(row[key])
-            return {"rows": rows, "total": len(rows)}
+            cursor.execute(f"SELECT COUNT(*) AS total FROM `mercado_notification_events` AS n {where}", params)
+            total = int((cursor.fetchone() or {}).get("total") or 0)
+            return {"rows": rows, "total": total}
     finally:
         connection.close()
 
@@ -10909,49 +11758,56 @@ def resolve_mercado_notification_task(event_id, reason):
         connection.close()
 
 
-def list_mercado_action_center_orders(*, token_ids=None, limit=500):
+def list_mercado_action_center_orders(*, token_ids=None, limit=500, offset=0):
     ids = sorted({int(value) for value in token_ids or () if int(value or 0) > 0})
     if not ids:
         return []
     limit = max(1, min(int(limit or 500), 1000))
+    offset = max(0, int(offset or 0))
     placeholders = ",".join(["%s"] * len(ids))
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
             _ensure_mercado_synced_orders_table(cursor)
+            _ensure_mercado_action_center_tables(cursor)
             cursor.execute(
                 f"""
                 SELECT `order_id`, `token_id`, `shop_name`, `site_id`, `status`, `status_label`,
                        `date_created`, `last_updated`, `shipping_id`, `workflow_status`,
                        `purchase_order`, `purchase_tracking`, `logistics_company`,
                        `tracking_cache_json`, `tracking_checked_at`, `raw_json`
-                FROM `mercado_synced_orders`
-                WHERE `token_id` IN ({placeholders})
-                  AND `date_created` >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                FROM `mercado_synced_orders` AS `orders`
+                WHERE `orders`.`token_id` IN ({placeholders})
                   AND (
-                      `status` IN ('paid', 'ready_to_ship', 'confirmed', 'partially_paid',
-                                   'payment_in_process', 'pending', 'pending_cancel',
-                                   'payment_required')
+                      `date_created` >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)
                       OR (
-                          `status` IN ('shipped', 'delivered', 'not_delivered', 'cancelled',
-                                       'canceled', 'invalid', 'expired', 'refunded',
-                                       'partially_refunded')
-                          AND `date_created` >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                          LOWER(TRIM(COALESCE(`status`, ''))) NOT IN
+                              ('delivered', 'cancelled', 'canceled', 'invalid', 'expired', 'refunded')
+                          AND TRIM(COALESCE(`workflow_status`, '')) NOT IN
+                              ('交付', '已签收', '完成', '已取消', '取消', '取消-发货前', '取消-发货后')
                       )
-                      OR (`purchase_tracking` IS NOT NULL
-                          AND `date_created` >= DATE_SUB(NOW(), INTERVAL 30 DAY))
+                      OR EXISTS (
+                          SELECT 1 FROM `mercado_operator_tasks` AS `watch`
+                          WHERE `watch`.`token_id` = `orders`.`token_id`
+                            AND `watch`.`resource` = `orders`.`order_id`
+                            AND `watch`.`status` IN ('open', 'in_progress')
+                            AND `watch`.`topic` IN
+                                ('purchase_order_missing_24h', 'purchase_tracking_missing_48h',
+                                 'order_not_in_transit_7d', 'procurement_tracking_stalled',
+                                 'shipment_deadline_check', 'order_not_delivered_30d')
+                      )
                   )
                 ORDER BY
                     CASE
                         WHEN `status` = 'ready_to_ship'
-                             AND `date_created` >= DATE_SUB(NOW(), INTERVAL 12 HOUR) THEN 0
-                        WHEN `date_created` < DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1
+                             AND `date_created` >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 12 HOUR) THEN 0
+                        WHEN `date_created` < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY) THEN 1
                         ELSE 2
                     END,
-                    `date_created` ASC, `last_updated` DESC
-                LIMIT %s
+                    `date_created` ASC, `last_updated` DESC, `token_id` ASC, `order_id` ASC
+                LIMIT %s OFFSET %s
                 """,
-                (*ids, limit),
+                (*ids, limit, offset),
             )
             rows = [dict(row or {}) for row in (cursor.fetchall() or ())]
             for row in rows:
@@ -10969,6 +11825,13 @@ def list_mercado_action_center_orders(*, token_ids=None, limit=500):
             return rows
     finally:
         connection.close()
+
+
+_MERCADO_ORDER_WATCH_TOPICS = {
+    "purchase_order_missing_24h", "purchase_tracking_missing_48h", "order_not_in_transit_7d",
+    "procurement_tracking_stalled", "shipment_deadline_check", "order_not_delivered_30d",
+}
+_MERCADO_ORDER_WATCH_SOURCES = {"order_watch", "procurement_watch", "order_age_watch"}
 
 
 def upsert_mercado_operator_task(task):
@@ -11000,6 +11863,46 @@ def upsert_mercado_operator_task(task):
                  str(row.get("priority") or "normal"), row["due_at"], now, now),
             )
             task_id = int(cursor.lastrowid or 0)
+            if (str(row.get("source") or "order_watch") in _MERCADO_ORDER_WATCH_SOURCES
+                    and str(row["topic"]) in _MERCADO_ORDER_WATCH_TOPICS):
+                cursor.execute(
+                    "SELECT t.`status`, t.`source`, t.`topic`, EXISTS ("
+                    "SELECT 1 FROM `mercado_operator_task_logs` AS l "
+                    "WHERE l.`task_id` = t.`id` AND l.`action` = 'deadline'"
+                    ") AS `has_manual_deadline` FROM `mercado_operator_tasks` AS t "
+                    "WHERE t.`id` = %s FOR UPDATE",
+                    (task_id,),
+                )
+                saved = cursor.fetchone() or {}
+                if (saved.get("source") in _MERCADO_ORDER_WATCH_SOURCES
+                        and saved.get("topic") in _MERCADO_ORDER_WATCH_TOPICS
+                        and not saved.get("has_manual_deadline")):
+                    cursor.execute(
+                        "UPDATE `mercado_operator_tasks` SET `due_at` = %s WHERE `id` = %s",
+                        (row["due_at"], task_id),
+                    )
+                if (saved.get("status") == "resolved"
+                        and saved.get("source") in _MERCADO_ORDER_WATCH_SOURCES
+                        and saved.get("topic") in _MERCADO_ORDER_WATCH_TOPICS):
+                    cursor.execute(
+                        "SELECT `action` FROM `mercado_operator_task_logs` "
+                        "WHERE `task_id` = %s AND `action` IN ('status', 'auto_resolve', 'auto_reopen') "
+                        "ORDER BY `created_at` DESC, `id` DESC LIMIT 1 FOR UPDATE",
+                        (task_id,),
+                    )
+                    latest_log = cursor.fetchone() or {}
+                    if latest_log.get("action") == "auto_resolve":
+                        cursor.execute(
+                            "UPDATE `mercado_operator_tasks` SET `status` = 'open', "
+                            "`resolution` = NULL, `updated_at` = %s WHERE `id` = %s",
+                            (now, task_id),
+                        )
+                        cursor.execute(
+                            "INSERT INTO `mercado_operator_task_logs` "
+                            "(`task_id`, `actor`, `action`, `note`, `created_at`) "
+                            "VALUES (%s, '系统', 'auto_reopen', %s, %s)",
+                            (task_id, "订单再次符合告警条件，系统重新打开待办", now),
+                        )
         connection.commit()
         return task_id
     except Exception:
@@ -11106,7 +12009,7 @@ def update_mercado_operator_task(task_id, *, actor, owner=None, status=None, due
                 )
             if note and task.get("topic") in {
                 "purchase_order_missing_24h", "purchase_tracking_missing_48h",
-                "order_not_in_transit_7d", "procurement_tracking_stalled",
+                "order_not_in_transit_7d", "procurement_tracking_stalled", "order_not_delivered_30d",
             }:
                 cursor.execute(
                     "SELECT `order_remark` FROM `mercado_synced_orders` "
@@ -11174,5 +12077,23 @@ def update_reputation_browser_fields(rows):
     except Exception:
         connection.rollback()
         raise
+    finally:
+        connection.close()
+
+
+def list_mercado_message_pack_candidates(token_id):
+    """Include read conversations through all locally synced orders, without a date cutoff."""
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                """SELECT DISTINCT COALESCE(
+                    NULLIF(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(`raw_json`, '$.pack_id')), 'null'), ''),
+                    `order_id`) AS pack_id
+                   FROM `mercado_synced_orders` WHERE `token_id` = %s""",
+                (int(token_id),),
+            )
+            return [str(row['pack_id']) for row in cursor.fetchall() if row.get('pack_id')]
     finally:
         connection.close()

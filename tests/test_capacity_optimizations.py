@@ -307,7 +307,7 @@ def test_split_child_environments_share_role_but_have_separate_pool_budgets(monk
     web, worker = child_environment('web'), child_environment('worker')
     assert web['BIT_SERVICE_MODE'] == 'web' and worker['BIT_SERVICE_MODE'] == 'worker'
     assert web['MYSQL_POOL_MAX_CONNECTIONS'] == '6'
-    assert worker['MYSQL_POOL_MAX_CONNECTIONS'] == '8'
+    assert worker['MYSQL_POOL_MAX_CONNECTIONS'] == '4'
     assert web['WORKBENCH_SECRET_KEY'] == worker['WORKBENCH_SECRET_KEY']
     assert worker['BIT_RUNTIME_ROLE'] == web['BIT_RUNTIME_ROLE'] == 'server'
 

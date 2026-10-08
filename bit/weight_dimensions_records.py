@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import os
 import re
 import threading
@@ -11,7 +12,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Mapping
 
 from openpyxl import Workbook, load_workbook
@@ -32,8 +33,16 @@ MAX_ORDER_ROWS = 3000
 _lock = threading.RLock()
 _tasks: dict[str, dict[str, Any]] = {}
 _latest_task_by_owner: dict[str, str] = {}
+_execution_threads: dict[str, threading.Thread] = {}
+_executions_shutting_down = False
+_logger = logging.getLogger(__name__)
 READ_MAX_WORKERS = 8
 UPDATE_MAX_WORKERS = 4
+
+
+class _ExecutionStopped(Exception):
+    """Cancel discovery before issuing the next remote request."""
+
 
 HEADERS = {
     "time": ("时间", "下单时间"),
@@ -812,7 +821,7 @@ def _finish_stopped_execute(task):
         pending = False
         for key in (["_zying_status"] if action == "zying" else
                     ["_zeshun_status"] if action == "zeshun" else ["_zying_status", "_zeshun_status"]):
-            if row.get(key) not in {"成功", "失败", "跳过"}:
+            if row.get(key) not in {"成功", "失败", "跳过", "已终结"}:
                 row[key] = "已终结"
                 pending = True
         if pending:
@@ -847,6 +856,29 @@ def stop_execute(task_id: str, owner: str, *, agent_cancel=None):
                     task["execute_stop_requested"] = False
             raise
     return {"status": "stopping", "message": task["execute_message"]}
+
+
+def shutdown_executions(timeout=30):
+    """Stop server executions and allow current writes to finish before exit."""
+    global _executions_shutting_down
+    deadline = time.monotonic() + max(0, float(timeout))
+    with _lock:
+        _executions_shutting_down = True
+        workers = list(_execution_threads.items())
+        for task_id, _thread in workers:
+            task = _tasks.get(task_id)
+            if task and task.get("execute_status") in {"queued", "running", "stopping"}:
+                task["execute_stop_requested"] = True
+                task["execute_status"] = "stopping"
+                task["execute_message"] = "服务正在关闭，当前更新收尾后终结任务"
+    current = threading.current_thread()
+    for _task_id, worker in workers:
+        if worker is not current:
+            worker.join(max(0, deadline - time.monotonic()))
+    pending = sum(worker.is_alive() for _task_id, worker in workers)
+    if pending:
+        _logger.warning("服务关闭时仍有 %s 个重量尺寸执行线程未收尾", pending)
+    return {"requested": len(workers), "pending": pending}
 
 
 def _apply_agent_job(task, job):
@@ -1091,11 +1123,20 @@ def _update_error(exc):
     return message[:1600]
 
 
-def _package_attributes(client: MercadoLibreClient, global_item_id: str,
-                        weight_g: str, dimensions_cm: str = "") -> None:
-    weight = Decimal(str(weight_g))
+def _marketplace_package_weight_g(weight_g) -> str:
+    """Use Mercado Libre's integer grams without rounding invalid input up."""
+    try:
+        weight = Decimal(str(weight_g))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError("美客多要求包装重量至少 50 克") from exc
     if not weight.is_finite() or weight < 50:
         raise ValueError("美客多要求包装重量至少 50 克")
+    return format(weight.to_integral_value(rounding=ROUND_HALF_UP), "f")
+
+
+def _package_attributes(client: MercadoLibreClient, global_item_id: str,
+                        weight_g: str, dimensions_cm: str = "") -> None:
+    weight = Decimal(_marketplace_package_weight_g(weight_g))
     values = {"PACKAGE_WEIGHT": (weight, "g")}
     pieces = []
     if str(dimensions_cm or "").strip():
@@ -1239,13 +1280,18 @@ def _listing_history_context(row, token_id, item_id, link, remote, settings_cach
     return context
 
 
-def _expand_same_title_records(records, authorized_ids, settings_cache=None):
+def _expand_same_title_records(records, authorized_ids, settings_cache=None, *, stop_requested=None):
     """Resolve every current exact-title listing before writing any attributes."""
     clients, details, matches, lookup_errors, token_errors = {}, {}, {}, {}, {}
     link_rows, settings_cache = {}, settings_cache if settings_cache is not None else {}
     expanded = []
 
+    def check_stopped():
+        if stop_requested is not None and stop_requested():
+            raise _ExecutionStopped()
+
     def detail(token_id, item_id):
+        check_stopped()
         key = (token_id, item_id)
         if token_id in token_errors:
             raise ValueError(token_errors[token_id])
@@ -1269,6 +1315,8 @@ def _expand_same_title_records(records, authorized_ids, settings_cache=None):
         return details[key]
 
     for row in records:
+        if stop_requested is not None and stop_requested():
+            break
         if not _public_record(row)["can_execute_zeshun"]:
             continue
         row["execution_error"] = ""
@@ -1280,6 +1328,7 @@ def _expand_same_title_records(records, authorized_ids, settings_cache=None):
             if authorized_ids is not None and token_id not in authorized_ids:
                 raise ValueError("订单关联店铺不在授权范围内")
             original = detail(token_id, item_id)
+            check_stopped()
             title = str(original.get("title") or "").strip()
             if not title:
                 raise ValueError("无法读取关联链接标题，不能确定同名链接范围")
@@ -1293,11 +1342,13 @@ def _expand_same_title_records(records, authorized_ids, settings_cache=None):
                 found = {}
                 page = 1
                 while True:
+                    check_stopped()
                     result = bit_db_api.list_mercado_store_links(
                         search=title, token_ids=authorized_ids, include_categories=False,
                         sort_by="item_id", sort_order="asc", page=page, page_size=1000,
                     )
                     for link in result["rows"]:
+                        check_stopped()
                         link_token = int(link["token_id"])
                         if authorized_ids is not None and link_token not in authorized_ids:
                             continue
@@ -1307,6 +1358,7 @@ def _expand_same_title_records(records, authorized_ids, settings_cache=None):
                         link_rows[key] = link
                         try:
                             remote = detail(*key)
+                            check_stopped()
                             if str(remote.get("title") or "").strip() != title:
                                 continue
                             skip_reason = _closed_listing_reason(remote)
@@ -1317,6 +1369,8 @@ def _expand_same_title_records(records, authorized_ids, settings_cache=None):
                             if not global_id:
                                 raise ValueError("缺少 Global 商品关联")
                             found[key] = (global_id, "", "")
+                        except _ExecutionStopped:
+                            raise
                         except Exception as exc:
                             # An inaccessible sibling must not discard every
                             # valid listing in this title group. Retain failure
@@ -1336,6 +1390,7 @@ def _expand_same_title_records(records, authorized_ids, settings_cache=None):
                 "title": title, "store_name": row.get("company_store") or "",
             })
             for (target_token, target_item), (global_id, lookup_error, skip_reason) in targets.items():
+                check_stopped()
                 child = dict(row)
                 for field in ("_package_status", "_net_status", "_zeshun_status", "_expansion_error", "_expansion_skip"):
                     child.pop(field, None)
@@ -1359,6 +1414,8 @@ def _expand_same_title_records(records, authorized_ids, settings_cache=None):
             _log_execution(row, "同名链接", "进行中", f"标题“{title}”匹配 {len(targets)} 条链接（含订单关联链接），"
                            + (f"其中 {skipped_count} 条已关闭或删除并跳过；" if skipped_count else "")
                            + "其余可更新链接将逐条保留并重提各自净收益")
+        except _ExecutionStopped:
+            break
         except Exception as exc:
             row["_zeshun_status"] = "失败"
             row["execution_status"] = "失败"
@@ -1367,7 +1424,7 @@ def _expand_same_title_records(records, authorized_ids, settings_cache=None):
     return expanded
 
 
-def _finish_same_title_records(originals, expanded):
+def _finish_same_title_records(originals, expanded, *, stopped=False):
     by_parent = defaultdict(list)
     for row in expanded:
         by_parent[id(row["_execution_parent"])].append(row)
@@ -1377,19 +1434,30 @@ def _finish_same_title_records(originals, expanded):
             continue
         skipped = sum(bool(row.get("_expansion_skip")) for row in children)
         targets = [row for row in children if not row.get("_expansion_skip")]
+        if stopped:
+            unfinished = [row for row in targets
+                          if row.get("_zeshun_status") not in {"成功", "失败", "跳过", "已终结"}]
+            for child in unfinished:
+                child.update(_zeshun_status="已终结", execution_status="已终结",
+                             execution_error="任务已终结，未完成的链接更新可重新执行核对")
+                _log_execution(child, "任务", "已终结", child["execution_error"])
         succeeded = sum(row.get("_zeshun_status") == "成功" for row in targets)
+        ended = sum(row.get("_zeshun_status") == "已终结" for row in targets)
         complete = bool(targets) and succeeded == len(targets)
-        original["_zeshun_status"] = "成功" if complete else "失败" if targets else "跳过"
-        original["execution_status"] = "完成" if complete else "部分完成" if targets else "跳过"
         failures = [f"{row['marketplace_item_id']}：{row.get('execution_error') or '未完成'}"
-                    for row in targets if row.get("_zeshun_status") != "成功"]
-        original["execution_error"] = "；".join(failures)
+                    for row in targets if row.get("_zeshun_status") not in {"成功", "已终结"}]
+        status = "成功" if complete else "失败" if failures else "已终结" if ended else "跳过"
+        original["_zeshun_status"] = status
+        original["execution_status"] = "完成" if complete else "部分完成" if failures else status
+        original["execution_error"] = "；".join(failures) or (
+            "任务已终结，未完成的链接更新可重新执行核对" if ended else "")
         for child in children:
             if (child["_token_id"], child["marketplace_item_id"]) == (original["_token_id"], original["marketplace_item_id"]):
                 original["current_net_proceeds_usd"] = child.get("current_net_proceeds_usd", "")
-        _log_execution(original, "同名链接", "成功" if complete else "失败" if targets else "跳过",
+        _log_execution(original, "同名链接", status,
                        f"同名链接更新成功 {succeeded}/{len(targets)} 条"
                        + (f"；跳过已关闭或删除链接 {skipped} 条" if skipped else "")
+                       + (f"；任务终结，未完成 {ended} 条" if ended else "")
                        + (f"；{original['execution_error']}" if failures else ""))
 
 
@@ -1467,7 +1535,11 @@ def _run_execute(
             if not selected or str(row.get("order_number") or "").strip() in selected
         ]
         task["execute_status"] = "stopping" if task.get("execute_stop_requested") else "running"
+        task["execute_action"] = action
         task["execute_message"] = "正在服务器更新智赢产品" if action == "zying" else "正在更新泽顺数据和链接"
+    if task.get("execute_stop_requested"):
+        _finish_stopped_execute(task)
+        return
     execution_id = uuid.uuid4().hex
     settings_cache = {}
     for row in records:
@@ -1480,7 +1552,10 @@ def _run_execute(
         authorized_ids = task.get("authorized_ids", sorted({
             int(row["_token_id"]) for row in records if row.get("_token_id")
         }))
-        records = _expand_same_title_records(records, authorized_ids, settings_cache=settings_cache)
+        records = _expand_same_title_records(
+            records, authorized_ids, settings_cache=settings_cache,
+            stop_requested=lambda: task.get("execute_stop_requested"),
+        )
     erp_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     dim_groups: dict[tuple[int, str], list[dict[str, Any]]] = defaultdict(list)
     net_groups: dict[tuple[int, str], list[dict[str, Any]]] = defaultdict(list)
@@ -1521,7 +1596,10 @@ def _run_execute(
 
     if not erp_groups and not dim_groups:
         if action == "zeshun":
-            _finish_same_title_records(original_records, records)
+            _finish_same_title_records(original_records, records, stopped=bool(task.get("execute_stop_requested")))
+        if task.get("execute_stop_requested"):
+            _finish_stopped_execute(task)
+            return
         with _lock:
             task["execute_status"] = "completed"
             task["execute_message"] = "没有可更新的链接，请查看订单执行日志"
@@ -1644,7 +1722,7 @@ def _run_execute(
             row = _latest_order_row(eligible)
             chosen_order = str(row.get("order_number") or "未知")
             chosen_time = str(row.get("time") or "时间未记录")
-            submitted_weight = package_update_weight_g(row)
+            submitted_weight = _marketplace_package_weight_g(package_update_weight_g(row))
             for item in eligible:
                 item.update(_submitted_weight_g=submitted_weight,
                             _submitted_dimensions_cm=row.get("actual_dimensions_cm") or "",
@@ -1670,21 +1748,24 @@ def _run_execute(
                 _log_execution(item, "美客多链接", "失败", item["execution_error"])
 
     def run_parallel_group_updates(groups, callback, stage_name, message):
+        if task.get("execute_stop_requested"):
+            return
         def run_unless_stopped(key, grouped):
             if not task.get("execute_stop_requested"):
                 callback(key, grouped)
         items = list(groups.items())
-        if not items:
+        if not items or task.get("execute_stop_requested"):
             return
         workers = _configured_workers(
             len(items), UPDATE_MAX_WORKERS, UPDATE_MAX_WORKERS,
             "WEIGHT_DIMENSIONS_UPDATE_WORKERS",
         )
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="wdr-update") as executor:
-            future_groups = {
-                executor.submit(run_unless_stopped, key, grouped): grouped
-                for key, grouped in items
-            }
+            future_groups = {}
+            for key, grouped in items:
+                if task.get("execute_stop_requested"):
+                    break
+                future_groups[executor.submit(run_unless_stopped, key, grouped)] = grouped
             for future in as_completed(future_groups):
                 grouped = future_groups[future]
                 try:
@@ -1752,7 +1833,7 @@ def _run_execute(
         net_groups, update_net_group, "净收益", "尺寸与净收益更新",
     )
     if action == "zeshun":
-        _finish_same_title_records(original_records, records)
+        _finish_same_title_records(original_records, records, stopped=bool(task.get("execute_stop_requested")))
         records = original_records
     if task.get("execute_stop_requested"):
         _finish_stopped_execute(task)
@@ -1780,6 +1861,7 @@ def _run_execute_guarded(task_id, owner, action, selected_order_numbers, erp_bro
     try:
         _run_execute(task_id, owner, action, selected_order_numbers, erp_browser_factory)
     except Exception as exc:
+        _logger.exception("重量尺寸执行任务 %s 异常结束（action=%s）", task_id, action)
         task = _tasks.get(task_id)
         if not task:
             return
@@ -1807,6 +1889,10 @@ def _run_execute_guarded(task_id, owner, action, selected_order_numbers, erp_bro
             task["execute_message"] = f"{reason}；未完成记录已标记失败"
         for row in affected:
             _log_execution(row, "任务", "失败", reason)
+    finally:
+        with _lock:
+            if _execution_threads.get(task_id) is threading.current_thread():
+                _execution_threads.pop(task_id, None)
 
 
 def start_execute(
@@ -1825,6 +1911,7 @@ def start_execute(
     action = str(action or "zeshun").strip().lower()
     if action not in {"zeshun", "zying", "combined"}:
         raise ValueError("更新动作无效")
+    use_agent = action == "zying" and agent_dispatch is not None
     selected = {
         str(value or "").strip()
         for value in selected_order_numbers or ()
@@ -1846,6 +1933,8 @@ def start_execute(
             raise ValueError("订单查询完成后才能执行更新")
         if task.get("execute_status") in {"queued", "running", "stopping"}:
             raise ValueError("当前任务正在执行")
+        if _executions_shutting_down and not use_agent:
+            raise ValueError("服务正在关闭，请重新连接后执行重量尺寸更新")
         if action in {"zeshun", "zying"} and not selected and not select_all_matching:
             raise ValueError("请至少勾选一条需要更新的订单")
         candidates = [
@@ -1891,7 +1980,6 @@ def start_execute(
 
     # Check the execution computer's visible browser before queuing any writes.
     # Opening Edge and waiting for login must not hold the global task lock.
-    use_agent = action == "zying" and agent_dispatch is not None
     if action in {"zying", "combined"} and not use_agent and erp_browser_preflight is not None:
         erp_browser_preflight()
 
@@ -1902,6 +1990,8 @@ def start_execute(
             raise ValueError("订单查询完成后才能执行更新")
         if task.get("execute_status") in {"queued", "running", "stopping"}:
             raise ValueError("当前任务正在执行")
+        if _executions_shutting_down and not use_agent:
+            raise ValueError("服务正在关闭，请重新连接后执行重量尺寸更新")
         if saved_selection is not None:
             task["records"] = saved_selection
         task["execute_status"] = "queued"
@@ -1915,6 +2005,20 @@ def start_execute(
         task["execute_order_numbers"] = sorted(selected)
         task["agent_applied_status"] = ""
         task["agent_applied_result"] = False
+        if not use_agent:
+            thread = threading.Thread(
+                target=_run_execute_guarded,
+                args=(task_id, owner, action, selected, erp_browser_factory),
+                name=f"weight-dimensions-update-{task_id[:8]}", daemon=True,
+            )
+            _execution_threads[task_id] = thread
+            try:
+                thread.start()
+            except Exception:
+                _execution_threads.pop(task_id, None)
+                task["execute_status"] = "idle"
+                task["execute_message"] = "重量尺寸执行线程启动失败"
+                raise
 
     if use_agent:
         execution_id = uuid.uuid4().hex
@@ -1956,9 +2060,4 @@ def start_execute(
             task["agent_cancel"](job_id)
         return {"status": task["execute_status"], "ready_count": ready, "agent_job_id": job_id}
 
-    thread = threading.Thread(
-        target=_run_execute_guarded,
-        args=(task_id, owner, action, selected, erp_browser_factory),
-                              name=f"weight-dimensions-update-{task_id[:8]}", daemon=True)
-    thread.start()
     return {"status": "queued", "ready_count": ready}

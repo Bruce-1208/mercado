@@ -1,0 +1,40 @@
+{
+  "status_since_server_start": {
+    "Aborted_clients": "120",
+    "Aborted_connects": "14",
+    "Connection_errors_max_connections": "0",
+    "Max_used_connections": "39",
+    "Threads_connected": "14",
+    "Threads_running": "2",
+    "Uptime": "17987"
+  },
+  "variables": {
+    "max_connections": "151",
+    "max_user_connections": "0",
+    "wait_timeout": "28800"
+  },
+  "sessions": [
+    {
+      "user": "mercado",
+      "client_host": "127.0.0.1",
+      "command": "Sleep",
+      "connections": 13,
+      "max_seconds": 28
+    },
+    {
+      "user": "mercado",
+      "client_host": "127.0.0.1",
+      "command": "Query",
+      "connections": 2,
+      "max_seconds": 0
+    },
+    {
+      "user": "event_scheduler",
+      "client_host": "localhost",
+      "command": "Daemon",
+      "connections": 1,
+      "max_seconds": 17981
+    }
+  ],
+  "note": "无 PROCESS 权限时仅能看到当前账号的会话；诊断连接也计入数量。"
+}

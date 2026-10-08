@@ -34,10 +34,11 @@ def reject_real_network(monkeypatch):
     ("Halloween LED string lights", "string lights", "CBT101"),
     ("Children's Venom Costume with Gloves", "children costume", "CBT102"),
 ])
-def test_first_empty_recommendation_can_recover_with_generic_entity(title, refined, category_id):
+def test_first_empty_recommendation_can_recover_with_generic_entity(title, refined, category_id, monkeypatch):
+    monkeypatch.setattr("erp.ai_original_category_catalog.known_cbt_paths", lambda: {
+        category_id: [{"id": category_id, "name": refined}]})
     client = DiscoveryClient({refined: [{"category_id": category_id, "category_name": refined}]})
     responses = iter([
-        {"category_id": "", "search_query": refined},
         {"category_id": category_id},
         {"attributes": []},
     ])
@@ -52,11 +53,10 @@ def test_first_empty_recommendation_can_recover_with_generic_entity(title, refin
     )
 
     assert result["category_id"] == category_id
-    assert result["category_prediction_query"] == refined
-    assert result["category_search_history"] == [title, refined]
-    assert "不能改变商品类型" in prompts[0]
-    assert "searched_queries" in prompts[1]
-    assert [call[1]["params"]["q"] for call in client.calls if "domain_discovery" in call[0]] == [title, refined]
+    assert result["category_prediction_query"] == title
+    assert result["category_search_history"] == [title]
+    assert "已知的跨境 CBT" in prompts[0]
+    assert [call[1]["params"]["q"] for call in client.calls if "domain_discovery" in call[0]] == [title]
 
 
 def test_exhausted_search_is_bounded_and_never_keeps_an_old_category():
@@ -67,7 +67,7 @@ def test_exhausted_search_is_bounded_and_never_keeps_an_old_category():
         model_calls.append(1)
         return json.dumps({"category_id": "CBT_OLD", "search_query": f"light fixture {len(model_calls)}"})
 
-    with pytest.raises(products.OriginalPreparationError, match="请人工选择分类") as error:
+    with pytest.raises(products.OriginalPreparationError, match="有效分类编号") as error:
         products.complete_marketplace_category(
             {"category_id": "CBT_OLD"}, {"product_type_en": "Halloween lamp"}, client, chat=chat,
         )
@@ -75,10 +75,10 @@ def test_exhausted_search_is_bounded_and_never_keeps_an_old_category():
     assert error.value.step == "category"
     assert "category_id" not in error.value.state
     assert error.value.state["category_search_history"] == [
-        "Halloween lamp", "light fixture 1", "light fixture 2", "light fixture 3", "light fixture 4",
+        "Halloween lamp",
     ]
-    assert len(client.calls) == 5
-    assert len(model_calls) == 5
+    assert len(client.calls) == 1
+    assert len(model_calls) == 2
 
 
 @pytest.mark.parametrize("refined", ["  STRING    Lights  ", "灯串", "12345"])
@@ -95,7 +95,7 @@ def test_repeated_or_non_english_queries_are_not_sent(refined):
 
     assert error.value.state["category_search_history"] == ["string lights"]
     assert len(client.calls) == 1
-    assert len(calls) == 5
+    assert len(calls) == 2
 
 
 def test_confirmed_override_skips_discovery_and_reads_current_schema():

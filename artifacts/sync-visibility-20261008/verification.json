@@ -1,0 +1,39 @@
+{
+  "member": "徐家强",
+  "role": "member",
+  "authorized_store_count": 4,
+  "checks": [
+    {
+      "path": "/api/store-links/sync/status",
+      "http_status": 200,
+      "running": false,
+      "visible_results": 0,
+      "no_foreign_store_data": true,
+      "cache_control": "no-store"
+    },
+    {
+      "path": "/api/order-sync/status",
+      "http_status": 200,
+      "running": false,
+      "visible_results": 4,
+      "no_foreign_store_data": true,
+      "cache_control": "no-store"
+    },
+    {
+      "path": "/api/prohibited-listings/sync/status",
+      "http_status": 200,
+      "running": false,
+      "visible_results": 0,
+      "no_foreign_store_data": true,
+      "cache_control": "no-store"
+    },
+    {
+      "path": "/api/official-infractions/sync/status",
+      "http_status": 200,
+      "running": false,
+      "visible_results": 0,
+      "no_foreign_store_data": true,
+      "cache_control": "no-store"
+    }
+  ]
+}

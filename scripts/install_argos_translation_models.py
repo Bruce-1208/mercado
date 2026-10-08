@@ -15,6 +15,10 @@ REQUIRED_PAIRS = (
     # Store analysis displays official Spanish/Portuguese category labels in
     # Simplified Chinese using the English pivot already installed above.
     ("en", "zh"),
+    # Claim replies start in Chinese and include English and local text.
+    ("zh", "en"),
+    ("en", "es"),
+    ("en", "pt"),
 )
 
 
@@ -70,6 +74,9 @@ def main() -> int:
         ("Pulsera de cuarzo natural.", "es", "en"),
         ("Pulseira de quartzo natural.", "pt", "en"),
         ("Home and Kitchen", "en", "zh"),
+        ("您好，我们会帮助您。", "zh", "en"),
+        ("Hello, we will help you.", "en", "es"),
+        ("Hello, we will help you.", "en", "pt"),
     )
     for text, source, target in checks:
         result = str(translate.translate(text, source, target) or "").strip()

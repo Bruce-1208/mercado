@@ -7,8 +7,8 @@ from flask import jsonify, render_template, request
 from bit import bit_db_api
 
 
-READ_ACTIONS = frozenset({"list", "options", "requirements", "records"})
-ACTIONS = READ_ACTIONS | {"create", "update", "copy", "delete", "preview", "upload", "reconcile"}
+READ_ACTIONS = frozenset({"list", "options", "requirements", "records", "batch-status"})
+ACTIONS = READ_ACTIONS | {"create", "update", "copy", "delete", "preview", "upload", "reconcile", "batch-upload"}
 
 
 def register_routes(app, *, login_required, internal_api_required, authorized_token_ids,
@@ -109,6 +109,11 @@ def register_routes(app, *, login_required, internal_api_required, authorized_to
     @login_required
     def api_size_chart_upload():
         return execute("upload")
+
+    @app.route("/api/size-charts/batch", methods=["GET", "POST"])
+    @login_required
+    def api_size_chart_batch():
+        return execute("batch-status" if request.method == "GET" else "batch-upload")
 
     @app.route("/api/size-charts/records", methods=["GET"])
     @login_required

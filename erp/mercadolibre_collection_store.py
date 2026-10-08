@@ -8,6 +8,7 @@ import hashlib
 import re
 import threading
 import time
+from bit import product_access
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Callable, Iterable, Mapping
@@ -62,11 +63,12 @@ SOURCE_1688_NUMERIC_FIELDS = {
 PRODUCT_REVIEW_STATUSES = {
     "unreviewed", "approved", "suspected", "infringing", "risk",
 }
-PRODUCT_PUBLISH_RECORD_STATUSES = {"pending", "publishing", "published", "failed"}
+PRODUCT_PUBLISH_RECORD_STATUSES = {"pending", "publishing", "published", "failed", "pending_review"}
 PRODUCT_PUBLISH_RETRYABLE_STATUSES = {"pending", "publishing", "failed"}
 PRODUCT_PUBLISH_FILTER_STATUSES = PRODUCT_PUBLISH_RECORD_STATUSES | {"unpublished"}
 PRODUCT_PUBLISH_RATE_LIMIT_RETRY_HOURS = 2
 ZYING_PROFITABILITY_SOURCE = "zying_collection"
+PURCHASE_PROFITABILITY_SOURCE = "purchase_cost_ratio"
 COLLECTION_WORKFLOW_COLUMN_DEFINITIONS = (
     ("review_status", "VARCHAR(32) NOT NULL DEFAULT 'unreviewed' AFTER `added_to_products`"),
     ("last_publish_status", "VARCHAR(32) NULL AFTER `review_status`"),
@@ -84,7 +86,35 @@ INFRINGEMENT_RESULT_COLUMN_DEFINITIONS = (
     ("infringement_keywords", "VARCHAR(1024) NULL"),
     ("infringement_reason", "VARCHAR(1000) NULL"),
     ("infringement_checked_at", "DATETIME NULL"),
+    ("infringement_check_json", "LONGTEXT NULL"),
 )
+
+
+def _copy_list_infringement_metadata(cursor, source, target, ids=None):
+    """Re-key complete screening and human decisions before deleting the old key."""
+    from bit.bit_mysql import INFRINGEMENT_CHECK_METADATA_COLUMNS
+    if (source, target) not in {("collection_list", "product_list"), ("product_list", "collection_list")}:
+        raise ValueError("侵权结果迁移方向无效")
+    if source == "collection_list":
+        source_id, target_id = "collections.`id`", "products.`id`"
+        joined = f"`{PRODUCT_TABLE}` products INNER JOIN `{COLLECTION_TABLE}` collections ON products.`collection_item_id`=collections.`id`"
+    else:
+        source_id, target_id = "products.`id`", "collections.`id`"
+        joined = f"`{PRODUCT_TABLE}` products INNER JOIN `{COLLECTION_TABLE}` collections ON products.`source_item_id`=collections.`source_item_id` AND products.`organization_key`=collections.`organization_key`"
+    assignments = ", ".join(f"target.`{name}`=source.`{name}`" for name in INFRINGEMENT_CHECK_METADATA_COLUMNS)
+    clause = ""
+    values = ()
+    if ids is not None:
+        if not ids:
+            return
+        clause = f" AND {source_id} IN ({', '.join(['%s'] * len(ids))})"
+        values = tuple(ids)
+    cursor.execute(
+        f"UPDATE {joined} INNER JOIN `infringement_risk_checks` source "
+        f"ON source.`source_type`='{source}' AND source.`source_row_id`={source_id} "
+        f"INNER JOIN `infringement_risk_checks` target "
+        f"ON target.`source_type`='{target}' AND target.`source_row_id`={target_id} "
+        f"SET {assignments} WHERE 1=1{clause}", values)
 
 _schema_lock = threading.Lock()
 _schema_ready = False
@@ -224,6 +254,9 @@ def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
     result["added_to_products"] = bool(result.get("added_to_products"))
     result["actual_weight_complete"] = has_valid_actual_weight(result)
     result["weight_dimensions_complete"] = has_complete_weight_dimensions(result)
+    user = product_access.actor()
+    if user:
+        result["can_manage_visibility"] = product_access.is_admin(user) or product_access.owns(result, user)
     return result
 
 
@@ -271,7 +304,7 @@ def _mirror_zying_snapshot_fields(row: Mapping[str, Any]) -> dict[str, Any]:
         variation_min, variation_max = ai_original_price_bounds_cny(variations)
         raw_product_price = result["original_1688"].get("price")
         product_min, _ = ai_original_price_bounds_cny([], fallback_price=raw_product_price)
-        if product_min is None:
+        if product_min is None and "price" not in result["original_1688"]:
             raw_product_price = result.get("price")
             product_min, _ = ai_original_price_bounds_cny([], fallback_price=raw_product_price)
         result["source_purchase_price_cny"] = (
@@ -364,7 +397,7 @@ def _ensure_collection_task_unique_index(cursor: Any) -> bool:
         for row in sorted(rows, key=lambda row: int(row.get("Seq_in_index") or 0))
         if isinstance(row, Mapping)
     ]
-    if columns == ["task_id", "source_item_id"]:
+    if columns == ["organization_key", "task_id", "source_item_id"]:
         return False
     if rows:
         cursor.execute(
@@ -372,7 +405,7 @@ def _ensure_collection_task_unique_index(cursor: Any) -> bool:
         )
     cursor.execute(
         f"ALTER TABLE `{COLLECTION_TABLE}` "
-        f"ADD UNIQUE KEY `{index_name}` (`task_id`, `source_item_id`)"
+        f"ADD UNIQUE KEY `{index_name}` (`organization_key`, `task_id`, `source_item_id`)"
     )
     return True
 
@@ -575,6 +608,56 @@ def _migrate_collection_tables(cursor: Any) -> None:
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
+    for access_table in (COLLECTION_TABLE, PRODUCT_TABLE):
+        for column, definition in (
+            ("organization_key", "VARCHAR(64) NOT NULL DEFAULT 'wuhan-zeshun'"),
+            ("owner_user_id", "BIGINT NULL"),
+            ("owner_name", "VARCHAR(128) NULL"),
+            ("visibility", "VARCHAR(16) NOT NULL DEFAULT 'enterprise'"),
+        ):
+            added = _ensure_column(cursor, access_table, column, definition)
+            if added and column == "owner_name":
+                if access_table == COLLECTION_TABLE:
+                    cursor.execute(f"UPDATE `{COLLECTION_TABLE}` AS items "
+                        f"JOIN `{TASK_TABLE}` AS tasks ON tasks.`id` = items.`task_id` "
+                        "SET items.`owner_name` = TRIM(REPLACE(COALESCE(tasks.`created_by`, ''), '浏览器插件：', ''))")
+                else:
+                    cursor.execute(f"UPDATE `{PRODUCT_TABLE}` AS products "
+                        f"LEFT JOIN `{COLLECTION_TABLE}` AS items ON items.`id` = products.`collection_item_id` "
+                        "SET products.`owner_name` = COALESCE(NULLIF(items.`owner_name`, ''), "
+                        "TRIM(REPLACE(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT("
+                        "IF(JSON_VALID(products.`source_snapshot_json`), products.`source_snapshot_json`, '{}'), "
+                        "'$.plugin_snapshot.created_by')), 'null'), ''), '浏览器插件：', '')))")
+        _ensure_index(cursor, access_table, "idx_product_enterprise_visibility", "(`organization_key`, `visibility`, `id`)")
+    cursor.execute("SHOW TABLES LIKE 'mercado_store_tokens'")
+    if cursor.fetchone():
+        cursor.execute(f"UPDATE `{PRODUCT_TABLE}` AS products "
+                       "JOIN `mercado_store_tokens` AS tokens ON tokens.`id` = products.`last_publish_token_id` "
+                       "SET products.`organization_key` = CASE WHEN tokens.`organization_key` IN ('', 'default') "
+                       "THEN 'wuhan-zeshun' ELSE tokens.`organization_key` END "
+                       "WHERE products.`owner_user_id` IS NULL AND tokens.`organization_key` IS NOT NULL")
+    cursor.execute("SHOW TABLES LIKE 'workbench_users'")
+    if cursor.fetchone():
+        # Global uniqueness is required before changing the historical company.
+        owners_sql = """(SELECT alias_name, MIN(id) AS user_id, MIN(organization_key) AS organization_key
+            FROM (SELECT id, display_name AS alias_name, organization_key FROM workbench_users
+                  UNION SELECT id, username AS alias_name, organization_key FROM workbench_users) AS aliases
+            WHERE alias_name IS NOT NULL AND alias_name <> ''
+            GROUP BY alias_name HAVING COUNT(DISTINCT id) = 1)"""
+        for access_table in (COLLECTION_TABLE, PRODUCT_TABLE):
+            cursor.execute(f"UPDATE `{access_table}` AS items JOIN {owners_sql} AS owners "
+                           "ON owners.alias_name = items.`owner_name` "
+                           "SET items.`owner_user_id` = owners.user_id, items.`organization_key` = "
+                           "CASE WHEN owners.organization_key IN ('', 'default') THEN 'wuhan-zeshun' "
+                           "ELSE owners.organization_key END WHERE items.`owner_user_id` IS NULL "
+                           "AND owners.organization_key IS NOT NULL")
+
+    cursor.execute(f"SHOW INDEX FROM `{PRODUCT_TABLE}` WHERE Key_name = 'uniq_erp_meli_product_item'")
+    unique_columns = [row.get("Column_name") for row in sorted(cursor.fetchall() or [], key=lambda row: int(row.get("Seq_in_index") or 0))]
+    if unique_columns == ["source_item_id"]:
+        cursor.execute(f"ALTER TABLE `{PRODUCT_TABLE}` DROP INDEX `uniq_erp_meli_product_item`, "
+                       "ADD UNIQUE KEY `uniq_erp_meli_product_item` (`organization_key`, `source_item_id`)")
+
     collection_volumetric_added = _ensure_column(
         cursor, COLLECTION_TABLE, "volumetric_weight_kg", "DECIMAL(20,4) NULL AFTER `weight_g`"
     )
@@ -615,11 +698,14 @@ def _migrate_collection_tables(cursor: Any) -> None:
         )
     cursor.execute("SHOW TABLES LIKE 'infringement_risk_checks'")
     if cursor.fetchone():
+        from bit.bit_mysql import _ensure_infringement_risk_checks_table
+        _ensure_infringement_risk_checks_table(cursor)
         risk_assignments = (
             "target.`infringement_risk_level` = risks.`risk_level`, "
             "target.`infringement_keywords` = risks.`keywords`, "
             "target.`infringement_reason` = risks.`reason`, "
-            "target.`infringement_checked_at` = risks.`checked_at`"
+            "target.`infringement_checked_at` = risks.`checked_at`, "
+            "target.`infringement_check_json` = COALESCE(target.`infringement_check_json`, risks.`details_json`)"
         )
         cursor.execute(
             f"UPDATE `{COLLECTION_TABLE}` AS target "
@@ -677,6 +763,7 @@ def _migrate_collection_tables(cursor: Any) -> None:
                 `reason` = VALUES(`reason`), `checked_at` = VALUES(`checked_at`)
             """
         )
+        _copy_list_infringement_metadata(cursor, "collection_list", "product_list")
         cursor.execute(
             f"DELETE risks FROM `infringement_risk_checks` AS risks "
             f"INNER JOIN `{PRODUCT_TABLE}` AS products "
@@ -768,10 +855,6 @@ def _collection_schema_is_current(cursor: Any) -> bool:
         (COLLECTION_TABLE, "last_publish_status"),
         (COLLECTION_TABLE, "ai_copy_json"),
         (COLLECTION_TABLE, "management_category_id"),
-        (COLLECTION_TABLE, "infringement_risk_level"),
-        (COLLECTION_TABLE, "infringement_keywords"),
-        (COLLECTION_TABLE, "infringement_reason"),
-        (COLLECTION_TABLE, "infringement_checked_at"),
         (PRODUCT_TABLE, "source_type"),
         (PRODUCT_TABLE, "review_status"),
         (PRODUCT_TABLE, "description_text"),
@@ -780,16 +863,19 @@ def _collection_schema_is_current(cursor: Any) -> bool:
         (PRODUCT_TABLE, "profitability_error"),
         (PRODUCT_TABLE, "last_published_at"),
         (PRODUCT_TABLE, "management_category_id"),
-        (PRODUCT_TABLE, "infringement_risk_level"),
-        (PRODUCT_TABLE, "infringement_keywords"),
-        (PRODUCT_TABLE, "infringement_reason"),
-        (PRODUCT_TABLE, "infringement_checked_at"),
         (MANAGEMENT_CATEGORY_TABLE, "name"),
         (MANAGEMENT_CATEGORY_TABLE, "listing_ratio_percent"),
         (PUBLISH_RECORD_TABLE, "failure_reason"),
         (PUBLISH_RECORD_TABLE, "result_json"),
         (PUBLISH_RECORD_TABLE, "auto_retry_started_at"),
     }
+    required.update((table, column) for table in (COLLECTION_TABLE, PRODUCT_TABLE)
+                    for column in ("organization_key", "owner_user_id", "owner_name", "visibility"))
+    required.update(
+        (table, column)
+        for table in (COLLECTION_TABLE, PRODUCT_TABLE)
+        for column, _definition in INFRINGEMENT_RESULT_COLUMN_DEFINITIONS
+    )
     cursor.execute(
         """
         SELECT `TABLE_NAME`, `COLUMN_NAME`
@@ -832,6 +918,17 @@ def ensure_collection_tables(cursor: Any) -> None:
                     cursor, table, "idx_erp_meli_profit_refresh",
                     "(`profitability_updated_at`, `id`)",
                 )
+        cursor.execute(f"SHOW INDEX FROM `{PRODUCT_TABLE}` WHERE Key_name = 'uniq_erp_meli_product_item'")
+        unique_columns = [row.get("Column_name") for row in sorted(cursor.fetchall() or [], key=lambda row: int(row.get("Seq_in_index") or 0))]
+        if unique_columns == ["source_item_id"]:
+            cursor.execute(f"ALTER TABLE `{PRODUCT_TABLE}` DROP INDEX `uniq_erp_meli_product_item`, "
+                           "ADD UNIQUE KEY `uniq_erp_meli_product_item` (`organization_key`, `source_item_id`)")
+        _ensure_collection_task_unique_index(cursor)
+        _ensure_index(cursor, PRODUCT_TABLE, "idx_product_source_enterprise", "(`source_item_id`, `organization_key`)" )
+        _ensure_index(
+            cursor, PRODUCT_TABLE, "idx_erp_meli_product_owner",
+            "(`last_publish_token_id`)",
+        )
         cursor.execute(
             f"""
             CREATE TABLE IF NOT EXISTS `{PRODUCT_PUBLISH_SCHEDULE_TABLE}` (
@@ -1206,6 +1303,43 @@ def _validate_collection_management_categories(cursor, category_ids) -> None:
             raise ValueError("所选泽顺产品分类不存在，请刷新分类后重试")
 
 
+def _execute_access_insert(cursor, sql, values, *, many=False, inherited=None):
+    """Attach enterprise ownership to INSERT values in the same transaction."""
+    user = product_access.actor() or {}
+    inherited = inherited or {}
+    access_values = (
+        inherited.get("organization_key") or product_access.organization(user),
+        inherited["owner_user_id"] if "owner_user_id" in inherited else user.get("id"),
+        inherited["owner_name"] if "owner_name" in inherited else (user.get("display_name") or user.get("username") or ""),
+        inherited.get("visibility") or "enterprise",
+    )
+    if user.get("access_version") == 1:
+        table = re.search(r"INSERT INTO `([^`]+)`", sql).group(1)
+        columns = re.search(r"INSERT INTO `[^`]+`\s*\((.*?)\)\s*VALUES", sql, re.S).group(1)
+        column_names = re.findall(r"`([^`]+)`", columns)
+        expressions = re.search(r"VALUES\s*\((.*?)\)", sql, re.S).group(1).split(',')
+        source_position = column_names.index("source_item_id")
+        param_index = sum(expression.count('%s') for expression in expressions[:source_position])
+        batches = values if many else [values]
+        sources = sorted({str(record[param_index]) for record in batches})
+        cursor.execute(f"SELECT `id`, `organization_key`, `owner_user_id`, `owner_name`, `visibility` "
+                       f"FROM `{table}` WHERE `organization_key` = %s AND `source_item_id` IN "
+                       f"({', '.join(['%s'] * len(sources))}) FOR UPDATE", (access_values[0], *sources))
+        if any(not product_access.can_view(row, user) for row in cursor.fetchall()):
+            raise PermissionError("当前账号无权重新采集该私有产品")
+    sql = re.sub(r"(\)\s*VALUES\s*\()", r", `organization_key`, `owner_user_id`, `owner_name`, `visibility`\1", sql, count=1, flags=re.I)
+    sql = re.sub(r"(VALUES\s*\([^)]*)(\))", r"\1, %s, %s, %s, %s\2", sql, count=1, flags=re.I)
+    if many:
+        return cursor.executemany(sql, [tuple(row) + access_values for row in values])
+    return cursor.execute(sql, tuple(values) + access_values)
+
+
+def _execute_source_scoped(cursor, sql, values):
+    """Source identifiers are unique within an enterprise."""
+    sql = re.sub(r"\s+(ORDER BY|LIMIT|FOR UPDATE)\b", r" AND `organization_key` = %s \1", sql, count=1, flags=re.I) if re.search(r"\s+(ORDER BY|LIMIT|FOR UPDATE)\b", sql, re.I) else sql + " AND `organization_key` = %s"
+    return cursor.execute(sql, tuple(values) + (product_access.organization(),))
+
+
 def upsert_collection_items(
     task_id: int,
     rows: Iterable[Mapping[str, Any]],
@@ -1227,6 +1361,44 @@ def upsert_collection_items(
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             _validate_collection_management_categories(cursor, category_ids)
+            # Every ingestion path (including the browser extension and DB
+            # API) must save freight and proceeds together. Use this cursor:
+            # opening a second connection here can exhaust small worker pools.
+            from erp.mercadolibre_profitability import (
+                estimate_collection_profitability_from_rate_card,
+                FIXED_COLLECTION_PROFITABILITY_SOURCE,
+            )
+            from erp.mercadolibre_shipping_rate_cards import (
+                OFFICIAL_SHIPPING_RATE_CARD_TABLE,
+            )
+            try:
+                cursor.execute(
+                    f"SELECT * FROM `{OFFICIAL_SHIPPING_RATE_CARD_TABLE}`"
+                )
+                rate_rows = tuple(cursor.fetchall() or [])
+            except Exception:
+                # Collection remains available before rate-card bootstrap.
+                rate_rows = ()
+            for row in records:
+                if row.get("profitability_source") != FIXED_COLLECTION_PROFITABILITY_SOURCE:
+                    # The plugin's reference net may use volumetric freight
+                    # and a minimum revenue floor. Never persist that as this
+                    # workflow's actual-weight-only calculation, or keep an
+                    # old net after a price/weight change.
+                    for column in PROFITABILITY_COLUMNS:
+                        if column not in {
+                            "category_id", "category_name",
+                            "listing_type_id", "listing_type_name",
+                        }:
+                            row[column] = None
+                    row["profitability_error"] = ""
+                    row["_replace_profitability_snapshot"] = True
+                estimate = estimate_collection_profitability_from_rate_card(
+                    row, rate_rows=rate_rows,
+                )
+                if estimate:
+                    row.update(estimate)
+                    row["_replace_profitability_snapshot"] = True
             # Resolve the USD display price for rows without a complete
             # rate-card snapshot from the one stored rate per currency.
             fixed_exchange_rates: dict[str, Mapping[str, Any]] = {}
@@ -1363,8 +1535,7 @@ def upsert_collection_items(
                     category_update_sql = (
                         "`management_category_id` = VALUES(`management_category_id`),"
                     )
-                cursor.execute(
-                    f"""
+                _execute_access_insert(cursor, f"""
                     INSERT INTO `{COLLECTION_TABLE}` (
                         `task_id`, `source_item_id`, `source_url`, `final_url`,
                         `main_image_url`, `title`, `price`, `currency_id`, `weight_g`,
@@ -1450,15 +1621,10 @@ def upsert_collection_items(
                             {protect_existing_complete_sql},
                             'ok', VALUES(`scrape_status`)
                         )
-                    """,
-                    values,
-                )
+                    """, values)
                 if row["management_category_id"] is not None:
-                    cursor.execute(
-                        f"UPDATE `{PRODUCT_TABLE}` SET `management_category_id` = %s "
-                        "WHERE `source_item_id` = %s",
-                        (row["management_category_id"], values[1]),
-                    )
+                    _execute_source_scoped(cursor, f"UPDATE `{PRODUCT_TABLE}` SET `management_category_id` = %s "
+                        "WHERE `source_item_id` = %s", (row["management_category_id"], values[1]))
         connection.commit()
         return len(records)
     except BaseException:
@@ -1468,19 +1634,57 @@ def upsert_collection_items(
         connection.close()
 
 
+def _product_token_scope(
+    token_ids: Iterable[int] | None,
+) -> tuple[str, str, list[int]]:
+    """Share product ownership rules between rows and filter directories."""
+    if token_ids is None:
+        return "", "", []
+    scoped_token_ids = sorted({
+        int(value) for value in token_ids or () if int(value or 0) > 0
+    })
+    if not scoped_token_ids:
+        return "", "1 = 0", []
+    placeholders = ", ".join(["%s"] * len(scoped_token_ids))
+    # Materialize the authorized IDs once. Correlated EXISTS under OR
+    # otherwise probes both ownership tables for every product. UNION
+    # deduplicates all three ownership paths before paging or aggregation.
+    authorized_ids_sql = (
+        f"SELECT `id` FROM `{PRODUCT_TABLE}` "
+        f"WHERE `last_publish_token_id` IN ({placeholders}) UNION "
+        f"SELECT own_records.`product_item_id` AS `id` FROM `{PUBLISH_RECORD_TABLE}` AS own_records "
+        f"INNER JOIN `{PRODUCT_TABLE}` AS recorded_products "
+        "ON recorded_products.`id` = own_records.`product_item_id` "
+        f"WHERE own_records.`token_id` IN ({placeholders}) UNION "
+        f"SELECT linked_products.`id` FROM `erp_mercadolibre_store_links` AS own_links "
+        f"INNER JOIN `{PRODUCT_TABLE}` AS linked_products "
+        "ON linked_products.`source_item_id` = own_links.`item_id` "
+        f"WHERE own_links.`token_id` IN ({placeholders})"
+    )
+    predicate = (
+        "`id` IN (SELECT authorized_products.`id` FROM ("
+        + authorized_ids_sql + ") AS authorized_products)"
+    )
+    return authorized_ids_sql, predicate, scoped_token_ids * 3
+
+
 def _list_rows(
     table: str,
     *,
     search: str = "",
     limit: int = 500,
     offset: int = 0,
+    include_total: bool = True,
     task_id: int | None = None,
     source_type: str = "",
     ai_status: str = "",
     target_platform: str = "mercadolibre",
+    salesperson: str = "",
+    include_salesperson_options: bool = False,
     collector_salesperson: str = "",
     collector_salesperson_exact: bool = False,
     generator_salesperson: str = "",
+    include_generator_options: bool = False,
     review_status: str = "",
     publish_status: str = "",
     weight_status: str = "",
@@ -1514,9 +1718,16 @@ def _list_rows(
     offset = max(0, int(offset))
     where: list[str] = []
     params: list[Any] = []
+    authorized_ids_sql = ""
+    authorized_ids_predicate = ""
+    access_sql, access_params = product_access.predicate(table)
+    if access_sql:
+        where.append(access_sql)
+        params.extend(access_params)
     search = str(search or "").strip()
+    search_predicate = "(`source_item_id` LIKE %s OR `title` LIKE %s)"
     if search:
-        where.append("(`source_item_id` LIKE %s OR `title` LIKE %s)")
+        where.append(search_predicate)
         pattern = f"%{search}%"
         params.extend((pattern, pattern))
     if task_id is not None and table == COLLECTION_TABLE:
@@ -1524,6 +1735,17 @@ def _list_rows(
         params.append(int(task_id))
     if table == COLLECTION_TABLE and exclude_added:
         where.append("`added_to_products` = 0")
+    salesperson_expression = (
+        "TRIM(REPLACE(COALESCE(NULLIF(collection_task.`created_by`, ''), "
+        "'未分配'), '浏览器插件：', ''))"
+    )
+    if table == COLLECTION_TABLE and str(salesperson or "").strip():
+        where.append(
+            f"EXISTS (SELECT 1 FROM `{TASK_TABLE}` AS collection_task "
+            f"WHERE collection_task.`id` = `{COLLECTION_TABLE}`.`task_id` "
+            f"AND {salesperson_expression} = %s)"
+        )
+        params.append(str(salesperson).strip())
     category_filter = str(management_category_id or "").strip().lower()
     if category_filter in {"uncategorized", "unclassified", "none"}:
         where.append("`management_category_id` IS NULL")
@@ -1541,32 +1763,20 @@ def _list_rows(
         where.append("(`category_id` = %s OR `category_name` LIKE %s)")
         params.extend((mercado_category, f"%{mercado_category}%"))
     if table == PRODUCT_TABLE:
-        if token_ids is not None:
-            scoped_token_ids = sorted({
-                int(value) for value in token_ids or () if int(value or 0) > 0
-            })
-            if not scoped_token_ids:
-                where.append("1 = 0")
-            else:
-                placeholders = ", ".join(["%s"] * len(scoped_token_ids))
-                where.append(
-                    f"(`last_publish_token_id` IN ({placeholders}) OR EXISTS ("
-                    f"SELECT 1 FROM `{PUBLISH_RECORD_TABLE}` AS own_records "
-                    f"WHERE own_records.`product_item_id` = `{PRODUCT_TABLE}`.`id` "
-                    f"AND own_records.`token_id` IN ({placeholders})) OR EXISTS ("
-                    "SELECT 1 FROM `erp_mercadolibre_store_links` AS own_links "
-                    f"WHERE own_links.`item_id` = `{PRODUCT_TABLE}`.`source_item_id` "
-                    f"AND own_links.`token_id` IN ({placeholders})))"
-                )
-                params.extend(scoped_token_ids)
-                params.extend(scoped_token_ids)
-                params.extend(scoped_token_ids)
+        if product_access.actor():
+            token_ids = None
+        authorized_ids_sql, authorized_ids_predicate, scoped_params = _product_token_scope(token_ids)
+        if authorized_ids_predicate:
+            where.append(authorized_ids_predicate)
+            params.extend(scoped_params)
         source_type = str(source_type or "").strip().lower()
         if source_type:
             if source_type not in PRODUCT_SOURCE_TYPES:
                 raise ValueError(f"不支持的产品来源: {source_type}")
             where.append("`source_type` = %s")
             params.append(source_type)
+        generator_options_where = [clause for clause in where if clause != search_predicate]
+        generator_options_params = list(access_params + params[len(access_params) + 2:] if search else params)
         ai_status = str(ai_status or "").strip().lower()
         if ai_status:
             if ai_status not in {"pending", "processing", "completed", "failed"}:
@@ -1594,10 +1804,11 @@ def _list_rows(
                 f"OR {zying_id_expr} = %s)"
             )
             params.extend((zying_category, f"%{zying_category}%", zying_category))
-        product_developer_id = str(product_developer_id or "").strip()[:64]
+        product_developer_id = str(product_developer_id or "").strip()[:255]
         if product_developer_id:
             where.append(
-                "(`product_developer_id` = %s OR `product_developer_name` = %s)"
+                "(TRIM(COALESCE(`product_developer_id`, '')) = %s "
+                "OR TRIM(COALESCE(`product_developer_name`, '')) = %s)"
             )
             params.extend((product_developer_id, product_developer_id))
     review_status = str(review_status or "").strip().lower()
@@ -1715,7 +1926,7 @@ def _list_rows(
                 "IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{}'), "
                 f"'{path}')), 'null'), ''), '{prefix}', ''))"
             )
-            if path == "$.plugin_snapshot.created_by" and collector_salesperson_exact:
+            if (path == "$.plugin_snapshot.created_by" and collector_salesperson_exact) or path == f"{listing_path}.generated_by":
                 where.append(f"{expression} = %s")
                 params.append(str(owner).strip())
             else:
@@ -1739,17 +1950,147 @@ def _list_rows(
         mark("schema")
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
-            mark("count")
-            cursor.execute(f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ COUNT(*) AS total FROM `{table}` {where_sql}", tuple(params))
-            total = int((cursor.fetchone() or {}).get("total") or 0)
-            mark("page")
+            salesperson_options = None
+            if include_salesperson_options and table == COLLECTION_TABLE:
+                # Read the directory independently of paging and active filters.
+                added_predicate = " AND item.`added_to_products` = 0" if exclude_added else ""
+                options_access, options_params = product_access.predicate("item")
+                if options_access:
+                    added_predicate += " AND " + options_access
+                cursor.execute(
+                    f"SELECT DISTINCT {salesperson_expression} AS salesperson "
+                    f"FROM `{TASK_TABLE}` AS collection_task WHERE EXISTS ("
+                    f"SELECT 1 FROM `{COLLECTION_TABLE}` AS item "
+                    f"WHERE item.`task_id` = collection_task.`id`{added_predicate}) "
+                    "ORDER BY salesperson", tuple(options_params) if options_params else None
+                )
+                salesperson_options = [row["salesperson"] for row in cursor.fetchall()]
+            generator_options = None
+            if include_generator_options and table == PRODUCT_TABLE:
+                options_where = " AND ".join(generator_options_where) or "1 = 1"
+                cursor.execute(
+                    "SELECT DISTINCT TRIM(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT("
+                    "IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{}'), "
+                    f"'{listing_path}.generated_by')), 'null'), '')) AS generator_salesperson "
+                    f"FROM `{table}` WHERE {options_where} "
+                    "HAVING generator_salesperson <> '' ORDER BY generator_salesperson",
+                    tuple(generator_options_params),
+                )
+                generator_options = [row["generator_salesperson"] for row in cursor.fetchall()]
+            scoped_page = include_total and bool(authorized_ids_sql and where == [authorized_ids_predicate])
+            keyword_only = table == PRODUCT_TABLE and bool(search) and all(
+                clause in (search_predicate, access_sql) for clause in where
+            )
+            keyword_scope = (access_sql + " AND " if access_sql else "") + search_predicate
+            keyword_index = "idx_product_scope_search" if access_sql else "idx_product_search_cover"
+            # Optimizer hints are ignored (rather than failing requests) before
+            # the offline index migration has been applied on another server.
+            keyword_hint = f"/*+ INDEX(`{table}` `{keyword_index}`) */"
+            keyword_from = ""
+            keyword_where = ""
+            if table == PRODUCT_TABLE and search and not keyword_only:
+                # Drive permission/filter checks from matching IDs. A semijoin
+                # lets ORDER BY/LIMIT reverse that order and scan the whole
+                # tenant before discovering that the keyword has no matches.
+                keyword_from = (
+                    f"(SELECT {keyword_hint} `id` AS match_id "
+                    f"FROM `{table}` WHERE {keyword_scope} "
+                    "LIMIT 9223372036854775807) AS keyword_matches "
+                    f"STRAIGHT_JOIN `{table}` ON `{table}`.`id` = keyword_matches.match_id "
+                )
+                remaining = [clause for clause in where if clause not in (search_predicate, access_sql)]
+                keyword_where = " WHERE " + " AND ".join(remaining) if remaining else ""
+            mark("count_page" if scoped_page else "count")
+            # MySQL's unqualified InnoDB COUNT can take the parallel clustered
+            # scan path despite EXPLAIN showing a secondary index. Pin the
+            # narrow existing index for the unfiltered product total only;
+            # filtered/permission-scoped queries need their own optimizer plan.
+            count_index = (
+                "FORCE INDEX (`idx_erp_meli_product_added`)"
+                if table == PRODUCT_TABLE and not where else ""
+            )
+            if include_total and not scoped_page:
+                count_from = f"`{table}` {count_index} {where_sql}"
+                if keyword_only:
+                    count_from = f"`{table}` WHERE {keyword_scope}"
+                elif keyword_from:
+                    count_from = keyword_from + keyword_where
+                count_hint = f" INDEX(`{table}` `{keyword_index}`)" if keyword_only else ""
+                cursor.execute(f"SELECT /*+ MAX_EXECUTION_TIME(8000){count_hint} */ COUNT(*) AS total FROM {count_from}", tuple(params))
+                count_result = cursor.fetchone() or {}
+                total = int(count_result.get("total") or 0)
+                if search and count_result.get("total") == 0:
+                    # An absent keyword must not scan the catalog a second time
+                    # looking for page IDs. This scan can time out even though
+                    # COUNT already established the exact empty result.
+                    mark("commit")
+                    connection.commit()
+                    mark("complete")
+                    return {"total": 0, "rows": [], **(
+                        {"generator_salespeople": generator_options}
+                        if generator_options is not None else {}
+                    ), **(
+                        {"salespeople": salesperson_options}
+                        if salesperson_options is not None else {}
+                    )}
+                mark("page")
             selected_fields = (
                 f"`{table}`.*, category.`name` AS `management_category_name`, "
                 "category.`listing_ratio_percent` AS `management_category_listing_ratio_percent`"
             )
+            page_from = (
+                # Materialize only page IDs, not large JSON snapshots/descriptions.
+                f"(SELECT `id` FROM `{table}` {where_sql} "
+                f"ORDER BY `id` DESC LIMIT %s OFFSET %s) AS page_ids "
+                f"INNER JOIN `{table}` ON `{table}`.`id` = page_ids.`id` "
+            )
+            query_prefix = ""
+            if keyword_only:
+                # Sort the covered IDs before fetching any large product row.
+                page_from = (
+                    f"(SELECT `id` FROM (SELECT {keyword_hint} `id` "
+                    f"FROM `{table}` WHERE {keyword_scope} "
+                    "LIMIT 9223372036854775807) AS keyword_matches "
+                    "ORDER BY `id` DESC LIMIT %s OFFSET %s) AS page_ids "
+                    f"INNER JOIN `{table}` ON `{table}`.`id` = page_ids.`id` "
+                )
+            elif keyword_from:
+                page_from = (
+                    f"(SELECT `{table}`.`id` FROM {keyword_from}{keyword_where} "
+                    f"ORDER BY `{table}`.`id` DESC LIMIT %s OFFSET %s) AS page_ids "
+                    f"INNER JOIN `{table}` ON `{table}`.`id` = page_ids.`id` "
+                )
+            if not include_total and authorized_ids_sql and where == [authorized_ids_predicate]:
+                # For a single page, each ownership path only needs its newest
+                # offset + limit + 1 distinct IDs. Bound before the UNION so a
+                # large account does not materialize its entire product catalog.
+                candidates = offset + limit + 1
+                bounded_paths = []
+                for index, path in enumerate(authorized_ids_sql.split(" UNION ")):
+                    distinct_path = path.replace("SELECT ", "SELECT DISTINCT ", 1)
+                    bounded_paths.append(
+                        f"SELECT id FROM ({distinct_path} ORDER BY id DESC "
+                        f"LIMIT {candidates}) AS ownership_{index}"
+                    )
+                page_from = (
+                    "(SELECT id FROM (" + " UNION ".join(bounded_paths) + ") AS authorized_page "
+                    "ORDER BY id DESC LIMIT %s OFFSET %s) AS page_ids "
+                    f"INNER JOIN `{table}` ON `{table}`.`id` = page_ids.`id` "
+                )
+            if scoped_page:
+                # UNION makes this CTE materialize once for both the exact total
+                # and paging. Each ownership path already joins existing products,
+                # so sorting its IDs needs no further product lookup until LIMIT.
+                query_prefix = f"WITH authorized_products AS ({authorized_ids_sql}) "
+                selected_fields += ", list_totals.`total` AS `__list_total`"
+                page_from = (
+                    "(SELECT COUNT(*) AS total FROM authorized_products) AS list_totals "
+                    "LEFT JOIN (SELECT `id` FROM authorized_products "
+                    "ORDER BY `id` DESC LIMIT %s OFFSET %s) AS page_ids ON 1 = 1 "
+                    f"LEFT JOIN `{table}` ON `{table}`.`id` = page_ids.`id` "
+                )
             from_sql = (
-                f"(SELECT * FROM `{table}` {where_sql} "
-                f"ORDER BY `id` DESC LIMIT %s OFFSET %s) AS `{table}` "
+                page_from +
                 f"LEFT JOIN `{MANAGEMENT_CATEGORY_TABLE}` AS category "
                 f"ON category.`id` = `{table}`.`management_category_id`"
             )
@@ -1772,11 +2113,22 @@ def _list_rows(
                     "LIMIT 1), ''), '浏览器插件：', '')) AS `salesperson`"
                 )
             cursor.execute(
-                f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ {selected_fields} FROM {from_sql} "
+                query_prefix + f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ {selected_fields} FROM {from_sql} "
                 f"ORDER BY `{table}`.`id` DESC",
-                tuple(params + [limit, offset]),
+                tuple(params + [limit if include_total else limit + 1, offset]),
             )
             raw_rows = cursor.fetchall()
+            if scoped_page:
+                # The total survives an empty page (including an offset beyond
+                # the last page); the LEFT JOIN's null row is not a product.
+                total = int((raw_rows[0] if raw_rows else {}).get("__list_total") or 0)
+                raw_rows = [row for row in raw_rows if row.get("id") is not None]
+                for row in raw_rows:
+                    row.pop("__list_total", None)
+            has_more = len(raw_rows) > limit if not include_total else offset + len(raw_rows) < total
+            if not include_total:
+                raw_rows = raw_rows[:limit]
+                total = None
             mark("decode")
             rows = [
                 _mirror_zying_snapshot_fields(_json_safe_row(row))
@@ -1785,7 +2137,13 @@ def _list_rows(
         mark("commit")
         connection.commit()
         mark("complete")
-        return {"total": total, "rows": rows}
+        return {"total": total, "rows": rows, **(
+            {"has_more": has_more, "total_exact": False} if not include_total else {}
+        ), **(
+            {"generator_salespeople": generator_options} if generator_options is not None else {}
+        ), **(
+            {"salespeople": salesperson_options} if salesperson_options is not None else {}
+        )}
     finally:
         mark("cleanup")
         elapsed_ms = round((time.monotonic() - started) * 1000, 1)
@@ -2009,6 +2367,82 @@ def list_product_items(**kwargs: Any) -> dict[str, Any]:
     return _list_rows(PRODUCT_TABLE, **kwargs)
 
 
+def list_product_developers(
+    *, token_ids: Iterable[int] | None = None,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Read developer choices from all visible saved ZYing products."""
+    if product_access.actor():
+        token_ids = None
+    _scope_sql, scope_predicate, scope_params = _product_token_scope(token_ids)
+    if scope_predicate == "1 = 0":
+        return {"rows": []}
+    access_sql, access_params = product_access.predicate(PRODUCT_TABLE)
+    where = ["`source_type` = %s"] + ([access_sql] if access_sql else [])
+    params: list[Any] = ["zying"] + access_params
+    if scope_predicate:
+        where.append(scope_predicate)
+        params.extend(scope_params)
+    where.append(
+        "(TRIM(COALESCE(`product_developer_id`, '')) <> '' "
+        "OR TRIM(COALESCE(`product_developer_name`, '')) <> '')"
+    )
+    connection = (connection_factory or _connect_list)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                "SELECT /*+ MAX_EXECUTION_TIME(8000) */ DISTINCT "
+                "TRIM(COALESCE(`product_developer_id`, '')) AS id, "
+                "TRIM(COALESCE(`product_developer_name`, '')) AS name "
+                f"FROM `{PRODUCT_TABLE}` WHERE {' AND '.join(where)}",
+                tuple(params),
+            )
+            saved_rows = cursor.fetchall()
+            if not saved_rows and token_ids is None and not product_access.actor():
+                # The legacy directory has no token/company ownership metadata.
+                # Only users with unrestricted product visibility may use it.
+                cursor.execute(
+                    "SELECT /*+ MAX_EXECUTION_TIME(8000) */ 1 AS present "
+                    "FROM information_schema.TABLES "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s LIMIT 1",
+                    ("zying_product",),
+                )
+                if cursor.fetchone():
+                    cursor.execute(
+                        "SELECT /*+ MAX_EXECUTION_TIME(8000) */ DISTINCT "
+                        "TRIM(COALESCE(`产品开发编号`, '')) AS id, "
+                        "TRIM(COALESCE(`产品开发`, '')) AS name "
+                        "FROM `zying_product` "
+                        "WHERE TRIM(COALESCE(`产品开发编号`, '')) <> '' "
+                        "OR TRIM(COALESCE(`产品开发`, '')) <> ''"
+                    )
+                    saved_rows = cursor.fetchall()
+        developers: dict[str, str] = {}
+        for row in saved_rows:
+            developer_id = str(row.get("id") or "").strip()
+            developer_name = str(row.get("name") or "").strip()
+            developer_id = developer_id or developer_name
+            if not developer_id:
+                continue
+            developer_name = developer_name or developer_id
+            previous = developers.get(developer_id)
+            # Prefer an actual name over an ID placeholder. Resolve historical
+            # name variants deterministically, regardless of database order.
+            if previous is None or (
+                developer_name == developer_id, developer_name.casefold(), developer_name
+            ) < (previous == developer_id, previous.casefold(), previous):
+                developers[developer_id] = developer_name
+        return {"rows": [
+            {"id": developer_id, "name": developer_name}
+            for developer_id, developer_name in sorted(
+                developers.items(), key=lambda row: (row[1].casefold(), row[0])
+            )
+        ]}
+    finally:
+        connection.close()
+
+
 def get_1688_product_options(
     *, connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
@@ -2017,13 +2451,16 @@ def get_1688_product_options(
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
+            access_sql, access_params = product_access.predicate(PRODUCT_TABLE)
             cursor.execute(
                 "SELECT DISTINCT TRIM(REPLACE(COALESCE(NULLIF(JSON_UNQUOTE("
                 "JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`), "
                 "`source_snapshot_json`, '{}'), '$.plugin_snapshot.created_by')), "
                 "'null'), ''), '浏览器插件：', '')) AS collector_salesperson "
                 f"FROM `{PRODUCT_TABLE}` WHERE `source_type` = 'ai_original' "
-                "HAVING collector_salesperson <> '' ORDER BY collector_salesperson"
+                + (f"AND {access_sql} " if access_sql else "")
+                + "HAVING collector_salesperson <> '' ORDER BY collector_salesperson",
+                tuple(access_params)
             )
             rows = cursor.fetchall()
         return {"collector_salespeople": sorted({
@@ -2272,7 +2709,7 @@ def assign_management_category(
                 cursor.execute(
                     f"UPDATE `{PRODUCT_TABLE}` AS product "
                     f"INNER JOIN `{COLLECTION_TABLE}` AS collection_item "
-                    "ON collection_item.`source_item_id` = product.`source_item_id` "
+                    "ON collection_item.`source_item_id` = product.`source_item_id` AND collection_item.`organization_key` = product.`organization_key` "
                     "SET product.`management_category_id` = %s "
                     f"WHERE collection_item.`id` IN ({placeholders})",
                     tuple([normalized_category_id] + ids),
@@ -2281,7 +2718,7 @@ def assign_management_category(
                 cursor.execute(
                     f"UPDATE `{COLLECTION_TABLE}` AS collection_item "
                     f"INNER JOIN `{PRODUCT_TABLE}` AS product "
-                    "ON collection_item.`source_item_id` = product.`source_item_id` "
+                    "ON collection_item.`source_item_id` = product.`source_item_id` AND collection_item.`organization_key` = product.`organization_key` "
                     "SET collection_item.`management_category_id` = %s "
                     f"WHERE product.`id` IN ({placeholders})",
                     tuple([normalized_category_id] + ids),
@@ -2542,6 +2979,11 @@ def list_product_publish_records(
             placeholders = ", ".join(["%s"] * len(scoped_token_ids))
             base_where.append(f"records.`token_id` IN ({placeholders})")
             base_params.extend(scoped_token_ids)
+    record_access, record_params = product_access.predicate("record_product")
+    if record_access:
+        base_where.append(f"(records.`product_item_id` IS NULL OR EXISTS (SELECT 1 FROM `{PRODUCT_TABLE}` AS record_product "
+                          f"WHERE record_product.`id` = records.`product_item_id` AND {record_access}))")
+        base_params.extend(record_params)
     selected_token_ids = sorted({
         int(value) for value in (filter_token_ids or ()) if int(value or 0) > 0
     })
@@ -2680,6 +3122,10 @@ def get_product_publish_records_by_ids(
                 tuple(ids),
             )
             rows = [_json_safe_row(row) for row in cursor.fetchall()]
+            if product_access.actor():
+                product_ids = [row['product_item_id'] for row in rows if row.get('product_item_id')]
+                if product_ids:
+                    check_catalog_access('products', product_ids)
         connection.commit()
         return rows
     finally:
@@ -2890,6 +3336,9 @@ def _product_content_update_plan(
                 "`profitability_source` = IF(`source_type` = 'zying', "
                 f"'{ZYING_PROFITABILITY_SOURCE}', 'manual_edit_pending')"
             )
+        net_proceeds_assignment = _preserve_purchase_assignment_sql(net_proceeds_assignment)
+        updated_at_assignment = _preserve_purchase_assignment_sql(updated_at_assignment)
+        source_assignment = _preserve_purchase_assignment_sql(source_assignment)
         assignments.extend((
             "`sale_price_usd` = NULL",
             "`commission_amount_local` = NULL",
@@ -3049,7 +3498,7 @@ def update_product_item(
                 cursor.execute(
                     f"UPDATE `{COLLECTION_TABLE}` AS c "
                     f"INNER JOIN `{PRODUCT_TABLE}` AS p "
-                    "ON c.`source_item_id` = p.`source_item_id` "
+                    "ON c.`source_item_id` = p.`source_item_id` AND c.`organization_key` = p.`organization_key` "
                     f"SET {', '.join(collection_assignments)} WHERE p.`id` = %s",
                     (row_id,),
                 )
@@ -3132,7 +3581,7 @@ def update_product_items(
                 cursor.execute(
                     f"UPDATE `{COLLECTION_TABLE}` AS c "
                     f"INNER JOIN `{PRODUCT_TABLE}` AS p "
-                    "ON c.`source_item_id` = p.`source_item_id` "
+                    "ON c.`source_item_id` = p.`source_item_id` AND c.`organization_key` = p.`organization_key` "
                     f"SET {', '.join(collection_assignments)} "
                     f"WHERE p.`id` IN ({placeholders})",
                     tuple(ids),
@@ -3250,10 +3699,19 @@ def update_collection_items(
                     "p.`profitability_source` = 'manual_edit_pending'",
                     "p.`profitability_error` = ''",
                 ))
+                product_assignments = [
+                    _preserve_purchase_assignment_sql(assignment, alias="p")
+                    if assignment.startswith(tuple(
+                        f"p.`{field}` = " for field in (
+                            "net_proceeds_usd", "profitability_source", "profitability_updated_at",
+                        )
+                    )) else assignment
+                    for assignment in product_assignments
+                ]
             cursor.execute(
                 f"UPDATE `{PRODUCT_TABLE}` AS p "
                 f"INNER JOIN `{COLLECTION_TABLE}` AS c "
-                "ON c.`source_item_id` = p.`source_item_id` "
+                "ON c.`source_item_id` = p.`source_item_id` AND c.`organization_key` = p.`organization_key` "
                 f"SET {', '.join(product_assignments)} "
                 f"WHERE c.`id` IN ({placeholders})",
                 tuple(ids),
@@ -3357,6 +3815,10 @@ def update_1688_product(
                 for field, value in normalized.items()
             })
             snapshot["source_1688_overrides"] = overrides
+            # A changed purchase price also changes the source's calculated
+            # net proceeds. Persist that same value for AI listing/publishing.
+            if "price" in normalized and "net_proceeds_usd" not in overrides:
+                normalized["net_proceeds_usd"] = _default_ai_original_net_proceeds(snapshot)
             assignments, values = _1688_override_table_assignments(current, normalized)
             assignments.append("`source_snapshot_json` = %s")
             values.append(_dumps(snapshot))
@@ -3373,6 +3835,31 @@ def update_1688_product(
         raise
     finally:
         connection.close()
+
+
+def _default_ai_original_net_proceeds(
+    snapshot: Mapping[str, Any], *, fallback_price: Any = None,
+) -> Decimal | None:
+    """Resolve the source-based default without undoing explicit source edits."""
+    from erp.ai_original_products import suggested_ai_original_net_proceeds
+
+    overrides = snapshot.get("source_1688_overrides")
+    overrides = overrides if isinstance(overrides, Mapping) else {}
+    if "net_proceeds_usd" in overrides:
+        return _decimal_from_text(overrides["net_proceeds_usd"])
+    original = snapshot.get("original_1688")
+    original = original if isinstance(original, Mapping) else {}
+    if "price" in overrides:
+        variations, price = [], overrides["price"]
+    else:
+        variations = original.get("variations")
+        price = original.get("price")
+    _, suggested = suggested_ai_original_net_proceeds(variations, fallback_price=price)
+    if suggested is None and "price" not in overrides:
+        _, suggested = suggested_ai_original_net_proceeds(
+            variations, fallback_price=fallback_price,
+        )
+    return Decimal(suggested) if suggested is not None else None
 
 
 def upsert_ai_original_product(
@@ -3419,11 +3906,10 @@ def upsert_ai_original_product(
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
-            cursor.execute(
-                f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `source_item_id` = %s FOR UPDATE",
-                (product["source_item_id"],),
-            )
+            _execute_source_scoped(cursor, f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `source_item_id` = %s FOR UPDATE", (product["source_item_id"],))
             existing = cursor.fetchone()
+            if existing and product_access.actor() and not product_access.can_view(existing, product_access.actor()):
+                raise PermissionError("当前账号无权重新采集该私有产品")
             existing = existing if existing and existing.get("source_type") == "ai_original" else {}
             existing_snapshot = _loads(existing.get("source_snapshot_json"), {})
             overrides = (
@@ -3433,6 +3919,8 @@ def upsert_ai_original_product(
             overrides = dict(overrides) if isinstance(overrides, Mapping) else {}
             if overrides:
                 source_snapshot["source_1688_overrides"] = overrides
+            if isinstance(existing_snapshot, Mapping) and isinstance(existing_snapshot.get("purchase_net_proceeds"), Mapping):
+                source_snapshot["purchase_net_proceeds"] = dict(existing_snapshot["purchase_net_proceeds"])
             if isinstance(existing_snapshot, Mapping) and isinstance(existing_snapshot.get("marketplace_listings"), Mapping):
                 source_snapshot["marketplace_listings"] = dict(existing_snapshot["marketplace_listings"])
             existing_prepared = existing_snapshot.get("ai_original") if isinstance(existing_snapshot, Mapping) else None
@@ -3445,16 +3933,26 @@ def upsert_ai_original_product(
                 if existing_prepared.get("status") != "completed":
                     source_snapshot["ai_original"].update(status="pending", error="")
                 source_snapshot.setdefault("marketplace_listings", {})["mercadolibre"] = dict(source_snapshot["ai_original"])
-            cursor.execute(
-                f"""
+            # Completed listings keep their saved source snapshot on recollection.
+            # Calculate from that same snapshot, and preserve an entered net value.
+            net_snapshot = (
+                existing_snapshot if isinstance(existing_prepared, Mapping)
+                and existing_prepared.get("status") == "completed" else source_snapshot
+            )
+            default_net = _default_ai_original_net_proceeds(net_snapshot)
+            previous_net = _default_ai_original_net_proceeds(
+                existing_snapshot if isinstance(existing_snapshot, Mapping) else {},
+            )
+            source_net_changed = bool(existing) and default_net != previous_net
+            _execute_access_insert(cursor, f"""
                 INSERT INTO `{PRODUCT_TABLE}` (
                     `collection_item_id`, `source_type`, `review_status`,
                     `source_item_id`, `source_url`, `main_image_url`, `title`,
                     `description_text`, `price`, `currency_id`, `weight_g`,
                     `package_length_cm`, `package_width_cm`, `package_height_cm`,
-                    `weight_basis`, `source_snapshot_json`, `added_at`
+                    `weight_basis`, `source_snapshot_json`, `added_at`, `net_proceeds_usd`
                 ) VALUES (0, 'ai_original', 'unreviewed', %s, %s, %s, %s, %s,
-                          %s, 'CNY', %s, %s, %s, %s, %s, %s, %s)
+                          %s, 'CNY', %s, %s, %s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     `source_url` = IF(`source_type` = 'ai_original', VALUES(`source_url`), `source_url`),
                     `main_image_url` = IF(`source_type` = 'ai_original' AND
@@ -3471,38 +3969,32 @@ def upsert_ai_original_product(
                     `package_length_cm` = IF(`source_type` = 'ai_original', VALUES(`package_length_cm`), `package_length_cm`),
                     `package_width_cm` = IF(`source_type` = 'ai_original', VALUES(`package_width_cm`), `package_width_cm`),
                     `package_height_cm` = IF(`source_type` = 'ai_original', VALUES(`package_height_cm`), `package_height_cm`),
+                    `net_proceeds_usd` = IF(`source_type` = 'ai_original' AND `net_proceeds_usd` IS NULL,
+                        VALUES(`net_proceeds_usd`), `net_proceeds_usd`),
                     `source_snapshot_json` = IF(`source_type` = 'ai_original' AND
                         JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`),
                         `source_snapshot_json`, '{{}}'), '$.ai_original.status')) <> 'completed',
                         VALUES(`source_snapshot_json`), `source_snapshot_json`),
                     `updated_at` = CURRENT_TIMESTAMP
-                """,
-                (
+                """, (
                     product["source_item_id"], product["source_url"],
                     product.get("main_image_url") or "", product["title"],
                     product.get("description_text") or "", _decimal_from_text(product.get("price")),
                     weight_g, dimensions[0], dimensions[1], dimensions[2],
-                    "1688_source" if weight_g else "", _dumps(source_snapshot), now,
-                ),
-            )
+                    "1688_source" if weight_g else "", _dumps(source_snapshot), now, default_net,
+                ))
             if category_id is not None:
-                cursor.execute(
-                    f"UPDATE `{PRODUCT_TABLE}` SET `management_category_id` = %s "
-                    "WHERE `source_item_id` = %s AND `source_type` = 'ai_original'",
-                    (category_id, product["source_item_id"]),
-                )
-            if overrides:
+                _execute_source_scoped(cursor, f"UPDATE `{PRODUCT_TABLE}` SET `management_category_id` = %s "
+                    "WHERE `source_item_id` = %s AND `source_type` = 'ai_original'", (category_id, product["source_item_id"]))
+            if overrides or source_net_changed:
                 assignments, values = _1688_override_table_assignments(existing, overrides)
+                if source_net_changed and "net_proceeds_usd" not in overrides:
+                    assignments.append("`net_proceeds_usd` = %s")
+                    values.append(default_net)
                 if assignments:
-                    cursor.execute(
-                        f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} "
-                        "WHERE `source_item_id` = %s AND `source_type` = 'ai_original'",
-                        tuple(values + [product["source_item_id"]]),
-                    )
-            cursor.execute(
-                f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `source_item_id` = %s",
-                (product["source_item_id"],),
-            )
+                    _execute_source_scoped(cursor, f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} "
+                        "WHERE `source_item_id` = %s AND `source_type` = 'ai_original'", tuple(values + [product["source_item_id"]]))
+            _execute_source_scoped(cursor, f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `source_item_id` = %s", (product["source_item_id"],))
             row = cursor.fetchone()
         connection.commit()
         return _mirror_zying_snapshot_fields(_json_safe_row(row))
@@ -3548,9 +4040,7 @@ def update_ai_original_product(
         expected_revision = None
     if not normalized:
         raise ValueError("没有可保存的 AI 原创产品字段")
-    if "review_status" in normalized and normalized["review_status"] not in {
-        "unreviewed", "approved"
-    }:
+    if "review_status" in normalized and normalized["review_status"] not in PRODUCT_REVIEW_STATUSES:
         raise ValueError("AI 原创产品审核状态无效")
     decimal_fields = {
         "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
@@ -3585,7 +4075,8 @@ def update_ai_original_product(
                 # An AI worker can save a snapshot loaded before a source edit.
                 # Lock and merge the current overrides so that save cannot erase it.
                 cursor.execute(
-                    f"SELECT `source_snapshot_json` FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
+                    f"SELECT `source_snapshot_json`, `net_proceeds_usd`, `price`, `currency_id` "
+                    f"FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
                     "AND `source_type` = 'ai_original' FOR UPDATE", (row_id,),
                 )
                 current = cursor.fetchone()
@@ -3635,13 +4126,30 @@ def update_ai_original_product(
                     overrides = existing_snapshot.get("source_1688_overrides")
                     if isinstance(overrides, Mapping):
                         incoming_snapshot["source_1688_overrides"] = dict(overrides)
+                    purchase_target = existing_snapshot.get("purchase_net_proceeds")
+                    if isinstance(purchase_target, Mapping):
+                        incoming_snapshot["purchase_net_proceeds"] = dict(purchase_target)
                     if "source_snapshot_json" in normalized:
                         values[list(normalized).index("source_snapshot_json")] = _dumps(incoming_snapshot)
+                        if (platform_listing is None and "net_proceeds_usd" not in normalized
+                                and current.get("net_proceeds_usd") is None):
+                            default_net = _default_ai_original_net_proceeds(
+                                incoming_snapshot,
+                                fallback_price=(current.get("price")
+                                    if str(current.get("currency_id") or "").upper() == "CNY"
+                                    else None),
+                            )
+                            if default_net is not None:
+                                assignments.append(
+                                    "`net_proceeds_usd` = IF(`net_proceeds_usd` IS NULL, %s, `net_proceeds_usd`)"
+                                )
+                                values.append(default_net)
+                                normalized["net_proceeds_usd"] = default_net
             if normalized.get("review_status") == "approved":
                 cursor.execute(
                     f"SELECT `weight_g`, `net_proceeds_usd`, `source_snapshot_json` "
                     f"FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
-                    "AND `source_type` = 'ai_original'",
+                    "AND `source_type` = 'ai_original' FOR UPDATE",
                     (row_id,),
                 )
                 current = cursor.fetchone()
@@ -3676,6 +4184,23 @@ def update_ai_original_product(
                     raise KeyError("AI 原创产品不存在")
             cursor.execute(f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s", (row_id,))
             row = cursor.fetchone()
+            # Report success only for the values actually stored by MySQL.
+            # Decimal columns may round user input; never silently approve a
+            # different net amount or an unchanged review result.
+            for field in ("weight_g", "net_proceeds_usd", "review_status", "category_id"):
+                if field not in normalized:
+                    continue
+                expected = normalized[field]
+                actual = (row or {}).get(field)
+                if field in decimal_fields:
+                    expected = _decimal_from_text(expected)
+                    actual = _decimal_from_text(actual)
+                    matches = expected == actual or (expected is not None and actual is not None
+                        and abs(expected - actual) <= Decimal("0.00005"))
+                else:
+                    matches = expected == actual
+                if not matches:
+                    raise ValueError(f"保存后回读的 {field} 不一致，请刷新后重试")
         connection.commit()
         return _mirror_zying_snapshot_fields(_json_safe_row(row))
     except BaseException:
@@ -3742,7 +4267,7 @@ def update_ai_original_product_items(
                 cursor.execute(
                     f"UPDATE `{COLLECTION_TABLE}` AS c "
                     f"INNER JOIN `{PRODUCT_TABLE}` AS p "
-                    "ON c.`source_item_id` = p.`source_item_id` "
+                    "ON c.`source_item_id` = p.`source_item_id` AND c.`organization_key` = p.`organization_key` "
                     f"SET {', '.join(collection_assignments)} "
                     f"WHERE p.`source_type` = 'ai_original' AND p.`id` IN ({missing_placeholders})",
                     tuple(missing_ids),
@@ -4191,6 +4716,47 @@ def translate_ai_original_listing(
         connection.close()
 
 
+def zying_captured_metrics(snapshot: Mapping[str, Any], record: Mapping[str, Any] | None = None) -> dict:
+    """Read source-owned Zying values, including API and clicked-form captures.
+
+    netproceed is the USD target entered in Zying, independent of the price
+    currency. Missing values must not become zero or estimated proceeds.
+    """
+    record = record or {}
+    page = snapshot.get("page_snapshot")
+    page = page if isinstance(page, Mapping) else {}
+    detail = record.get("detail_data") or page.get("zying_detail")
+    detail = detail if isinstance(detail, Mapping) else {}
+    form = record.get("detail_form_fields") or page.get("detail_form_fields")
+    form = form if isinstance(form, Mapping) else {}
+
+    def number(*values):
+        return next((parsed for value in values
+                     if (parsed := _decimal_from_text(value)) is not None), None)
+
+    net = number(record.get("net_income"), snapshot.get("zying_net_proceeds_usd"),
+                 detail.get("sale_netproceed"), form.get("netproceed"))
+    weight = number(record.get("package_gross_weight"), snapshot.get("weight_g"),
+                    detail.get("sale_weight"), form.get("weight"))
+    raw_size = detail.get("sale_size")
+    size = _loads(raw_size, []) if isinstance(raw_size, str) else raw_size
+    size = size if isinstance(size, list) else []
+    record_size = re.findall(r"\d+(?:[.,]\d+)?", str(record.get("package_dimensions") or ""))[:3]
+    # Never shift a partially captured dimension into a different axis.
+    if len(record_size) != 3:
+        record_size = []
+    result = {"net_proceeds_usd": net, "weight_g": weight}
+    for index, (field, form_key) in enumerate((
+        ("package_length_cm", "sizeLength"), ("package_width_cm", "sizeWidth"),
+        ("package_height_cm", "sizeHeight"),
+    )):
+        result[field] = number(
+            record_size[index] if record_size else None, snapshot.get(field),
+            size[index] if len(size) > index else None, form.get(form_key),
+        )
+    return result
+
+
 def upsert_zying_products_to_products(
     records: Iterable[Mapping[str, Any]],
     *,
@@ -4252,22 +4818,13 @@ def upsert_zying_products_to_products(
         ).strip().upper()[:16]
         if currency_id in {"$", "US$", "USD$"}:
             currency_id = "USD"
-        weight_g = _decimal_from_text(
-            snapshot.get("weight_g") if snapshot.get("weight_g") not in (None, "")
-            else record.get("package_gross_weight")
-        )
+        metrics = zying_captured_metrics(snapshot, record)
+        snapshot.update(metrics)
+        weight_g = metrics["weight_g"]
         dimensions = [
-            _decimal_from_text(snapshot.get("package_length_cm")),
-            _decimal_from_text(snapshot.get("package_width_cm")),
-            _decimal_from_text(snapshot.get("package_height_cm")),
+            metrics["package_length_cm"], metrics["package_width_cm"],
+            metrics["package_height_cm"],
         ]
-        if any(value is None for value in dimensions):
-            parsed_dimensions = re.findall(
-                r"\d+(?:[.,]\d+)?",
-                str(record.get("package_dimensions") or ""),
-            )[:3]
-            if len(parsed_dimensions) == 3:
-                dimensions = [_decimal_from_text(value) for value in parsed_dimensions]
         volumetric_weight = (
             dimensions[0] * dimensions[1] * dimensions[2] / Decimal("6000")
             if all(value is not None for value in dimensions)
@@ -4281,9 +4838,7 @@ def upsert_zying_products_to_products(
         ).strip()[:64]
         category_name = str(record.get("product_category") or "").strip()[:255]
         sale_price_usd = price if currency_id == "USD" else None
-        net_proceeds = _decimal_from_text(record.get("net_income"))
-        if currency_id != "USD":
-            net_proceeds = None
+        net_proceeds = metrics["net_proceeds_usd"]
         # Preserve the direct ZYing value inside the source snapshot as an
         # auditable recovery source; it must never be derived from our fees.
         snapshot["zying_net_proceeds_usd"] = net_proceeds
@@ -4328,7 +4883,21 @@ def upsert_zying_products_to_products(
         "product_developer_id", "product_developer_name",
     )
     updates = ",\n                    ".join(
-        f"`{field}` = IF(`source_type` = 'zying', VALUES(`{field}`), `{field}`)"
+        f"`{field}` = IF(`source_type` = 'zying', "
+        + (
+            _preserve_purchase_snapshot_sql(zying=True)
+            if field == "source_snapshot_json"
+            else (
+                f"IF({_purchase_profitability_guard_sql()}, VALUES(`{field}`), `{field}`)"
+                if field in {"profitability_updated_at", "profitability_source"}
+                else f"IF({_purchase_profitability_guard_sql()}, COALESCE(VALUES(`{field}`), `{field}`), `{field}`)"
+                if field == "net_proceeds_usd"
+                else f"COALESCE(VALUES(`{field}`), `{field}`)"
+                if field in {"weight_g", "package_length_cm", "package_width_cm", "package_height_cm"}
+                else f"VALUES(`{field}`)"
+            )
+        )
+        + f", `{field}`)"
         for field in mirrored_fields
     )
     connection = (connection_factory or _connect)()
@@ -4336,8 +4905,7 @@ def upsert_zying_products_to_products(
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             _validate_collection_management_categories(cursor, category_ids)
-            cursor.executemany(
-                f"""
+            _execute_access_insert(cursor, f"""
                 INSERT INTO `{PRODUCT_TABLE}` (
                     `collection_item_id`, `source_type`, `review_status`, `source_item_id`,
                     `source_url`, `main_image_url`, `title`, `description_text`, `price`,
@@ -4352,9 +4920,7 @@ def upsert_zying_products_to_products(
                     {category_update_sql}
                     {updates},
                     `updated_at` = CURRENT_TIMESTAMP
-                """,
-                values,
-            )
+                """, values, many=True)
         connection.commit()
         return {"count": len(values), "skipped": skipped}
     except BaseException:
@@ -4487,15 +5053,23 @@ def upsert_pulled_store_links_to_products(
         "source_snapshot_json",
     )
     updates = ",\n                    ".join(
-        f"`{field}` = IF(`source_type` = 'pulled', VALUES(`{field}`), `{field}`)"
+        f"`{field}` = IF(`source_type` = 'pulled', "
+        + (
+            _preserve_purchase_snapshot_sql()
+            if field == "source_snapshot_json"
+            else (
+                f"IF({_purchase_profitability_guard_sql()}, VALUES(`{field}`), `{field}`)"
+                if field == "net_proceeds_usd" else f"VALUES(`{field}`)"
+            )
+        )
+        + f", `{field}`)"
         for field in pulled_fields
     )
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
-            cursor.executemany(
-                f"""
+            _execute_access_insert(cursor, f"""
                 INSERT INTO `{PRODUCT_TABLE}` (
                     `collection_item_id`, `source_type`, `review_status`, `source_item_id`,
                     `source_url`, `main_image_url`, `title`, `price`, `currency_id`,
@@ -4507,9 +5081,7 @@ def upsert_pulled_store_links_to_products(
                 ON DUPLICATE KEY UPDATE
                     {updates},
                     `updated_at` = CURRENT_TIMESTAMP
-                """,
-                values,
-            )
+                """, values, many=True, inherited=token)
         connection.commit()
         return {"count": len(values), "skipped": skipped}
     except BaseException:
@@ -4573,6 +5145,15 @@ def sync_pulled_product_fields_from_store_links(
             "products.`profitability_error` = NULL",
         ])
     assignments.append("products.`updated_at` = CURRENT_TIMESTAMP")
+    assignments = [
+        _preserve_purchase_assignment_sql(assignment, alias="products")
+        if assignment.startswith(tuple(
+            f"products.`{field}` = " for field in (
+                "net_proceeds_usd", "profitability_source", "profitability_updated_at",
+            )
+        )) else assignment
+        for assignment in assignments
+    ]
     placeholders = ", ".join(["%s"] * len(ids))
     connection = (connection_factory or _connect)()
     try:
@@ -4704,7 +5285,7 @@ def delete_product_items(
             cursor.execute(
                 f"SELECT `id`, `source_item_id`, `review_status`, `last_publish_status`, "
                 "`infringement_risk_level`, `infringement_keywords`, "
-                "`infringement_reason`, `infringement_checked_at` "
+                "`infringement_reason`, `infringement_checked_at`, `infringement_check_json` "
                 f"FROM `{PRODUCT_TABLE}` WHERE `id` IN ({placeholders})",
                 tuple(ids),
             )
@@ -4730,7 +5311,7 @@ def delete_product_items(
                     INNER JOIN `{PRODUCT_TABLE}` AS products
                       ON products.`id` = risks.`source_row_id`
                     INNER JOIN `{COLLECTION_TABLE}` AS collection_items
-                      ON collection_items.`source_item_id` = products.`source_item_id`
+                      ON collection_items.`source_item_id` = products.`source_item_id` AND collection_items.`organization_key` = products.`organization_key`
                     WHERE risks.`source_type` = 'product_list'
                       AND risks.`source_row_id` IN ({placeholders})
                     ON DUPLICATE KEY UPDATE
@@ -4743,6 +5324,7 @@ def delete_product_items(
                     """,
                     tuple(ids),
                 )
+                _copy_list_infringement_metadata(cursor, "product_list", "collection_list", ids)
                 cursor.execute(
                     f"DELETE FROM `infringement_risk_checks` "
                     f"WHERE `source_type` = 'product_list' "
@@ -4755,22 +5337,20 @@ def delete_product_items(
             )
             deleted = int(cursor.rowcount or 0)
             for row in product_states:
-                cursor.execute(
-                    f"UPDATE `{COLLECTION_TABLE}` SET `added_to_products` = 0, "
+                _execute_source_scoped(cursor, f"UPDATE `{COLLECTION_TABLE}` SET `added_to_products` = 0, "
                     "`review_status` = %s, `last_publish_status` = %s, "
                     "`infringement_risk_level` = %s, `infringement_keywords` = %s, "
-                    "`infringement_reason` = %s, `infringement_checked_at` = %s "
-                    "WHERE `source_item_id` = %s",
-                    (
+                    "`infringement_reason` = %s, `infringement_checked_at` = %s, `infringement_check_json` = %s "
+                    "WHERE `source_item_id` = %s", (
                         str(row.get("review_status") or "unreviewed"),
                         row.get("last_publish_status"),
                         row.get("infringement_risk_level"),
                         row.get("infringement_keywords"),
                         row.get("infringement_reason"),
                         row.get("infringement_checked_at"),
+                        row.get("infringement_check_json"),
                         str(row.get("source_item_id") or ""),
-                    ),
-                )
+                    ))
         connection.commit()
         return {"requested": len(ids), "deleted": deleted}
     except BaseException:
@@ -4810,11 +5390,12 @@ def move_product_items_to_collection(
             for row in product_rows:
                 cursor.execute(
                     f"SELECT * FROM `{COLLECTION_TABLE}` "
-                    "WHERE `id` = %s OR `source_item_id` = %s "
+                    "WHERE (`id` = %s OR `source_item_id` = %s) AND `organization_key` = %s "
                     "ORDER BY (`id` = %s) DESC, `id` DESC LIMIT 1",
                     (
                         int(row.get("collection_item_id") or 0),
                         str(row.get("source_item_id") or ""),
+                        row.get("organization_key") or product_access.organization(),
                         int(row.get("collection_item_id") or 0),
                     ),
                 )
@@ -4913,8 +5494,7 @@ def move_product_items_to_collection(
                         _dumps(snapshot.get("plugin_snapshot") or {}),
                         _now(),
                     )
-                    cursor.execute(
-                        f"""
+                    _execute_access_insert(cursor, f"""
                         INSERT INTO `{COLLECTION_TABLE}` (
                             `task_id`, `source_item_id`, `source_url`, `final_url`,
                             `main_image_url`, `title`, `price`, `currency_id`,
@@ -4938,19 +5518,22 @@ def move_product_items_to_collection(
                             `infringement_checked_at` = VALUES(`infringement_checked_at`),
                             `error_message` = VALUES(`error_message`),
                             `updated_at` = CURRENT_TIMESTAMP
-                        """,
-                        values,
-                    )
+                        """, values, inherited=row)
                     collection_row_id = int(cursor.lastrowid or 0)
                     if not collection_row_id:
-                        cursor.execute(
-                            f"SELECT `id` FROM `{COLLECTION_TABLE}` "
-                            "WHERE `source_item_id` = %s ORDER BY `id` DESC LIMIT 1",
-                            (str(row.get("source_item_id") or ""),),
-                        )
+                        _execute_source_scoped(cursor, f"SELECT `id` FROM `{COLLECTION_TABLE}` "
+                            "WHERE `source_item_id` = %s ORDER BY `id` DESC LIMIT 1", (str(row.get("source_item_id") or ""),))
                         collection_row_id = int((cursor.fetchone() or {}).get("id") or 0)
                     created += 1
                 if collection_row_id:
+                    cursor.execute(f"UPDATE `{COLLECTION_TABLE}` SET `organization_key` = %s, "
+                                   "`owner_user_id` = %s, `owner_name` = %s, `visibility` = %s WHERE `id` = %s",
+                                   (row.get('organization_key') or product_access.organization(), row.get('owner_user_id'),
+                                    row.get('owner_name') or '', row.get('visibility') or 'enterprise', collection_row_id))
+                    cursor.execute(
+                        f"UPDATE `{COLLECTION_TABLE}` SET `infringement_check_json` = %s, `category_id` = %s, `category_name` = %s WHERE `id` = %s",
+                        (row.get("infringement_check_json"), row.get("category_id"), row.get("category_name"), collection_row_id),
+                    )
                     moved_pairs.append((int(row["id"]), collection_row_id))
                 moved += 1
             if moved_pairs:
@@ -4985,6 +5568,8 @@ def move_product_items_to_collection(
                             """,
                             (collection_row_id, product_row_id),
                         )
+                    from bit.bit_mysql import copy_infringement_check_metadata
+                    copy_infringement_check_metadata(cursor, "product_list", "collection_list", moved_pairs)
                     cursor.execute(
                         f"DELETE FROM `infringement_risk_checks` "
                         f"WHERE `source_type` = 'product_list' "
@@ -5023,7 +5608,7 @@ def update_product_publish_state(
     connection_factory: Callable[[], Any] | None = None,
 ) -> None:
     status = str(status or "").strip()[:32]
-    if status not in {"pending", "publishing", "published", "failed"}:
+    if status not in {"pending", "publishing", "published", "failed", "pending_review"}:
         raise ValueError(f"不支持的上架状态: {status}")
     assignments = [
         "`last_publish_status` = %s",
@@ -5068,6 +5653,35 @@ def update_product_publish_state(
         connection.close()
 
 
+def _purchase_profitability_guard_sql(alias: str = "") -> str:
+    """Keep a purchase target authoritative during automatic fee refreshes."""
+    prefix = f"{alias}." if alias else ""
+    return (
+        f"LOWER(TRIM(COALESCE({prefix}`profitability_source`, ''))) "
+        f"<> '{PURCHASE_PROFITABILITY_SOURCE}'"
+    )
+
+
+def _preserve_purchase_assignment_sql(assignment: str, *, alias: str = "") -> str:
+    column, value = assignment.split(" = ", 1)
+    return f"{column} = IF({_purchase_profitability_guard_sql(alias)}, {value}, {column})"
+
+
+def _preserve_purchase_snapshot_sql(*, zying: bool = False) -> str:
+    """Merge only purchase metadata into a new source snapshot atomically."""
+    old_snapshot = "IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{}')"
+    purchase_fields = (
+        "'$.purchase_net_proceeds', "
+        f"JSON_EXTRACT({old_snapshot}, '$.purchase_net_proceeds')"
+    )
+    if zying:
+        purchase_fields += ", '$.zying_net_proceeds_usd', `net_proceeds_usd`"
+    return (
+        f"IF({_purchase_profitability_guard_sql()}, VALUES(`source_snapshot_json`), "
+        f"JSON_SET(VALUES(`source_snapshot_json`), {purchase_fields}))"
+    )
+
+
 def list_stale_profitability_items(
     *,
     stale_before: str,
@@ -5107,6 +5721,7 @@ def list_stale_profitability_items(
                         NULLIF(TRIM(COALESCE(`category_id`, '')), '') IS NOT NULL
                         OR NULLIF(TRIM(COALESCE(`title`, '')), '') IS NOT NULL
                     )
+                    AND {_purchase_profitability_guard_sql()}
                     {"AND `source_type` NOT IN ('zying', 'ai_original')" if table == PRODUCT_TABLE else ""}
                 """
                 cursor.execute(
@@ -5179,7 +5794,7 @@ def update_item_profitability(
         raise ValueError("商品编号不能为空")
     if str(snapshot.get("source_type") or "").strip().lower() in {
         "zying", "ai_original",
-    }:
+    } or str(snapshot.get("profitability_source") or "").strip().lower() == PURCHASE_PROFITABILITY_SOURCE:
         # Protect source-owned proceeds even when a row was already fetched by
         # an estimator worker before the queue exclusion took effect. ZYing
         # supplies the value directly; AI-original rows use the manually
@@ -5216,6 +5831,19 @@ def update_item_profitability(
             "".join(f" AND `{column}` <=> %s" for column in columns),
             [expected_inputs.get(column) for column in columns],
         )
+
+    def write_guard(table: str) -> str:
+        # Recheck the persisted owner inside the UPDATE. A worker may have
+        # fetched its inputs before the purchase transaction saved the target,
+        # and collection mirrors/fallback writes do not always carry an input
+        # snapshot to compare. The row lock makes this check atomic with save.
+        return (
+            f" AND {_purchase_profitability_guard_sql()}"
+            + (
+                " AND `source_type` NOT IN ('zying', 'ai_original')"
+                if table == PRODUCT_TABLE else ""
+            )
+        )
     collection_item_id = None
     if snapshot.get("task_id") is not None:
         try:
@@ -5233,7 +5861,8 @@ def update_item_profitability(
                 cas_sql, cas_values = cas(PRODUCT_TABLE)
                 cursor.execute(
                     f"UPDATE `{PRODUCT_TABLE}` SET {assignments} "
-                    f"WHERE `id` = %s AND `source_item_id` = %s{cas_sql}",
+                    f"WHERE `id` = %s AND `source_item_id` = %s"
+                    f"{write_guard(PRODUCT_TABLE)}{cas_sql}",
                     tuple(values + [int(snapshot["id"]), item_id] + cas_values),
                 )
                 applied = int(cursor.rowcount or 0) > 0
@@ -5242,7 +5871,7 @@ def update_item_profitability(
                 cursor.execute(
                     f"UPDATE `{COLLECTION_TABLE}` SET {assignments} "
                     f"WHERE `id` = %s AND `source_item_id` = %s"
-                    f"{collection_cas_sql}",
+                    f"{write_guard(COLLECTION_TABLE)}{collection_cas_sql}",
                     tuple(
                         values
                         + [collection_item_id, item_id]
@@ -5258,30 +5887,30 @@ def update_item_profitability(
                         include_updated_at=False,
                         include_snapshots=False,
                     )
-                    cursor.execute(
-                        f"""
+                    cursor.execute(f"""
                         UPDATE `{PRODUCT_TABLE}`
                         SET {assignments}
                         WHERE `source_item_id` = %s
                           AND `collection_item_id` = %s
                           AND `source_type` = 'collected'
+                          {write_guard(PRODUCT_TABLE)}
                           {product_cas_sql}
                           AND NOT EXISTS (
                               SELECT 1 FROM `{COLLECTION_TABLE}` AS newer
                               WHERE newer.`source_item_id` = %s AND newer.`id` > %s
+                                AND newer.`organization_key` = `{PRODUCT_TABLE}`.`organization_key`
                           )
-                        """,
-                        tuple(
+                        """, tuple(
                             values
                             + [item_id, collection_item_id]
                             + product_cas_values
                             + [item_id, collection_item_id]
-                        ),
-                    )
+                        ))
             else:
                 for table in (COLLECTION_TABLE, PRODUCT_TABLE):
                     cursor.execute(
-                        f"UPDATE `{table}` SET {assignments} WHERE `source_item_id` = %s",
+                        f"UPDATE `{table}` SET {assignments} WHERE `source_item_id` = %s"
+                        f"{write_guard(table)}",
                         tuple(values + [item_id]),
                     )
                     applied = applied or int(cursor.rowcount or 0) > 0
@@ -5360,6 +5989,7 @@ def mark_all_profitability_stale(
                         FROM `{table}`
                         WHERE `id` > %s
                           AND `price` IS NOT NULL AND `price` > 0
+                          AND {_purchase_profitability_guard_sql()}
                           {source_filter}
                           {site_filter}
                           {stale_filter}
@@ -5390,6 +6020,8 @@ def mark_all_profitability_stale(
                             `profitability_source` = %s,
                             `profitability_error` = ''
                         WHERE `id` IN ({placeholders})
+                          AND {_purchase_profitability_guard_sql()}
+                          {source_filter}
                         """,
                         tuple([reason_text] + batch_ids),
                     )
@@ -5522,7 +6154,12 @@ def _add_collection_items_to_products_once(
                 f"`{column}`" for column in PROFITABILITY_COLUMNS
             )
             profitability_updates_sql = ",\n                        ".join(
-                f"`{column}` = VALUES(`{column}`)" for column in PROFITABILITY_COLUMNS
+                (
+                    _preserve_purchase_assignment_sql(f"`{column}` = VALUES(`{column}`)")
+                    if column in {"net_proceeds_usd", "profitability_source", "profitability_updated_at"}
+                    else f"`{column}` = VALUES(`{column}`)"
+                )
+                for column in PROFITABILITY_COLUMNS
             )
             for row in selected_rows:
                 snapshot = {
@@ -5561,8 +6198,7 @@ def _add_collection_items_to_products_once(
                     *(row.get(column) for column in PROFITABILITY_COLUMNS),
                     _dumps(snapshot), _now(), row.get("ai_weight_price_json"),
                 )
-                cursor.execute(
-                    f"""
+                _execute_access_insert(cursor, f"""
                     INSERT INTO `{PRODUCT_TABLE}` (
                         `collection_item_id`, `source_type`, `review_status`,
                         `source_item_id`, `source_url`,
@@ -5600,14 +6236,20 @@ def _add_collection_items_to_products_once(
                         `infringement_checked_at` = VALUES(`infringement_checked_at`),
                         {profitability_updates_sql},
                         `ai_weight_price_json` = VALUES(`ai_weight_price_json`),
-                        `source_snapshot_json` = VALUES(`source_snapshot_json`),
+                        `source_snapshot_json` = {_preserve_purchase_snapshot_sql()},
                         `updated_at` = CURRENT_TIMESTAMP
-                    """,
-                    values,
-                )
+                    """, values, inherited=row)
             complete_ids = [int(row["id"]) for row in complete_rows]
             if complete_ids:
                 complete_placeholders = ", ".join(["%s"] * len(complete_ids))
+                cursor.execute(
+                    f"UPDATE `{PRODUCT_TABLE}` AS products INNER JOIN `{COLLECTION_TABLE}` AS collections "
+                    "ON products.`collection_item_id` = collections.`id` "
+                    "SET products.`infringement_check_json` = collections.`infringement_check_json`, "
+                    "products.`category_id` = collections.`category_id`, products.`category_name` = collections.`category_name` "
+                    f"WHERE collections.`id` IN ({complete_placeholders})",
+                    tuple(complete_ids),
+                )
                 cursor.execute(
                     f"UPDATE `{COLLECTION_TABLE}` SET `added_to_products` = 1 "
                     f"WHERE `id` IN ({complete_placeholders})",
@@ -5649,6 +6291,7 @@ def _add_collection_items_to_products_once(
                         """,
                         tuple(complete_ids),
                     )
+                    _copy_list_infringement_metadata(cursor, "collection_list", "product_list", complete_ids)
                     cursor.execute(
                         f"DELETE FROM `infringement_risk_checks` "
                         f"WHERE `source_type` = 'collection_list' "
@@ -5739,3 +6382,94 @@ def add_collection_items_to_products(
                 raise
             time.sleep(0.15 * (2**attempt))
     raise RuntimeError("加入产品列表重试结束但没有返回结果")
+
+
+def check_catalog_access(item_type, item_ids, *, manage_visibility=False, connection_factory=None):
+    """Validate the whole selection before returning or mutating any product."""
+    user = product_access.actor()
+    if not user:
+        return
+    table = {'products': PRODUCT_TABLE, 'collection': COLLECTION_TABLE}.get(item_type)
+    if not table:
+        raise ValueError('产品类型无效')
+    ids = _normalize_row_ids(item_ids, empty_message='请至少选择一个产品')
+    connection = (connection_factory or _connect_list)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(f"SELECT `id`, `organization_key`, `owner_user_id`, `owner_name`, `visibility` "
+                           f"FROM `{table}` WHERE `id` IN ({', '.join(['%s'] * len(ids))})", tuple(ids))
+            rows = cursor.fetchall()
+            if len(rows) != len(ids) or any(not product_access.can_view(row, user) for row in rows):
+                raise PermissionError('当前账号无权访问所选产品')
+            if manage_visibility and any(not (product_access.is_admin(user) or product_access.owns(row, user)) for row in rows):
+                raise PermissionError('只能设置自己采集产品的可见性')
+    finally:
+        connection.close()
+
+
+def set_catalog_visibility(item_type, item_ids, visibility, *, connection_factory=None):
+    if visibility not in {'private', 'enterprise'}:
+        raise ValueError('产品可见性必须为私有或企业共享')
+    if not product_access.actor():
+        raise PermissionError('请先登录')
+    ids = _normalize_row_ids(item_ids, empty_message='请至少选择一个产品')
+    table = {'products': PRODUCT_TABLE, 'collection': COLLECTION_TABLE}.get(item_type)
+    if not table:
+        raise ValueError('产品类型无效')
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(f"SELECT * FROM `{table}` WHERE `id` IN ({', '.join(['%s'] * len(ids))}) FOR UPDATE", tuple(ids))
+            rows = cursor.fetchall()
+            user = product_access.actor()
+            if len(rows) != len(ids) or any(not product_access.can_view(row, user) or not (product_access.is_admin(user) or product_access.owns(row, user)) for row in rows):
+                raise PermissionError('只能设置自己采集产品的可见性')
+            # The collection and product copies are one logical product.
+            for row in rows:
+                for linked_table in (PRODUCT_TABLE, COLLECTION_TABLE):
+                    cursor.execute(f"UPDATE `{linked_table}` SET `visibility` = %s WHERE `organization_key` = %s "
+                                   "AND `source_item_id` = %s AND (`owner_user_id` <=> %s "
+                                   "AND COALESCE(`owner_name`, '') = %s)",
+                                   (visibility, row['organization_key'], row['source_item_id'], row.get('owner_user_id'), row.get('owner_name') or ''))
+            # Always update the selected rows (a batch can contain several owners).
+            cursor.execute(f"UPDATE `{table}` SET `visibility` = %s WHERE `id` IN ({', '.join(['%s'] * len(ids))})", (visibility, *ids))
+        connection.commit()
+        return {'count': len(ids), 'visibility': visibility}
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def _protect_catalog_function(function):
+    """Enforce ID access for API, browser extension and worker store calls."""
+    import inspect
+    from functools import wraps
+    signature = inspect.signature(function)
+    keys = [key for key in signature.parameters if key in {
+        'product_item_id', 'product_item_ids', 'collection_item_id', 'collection_item_ids',
+    }]
+    if not keys:
+        return function
+    @wraps(function)
+    def protected(*args, **kwargs):
+        if product_access.actor():
+            bound = signature.bind(*args, **kwargs)
+            for key in keys:
+                value = bound.arguments.get(key)
+                if value is None:
+                    continue
+                check_catalog_access('products' if key.startswith('product') else 'collection',
+                                     value if key.endswith('ids') else [value],
+                                     connection_factory=kwargs.get('connection_factory'))
+        return function(*args, **kwargs)
+    return protected
+
+
+# Functions without explicit IDs (ingestion and maintenance) retain their own scope.
+for _catalog_name, _catalog_function in list(globals().items()):
+    if callable(_catalog_function) and getattr(_catalog_function, '__module__', '') == __name__ and not _catalog_name.startswith('_'):
+        globals()[_catalog_name] = _protect_catalog_function(_catalog_function)

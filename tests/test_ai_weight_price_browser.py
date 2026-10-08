@@ -563,9 +563,9 @@ def test_current_1688_detail_reads_only_official_sku_prices_and_weights(page):
     assert offer['merchant_id'] == 'shop123'
     assert offer['skus'] == [
         {'id': '11', 'label': '黄色 / 小号', 'price': '1.25', 'raw_price': '¥1.25',
-         'raw_surcharge': '', 'raw_weight': '40g', 'raw_dimensions': '黄色 / 小号', 'raw_text': '黄色 / 小号；页面单价 ¥1.25；包装重量 40g'},
+         'raw_surcharge': '', 'raw_weight': '40g', 'raw_dimensions': '', 'raw_text': '黄色 / 小号；页面单价 ¥1.25；包装重量 40g'},
         {'id': '22', 'label': '黑色 / 大号', 'price': '2.50', 'raw_price': '¥2.50',
-         'raw_surcharge': '', 'raw_weight': '55g', 'raw_dimensions': '黑色 / 大号', 'raw_text': '黑色 / 大号；页面单价 ¥2.50；包装重量 55g'},
+         'raw_surcharge': '', 'raw_weight': '55g', 'raw_dimensions': '', 'raw_text': '黑色 / 大号；页面单价 ¥2.50；包装重量 55g'},
     ]
 
 
@@ -1143,17 +1143,24 @@ def test_explicit_card_id_is_used_and_bad_custom_selector_is_not_ignored(page):
 
 
 @pytest.mark.parametrize("wrong_saved_value", [False, True])
-def test_write_fills_integer_dollar_net_proceeds_and_verifies_after_reload(page, monkeypatch, wrong_saved_value):
-    html = '''<div class="curd-detail-wrap"><div id="goods">101</div><div id="sku">blue cup</div>
+@pytest.mark.parametrize("saved_status", ["通过", "待审核"])
+@pytest.mark.parametrize("keep_original_income", [False, True])
+def test_write_fills_integer_dollar_net_proceeds_and_verifies_after_reload(
+        page, monkeypatch, wrong_saved_value, saved_status, keep_original_income):
+    html = '''<meta charset="utf-8"><div class="curd-detail-wrap"><div id="goods">101</div><div id="sku">blue cup</div>
       <input id="cost" value="99"><input id="netproceed" value="5"><input id="weight" value="400">
+      <label><input type="radio" name="stat" value="3000" checked>待审核</label>
+      <label><input type="radio" name="stat" value="1000">通过</label>
       <button id="save">保存</button><span id="saved" hidden>已保存</span></div>
       <script>
         const previous=JSON.parse(sessionStorage.getItem('saved')||'null');
-        if(previous){document.querySelector('#netproceed').value=previous.net;document.querySelector('#weight').value=previous.weight;}
+        if(previous){document.querySelector('#netproceed').value=previous.net;document.querySelector('#weight').value=previous.weight;
+          document.querySelector(`input[name=stat][value="${previous.status}"]`).checked=true;}
         document.querySelector('#save').onclick=()=>{sessionStorage.setItem('saved',JSON.stringify({
-          net:WRONG?'777':document.querySelector('#netproceed').value,weight:document.querySelector('#weight').value}));
+          net:WRONG?'777':document.querySelector('#netproceed').value,weight:document.querySelector('#weight').value,
+          status:STATUS_WRONG?'3000':document.querySelector('input[name=stat]:checked').value}));
           document.querySelector('#saved').hidden=false;};
-      </script>'''.replace("WRONG", "true" if wrong_saved_value else "false")
+      </script>'''.replace("STATUS_WRONG", "true" if saved_status != "通过" else "false").replace("WRONG", "true" if wrong_saved_value else "false")
     page.route("https://meli.zying.net/**", lambda route: route.fulfill(body=html, content_type="text/html"))
     page.goto("https://meli.zying.net/#/product/101")
     config = validate({"selectors": {"erp_edit_id": "#goods", "erp_edit_sku": "#sku", "erp_cost_input": "#cost",
@@ -1163,13 +1170,18 @@ def test_write_fills_integer_dollar_net_proceeds_and_verifies_after_reload(page,
     monkeypatch.setattr(adapter, "release", lambda *args: None)
     task = {"erp_edit_url": page.url, "erp_goods_id": "101", "erp_sku": "blue cup", "cost_price": "22", "net_income_usd": "4", "weight_g": "450"}
     before = []
-    if wrong_saved_value:
+    def before_save(old):
+        before.append(old)
+        if keep_original_income:
+            task.update(net_income_usd=old["net_income_usd"], pricing={"net_income_retained_original": True})
+    if wrong_saved_value or saved_status != "通过":
         with pytest.raises(ValueError, match="美元净收益"):
-            adapter.write(task, before.append)
+            adapter.write(task, before_save)
     else:
-        adapter.write(task, before.append)
-        assert page.locator("#netproceed").input_value() == "4"
-    assert before == [{"net_income_usd": "5", "weight_g": "400"}]
+        actual = adapter.write(task, before_save)
+        assert page.locator("#netproceed").input_value() == ("5" if keep_original_income else "4")
+        assert actual["review_status"] == "通过"
+    assert before == [{"net_income_usd": "5", "weight_g": "400", "review_status": "待审核"}]
     assert page.locator("#cost").input_value() == "99"
     assert page.locator("#weight").input_value() == "450"
 

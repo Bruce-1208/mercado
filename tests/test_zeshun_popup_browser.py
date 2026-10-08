@@ -1438,6 +1438,10 @@ def test_background_image_search_follows_new_1688_result_tab(browser):
       window.tabs=[{id:7,url:'https://www.1688.com/',status:'complete'}];
     }""")
     page.add_script_tag(path=str(EXTENSION / "background.js"))
+    page.evaluate("""() => {
+      window.aiWeightPriceWith1688Verification = async (_tab, operation) => operation();
+      window.aiWeightPriceConfirm1688Readable = async () => {};
+    }""")
     result = page.evaluate("""async () => {
       sendTabMessage=async(tabId,message)=>{
         if(message.type==='AI_WEIGHT_PRICE_SEARCH'){
@@ -1470,7 +1474,7 @@ def test_background_image_search_does_not_reload_new_result_tab_while_injecting_
         runtime:{onInstalled:event,onStartup:event,onMessage:event},alarms:{onAlarm:event},
         contextMenus:{onClicked:event},
         scripting:{executeScript:async args=>{
-              if(args.func) return [{result:args.target.tabId===7?'1.8.22':''}];
+                  if(args.func) return [{result:args.target.tabId===7?AI_WEIGHT_PRICE_CONTENT_VERSION:''}];
           injections.push(args);
         }},
         tabs:{query:async()=>window.tabs,reload:async tabId=>reloads.push(tabId)}};
@@ -1478,6 +1482,10 @@ def test_background_image_search_does_not_reload_new_result_tab_while_injecting_
       window.tabs=[{id:7,url:'https://www.1688.com/',status:'complete'}];
     }""")
     page.add_script_tag(path=str(EXTENSION / "background.js"))
+    page.evaluate("""() => {
+      window.aiWeightPriceWith1688Verification = async (_tab, operation) => operation();
+      window.aiWeightPriceConfirm1688Readable = async () => {};
+    }""")
     result = page.evaluate("""async () => {
       sendTabMessage=async(tabId,message)=>{
         if(message.type==='AI_WEIGHT_PRICE_SEARCH'){
@@ -1524,6 +1532,10 @@ def test_image_search_recovers_document_replacement_without_all_frame_injection(
       window.importScripts=()=>{};
     }""")
     page.add_script_tag(path=str(EXTENSION / "background.js"))
+    page.evaluate("""() => {
+      window.aiWeightPriceWith1688Verification = async (_tab, operation) => operation();
+      window.aiWeightPriceConfirm1688Readable = async () => {};
+    }""")
     result = page.evaluate("""async () => {
       let calls=0, uploads=0;
       sendTabMessage=async()=>{

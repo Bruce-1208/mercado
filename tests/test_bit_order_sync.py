@@ -723,6 +723,7 @@ def test_automatic_print_persists_activation_floor_and_uses_system_operator(monk
     assert print_options["operator_name"] == "系统自动打印"
     assert print_options["include_first_run_backlog"] is False
     assert print_options["candidate_start_by_token"] == {7: expected_start}
+    assert print_options["require_prepaid"] is True
     assert print_options["released"] is True
 
 
@@ -896,7 +897,12 @@ def test_cancelled_order_wins_over_shipment_status():
     }) == "cancelled"
 
 
-def test_order_sync_reads_official_shipment_status_in_parallel():
+def test_order_sync_reads_official_shipment_status_in_parallel(monkeypatch):
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "get_mercado_shipping_deadlines",
+        lambda token_id, shipping_ids: {},
+    )
     orders = [
         {"id": "101", "status": "paid", "shipping": {"id": "501"}},
         {"id": "102", "status": "paid", "shipping": {"id": "502"}},
@@ -913,7 +919,7 @@ def test_order_sync_reads_official_shipment_status_in_parallel():
                 "last_updated": "2026-09-13T01:02:03.000Z",
             }
 
-    result = bit_order_sync._enrich_order_shipment_statuses(Client(), orders)
+    result = bit_order_sync._enrich_order_shipment_statuses(Client(), orders, 8)
 
     assert result == {"shipments": 2, "failed": 0}
     assert orders[0]["_shipment_status"] == "shipped"
@@ -922,6 +928,11 @@ def test_order_sync_reads_official_shipment_status_in_parallel():
 
 def test_daily_refresh_reads_every_non_final_old_shipment(monkeypatch):
     saved = []
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "get_mercado_shipping_deadlines",
+        lambda token_id, shipping_ids: {},
+    )
     monkeypatch.setattr(
         bit_order_sync.bit_mysql,
         "list_mercado_shipment_status_candidates",
@@ -1104,13 +1115,34 @@ def test_mysql_upsert_uses_top_level_shipping_cost(monkeypatch):
     )
 
     row = captured_rows[0]
-    assert str(row[24]) == "31.99"
+    assert row[24] is None
+    assert str(row[37]) == "31.99"
+    assert str(row[38]) == "31.99"
+    assert row[39] == "USD"
+    assert row[40] == "order_shipping_cost"
 
 
 def test_shipment_sender_cost_sums_all_seller_parts():
     assert bit_order_sync._shipment_sender_cost(
         {"senders": [{"cost": 6.71}, {"cost": "1.29"}]}
     ) == bit_order_sync.Decimal("8.00")
+
+
+@pytest.mark.parametrize("cost", [None, "", "NaN", "Infinity", "-Infinity"])
+def test_shipment_sender_cost_rejects_missing_or_non_finite_values(cost):
+    with pytest.raises(ValueError, match="sender.cost"):
+        bit_order_sync._shipment_sender_cost({"senders": [{"cost": cost}]})
+
+
+def test_shipment_sender_cost_requires_every_sender_cost():
+    with pytest.raises(ValueError, match="sender.cost"):
+        bit_order_sync._shipment_sender_cost({"senders": [{"cost": 6.71}, {}]})
+
+
+def test_shipment_sender_cost_preserves_official_zero():
+    assert bit_order_sync._shipment_sender_cost(
+        {"senders": [{"cost": 0}]}
+    ) == bit_order_sync.Decimal("0")
 
 
 def test_parallel_api_results_stops_workers_during_interpreter_shutdown(monkeypatch):
@@ -1315,6 +1347,144 @@ def test_recent_order_financials_reuses_cache_within_six_hours(monkeypatch):
     assert saved_entries[0]["seller_cost"] == 2.6
 
 
+@pytest.mark.parametrize("shipment_status", ["shipped", "delivered", "not_delivered"])
+@pytest.mark.parametrize("cache_in_same_run", [False, True])
+@pytest.mark.parametrize("cached_status", ["ready_to_ship", ""])
+def test_dispatched_order_refreshes_pre_dispatch_cost_cache(
+    monkeypatch, shipment_status, cache_in_same_run, cached_status,
+):
+    saved_entries = []
+    calls = []
+    cached = {
+        "shipping_id": "shipment-9",
+        "seller_cost": 2.6,
+        "currency_id": "USD",
+        "payload_json": '{"senders": [{"cost": 2.6}]}',
+        "checked_at": datetime.now(),
+        "last_error": "",
+        "shipment_status": cached_status,
+    }
+
+    class Client:
+        def get_shipment_costs(self, shipment_id):
+            calls.append(shipment_id)
+            return {"currency_id": "USD", "senders": [{"cost": 8.25}]}
+
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "list_mercado_shipment_cost_cache",
+        lambda _ids: {"shipment-9": cached} if not cache_in_same_run else {},
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "save_mercado_shipment_costs",
+        lambda token_id, entries: saved_entries.extend(entries)
+        or {"shipments": len(entries), "orders": 1},
+    )
+    cache = (
+        {"shipment-9": bit_order_sync._cached_cost_entry(cached)}
+        if cache_in_same_run else {}
+    )
+
+    result = bit_order_sync._sync_order_financials(
+        Client(),
+        {"id": 9},
+        [{"shipping": {"id": "shipment-9"}, "status": "paid",
+          "_shipment_status": shipment_status}],
+        cache,
+    )
+
+    assert result["failed"] == 0
+    assert calls == ["shipment-9"]
+    assert saved_entries[0]["seller_cost"] == bit_order_sync.Decimal("8.25")
+    assert saved_entries[0]["shipment_status"] == shipment_status
+    assert saved_entries[0]["from_cache"] is False
+
+
+def test_dispatched_order_refresh_failure_keeps_cached_quote_stage(monkeypatch):
+    saved_entries = []
+
+    class Client:
+        def get_shipment_costs(self, shipment_id):
+            raise RuntimeError("运费 API 暂不可用")
+
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "list_mercado_shipment_cost_cache",
+        lambda _ids: {
+            "shipment-9": {
+                "shipping_id": "shipment-9",
+                "seller_cost": 2.6,
+                "currency_id": "USD",
+                "payload_json": '{"senders": [{"cost": 2.6}]}',
+                "checked_at": datetime.now(),
+                "last_error": "",
+                "shipment_status": "ready_to_ship",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "save_mercado_shipment_costs",
+        lambda token_id, entries: saved_entries.extend(entries)
+        or {"shipments": len(entries), "orders": 1},
+    )
+
+    result = bit_order_sync._sync_order_financials(
+        Client(),
+        {"id": 9},
+        [{"shipping": {"id": "shipment-9"}, "status": "shipped"}],
+    )
+
+    assert result["failed"] == 1
+    assert saved_entries[0]["seller_cost"] == 2.6
+    assert saved_entries[0]["shipment_status"] == "ready_to_ship"
+    assert saved_entries[0]["from_cache"] is True
+    assert saved_entries[0]["error"] == "运费 API 暂不可用"
+
+
+def test_dispatched_order_reuses_only_post_dispatch_cost_cache(monkeypatch):
+    saved_entries = []
+
+    class Client:
+        def get_shipment_costs(self, shipment_id):
+            pytest.fail(f"发货后的新鲜成本缓存应复用：{shipment_id}")
+
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "list_mercado_shipment_cost_cache",
+        lambda _ids: {
+            "shipment-9": {
+                "shipping_id": "shipment-9",
+                "seller_cost": 8.25,
+                "currency_id": "USD",
+                "payload_json": '{"senders": [{"cost": 8.25}]}',
+                "checked_at": datetime.now(),
+                "last_error": "",
+                "shipment_status": "shipped",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "save_mercado_shipment_costs",
+        lambda token_id, entries: saved_entries.extend(entries)
+        or {"shipments": len(entries), "orders": 1},
+    )
+
+    result = bit_order_sync._sync_order_financials(
+        Client(),
+        {"id": 9},
+        [{"shipping": {"id": "shipment-9"}, "status": "paid",
+          "_shipment_status": "delivered"}],
+    )
+
+    assert result["failed"] == 0
+    assert saved_entries[0]["seller_cost"] == 8.25
+    assert saved_entries[0]["shipment_status"] == "shipped"
+    assert saved_entries[0]["from_cache"] is True
+
+
 def test_daily_financial_sync_bypasses_fresh_shipment_cache(monkeypatch):
     saved_entries = []
     calls = []
@@ -1462,7 +1632,7 @@ def test_financial_backfill_loop_stops_during_interpreter_shutdown(monkeypatch):
     monkeypatch.setattr(
         bit_order_sync.bit_mysql,
         "refresh_mercado_order_quoted_freight",
-        lambda limit=200: pytest.fail("退出期间不应继续补算标价运费"),
+        lambda limit=200: pytest.fail("退出期间不应继续补全标价运费"),
     )
     monkeypatch.setattr(bit_order_sync, "_financial_backfill_stop_event", threading.Event())
 

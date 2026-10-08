@@ -574,3 +574,44 @@ def test_family_result_does_not_expose_one_variants_up_id_for_reuse():
         "site_items": [{"site_id": "MLM", "item_id": "MLM1"}, {"site_id": "MLM", "item_id": "MLM2"}],
     }}
     assert batch_publish._published_item_id(publication) == "MLM1"
+
+
+@pytest.mark.parametrize("draft_risk", [False, True])
+def test_infringement_is_held_for_review_while_other_products_publish(draft_risk):
+    from bit.infringement_state import content_hash
+    from bit.infringement_publish import InfringementReviewRequired
+    rows = _rows()
+    if not draft_risk:
+        risky = rows[0]
+        risky["infringement_check_json"] = json.dumps({
+            "risk_level": 2, "check_status": "completed", "detection_scope": "title",
+            "content_hash": content_hash(risky),
+        })
+    uploaded, states, records = [], [], []
+
+    def preflight(row, draft, site):
+        if row["id"] == 11:
+            raise InfringementReviewRequired("最终上架标题存在侵权风险")
+
+    def publish(client, url, **kwargs):
+        kwargs["on_prepared"]({"report": {}, "payload": {"title": "Title"}})
+        uploaded.append(url)
+        return {"result": {"id": "CBT999"}}
+
+    with patch.object(batch_publish, "_token_record", return_value={"access_token": "secret"}), patch.object(
+        batch_publish, "follow_sell", side_effect=publish
+    ):
+        result = batch_publish.publish_product_batch(
+            rows, token_id=7, site_id="MLB", client=object(),
+            update_state=lambda product_id, **changes: states.append((product_id, changes)),
+            create_records=lambda *args, **kwargs: {11: 101, 12: 102},
+            update_record=lambda record_id, **changes: records.append((record_id, changes)),
+            infringement_preflight=preflight if draft_risk else None,
+        )
+    assert result["published_count"] == 1
+    assert result["failed_count"] == 0
+    assert result["pending_review_count"] == 1
+    assert result["results"][0]["status"] == "pending_review"
+    assert uploaded == [rows[1]["source_url"]]
+    assert any(i == 11 and change["status"] == "pending_review" for i, change in states)
+    assert any(i == 101 and change["status"] == "pending_review" for i, change in records)

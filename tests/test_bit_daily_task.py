@@ -980,11 +980,11 @@ def test_shop_executor_passes_ai_copy_mode_only_for_supported_types(
         appeal_type=appeal_type,
         site_pause=0,
         appeal_copy_mode="AI话术模式",
-        deepseek_api_key="manual-secret",
+        dashscope_api_key="manual-secret",
     )
 
     assert calls[0][1]["ai_script_mode"] is True
-    assert calls[0][1]["deepseek_api_key"] == "manual-secret"
+    assert calls[0][1]["dashscope_api_key"] == "manual-secret"
 
 
 def test_infraction_plan_opens_prohibited_as_independent_form(monkeypatch):

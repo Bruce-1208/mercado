@@ -2,7 +2,7 @@ from test_browser_extension_management_categories import workbench, HEADERS
 from bit.mercado_product_data import DataError
 
 
-def test_product_data_routes_require_own_login_and_hide_upstream_auth(workbench, monkeypatch):
+def test_product_data_routes_require_own_login_and_hide_upstream_auth(workbench, monkeypatch, subscribed_workbench_account):
     from bit.mercado_product_data import service
     client = workbench.app.test_client()
     remote = {"base_url":"https://zeshun.example.com", "environ_base":{"REMOTE_ADDR":"192.0.2.25"}}
@@ -21,7 +21,10 @@ def test_product_data_routes_require_own_login_and_hide_upstream_auth(workbench,
     assert 'token' not in failed.text
 
 
-def test_product_data_is_routed_to_single_worker():
+def test_product_data_uses_web_pool_independent_of_background_jobs():
     from bit.service_split import is_worker_path
-    assert is_worker_path('/api/browser-extension/mercado-data/query')
-    assert is_worker_path('/api/browser-extension/mercado-data/status')
+    # ProductDataService already coalesces cache misses and session refreshes
+    # with an interprocess file lock; reads do not need the task worker.
+    assert not is_worker_path('/api/browser-extension/mercado-data/query')
+    assert not is_worker_path('/api/browser-extension/mercado-data/status')
+    assert is_worker_path('/api/browser-extension/zying/start')

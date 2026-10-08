@@ -12,7 +12,98 @@ from urllib.parse import urlsplit
 ORDER_URL = "https://meli.zying.net/#/order"
 SEARCH_PLACEHOLDER = "订单、采购单、运单,多个编号可以逗号、空格分隔"
 SYNC_BATCH_SIZE = 10
+SYNC_DETAIL_CONCURRENCY = 4
+SYNC_LOOKUP_TIMEOUT_MS = 30000
 SYNC_PROGRESS_TIMEOUT = 600
+
+# Discover the already loaded official request module instead of coupling to
+# Vite's changing chunk names/export aliases. No credentials leave the page.
+ORDER_API_DISCOVERY = r"""async () => {
+    if (window.__mercadoZyingOrderApi) return true;
+    const urls = [...new Set([
+        ...performance.getEntriesByType('resource').map(entry => entry.name),
+        ...Array.from(document.scripts, script => script.src)
+    ])].filter(url => {
+        try {
+            const parsed = new URL(url, location.href);
+            return parsed.origin === location.origin && parsed.pathname.endsWith('.js');
+        } catch (_) { return false; }
+    });
+    const controller = new AbortController();
+    let timer;
+    try {
+        return await Promise.race([
+            (async () => {
+                for (const url of urls) {
+                    if (controller.signal.aborted) return false;
+                    try {
+                        const response = await fetch(url, {
+                            credentials: 'same-origin', signal: controller.signal
+                        });
+                        if (!response.ok) continue;
+                        const source = await response.text();
+                        if (!/getFreeStyleApi\s*:/.test(source)) continue;
+                        const module = await import(url);
+                        if (controller.signal.aborted) return false;
+                        const api = Object.values(module).find(value =>
+                            value && typeof value.getFreeStyleApi === 'function');
+                        if (api) {
+                            window.__mercadoZyingOrderApi = api;
+                            return true;
+                        }
+                    } catch (_) {}
+                }
+                return false;
+            })(),
+            new Promise(resolve => { timer = setTimeout(() => {
+                controller.abort(); resolve(false);
+            }, 5000); })
+        ]);
+    } finally { clearTimeout(timer); controller.abort(); }
+}"""
+
+ORDER_API_DETAILS = r"""async ({ids, timeout}) => {
+    const api = window.__mercadoZyingOrderApi;
+    return await Promise.all(ids.map(async id => {
+        const controller = new AbortController();
+        let timer;
+        try {
+            const response = await Promise.race([
+                api.getFreeStyleApi('order.view', {id: Number(id)}, undefined, {
+                    signal: controller.signal, timeout, silentError: true
+                }),
+                new Promise((_, reject) => { timer = setTimeout(() => {
+                    controller.abort(); reject(new Error('zying-detail-timeout'));
+                }, timeout); })
+            ]);
+            if (response?.code !== 200 || !response.data || typeof response.data !== 'object') {
+                return {id, error: '智赢请求未成功，请检查登录状态与订单查看权限'};
+            }
+            const data = response.data;
+            const pick = (value, keys) => value && typeof value === 'object'
+                ? Object.fromEntries(keys.filter(key => key in value).map(key => [key, value[key]]))
+                : value;
+            // Items/images/customer data are not used for purchase writeback.
+            return {id, detail: {
+                root: Array.isArray(data.root) ? data.root.map(row => pick(row,
+                    ['order_id', 'order_no', 'order_key', 'order_cost'])) : data.root,
+                buys: Array.isArray(data.buys) ? data.buys.map(row => pick(row,
+                    ['no', 'trace'])) : data.buys
+            }};
+        } catch (error) {
+            const timedOut = error?.message === 'zying-detail-timeout' ||
+                ['ECONNABORTED', 'ETIMEDOUT'].includes(error?.code);
+            return timedOut ? {id, timeout: true} : {
+                id, error: '智赢详情请求失败，请检查登录状态与订单查看权限：' +
+                    String(error?.response?.data?.message || error?.message || error).slice(0, 200)
+            };
+        } finally { clearTimeout(timer); controller.abort(); }
+    }));
+}"""
+
+
+class ZyingLoginRequired(RuntimeError):
+    """The visible browser still needs an authenticated session."""
 
 
 def is_lookup_timeout(exc):
@@ -76,8 +167,8 @@ def parse_purchase(detail, row):
     return changes
 
 
-def snapshot_orders(reader, filters, should_stop=None):
-    params = dict(filters, page=1, page_size=200)
+def snapshot_orders(reader, filters, should_stop=None, page_size=200):
+    params = dict(filters, page=1, page_size=page_size)
     result, seen = [], set()
     while True:
         if should_stop and should_stop():
@@ -115,6 +206,7 @@ class ZyingPage:
     def __init__(self, page):
         self.page = page
         self._ready = False
+        self._api_available = None
 
     def _ensure_order_page(self):
         page = self.page
@@ -146,8 +238,18 @@ class ZyingPage:
                     f"已尝试切换智赢订单页，但未找到订单搜索框（当前页面：{location}）；"
                     "请确认该账号能打开订单列表，或检查智赢页面是否已改版"
                 )
+            if route.rstrip("/") == "/login" or current.path.rstrip("/") == "/login":
+                raise ZyingLoginRequired(message) from exc
             raise RuntimeError(message) from exc
         self._ready = True
+
+    def ensure_login(self):
+        # A login in another tab updates cookies/storage but leaves this SPA's
+        # in-memory authentication stale. Reload once after user confirmation.
+        self.page.reload(wait_until="domcontentloaded", timeout=30000)
+        self._ready = False
+        self._api_available = None
+        self._ensure_order_page()
 
     @staticmethod
     def _query_key(rows):
@@ -196,6 +298,34 @@ class ZyingPage:
             raise ValueError("智赢返回了其他订单详情")
         return detail
 
+    def _details_many(self, internal_ids):
+        if self._api_available is None:
+            self._api_available = bool(self.page and self.page.evaluate(ORDER_API_DISCOVERY))
+        if not self._api_available:
+            return None
+        outcomes = {}
+        # One wave at a time also bounds outstanding requests after a timeout;
+        # the official HTTP client receives an abort signal and a 30s timeout.
+        for start in range(0, len(internal_ids), SYNC_DETAIL_CONCURRENCY):
+            ids = internal_ids[start:start + SYNC_DETAIL_CONCURRENCY]
+            results = self.page.evaluate(ORDER_API_DETAILS, {"ids": ids, "timeout": SYNC_LOOKUP_TIMEOUT_MS})
+            for result in results:
+                internal_id = result["id"]
+                if result.get("timeout"):
+                    outcomes[internal_id] = timeout_outcome(TimeoutError("订单详情响应超过 30 秒"))
+                elif result.get("error"):
+                    raise RuntimeError(result["error"])
+                else:
+                    detail = result.get("detail") or {}
+                    roots = detail.get("root")
+                    if (not isinstance(roots, list) or len(roots) != 1
+                            or not isinstance(roots[0], dict)
+                            or clean(roots[0].get("order_id")) != internal_id):
+                        outcomes[internal_id] = {"error": "智赢返回了其他订单详情或详情不唯一"}
+                    else:
+                        outcomes[internal_id] = {"detail": detail}
+        return outcomes
+
     def lookup_many(self, rows):
         """Search several orders in the SPA, splitting groups that overflow one page."""
         outcomes = {}
@@ -239,7 +369,12 @@ class ZyingPage:
                     continue
                 matches_by_id.setdefault(internal_id, []).append(row_id)
 
+            parallel = self._details_many(list(matches_by_id)) if matches_by_id else None
             for internal_id, row_ids in matches_by_id.items():
+                if parallel is not None:
+                    for row_id in row_ids:
+                        outcomes[row_id] = parallel[internal_id]
+                    continue
                 try:
                     detail = self._detail(internal_id)
                 except Exception as exc:
@@ -445,6 +580,79 @@ class SyncManager:
             raise
         return self.status(owner)
 
+    def start_excel(self, owner, filters, records, reader, writer):
+        """Use the same worker lifecycle and write lock as browser synchronization."""
+        with self.lock:
+            self._reap_stalled()
+            if self.running:
+                raise ValueError("智赢订单同步正在运行，请稍后再试")
+            state = {"started_at": time.time(), "running": True, "phase": "loading",
+                     "execution_target": "excel", "total": len(records), "completed": 0,
+                     "updated": 0, "skipped": 0, "failed": 0, "results": [],
+                     "message": "正在读取当前筛选范围内的订单，准备同步 Excel"}
+            self.running = True
+            self.active_state = state
+            self.jobs[str(owner)] = state
+            self.login_events[str(owner)] = threading.Event()
+
+        def run():
+            try:
+                rows = snapshot_orders(reader, dict(filters, include_summary=False, sync_identifiers_only=True),
+                                       lambda: state.get("stop_requested"))
+                # Only a platform child order ID owns its cost. Pack IDs and
+                # Zying's internal IDs must never assign a whole pack's cost.
+                ids = {clean(row["id"]) for row in rows if not clean(row["id"]).startswith("yandex:")}
+                with self.lock:
+                    if state.get("stop_requested"):
+                        return
+                    state.update(phase="syncing", progress_at=time.time(), message="正在同步 Excel 采购信息")
+                for record in records:
+                    if state.get("stop_requested"):
+                        break
+                    result = {"order_id": record["order_id"], "source": "；".join(record["locations"])}
+                    try:
+                        if record["error"]:
+                            raise ValueError(record["error"])
+                        if record["order_id"] not in ids:
+                            result.update(status="skipped", message="未匹配当前筛选中的平台子订单（仅打包单号不回填）")
+                        elif not record["changes"]:
+                            result.update(status="skipped", message="采购字段为空，保留已有值")
+                        else:
+                            with self.lock:
+                                if state.get("stop_requested"):
+                                    break
+                                saved = writer(record["order_id"], record["changes"])
+                            if not saved or int(saved.get("matched") or 0) != 1:
+                                raise ValueError("泽顺订单未成功匹配，未确认回填")
+                            result.update(status="updated", message="已同步", **record["changes"])
+                    except Exception as exc:
+                        result.update(status="failed", message=str(exc)[:300])
+                    with self.lock:
+                        state[result["status"]] += 1
+                        state["completed"] += 1
+                        state["results"].append(result)
+                        state["progress_at"] = time.time()
+                with self.lock:
+                    state.update(phase="stopped" if state.get("stop_requested") else "completed",
+                                 message="任务已结束" if state.get("stop_requested") else "Excel 同步完成")
+            except Exception as exc:
+                with self.lock:
+                    state.update(phase="stopped" if state.get("stop_requested") else "failed",
+                                 message="任务已结束" if state.get("stop_requested") else str(exc)[:300])
+            finally:
+                with self.lock:
+                    self._release(state)
+
+        thread = threading.Thread(target=run, name="zying-excel-sync", daemon=True)
+        try:
+            thread.start()
+        except Exception:
+            with self.lock:
+                self._release(state)
+                state.update(phase="failed", message="Excel 同步线程启动失败")
+            raise
+        return self.status(owner)
+
 
 manager = SyncManager()
 
@@ -549,19 +757,30 @@ class AgentSync:
                 return None
             entry["stop_event"].set()
             entry["state"].update(
-                phase="stopping", stop_requested=True, message="正在停止订单读取",
+                running=False, phase="stopped", stop_requested=True, message="任务已结束",
             )
             return copy.deepcopy(entry["state"])
+
+    def stop(self, store, job):
+        """Revoke writes immediately; the Agent cleans up on its next heartbeat."""
+        with self.lock:
+            if store.request_cancel(job["job_id"]):
+                state = dict(job.get("result") or {})
+                state.update(running=False, phase="stopped", stop_requested=True, message="任务已结束")
+                store.append_event(job["job_id"], job["agent_id"],
+                                   status="stopped", message=state["message"], result=state)
+            return self.status(store.get_job(job["job_id"]))
 
     def owner_status(self, store, owner, manager):
         job = self.job(store, owner)
         preparing = self.preparing_status(owner)
+        server_state = manager.status(owner)
         if preparing and (
             job is None
             or float(preparing.get("started_at") or 0) >= float(job.get("created_at") or 0)
-        ):
+        ) and float(preparing.get("started_at") or 0) >= float(server_state.get("started_at") or 0):
             return preparing
-        return self.status(job) if job else manager.status(owner)
+        return self.status(job) if job else server_state
 
     def job(self, store, owner):
         if owner is None:
@@ -569,6 +788,9 @@ class AgentSync:
         with self.lock:
             jobs = store.list_jobs(job_type="zying_order_sync", created_by_id=owner, limit=1)
             job = jobs[0] if jobs else None
+            if job and job["status"] == "stopping" and job.get("cancel_requested"):
+                self.stop(store, job)
+                job = store.get_job(job["job_id"])
             if job and job["status"] in {"running", "stopping"}:
                 state = dict(job.get("result") or {})
                 now = time.time()
@@ -597,7 +819,8 @@ class AgentSync:
         state.update(running=running, execution_target="agent", task_id=job["job_id"])
         if not running:
             state.update(phase="completed" if job["status"] == "success" else job["status"],
-                         message=job.get("message") or "任务已结束")
+                         message=(state.get("worker_error") if job["status"] == "error" else None)
+                         or job.get("message") or "任务已结束")
         elif job.get("cancel_requested"):
             state.update(phase="stopping", message="正在结束任务", stop_requested=True)
         else:
@@ -618,6 +841,10 @@ class AgentSync:
             state.update(phase="waiting_login", message="已打开 Agent 本机 Edge，请登录智赢后点击确定登录",
                          total=len(job["payload"]["rows"]), completed=0, updated=0, skipped=0, failed=0, results=[])
             self.save(store, job, state)
+        elif action == "login_required":
+            if state.get("phase") == "syncing":
+                state.update(phase="waiting_login", message="Agent 的智赢页面尚未登录，请在同步窗口完成登录后再次点击确定登录")
+                self.save(store, job, state)
         elif action in {"row", "rows"}:
             if state.get("phase") != "syncing":
                 raise ValueError("请先确认登录")
@@ -681,7 +908,19 @@ def run_agent_sync(job, stop_event, request_api=None, browser_factory=open_reade
     path = "/api/local-agents/zying-sync/" + job["job_id"]
     def call(**data):
         timeout = 180 if data.get("action") in {"row", "rows"} else 60
-        return request_api("POST", path, json={**data, "compact": True}, timeout=timeout)
+        from bit.bit_db_api import DatabaseAPIUnavailableError
+        # Control actions are idempotent. Keep result writes single-attempt:
+        # a transport failure can happen after the database has committed.
+        for attempt in range(7):
+            try:
+                return request_api("POST", path, json={**data, "compact": True}, timeout=timeout)
+            except DatabaseAPIUnavailableError:
+                if data.get("action") not in {"ready", "control", "login_required"} or attempt == 6:
+                    raise
+                delay = min(30, 2 ** attempt)
+                print(f"智赢同步连接暂时中断，{delay} 秒后恢复连接", flush=True)
+                if stop_event.wait(delay):
+                    return {"stop": True, "phase": "stopped", "message": "任务已结束"}
     rows = job["payload"]["rows"]
     state = {}
     if stop_event.is_set():
@@ -691,13 +930,23 @@ def run_agent_sync(job, stop_event, request_api=None, browser_factory=open_reade
     with browser_factory({}) as browser:
         state = call(action="ready")
         deadline = time.monotonic() + 900
-        while state.get("phase") != "syncing":
-            if state.get("stop") or stop_event.wait(1):
-                stop_event.set()
-                return state
-            if time.monotonic() >= deadline:
-                raise RuntimeError("等待登录超时，请重新启动同步")
-            state = call(action="control")
+        while True:
+            while state.get("phase") != "syncing":
+                if state.get("stop") or stop_event.wait(1):
+                    stop_event.set()
+                    return state
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("等待登录超时，请重新启动同步")
+                state = call(action="control")
+            try:
+                ensure_login = getattr(browser, "ensure_login", None)
+                if callable(ensure_login):
+                    ensure_login()
+                break
+            except ZyingLoginRequired:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("等待登录超时，请重新启动同步")
+                state = call(action="login_required")
         for start in range(0, len(rows), SYNC_BATCH_SIZE):
             # Login and each result response already include the stop state.
             if state.get("stop") or stop_event.is_set():

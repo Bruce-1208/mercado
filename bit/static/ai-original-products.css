@@ -30,3 +30,22 @@
 .ai-original-editor-variant-wrap table{min-width:1060px}.ai-original-editor-variant-wrap th,.ai-original-editor-variant-wrap td{vertical-align:middle}.ai-original-editor-variant-wrap th{white-space:nowrap}.ai-original-editor-variant-wrap input{min-width:74px}.ai-original-variant-image-cell{display:grid;gap:5px;min-width:150px}.ai-original-variant-thumbnails{display:flex;gap:4px}.ai-original-variant-thumbnails img{width:34px;height:34px;border:1px solid #e2e8f0;border-radius:5px;object-fit:cover}
 .ai-original-variant-dimensions{display:grid;gap:7px;margin-bottom:8px}.ai-original-variant-dimension-row{display:grid;grid-template-columns:minmax(140px,.8fr) minmax(240px,2fr) auto;align-items:end;gap:8px;padding:8px;border:1px solid #edf1f5;border-radius:8px;background:#fbfcfe}.ai-original-variant-dimension-row label{display:grid;gap:4px}.ai-original-variant-dimension-row label span{color:#77869a;font-size:10px;font-weight:700}.ai-original-variant-dimension-row input{box-sizing:border-box;width:100%;border:1px solid #d7e0ec;border-radius:6px;padding:7px 8px;color:#2f4058;font:inherit;font-size:11px}.ai-original-variant-dimension-actions{display:flex;gap:7px;margin-bottom:8px}.ai-original-variant-hint{color:#8a97a8;font-size:11px}
 @media(max-width:680px){.ai-original-variant-dimension-row{grid-template-columns:1fr}}
+
+/* Defer offscreen card layout while preserving form values and selection. */
+#ai-original-grid > .ai-original-card{content-visibility:auto;contain-intrinsic-height:auto 520px}
+@media print{#ai-original-grid > .ai-original-card{content-visibility:visible}}
+
+/* Show correction targets directly on cards and editor controls. */
+#tab-ai-original-products .ai-original-card.has-issues{border-color:#e3a25b}
+#tab-ai-original-products .ai-original-issues{margin:0 0 6px;padding:6px 8px;border:1px solid #efc69c;border-radius:7px;background:#fff5e9;color:#9a4814;max-height:76px;overflow:auto;font-size:11px}
+#tab-ai-original-products .ai-original-issues>summary{color:#9a4814;font-weight:750;cursor:pointer}
+#tab-ai-original-products .ai-original-issues ul{margin:4px 0 0;padding-left:16px;line-height:1.6;overflow-wrap:anywhere}
+#tab-ai-original-products .ai-original-check-panel li.pending{color:#9a4814;font-weight:700;background:#fff5e9;border-radius:4px;padding:3px}
+#tab-ai-original-products .ai-original-fields .ai-original-field-issue,#tab-ai-original-products .ai-original-editor-dialog .ai-original-field-issue{border:2px solid #d86b36;background:#fff7ef}
+#tab-ai-original-products .ai-original-label-issue,#tab-ai-original-products .ai-original-editor-dialog .ai-original-label-issue>span{color:#a54319;font-weight:750}
+#tab-ai-original-products .ai-original-field-hint,.ai-original-editor-dialog .ai-original-field-hint{display:block;margin-top:3px;color:#a54319;font-size:10px;font-weight:650}
+.ai-original-editor-dialog .ai-original-section-issue{border:2px solid #d86b36;background:#fffaf4}
+#tab-ai-original-products .has-issues .ai-original-copy>.ai-original-issues{max-height:44px;margin-bottom:4px;padding:4px 6px}
+#tab-ai-original-products .has-issues .ai-original-copy>.ai-original-title-label{line-height:14px;margin-bottom:2px}
+#tab-ai-original-products .has-issues .ai-original-copy>.ai-original-title-text{height:32px;line-height:16px;margin-bottom:3px}
+#tab-ai-original-products .has-issues .ai-original-copy>.ai-original-edit-button{padding:6px 10px;margin-top:4px}

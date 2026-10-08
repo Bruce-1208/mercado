@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "泽顺插件",
-  "version": "1.8.42",
-  "description": "采集 Mercado Libre、Yandex 国外商品、1688 与智赢商品，检查智赢产品侵权风险，并同步采购订单物流号。",
+  "version": "1.8.62",
+  "description": "采集 Mercado Libre、Yandex、1688 与智赢商品，自动化申诉，检查侵权风险，按日期同步智赢订单与采购物流号。",
   "permissions": [
     "alarms",
     "contextMenus",
+    "debugger",
     "cookies",
     "scripting",
     "storage",
@@ -35,7 +36,12 @@
     "https://*.mercadolibre.com.ar/*",
     "https://*.mercadolibre.cl/*",
     "https://*.mercadolibre.com.co/*",
-    "https://*.mercadolibre.com.uy/*"
+    "https://*.mercadolibre.com.uy/*",
+    "https://global-selling.mercadolibre.com/*",
+    "https://outlook.live.com/*",
+    "https://outlook.office.com/*",
+    "https://outlook.office365.com/*",
+    "https://*.mercadolibre.com/*"
   ],
   "optional_host_permissions": [
     "http://*/*",
@@ -89,7 +95,9 @@
         "https://*.mercadolibre.com.ar/*",
         "https://*.mercadolibre.cl/*",
         "https://*.mercadolibre.com.co/*",
-        "https://*.mercadolibre.com.uy/*"
+        "https://*.mercadolibre.com.uy/*",
+        "https://global-selling.mercadolibre.com/*",
+        "https://sellers.mercadolibre.com/*"
       ],
       "js": [
         "launcher.js"
@@ -178,7 +186,9 @@
         "https://*.mercadolibre.com.ar/*",
         "https://*.mercadolibre.cl/*",
         "https://*.mercadolibre.com.co/*",
-        "https://*.mercadolibre.com.uy/*"
+        "https://*.mercadolibre.com.uy/*",
+        "https://global-selling.mercadolibre.com/*",
+        "https://sellers.mercadolibre.com/*"
       ]
     }
   ]

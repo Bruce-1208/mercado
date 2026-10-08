@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, render_template, request
 
 from bit.mercado_promotions import (
     create_preview,
+    enrich_item_products,
     execute_preview,
     sync_promotions,
     visible_store_options,
@@ -116,6 +117,9 @@ def create_promotions_blueprint(
                 "candidate_items": sum(int(row.get("candidate_count") or 0) for row in rows),
                 "active_items": sum(int(row.get("active_item_count") or 0) for row in rows),
                 "ending_soon": sum(1 for row in rows if row.get("deadline_date") and str(row.get("status_raw")) != "finished"),
+                "enrollment_succeeded": sum(int((row.get("enrollment_summary") or {}).get("succeeded") or 0) for row in rows),
+                "enrollment_failed": sum(int((row.get("enrollment_summary") or {}).get("failed") or 0) for row in rows),
+                "enrollment_unknown": sum(int((row.get("enrollment_summary") or {}).get("unknown") or 0) for row in rows),
             }
             return ok({"rows": rows, "summary": summary})
         except Exception as exc:
@@ -147,7 +151,23 @@ def create_promotions_blueprint(
             allowed = allowed_ids()
             if allowed is not None and int(promotion.get("token_id") or 0) not in allowed:
                 return fail("当前账号不能查看该店铺", 403)
-            return ok({"promotion": promotion, "rows": store.list_items(promotion_id)})
+            page_data = store.list_items_page(
+                promotion_id,
+                page=request.args.get("page", 1),
+                page_size=request.args.get("page_size", 50),
+                target_item_id=str(request.args.get("target_item_id") or "").strip(),
+            )
+            results = store.enrollment_results(promotion_id, limit=50)
+            results_total = int((promotion.get("enrollment_summary") or {}).get("total") or 0)
+            return ok({
+                **page_data,
+                "promotion": promotion,
+                "rows": enrich_item_products(promotion, page_data["rows"]),
+                "enrollment_results": results,
+                "enrollment_results_total": results_total,
+                "enrollment_results_truncated": results_total > len(results),
+                "latest_job": store.latest_job(promotion_id, result_limit=50),
+            })
         except Exception as exc:
             return fail(exc, 500)
 
@@ -181,11 +201,20 @@ def create_promotions_blueprint(
         try:
             store = PromotionStore()
             if request.method == "GET":
-                return ok({"rows": store.list_jobs()})
+                return ok({"rows": store.list_jobs(token_ids=allowed_ids())})
             body = request.get_json(silent=True) or {}
             if body.get("confirmed") is not True:
                 return fail("请确认已核对活动、商品和价格后再提交")
-            return ok(execute_preview(str(body.get("preview_id") or ""), actor=actor(), store=store))
+            preview = store.get_preview(str(body.get("preview_id") or ""))
+            if not preview:
+                return fail("报名预览不存在", 404)
+            promotion = store.get_promotion(int(preview.get("promotion_fk") or 0))
+            if not promotion:
+                return fail("活动不存在", 404)
+            allowed = allowed_ids()
+            if allowed is not None and int(promotion.get("token_id") or 0) not in allowed:
+                return fail("当前账号不能操作该店铺", 403)
+            return ok(execute_preview(str(body.get("preview_id") or ""), actor=actor(), store=store, background=True))
         except ValueError as exc:
             return fail(exc)
         except Exception as exc:

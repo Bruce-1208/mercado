@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from flask import Flask
 from bit import mercado_action_center as module
 
@@ -17,22 +17,28 @@ class WatchStore:
 def test_procurement_thresholds_and_completion():
     now = datetime(2026, 9, 29, 12)
     for hours, expected in [(24, set()), (25, {'purchase_order_missing_24h'}),
-                            (48, {'purchase_order_missing_24h'}),
+                            (48, {'purchase_order_missing_24h', 'purchase_tracking_missing_48h'}),
                             (49, {'purchase_order_missing_24h', 'purchase_tracking_missing_48h'}),
+                            (168, {'purchase_order_missing_24h', 'purchase_tracking_missing_48h', 'order_not_in_transit_7d'}),
                             (169, {'purchase_order_missing_24h', 'purchase_tracking_missing_48h', 'order_not_in_transit_7d'})]:
-        row = dict(token_id=1, order_id='123', status='paid', date_created=now-timedelta(hours=hours))
+        row = dict(token_id=1, order_id='123', status='paid', date_created=(now-timedelta(hours=hours)).replace(tzinfo=timezone(timedelta(hours=8))))
         store = WatchStore([row])
         module._refresh_order_watch_tasks(store, [1], {1: 'org'}, now=now)
         assert {t['topic'] for t in store.tasks} == expected
-    for updates in [dict(status='cancelled'), dict(workflow_status='已发-在途中'), dict(workflow_status='交付')]:
+    for updates in [dict(status='cancelled'), dict(workflow_status='交付')]:
         store = WatchStore([{**row, **updates}])
         module._refresh_order_watch_tasks(store, [1], {1: 'org'}, now=now)
         assert not store.tasks
-        assert len(store.resolved) == 3
+        assert module._task_key('order_age_watch', 'org', 1, 'order_not_delivered_30d', '123') in store.resolved
+        assert module._task_key('procurement_watch', 'org', 1, 'purchase_tracking_missing_48h', '123') in store.resolved
+    store = WatchStore([{**row, 'workflow_status': '已发-在途中'}])
+    module._refresh_order_watch_tasks(store, [1], {1: 'org'}, now=now)
+    assert {t['topic'] for t in store.tasks} == {'purchase_tracking_missing_48h'}
     store = WatchStore([{**row, 'purchase_order': 'P123', 'purchase_tracking': 'T123'}])
     module._refresh_order_watch_tasks(store, [1], {1: 'org'}, now=now)
     assert {t['topic'] for t in store.tasks} == {'order_not_in_transit_7d'}
-    assert len(store.resolved) == 2
+    assert module._task_key('procurement_watch', 'org', 1, 'purchase_order_missing_24h', '123') in store.resolved
+    assert module._task_key('procurement_watch', 'org', 1, 'purchase_tracking_missing_48h', '123') in store.resolved
 
 
 def test_filters_intersect_authorized_store_scope(monkeypatch):

@@ -1,0 +1,5 @@
+{
+  "all": 0.503,
+  "core": 0.166,
+  "description": "Controlled test with 80 ms per external read; all = six serial reads, core = claim + chat."
+}

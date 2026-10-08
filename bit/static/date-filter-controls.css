@@ -1,0 +1,20 @@
+.zs-common-date-filter { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.zs-common-date-filter > label { margin: 0; padding: 0; color: #64748b; font-size: 12px; font-weight: 600; }
+.zs-common-date-filter > select, .zs-common-date-filter > input {
+    box-sizing: border-box; width: 100%; min-width: 0; min-height: 38px; padding: 8px 10px;
+    border: 1px solid #dce4ee; border-radius: 8px; background: #fff; color: #1e293b; font: inherit;
+}
+.zs-common-date-filter > [hidden] { display: none !important; }
+.zs-date-filter-panel > .zs-date-advanced { grid-column: 1 / -1; flex: 1 0 100%; width: 100%; min-width: 0; }
+.zs-date-advanced > summary { cursor: pointer; color: #315b91; font-size: 13px; font-weight: 600; padding: 10px 0; }
+.zs-date-advanced > summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+.zs-date-advanced > .zs-date-advanced-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; padding: 10px 0; }
+.zs-date-advanced-grid > * { min-width: 0; width: auto; grid-column: auto !important; }
+.zs-date-advanced-grid > label, .zs-date-advanced-grid > .field, .zs-date-advanced-grid > .order-filter-field { display: flex; flex-direction: column; gap: 6px; }
+.zs-date-advanced-grid input, .zs-date-advanced-grid select { box-sizing: border-box; max-width: 100%; min-width: 0; }
+.zs-date-advanced-grid > [hidden] { display: none !important; }
+.p1688-toolbar > .zs-common-date-filter { margin-top: 12px; max-width: 320px; }
+@media (max-width: 650px) {
+    .zs-date-advanced > .zs-date-advanced-grid { grid-template-columns: minmax(0, 1fr); }
+    .zs-date-filter-panel > .zs-common-date-filter { flex: 1 0 100%; width: 100%; max-width: none; }
+}

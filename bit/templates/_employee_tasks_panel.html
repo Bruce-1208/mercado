@@ -3,5 +3,6 @@
   <div class="employee-toolbar"><select id="employee-filter" aria-label="筛选员工任务"><option value="active">进行中 / 逾期</option><option value="upcoming">未开始</option><option value="completed">已完成</option><option value="all">全部任务</option></select><button class="button" id="employee-refresh" type="button">刷新员工任务</button><span class="hint">时间为北京时间；逾期未完成任务持续保留。</span></div>
   <div class="employee-summary" id="employee-summary"></div>
   <div class="employee-error" id="employee-error" role="alert"></div>
+  <div class="employee-toolbar" id="employee-batch" hidden><label><input type="checkbox" id="employee-select-all"> 全选当前筛选</label><span id="employee-selected-count"></span><select id="employee-batch-status" aria-label="批量完成状态"><option value="false">未完成</option><option value="true">已完成</option></select><input id="employee-batch-note" maxlength="2000" aria-label="批量完成备注" placeholder="完成备注（留空保留原备注）"><button class="button primary" type="button" id="employee-batch-save">更新所选状态</button></div>
   <div id="employee-list" class="employee-task-list"><div class="empty">正在读取员工任务…</div></div>
 </section>

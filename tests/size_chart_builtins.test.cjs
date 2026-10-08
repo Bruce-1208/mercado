@@ -45,3 +45,10 @@ test('reference profiles stay immutable across import and editing',() => {
   assert.equal(library.get('__proto__'),null);
   assert.match(library.note,/参考数据/);
 });
+test('server batch catalog exactly matches the browser reference templates', () => {
+  const fs=require('node:fs'), path=require('node:path');
+  const catalog=JSON.parse(fs.readFileSync(path.join(__dirname,'../bit/size-chart-builtins.json'),'utf8'));
+  const browser=require('../bit/static/size-chart-builtins.js');
+  assert.equal(catalog.version,browser.version);
+  assert.deepEqual(catalog.templates,browser.templates.map(item => item.template));
+});

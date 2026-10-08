@@ -64,6 +64,8 @@ _sync_state = {
     "processed_stores": 0,
     "current_store": "",
     "active_stores": [],
+    "active_token_ids": [],
+    "target_token_ids": [],
     "scanned_count": 0,
     "reason_matched_count": 0,
     "prohibited_count": 0,
@@ -99,7 +101,7 @@ def _append_log(message: str) -> None:
         _sync_state["logs"] = logs[-300:]
 
 
-def _set_store_active(store_name: str, active: bool) -> None:
+def _set_store_active(store_name: str, active: bool, token_id: int) -> None:
     with _state_guard:
         names = list(_sync_state.get("active_stores") or [])
         if active and store_name not in names:
@@ -107,6 +109,12 @@ def _set_store_active(store_name: str, active: bool) -> None:
         elif not active and store_name in names:
             names.remove(store_name)
         _sync_state["active_stores"] = names
+        ids = set(_sync_state.get("active_token_ids") or [])
+        if active:
+            ids.add(token_id)
+        else:
+            ids.discard(token_id)
+        _sync_state["active_token_ids"] = sorted(ids)
         _sync_state["current_store"] = "、".join(names[:PROHIBITED_STORE_WORKERS])
 
 
@@ -512,7 +520,8 @@ def run_prohibited_listing_sync(token_ids: Iterable[Any] | None = None) -> dict[
     records = _token_records(token_ids)
     _state_update(
         running=True, status="running", message="正在同步禁限售列表",
-        total_stores=len(records), processed_stores=0, current_store="", active_stores=[],
+        target_token_ids=[int(record["id"]) for record in records],
+        total_stores=len(records), processed_stores=0, current_store="", active_stores=[], active_token_ids=[],
         scanned_count=0, reason_matched_count=0, prohibited_count=0,
         detail_failed_count=0, failed_count=0, started_at=_now_text(), finished_at="",
         results=[], logs=[],
@@ -527,7 +536,7 @@ def run_prohibited_listing_sync(token_ids: Iterable[Any] | None = None) -> dict[
     def sync_one(record: dict) -> dict:
         store_name = str(record.get("display_name") or record.get("nickname") or record.get("id"))
         token_id = int(record["id"])
-        _set_store_active(store_name, True)
+        _set_store_active(store_name, True, token_id)
         mark_prohibited_sync_started(token_id)
         try:
             result = _sync_store(record)
@@ -550,7 +559,7 @@ def run_prohibited_listing_sync(token_ids: Iterable[Any] | None = None) -> dict[
             _append_log(f"{store_name} 失败：{exc}")
             return {"store": store_name, "token_id": token_id, "status": "error", "message": str(exc)}
         finally:
-            _set_store_active(store_name, False)
+            _set_store_active(store_name, False, token_id)
 
     with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="meli-prohibited") as executor:
         futures = [executor.submit(run_capacity_store, "prohibited", record["id"], sync_one, record) for record in records]
@@ -568,7 +577,7 @@ def run_prohibited_listing_sync(token_ids: Iterable[Any] | None = None) -> dict[
     )
     _state_update(
         running=False, status="completed" if failed == 0 else "partial",
-        message=message, current_store="", active_stores=[], finished_at=_now_text(),
+        message=message, current_store="", active_stores=[], active_token_ids=[], finished_at=_now_text(),
         results=list(results),
     )
     _append_log(message)
@@ -592,7 +601,7 @@ def _run_background(token_ids: list[int]) -> None:
     except Exception as exc:
         _state_update(
             running=False, status="error", message=str(exc), current_store="",
-            active_stores=[], finished_at=_now_text(),
+            active_stores=[], active_token_ids=[], finished_at=_now_text(),
         )
         _append_log(f"任务失败：{exc}")
     finally:
@@ -622,8 +631,8 @@ def start_prohibited_listing_sync(
             return False, prohibited_listing_sync_status()
         _sync_state.update(
             running=True, task_id=uuid.uuid4().hex, status="starting",
-            message="正在启动禁限售同步", total_stores=0, processed_stores=0,
-            current_store="", active_stores=[], scanned_count=0,
+            message="正在启动禁限售同步", target_token_ids=list(selected_ids), total_stores=0, processed_stores=0,
+            current_store="", active_stores=[], active_token_ids=[], scanned_count=0,
             reason_matched_count=0, prohibited_count=0, detail_failed_count=0,
             failed_count=0, started_at=_now_text(), finished_at="", results=[], logs=[],
         )

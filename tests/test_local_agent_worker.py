@@ -91,3 +91,15 @@ def test_awp_failed_run_exits_nonzero_and_preserves_result(monkeypatch, tmp_path
         "run_error": "browser failed", "run": {"outcome": "failed"}})
     assert local_agent_worker.main(["--job-file", str(job), "--cancel-file", str(tmp_path / "cancel")]) == 1
     assert json.loads(job.with_name("result.json").read_text())["run_error"] == "browser failed"
+
+
+def test_zying_failure_preserves_actionable_message(monkeypatch, tmp_path):
+    from bit import zying_order_sync
+    job = tmp_path / 'job.json'
+    job.write_text(json.dumps({'job_type': 'zying_order_sync'}), encoding='utf-8')
+    monkeypatch.setattr(local_agent_worker, '_watch_cancel', lambda *a: None)
+    def fail(*args):
+        raise RuntimeError('智赢登录状态已失效')
+    monkeypatch.setattr(zying_order_sync, 'run_agent_sync', fail)
+    assert local_agent_worker.main(['--job-file', str(job), '--cancel-file', str(tmp_path / 'cancel')]) == 1
+    assert json.loads(job.with_name('result.json').read_text())['message'] == '智赢登录状态已失效'

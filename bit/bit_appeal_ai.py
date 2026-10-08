@@ -23,6 +23,7 @@ import math
 import uuid
 from contextvars import ContextVar
 from contextlib import contextmanager
+from erp.ai_usage_billing import bind_usage
 from bit.chat_log import write_local_record
 
 
@@ -3053,7 +3054,8 @@ def run_top_infraction_appeal_round(max_windows=5, top_shops=5, recent_days=30, 
     max_workers = max(1, min(int(max_windows), len(plan)))
     results = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(run_top_infraction_shop_once, shop, site_pause) for shop in plan]
+        futures = [executor.submit(bind_usage(run_top_infraction_shop_once,
+                   task_type="ai_appeal", task_name="AI 侵权申诉"), shop, site_pause) for shop in plan]
         for future in futures:
             try:
                 results.append(future.result())
@@ -3417,7 +3419,7 @@ def save_ai_appeal_group_record(
     appeal_kind="侵权",
     appeal_copy_mode="普通模式",
 ):
-    """每组侵权/取消率申诉结束后写入原始结果，不调用 DeepSeek 总结。"""
+    """每组侵权/取消率申诉结束后写入原始结果，不调用 千问 总结。"""
     identifiers = _extract_identifiers_from_text(infraction_ids)
     ai_replies = _collect_group_ai_replies(group_records)
     chat_history = _collect_full_chat_history(group_records)
@@ -3469,7 +3471,7 @@ def save_ai_appeal_group_record(
 def shensu(
     name, site, form, message, validate_open=False, infraction_ids=None,
     prohibited_ids=None, stop_event=None, window_id=None,
-    ai_script_mode=False, deepseek_api_key="", appeal_copy_mode="普通模式",
+    ai_script_mode=False, dashscope_api_key="", appeal_copy_mode="普通模式",
 ):
     """返回执行状态；收到回复不等于平台已批准申诉。"""
     print(f"{name} {site} 开始进行{form}申诉，自定义话术为{message}<br>")
@@ -3532,13 +3534,13 @@ def shensu(
                 handle_infraction(window_id, driver, name, site_name, message, nickname,
                                   infraction_ids=infraction_ids,
                                   ai_script_mode=ai_script_mode,
-                                  deepseek_api_key=deepseek_api_key,
+                                  dashscope_api_key=dashscope_api_key,
                                   appeal_copy_mode=appeal_copy_mode)
             elif form == "禁限售":
                 handle_prohibited(window_id, driver, name, site_name, message, nickname,
                                   prohibited_ids=prohibited_ids,
                                   ai_script_mode=ai_script_mode,
-                                  deepseek_api_key=deepseek_api_key,
+                                  dashscope_api_key=dashscope_api_key,
                                   appeal_copy_mode=appeal_copy_mode)
             elif form == "延误":
                 handle_delay(window_id, driver, name, site_name, message, nickname,
@@ -3647,7 +3649,7 @@ def handle_infraction(
     nickname,
     infraction_ids=None,
     ai_script_mode=False,
-    deepseek_api_key="",
+    dashscope_api_key="",
     appeal_copy_mode="普通模式",
 ):
     """处理侵权申诉：普通模式每组 10 个，AI 话术模式每组最多 3 个。"""
@@ -3687,7 +3689,7 @@ def handle_infraction(
         try:
             if ai_script_mode:
                 generated = generate_ai_appeal_copy(
-                    "侵权", current_group, deepseek_api_key,
+                    "侵权", current_group, dashscope_api_key,
                     product_loader=lambda ids: get_ai_appeal_product_contexts(name, ids),
                 )
                 huashu = generated["message"]
@@ -3748,7 +3750,7 @@ def handle_prohibited(
     nickname,
     prohibited_ids=None,
     ai_script_mode=False,
-    deepseek_api_key="",
+    dashscope_api_key="",
     appeal_copy_mode="普通模式",
 ):
     """处理禁限售申诉：普通模式每组 10 个，AI 话术模式每组最多 3 个。"""
@@ -3788,7 +3790,7 @@ def handle_prohibited(
         try:
             if ai_script_mode:
                 generated = generate_ai_appeal_copy(
-                    "禁限售", current_group, deepseek_api_key,
+                    "禁限售", current_group, dashscope_api_key,
                     product_loader=lambda ids: get_ai_appeal_product_contexts(name, ids),
                 )
                 huashu = generated["message"]
@@ -4666,7 +4668,8 @@ def use_all_browser_run_task_with_thread_pool(browser_list, max_threads=10):
     :param max_threads: 最大并发线程数
     """
     with ThreadPoolExecutor(max_workers=max_threads) as executor:
-        executor.map(use_one_browser_run_task, browser_list)
+        executor.map(bind_usage(use_one_browser_run_task,
+                     task_type="ai_appeal", task_name="AI 客服申诉"), browser_list)
 
 
 def auto_appeal_delay():

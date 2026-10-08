@@ -361,3 +361,21 @@ def test_recollection_assigns_selected_management_category(row, category_id):
     if writes:
         assert writes[0][1][0] == category_id
     assert connection.committed
+
+
+def test_list_omits_duplicate_ai_payloads_but_preserves_supplier_detail():
+    original = {"title": "供应商产品", "variations": [{"sku_id": "sku-1"}],
+                "properties": [{"name": "材质", "value": "钢"}], "description_text": "商品说明"}
+    route = load_route("api_1688_products", db_list_mercado_product_items=lambda **kw: {
+        "rows": [{"id": 7, "original_1688": original, "ai_status": "completed",
+                  "source_snapshot_json": "duplicate", "ai_original": {"large": "listing"},
+                  "marketplace_listings": {"large": "listing"},
+                  "source_1688_overrides": {"net_proceeds_usd": None}}], "total": 1})
+    with Flask(__name__).test_request_context('/api/1688-products'):
+        data = route().get_json()['data']
+    row = data['rows'][0]
+    assert data['total'] == 1
+    assert row['original_1688'] == original
+    assert row['ai_status'] == 'completed'
+    assert row['net_proceeds_usd'] is None
+    assert not {'source_snapshot_json', 'ai_original', 'marketplace_listings'} & row.keys()

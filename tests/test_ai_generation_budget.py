@@ -285,3 +285,47 @@ def test_uncapped_keeps_unknown_usage_blocked():
     chat = make_chat(lambda **kw: pytest.fail('must not call'), ledger=ledger, enforce_cap=False)
     with pytest.raises(GenerationBudgetError, match='unknown charge'):
         chat(MESSAGES)
+
+
+@pytest.mark.parametrize('prompt,expected', [(32000, .00648), (32001, .0194406), (256001, .3076812)])
+def test_qwen_tiers_peak_hours_and_preserved_legacy_spend(prompt, expected):
+    from erp.ai_generation_budget import QWEN_MODEL, QWEN_BASE_URL
+    legacy = make_chat(lambda **kw: response())
+    legacy(MESSAGES)
+    calls = []
+    def transport(**kwargs):
+        calls.append(kwargs)
+        return {**response(prompt=prompt, completion=100), 'model': QWEN_MODEL}
+    chat = BudgetedChat(model=QWEN_MODEL, ledger=legacy.snapshot(), transport=transport,
+                        enforce_cap=False, now=lambda: datetime(2026, 10, 5, 10, tzinfo=BEIJING))
+    chat([{'role': 'user', 'content': 'x' * prompt}], api_key='test-qwen')
+    assert calls[0]['base_url'] == QWEN_BASE_URL
+    assert calls[0]['model'] == QWEN_MODEL
+    assert calls[0]['thinking'] is False
+    ledger = chat.snapshot()
+    assert ledger['calls'][0]['model'] == 'deepseek-flash'
+    assert ledger['calls'][0]['cost_yuan'] == .0005
+    assert ledger['calls'][-1]['cost_yuan'] == expected
+    assert ledger['calls'][-1]['rate_period'] == 'standard'
+    assert ledger['spent_yuan'] == pytest.approx(.0005 + expected)
+
+
+def test_qwen_adapter_uses_enable_thinking(monkeypatch):
+    from AI_Agent import deepseek
+    from erp.ai_generation_budget import QWEN_MODEL, QWEN_BASE_URL
+    calls = []
+    provider = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{}'), finish_reason='stop')],
+                               usage={'prompt_tokens': 10, 'completion_tokens': 2}, model=QWEN_MODEL)
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+        create=lambda **kw: calls.append(kw) or provider)))
+    monkeypatch.setattr(deepseek, '_get_client', lambda **kw: client)
+    deepseek.chat_deepseek_with_usage(MESSAGES, model=QWEN_MODEL, base_url=QWEN_BASE_URL,
+                                      api_key='test', thinking=False)
+    assert calls[0]['extra_body'] == {'enable_thinking': False}
+
+
+def test_qwen_requires_own_key_before_any_request():
+    from erp.ai_generation_budget import QWEN_MODEL
+    chat = BudgetedChat(model=QWEN_MODEL, transport=lambda **kw: pytest.fail('must not send DeepSeek key'))
+    with pytest.raises(ValueError, match='百炼 API Key'):
+        chat(MESSAGES)

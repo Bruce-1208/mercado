@@ -1,0 +1,22 @@
+[
+  {
+    "query": "order_context_old",
+    "seconds": 0.0676,
+    "rows": 1
+  },
+  {
+    "query": "order_context_new",
+    "seconds": 0.0009,
+    "rows": 1
+  },
+  {
+    "query": "inventory_old",
+    "seconds": 15.075,
+    "error_code": 3024
+  },
+  {
+    "query": "inventory_new",
+    "seconds": 1.2214,
+    "rows": 291
+  }
+]

@@ -87,6 +87,31 @@ function harness(custom,canManage=true) {
 }
 const descendants=element => [element,...element.children.flatMap(descendants)];
 
+test('batch filters salesperson and store and submits all categories without site selection',async () => {
+  let submitted;
+  const stores=[{id:1,name:'Store A',enabled:true,salespersons:['Alice'],sites:[]},
+    {id:2,name:'Store B',enabled:true,salespersons:['Bob'],sites:[]}];
+  const h=harness(async (url,options) => {
+    if (url.endsWith('/options')) return response({stores});
+    if (url.endsWith('/batch') && options.method==='POST') { submitted=JSON.parse(options.body); return response({task:{task_id:'batch',running:true,total:21,completed:1,results:[{template_name:'童装',token_id:1,status:'failed',message:'颈围范围不支持'}]}}); }
+    if (url.endsWith('/batch')) return response({task:submitted ? {task_id:'batch',running:true,total:21,completed:1,message:'处理中',results:[{template_name:'童装',token_id:1,status:'failed',message:'颈围范围不支持'}]} : null});
+  });
+  await tick(); h.get('sc-salesperson-filter').value='Alice'; h.get('sc-salesperson-filter').listeners.change();
+  assert.deepEqual(h.app.filteredStores().map(store => store.id),[1]);
+  assert.match(h.get('sc-batch-stores').textContent,/Store A/); assert.doesNotMatch(h.get('sc-batch-stores').textContent,/Store B/);
+  h.get('sc-batch-select-all').listeners.click(); await h.app.startBatchUpload();
+  assert.deepEqual(submitted,{token_ids:[1]});
+  assert.equal(h.get('sc-batch-upload').disabled,true);
+  assert.match(h.get('sc-batch-results').textContent,/颈围范围不支持/);
+  assert.equal(h.get('sc-batch-progress').value,1);
+});
+
+test('read-only account cannot start a batch even with injected selections',async () => {
+  const h=harness(null,false); await tick(); h.app.state.batchTokenIds=[1];
+  const count=h.requests.length; await h.app.startBatchUpload();
+  assert.equal(h.requests.length,count); assert.equal(h.get('sc-batch-upload').disabled,true);
+});
+
 test('read-only accounts cannot create, save, preview, upload or change rows',async () => {
   const h=harness(null,false); await tick(); h.app.selectTemplate(template()); await h.app.requirements();
   const count=h.requests.length; h.app.newTemplate(); await h.app.saveTemplate(); await h.app.preview(); await h.app.performUpload(); h.app.addRow();
@@ -159,11 +184,11 @@ test('changing template filters or source store blocks stale schema generation w
 test('upload requires reviewed preview, sends only preview_id, and exposes returned row IDs safely',async () => {
   const record={record_id:'r1',template_id:4,revision:2,template_snapshot:{name:'<img src=x onerror=bad()>'},token_id:1,sites:['MLM'],status:'succeeded',chart_id:'chart-42',payload:{main_attribute:{attributes:[{id:'SIZE'}]}},rows:[{id:'row-2',attributes:[{id:'SIZE',values:[{name:'M'}]}]}]}; let uploaded=false;
   const h=harness(async (url,options) => { if (url.endsWith('/preview')) return response({preview_id:'p2',template_id:4,revision:2,expires_at:'2099-01-01T00:00:00Z',results:[{token_id:1,sites:['MLM'],status:'ready'}]}); if (url.endsWith('/upload')) { uploaded=true; assert.deepEqual(JSON.parse(options.body),{preview_id:'p2'}); return response({results:[record],succeeded:1,failed:0,unknown:0}); } if (url.endsWith('/records') && uploaded) return response({records:[record]}); }); await tick(); h.app.selectTemplate(template()); h.app.state.targets=[{token_id:1,site_id:'MLM'}]; await h.app.performUpload(); assert.equal(uploaded,false); await h.app.preview(); await h.app.performUpload();
-  assert.equal(uploaded,true); assert.equal(h.app.state.preview,null); assert.match(h.get('sc-records').textContent,/row-2/); assert.match(h.get('sc-records').textContent,/<img src=x onerror=bad\(\)>/); assert.equal(h.get('sc-upload').disabled,true);
+  assert.equal(uploaded,true); assert.equal(h.app.state.preview,null); assert.match(h.get('sc-records').textContent,/row-2/); assert.match(h.get('sc-records').textContent,/<img src=x onerror=bad\(\)>/); assert.equal(h.get('sc-upload').disabled,false);
 });
 
 
-test('saved measurements can be reviewed and uploaded to another site without reopening the editor',async () => {
+test('saved measurements upload to all store sites without reopening the editor',async () => {
   const h=harness(async url => url.endsWith('/preview') ? response({preview_id:'reuse',results:[{token_id:1,sites:['MLB'],status:'ready'}]}) : null);
   await tick(); const saved=template(); saved.rows[0].attributes[1].values.push({name:'50 cm',struct:{number:50,unit:'cm'}});
   h.app.selectTemplate(saved);
@@ -171,10 +196,11 @@ test('saved measurements can be reviewed and uploaded to another site without re
   assert.equal(h.get('sc-grid-wrap').hidden,false);
   assert.match(h.get('sc-grid-rows').textContent,/48 cm \/ 50 cm/);
   assert.equal(h.get('sc-grid-rows').textContent.includes('M'),true);
-  const target=descendants(h.get('sc-targets')).filter(el => el.tagName==='input')[1];
+  const target=descendants(h.get('sc-targets')).filter(el => el.tagName==='input')[0];
   target.checked=true; target.listeners.change();
   const names=descendants(h.get('sc-site-names')).filter(el => el.tagName==='input');
-  assert.equal(names[1].value,saved.name);
+  assert.equal(names[0].value,saved.names.CBT);
+  assert.deepEqual(h.app.state.targets,[{token_id:1}]);
   assert.equal(h.app.state.dirty,false);
   await h.app.preview();
   assert.equal(h.get('sc-upload').disabled,false);
@@ -210,4 +236,42 @@ test('built-in creation failure keeps filled draft, and read-only users only ins
   const read=harness(null,false); await tick(); const count=read.requests.length;
   await read.app.useBuiltin(); assert.equal(read.requests.length,count); assert.equal(read.app.state.draft,null);
   assert.equal(read.get('sc-builtin-use').disabled,true); assert.equal(read.get('sc-builtin-rows').children.length,7);
+});
+
+test('direct upload automatically validates selected stores and confirms destinations before submitting',async () => {
+  const h=harness(async url => url.endsWith('/preview') ? response({preview_id:'direct',results:[{token_id:1,sites:['MLM'],status:'ready'},{token_id:2,sites:['MLB'],status:'invalid'}]}) : null);
+  await tick(); h.app.selectTemplate(template());
+  const target=descendants(h.get('sc-targets')).find(el => el.tagName==='input'); target.checked=true; target.listeners.change();
+  assert.equal(h.get('sc-upload').disabled,false);
+  await h.app.upload();
+  assert.equal(h.requests.filter(r => r.url.endsWith('/preview')).length,1);
+  assert.equal(h.requests.some(r => r.url.endsWith('/upload')),false);
+  assert.equal(h.get('sc-confirm-dialog').open,true);
+  assert.match(h.get('sc-confirm-message').textContent,/店铺 A（墨西哥 · MLM）/);
+  assert.match(h.get('sc-confirm-message').textContent,/1 个店铺.*本次不会上传/);
+  h.get('sc-confirm-form').listeners.submit({preventDefault(){}}); await tick();
+  assert.deepEqual(JSON.parse(h.requests.find(r => r.url.endsWith('/upload')).options.body),{preview_id:'direct'});
+});
+
+test('direct upload stops on validation failure, duplicate records, and read-only access',async () => {
+  for (const status of ['invalid','duplicate','network']) {
+    const h=harness(async url => { if (url.endsWith('/preview')) { if (status==='network') throw new Error('网络异常'); return response({preview_id:'blocked',results:[{token_id:1,sites:['MLM'],status}]}); } });
+    await tick(); h.app.selectTemplate(template()); h.app.state.targets=[{token_id:1,site_id:'MLM'}];
+    await h.app.upload();
+    assert.equal(h.requests.some(r => r.url.endsWith('/upload')),false);
+    assert.notEqual(h.get('sc-confirm-dialog').open,true);
+    assert.match(h.get('sc-error').textContent,status==='network' ? /网络异常/ : /暂无可上传结果/);
+  }
+  const h=harness(null,false); await tick(); h.app.selectTemplate(template()); h.app.state.targets=[{token_id:1,site_id:'MLM'}];
+  await h.app.upload(); assert.equal(h.requests.some(r => r.url.endsWith('/preview')),false);
+});
+
+test('direct upload refreshes expired previews and rejects changed targets at confirmation',async () => {
+  const h=harness(async url => url.endsWith('/preview') ? response({preview_id:'fresh',results:[{token_id:1,sites:['MLM'],status:'ready'}]}) : null);
+  await tick(); h.app.selectTemplate(template()); h.app.state.targets=[{token_id:1,site_id:'MLM'}];
+  h.app.state.preview={preview_id:'expired',template_id:4,revision:2,targetFingerprint:'1:MLM',expires_at:'2000-01-01T00:00:00Z'};
+  await h.app.upload(); assert.equal(h.app.state.preview.preview_id,'fresh');
+  h.app.invalidatePreview(); h.get('sc-confirm-form').listeners.submit({preventDefault(){}}); await tick();
+  assert.equal(h.requests.some(r => r.url.endsWith('/upload')),false);
+  assert.match(h.get('sc-error').textContent,/已变化/);
 });

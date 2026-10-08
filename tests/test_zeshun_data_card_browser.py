@@ -49,7 +49,13 @@ def listing_markup(layout="grid", sku=SKU, card_id="product"):
         '<span class="andes-money-amount__cents">16</span></span></div>'
     )
     image = '<div class="native-image" aria-label="Product image"></div>'
-    if layout == "classic":
+    if layout == "classic_wrapped":
+        card = (
+            f'<div class="ui-search-result" id="{card_id}">{image}'
+            '<div class="ui-search-result__content-wrapper">'
+            f'<div class="ui-search-result__content">{title}{price}</div></div></div>'
+        )
+    elif layout == "classic":
         card = (
             f'<div class="ui-search-result" id="{card_id}">{image}'
             f'<div class="ui-search-result__content">{title}{price}</div></div>'
@@ -88,7 +94,8 @@ def browser():
 def mercado_page(browser):
     contexts = []
 
-    def create(body=None, *, width=284, url=LIST_URL, products=None, mode="success", content=True):
+    def create(body=None, *, width=284, url=LIST_URL, products=None, mode="success", content=True,
+               native_css=""):
         context = browser.new_context(viewport={"width": 1000, "height": 1000})
         contexts.append(context)
         page = context.new_page()
@@ -108,6 +115,7 @@ def mercado_page(browser):
             .poly-card--list .native-image, .ui-search-result .native-image {{ flex: 0 0 120px; }}
             .poly-card--list .poly-card__content, .ui-search-result__content {{ flex: 1; }}
             .ui-pdp-container__col {{ width: 400px; }}
+            {native_css}
           </style></head><body>{markup}</body></html>"""
         # Every request, including a shop tab opened by a click, is fulfilled locally.
         context.route("**/*", lambda route: route.fulfill(
@@ -185,6 +193,80 @@ def test_panel_belongs_to_native_card_and_survives_mutations(mercado_page, layou
     assert page.evaluate("messages.filter(m => m.type === 'GET_MERCADO_PRODUCT_INFO').length") == 1
 
 
+@pytest.mark.parametrize("overflow", ["hidden", "clip"])
+@pytest.mark.parametrize("layout,host", [
+    ("grid", "#product"),
+    ("horizontal", "#product > .poly-card__content"),
+    ("classic", "#product > .ui-search-result__content"),
+    ("classic_wrapped", "#product .ui-search-result__content"),
+])
+def test_product_data_remains_visible_below_each_fixed_height_native_card(
+        mercado_page, layout, host, overflow):
+    native_css = f"""
+        #results > .ui-search-layout__item {{
+            height: 180px; max-height: 180px; overflow: {overflow};
+        }}
+        #results .poly-card, #results .ui-search-result {{
+            display: flex; height: 180px; max-height: 180px; overflow: {overflow};
+        }}
+        #results .native-image {{ flex: 0 0 120px; }}
+        #results .ui-search-result__content-wrapper {{ display: flex; }}
+        #results .poly-card__content, #results .ui-search-result__content {{ display: flex; }}
+        #results .poly-card__content, #results .ui-search-result__content,
+        #results .ui-search-result__content-wrapper {{
+            height: 90px; max-height: 90px; overflow: {overflow};
+            min-width: 0; flex: 1;
+        }}
+    """
+    page = mercado_page(
+        '<ol id="results">' + listing_markup(layout)
+        + listing_markup(layout, sku="MLM385775247", card_id="second-product") + '</ol>',
+        native_css=native_css,
+    )
+    page.set_default_timeout(3000)
+    page.set_viewport_size({"width": 1000, "height": 2000})
+    page.mouse.move(990, 10)
+    first = wait_for_card(page)
+    second = wait_for_card(page, "second-product")
+    assert page.locator(f"{host} > .zeshun-product-info").count() == 1
+    assert page.locator("li > .zeshun-product-info").count() == 0
+    for card_id, panel in [("product", first), ("second-product", second)]:
+        card = page.locator(f"#{card_id}")
+        card_bounds = card.bounding_box()
+        panel_bounds = panel.bounding_box()
+        image_bounds = card.locator(".native-image").bounding_box()
+        content_bounds = card.locator(".poly-card__content, .ui-search-result__content").bounding_box()
+        price_bounds = card.locator(".poly-price__current").bounding_box()
+        assert not card.evaluate("card => card.matches(':hover')")
+        assert panel_bounds["x"] >= card_bounds["x"] - 1
+        assert panel_bounds["x"] + panel_bounds["width"] <= card_bounds["x"] + card_bounds["width"] + 1
+        assert panel_bounds["y"] + panel_bounds["height"] <= card_bounds["y"] + card_bounds["height"] + 1
+        assert panel_bounds["y"] >= price_bounds["y"] + price_bounds["height"] - 1
+        if layout == "grid":
+            assert panel_bounds["y"] >= image_bounds["y"] + image_bounds["height"] - 1
+            assert panel_bounds["y"] >= content_bounds["y"] + content_bounds["height"] - 1
+        else:
+            assert content_bounds["x"] >= image_bounds["x"] + image_bounds["width"] - 1
+            assert abs(content_bounds["y"] - image_bounds["y"]) <= 1
+        for label, expected in [("重量：", "210g"), ("尺寸：", "30 × 24 × 4 cm"),
+                                ("净收益：", "$8.89")]:
+            value = row(panel, label).locator(".zs-info-value")
+            assert expected in value.inner_text()
+            visible = value.evaluate("""value => {
+                const rect = value.getBoundingClientRect();
+                const hit = document.elementFromPoint(
+                    rect.left + rect.width / 2, rect.top + rect.height / 2);
+                return rect.width > 0 && rect.height > 0 &&
+                    (hit === value || value.contains(hit));
+            }""")
+            assert visible, f"{card_id} {label} is clipped or obscured without hovering"
+    first_panel_bounds = first.bounding_box()
+    next_item_bounds = page.locator("#second-product").evaluate(
+        "card => { const rect = card.closest('li').getBoundingClientRect(); return {y: rect.top}; }"
+    )
+    assert first_panel_bounds["y"] + first_panel_bounds["height"] <= next_item_bounds["y"]
+
+
 def test_added_cards_and_changed_prices_get_their_own_data(mercado_page):
     page = mercado_page(products={"MLM385775247": {"sales": 42, "commission_percent": 0}})
     wait_for_card(page)
@@ -210,9 +292,6 @@ def test_reused_card_collects_the_current_listing(mercado_page):
     wait_for_card(page)
     next_url = "https://articulo.mercadolibre.com.mx/MLM-385775247-new-product-_JM"
     page.evaluate("""url => {
-      window.open = (url, target, features) => {
-        window.openedListing = {url, target, features}; return {};
-      };
       document.querySelector('#product a.poly-component__title').href = url;
       document.querySelector('#product a.poly-component__title').textContent = 'New product';
     }""", next_url)
@@ -221,10 +300,8 @@ def test_reused_card_collects_the_current_listing(mercado_page):
     assert page.locator(".zeshun-card-collect").count() == 1
     assert page.locator(".zs-info-shop").inner_text() == "NEW SELLER"
     page.locator("#product > .zeshun-card-collect").click()
-    assert page.evaluate("openedListing") == {
-        "url": next_url, "target": "_blank", "features": "noopener"
-    }
-    assert page.evaluate("messages.every(m => m.type === 'GET_MERCADO_PRODUCT_INFO')")
+    assert page.evaluate("messages.find(m => m.type === 'COLLECT_MERCADO_URL').url") == next_url
+    assert len(page.context.pages) == 1
 
 
 def test_zero_sales_actual_commission_and_refresh(mercado_page):
@@ -421,14 +498,17 @@ def test_missing_zeshun_dimensions_never_fall_back_to_zying(mercado_page):
     '<div class="ui-pdp-buybox"><a href="?wid=MLM385775246">Selected seller</a></div>',
     '<script type="application/json">{"initialState":{"item":{"id":"MLM385775246"},"recommendations":[{"item_id":"MLM999999999"}]}}</script>',
     '<script>window.__PRELOADED_STATE__ = {"initialState":{"track":{"melidata":{"event_data":{"item_id":"MLM385775246"}}}}};</script>',
+    '<script id="__NORDIC_RENDERING_CTX__">_n.ctx.r={"appProps":{"pageProps":{"initialState":{"id":"MLMU5281509106","components":{"main_actions":{"form":{"item_id":"MLM385775246"}}},"recommendations":[{"item_id":"MLM999999999"}]}}}}; window.booted=true;</script>',
+    '<script id="__NORDIC_RENDERING_CTX__">_n.ctx.r={"appProps":{"pageProps":{"initialState":{"components":{"track":{"melidata_event":{"event_data":{"item_id":"MLM385775246"}}}}}}}};</script>',
 ])
-def test_catalog_uses_seller_listing_for_data_query(mercado_page, offer_markup):
+@pytest.mark.parametrize('path', ['p/MLM2062246084', 'up/MLMU5281509106'])
+def test_catalog_uses_seller_listing_for_data_query(mercado_page, offer_markup, path):
     page = mercado_page(
         '<main class="ui-pdp-container"><h1 class="ui-pdp-title">Catalog product</h1>'
         '<meta property="og:image" content="https://example.test/product.jpg">'
         '<div class="recommendations" data-item-id="MLM999999999">Other product</div>'
         + offer_markup + '</main>',
-        url='https://www.mercadolibre.com.mx/test/p/MLM2062246084',
+        url=f'https://www.mercadolibre.com.mx/test/{path}',
     )
     result = page.evaluate("""() => new Promise(resolve =>
       extensionListener({type:'EXTRACT_BATCH_PRODUCT'}, {}, resolve))""")
@@ -438,18 +518,33 @@ def test_catalog_uses_seller_listing_for_data_query(mercado_page, offer_markup):
     assert all(item['sku'] == SKU for query in queries for item in query['items'])
 
 
-def test_catalog_without_selected_seller_never_queries_catalog_or_recommendations(mercado_page):
+@pytest.mark.parametrize('catalog_id', ['MLM2062246084', 'MLMU5281509106'])
+def test_catalog_without_selected_seller_never_queries_catalog_or_recommendations(mercado_page, catalog_id):
     page = mercado_page(
         '<main class="ui-pdp-container"><h1 class="ui-pdp-title">Catalog product</h1>'
-        '<script type="application/ld+json">{"@type":"Product","sku":"MLM2062246084"}</script>'
+        f'<script type="application/ld+json">{{"@type":"Product","sku":"{catalog_id}"}}</script>'
+        '<script id="__NORDIC_RENDERING_CTX__">_n.ctx.r={"appProps":{"pageProps":{"initialState":{"recommendations":[{"item_id":"MLM999999999"}]}}}};</script>'
         '<div data-item-id="MLM999999999">Recommendation</div></main>',
-        url='https://www.mercadolibre.com.mx/test/p/MLM2062246084',
+        url=f'https://www.mercadolibre.com.mx/test/up/{catalog_id}',
     )
     result = page.evaluate("""() => new Promise(resolve =>
       extensionListener({type:'EXTRACT_BATCH_PRODUCT'}, {}, resolve))""")
     assert result['ok'] is False
     assert '卖家刊登编号' in result['error']
     assert page.evaluate('messages') == []
+
+
+@pytest.mark.parametrize('query', ['item_id=MLM385775246', 'pdp_filters=item_id%3AMLM385775246'])
+def test_user_product_explicit_offer_works_without_legacy_detail_classes(mercado_page, query):
+    page = mercado_page(
+        '<main><h1>User product</h1>'
+        '<meta property="og:image" content="https://example.test/product.jpg"></main>',
+        url=f'https://www.mercadolibre.com.mx/test/up/MLMU5281509106?{query}',
+    )
+    result = page.evaluate("""() => new Promise(resolve =>
+      extensionListener({type:'EXTRACT_BATCH_PRODUCT'}, {}, resolve))""")
+    assert result['ok'] is True
+    assert result['product']['source_item_id'] == SKU
 
 
 def test_batch_data_error_is_terminal_and_preserves_reason(mercado_page):
@@ -463,4 +558,151 @@ def test_batch_data_error_is_terminal_and_preserves_reason(mercado_page):
     page.add_script_tag(path=str(EXTENSION / 'content.js'))
     result = page.evaluate("""() => new Promise(resolve =>
       extensionListener({type:'EXTRACT_BATCH_PRODUCT'}, {}, resolve))""")
-    assert result == {'ok': False, 'retryable': False, 'error': '商品数据服务繁忙，请稍后重试'}
+    assert result['ok'] is False and result['retryable'] is False
+    assert result['error'] == '商品数据服务繁忙，请稍后重试'
+    assert result['errorSource'] == 'data_service'
+    assert not result.get('authRequired')
+
+
+def test_stalled_message_releases_query_queue_and_allows_retry(mercado_page):
+    page = mercado_page(mode='hold', content=False)
+    page.evaluate("""() => {
+      const original = window.setTimeout;
+      window.setTimeout = (fn, ms, ...args) => original(fn, ms === 65000 ? 40 : ms, ...args);
+    }""")
+    page.add_script_tag(path=str(EXTENSION / 'content.js'))
+    panel = page.locator('#product .zeshun-product-info')
+    panel.get_by_role('button', name='重试').wait_for()
+    assert '响应超时' in panel.inner_text()
+    page.evaluate("mockMode = 'success'")
+    panel.get_by_role('button', name='重试').click()
+    wait_for_card(page)
+    assert page.evaluate('messages.length') == 2
+
+
+def test_collection_preserves_auth_error_for_batch_stop(mercado_page):
+    page = mercado_page(
+        '<h1 class="ui-pdp-title">Test</h1>'
+        '<meta property="og:image" content="https://example.test/product.jpg">',
+        url='https://articulo.mercadolibre.com.mx/MLM-385775246-test-_JM', content=False)
+    page.evaluate("""() => {
+      chrome.runtime.sendMessage = (_, callback) => callback({ok:false, authRequired:true,
+        status:401, error:'插件登录已失效'});
+    }""")
+    page.add_script_tag(path=str(EXTENSION / 'content.js'))
+    result = page.evaluate("""() => new Promise(resolve =>
+      extensionListener({type:'EXTRACT_BATCH_PRODUCT'}, {}, resolve))""")
+    assert result['authRequired'] is True
+    assert result['status'] == 401
+    assert result['errorSource'] == 'data_service'
+
+
+def test_grid_cards_align_fields_and_shrink_after_refresh_and_resize(mercado_page):
+    second_sku = "MLM385775247"
+    page = mercado_page(
+        '<ol id="results">' + listing_markup()
+        + listing_markup(sku=second_sku, card_id="second-product") + '</ol>',
+        native_css='''
+          #results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 600px; }
+          #results .poly-card { width: 100%; }
+          #second-product .poly-component__title { padding-bottom: 75px; }
+        ''',
+        products={second_sku: {
+            "brand": "Long descriptive brand name " * 3,
+            "size_cm": [123.45, 678.9, 101.12],
+            "seller_status": "", "seller_level": None,
+        }},
+    )
+    wait_for_card(page)
+    second = wait_for_card(page, "second-product")
+    aligned = '''() => {
+      const cards = [...document.querySelectorAll('.poly-card')];
+      const panels = cards.map(card => card.querySelector('.zeshun-product-info'));
+      const selectors = ['', '.zs-info-seller > .zs-info-label', '.zs-info-stats', '.zs-info-measure', '.zs-info-profit', '.zs-info-foot'];
+      return selectors.every(selector => {
+        const boxes = panels.map(panel => (selector ? panel.querySelector(selector) : panel).getBoundingClientRect());
+        return Math.abs(boxes[0].top - boxes[1].top) < 1;
+      }) && Math.abs(cards[0].getBoundingClientRect().bottom - cards[1].getBoundingClientRect().bottom) < 1;
+    }'''
+    page.wait_for_function(aligned)
+    initial_height = second.bounding_box()["height"]
+    page.evaluate('''() => {
+      mockProducts.MLM385775247 = {brand: 'Short', seller_status: '', seller_level: null};
+      document.querySelector('#second-product .poly-component__title').style.paddingBottom = '8px';
+    }''')
+    second.locator('.zs-info-refresh').click()
+    page.wait_for_function("document.querySelector('#second-product .zs-info-profit') && document.querySelector('#second-product .zeshun-product-info').textContent.includes('Short')")
+    page.wait_for_function(aligned)
+    assert second.bounding_box()["height"] < initial_height
+    page.evaluate("document.querySelector('#results').style.width = '440px'")
+    page.wait_for_function(aligned)
+    for panel in page.locator('.zeshun-product-info').all():
+        assert panel.evaluate('panel => panel.scrollWidth <= panel.clientWidth + 1')
+    page.evaluate("document.querySelector('#results').style.gridTemplateColumns = '1fr'")
+    page.set_viewport_size({"width": 500, "height": 1400})
+    page.wait_for_function("[...document.querySelectorAll('.poly-card')].every(card => !card.style.getPropertyValue('--zs-aligned-card-height'))")
+
+
+def test_collection_bypasses_stalled_unrelated_card_batch(mercado_page):
+    page = mercado_page(mode='hold')
+    page.wait_for_function('pendingResponses.length === 1')
+    page.evaluate("""() => {
+      mockMode = 'success';
+      history.pushState({}, '', '/MLM-385775247-test-_JM');
+      document.body.innerHTML = '<main><h1 class="ui-pdp-title">Selected item</h1>' +
+        '<meta property="og:image" content="https://example.test/product.jpg"></main>';
+    }""")
+    result = page.evaluate("""() => Promise.race([
+      new Promise(resolve => extensionListener({type:'EXTRACT_BATCH_PRODUCT'}, {}, resolve)),
+      new Promise(resolve => setTimeout(() => resolve({error:'blocked by card queue'}), 2000))
+    ])""")
+    assert result['ok'] is True
+    assert result['product']['source_item_id'] == 'MLM385775247'
+    assert page.evaluate('pendingResponses.length') == 1
+
+
+def test_collection_does_not_wait_for_background_card_timer(mercado_page):
+    page = mercado_page(
+        '<main><h1 class="ui-pdp-title">Selected item</h1>'
+        '<meta property="og:image" content="https://example.test/product.jpg"></main>',
+        url='https://articulo.mercadolibre.com.mx/MLM-385775246-test-_JM', content=False)
+    page.evaluate("""() => {
+      const original = window.setTimeout;
+      window.setTimeout = (fn, ms, ...args) => original(fn, ms === 80 ? 60000 : ms, ...args);
+    }""")
+    page.add_script_tag(path=str(EXTENSION / 'content.js'))
+    result = page.evaluate("""() => Promise.race([
+      new Promise(resolve => extensionListener({type:'EXTRACT_BATCH_PRODUCT'}, {}, resolve)),
+      new Promise(resolve => setTimeout(() => resolve({error:'blocked by timer'}), 2000))
+    ])""")
+    assert result['ok'] is True
+
+
+@pytest.mark.parametrize("response,label", [
+    ({"ok": True, "queued": False}, "已采集"),
+    ({"ok": True, "queued": True}, "已待传"),
+    ({"ok": False, "error": "商品需要验证"}, "重试"),
+])
+def test_single_card_collect_submits_without_navigation(mercado_page, response, label):
+    page = mercado_page()
+    page.evaluate("""response => {
+      const original = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = (message, callback) => {
+        if (message.type !== 'COLLECT_MERCADO_URL') return original(message, callback);
+        messages.push(structuredClone(message));
+        window.finishCollection = () => callback(response);
+      };
+    }""", response)
+    button = page.locator("#product > .zeshun-card-collect")
+    button.click()
+    assert button.is_disabled()
+    assert button.inner_text() == "采集中…"
+    page.evaluate("finishCollection()")
+    assert button.inner_text() == label
+    assert page.url == LIST_URL
+    assert len(page.context.pages) == 1
+    messages = page.evaluate("messages.filter(message => message.type === 'COLLECT_MERCADO_URL')")
+    assert len(messages) == 1
+    assert SKU[3:] in messages[0]["url"]
+    toast = page.locator("#zeshun-collector-toast").inner_text()
+    assert ("待传" if response.get("queued") else "已采集" if response["ok"] else response["error"]) in toast

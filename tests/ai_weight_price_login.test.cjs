@@ -39,7 +39,10 @@ test('refresh keeps the signed-in computer and never switches to another online 
     let agents = [{agent_id: 'other-pc', online: true}, {agent_id: 'signed-in-pc', online: true}];
     context.fetch = async () => ({ok: true, json: async () => ({data: {agents}})});
     context.esc = value => String(value ?? '');
-    vm.runInContext(functionSource('loadAgents'), context);
+    vm.runInContext([
+        template.split('\n').find(line => line.startsWith('let awpAgentPromise=')),
+        functionSource('loadAgents'), functionSource('performLoadAgents'),
+    ].join('\n'), context);
     await vm.runInContext('loadAgents()', context);
     assert.equal($('execution-agent').value, 'signed-in-pc');
     agents = [agents[0]];
@@ -118,7 +121,10 @@ test('owner query is added only to record reads, never browser actions', async (
         isAgentAction: (_, method) => method === 'POST', encodeURIComponent,
         fetch: async (url, options) => {requests.push({url, options}); return {ok: true, json: async () => ({})};}};
     vm.createContext(context);
-    vm.runInContext(functionSource('api'), context);
+    vm.runInContext([
+        template.split('\n').find(line => line.startsWith('const awpReadRequests=')),
+        functionSource('api'),
+    ].join('\n'), context);
     await vm.runInContext("api('logs?after=4')", context);
     await vm.runInContext("api('tasks?page=2')", context);
     await vm.runInContext("api('start','POST',{})", context);

@@ -11,7 +11,7 @@
         ['service', '客服与申诉', ['pre-sale', 'customer-service', 'appeal', 'ai-appeals']],
         ['risk', '风控与合规', ['prohibited-listings', 'ip-rights', 'infractions', 'risk-check', 'infringement-knowledge', 'reputation', 'api-reputation']],
         ['analytics', '数据与资金', ['order-analysis', 'store-analysis', 'salesperson-stats', 'ad-analysis', 'funds']],
-        ['system', '系统管理', ['access']],
+        ['system', '系统管理', ['access', '/billing', '/ai-billing']],
     ];
     const key = 'zeshun-navigation-groups-v1';
     let saved = {};
@@ -25,7 +25,7 @@
     const sections = [];
     const assigned = new Set();
     groups.forEach(([id, label, ids]) => {
-        const items = ids.map(item => buttons.find(b => b.dataset.tab === item || (!b.dataset.tab && b.getAttribute('onclick')?.includes(`'${item}'`)))).filter(Boolean);
+        const items = ids.map(item => buttons.find(b => b.dataset.tab === item || b.getAttribute('href') === item || (!b.dataset.tab && b.getAttribute('onclick')?.includes(`'${item}'`)))).filter(Boolean);
         if (!items.length) return;
         const section = document.createElement('details');
         section.className = 'nav-section';
@@ -82,14 +82,22 @@
         search.value = ''; refresh();
         sections.forEach(({section}) => { section.open = button.dataset.expand === 'true'; });
     }));
-    buttons.forEach(b => new MutationObserver(records => {
-        if (records.some(r => r.attributeName === 'class' && b.classList.contains('active') && !(r.oldValue || '').split(' ').includes('active'))) {
-            search.value = ''; refresh();
-            const section = b.closest('.nav-section');
+    const buttonSet = new Set(buttons);
+    let refreshScheduled = false;
+    new MutationObserver(records => {
+        const changes = records.filter(record => buttonSet.has(record.target));
+        if (!changes.length) return;
+        const activated = changes.find(record => record.attributeName === 'class'
+            && record.target.classList.contains('active') && !(record.oldValue || '').split(' ').includes('active'))?.target;
+        if (activated) {
+            search.value = '';
+            const section = activated.closest('.nav-section');
             if (section) section.open = true;
         }
-        refresh();
-    }).observe(b, {attributes: true, attributeFilter: ['hidden', 'class'], attributeOldValue: true}));
+        if (refreshScheduled) return;
+        refreshScheduled = true;
+        window.requestAnimationFrame(() => {refreshScheduled = false; refresh();});
+    }).observe(nav, {subtree: true, attributes: true, attributeFilter: ['hidden', 'class'], attributeOldValue: true});
     refresh();
 
     const sidebar = nav.closest('.sidebar');

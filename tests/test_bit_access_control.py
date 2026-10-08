@@ -577,8 +577,8 @@ def test_account_initialization_only_writes_when_upgrade_needed(monkeypatch, mis
     # belongs to users, so do not derive this fixture from required constants.
     role_columns = {'role_key', 'role_name', 'description', 'permissions_json',
                     'own_store_only', 'is_system', 'created_at', 'updated_at'}
-    user_columns = {'id', 'username', 'password_hash', 'display_name', 'email',
-                    'department', 'organization_key', 'role_key', 'is_active',
+    user_columns = {'id', 'username', 'password_hash', 'display_name', 'personal_name', 'email',
+                    'department', 'wechat_id', 'phone', 'warehouse_key', 'organization_key', 'role_key', 'is_active',
                     'created_at', 'updated_at'}
     tables = {'workbench_roles', 'workbench_users', 'workbench_organizations'}
     if missing == 'user_organization_column':
@@ -628,3 +628,6 @@ def test_account_initialization_only_writes_when_upgrade_needed(monkeypatch, mis
         normalize = next(i for i, event in enumerate(events) if "SET `organization_key` = 'wuhan-zeshun'" in event)
         backfill = next(i for i, event in enumerate(events) if 'SELECT DISTINCT u.`organization_key`' in event)
         assert normalize < backfill
+
+
+pytestmark = pytest.mark.usefixtures("subscribed_workbench_account")

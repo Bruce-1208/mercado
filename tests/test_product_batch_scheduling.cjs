@@ -94,3 +94,56 @@ test('rate limit interrupts another lane with a nonresponsive page',async()=>{
   assert.equal(h.run.state.phase,'stopped');
   assert.equal(h.starts.length,2);
 });
+
+test('one verification page cannot pause other lanes or retry indefinitely',async()=>{
+  const h=harness({read:key=>key===1?{ok:false,blocked:true,error:'请先在前端页面完成登录或人机验证'}:product(key)});
+  await h.start();
+  assert.equal(h.run.state.phase,'partial');
+  assert.equal(h.run.state.failed_count,1);
+  assert.equal(h.run.state.completed_count,7);
+  assert.equal(h.starts.filter(x=>x.key===1).length,1);
+  assert.equal(h.tabs.size,0);
+});
+test('a detail redirect is isolated even in single-lane mode',async()=>{
+  const h=harness(); h.run.state.params.concurrency=1;
+  const get=h.context.chrome.tabs.get;
+  h.context.chrome.tabs.get=async id=>{
+    const tab=await get(id);
+    return /MLM-1$/.test(tab.url)?{...tab,url:'https://www.mercadolibre.com.mx/login'}:tab;
+  };
+  await h.start();
+  assert.equal(h.run.state.failed_count,1);
+  assert.equal(h.run.state.completed_count,7);
+  assert.equal(h.tabs.size,0);
+});
+test('blocked search page stops with an actionable message',async()=>{
+  const h=harness();
+  h.context.sendTabMessage=async()=>({ok:false,blocked:true,error:'需要买家登录'});
+  await h.start();
+  assert.equal(h.run.state.phase,'stopped');
+  assert.match(h.run.state.message,/列表页.*停止/);
+  assert.equal(h.run.state.retry_at,null);
+  assert.equal(h.tabs.size,0);
+});
+test('data source rate limit is not mislabeled as Mercado page blocking',async()=>{
+  const h=harness({read:key=>key===1?{ok:false,retryable:false,status:503,errorSource:'data_service',error:'数据源暂时限频'}:product(key)});
+  await h.start();
+  assert.equal(h.run.state.phase,'partial');
+  assert.equal(h.run.state.completed_count,7);
+  assert.match(h.run.state.last_error,/数据源暂时限频/);
+});
+test('true plugin authentication failure stops without failing every product',async()=>{
+  const h=harness({read:()=>({ok:false,retryable:false,authRequired:true,status:401,error:'插件登录已失效'})});
+  await h.start();
+  assert.equal(h.run.state.phase,'error');
+  assert.match(h.run.state.message,/登录已失效/);
+  assert(h.starts.length<=2);
+});
+test('a rejected progress write does not poison all subsequent saves',async()=>{
+  const h=harness();let writes=0;
+  h.context.storageSet=async()=>{if(++writes===1) throw Error('Storage temporarily unavailable');};
+  await h.start();
+  assert.equal(h.run.state.completed_count,8);
+  assert.equal(h.run.state.running,false);
+  assert(writes>1);
+});

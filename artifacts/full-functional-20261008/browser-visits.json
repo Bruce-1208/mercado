@@ -1,0 +1,4569 @@
+{
+  "environment": "http://127.0.0.1:5000",
+  "thresholdMs": 3000,
+  "viewport": {
+    "width": 319,
+    "height": 877
+  },
+  "scope": "Click to DOM update. Raw broad-module timing includes background progress on store-links; corrected primary probes are stored in queries. Includes session preload. Error states and timeouts do not pass.",
+  "visits": [
+    {
+      "id": "tasks",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 6604.199999999255,
+        "done": true,
+        "elapsedMs": 15028.39999999851,
+        "errors": false,
+        "lastChange": 43492.39999999851,
+        "module": "tasks",
+        "pending": 2,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 6594.199999999255,
+            "path": "/api/execution-agents",
+            "start": 36895.5,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/tasks/daily/options",
+            "start": 36896
+          },
+          {
+            "method": "GET",
+            "path": "/api/ai-weight-price/tasks",
+            "start": 37028.5
+          }
+        ],
+        "rows": 0,
+        "start": 36888.199999999255,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-tasks",
+        "frames": [],
+        "heading": "任务模块",
+        "loading": []
+      }
+    },
+    {
+      "id": "1688-products",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": true,
+        "dataMs": 10.699999999254942,
+        "done": true,
+        "elapsedMs": 15038,
+        "errors": false,
+        "lastChange": 52284.39999999851,
+        "module": "1688-products",
+        "pending": 3,
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/1688-products/options",
+            "start": 52283
+          },
+          {
+            "method": "GET",
+            "path": "/api/mercado-management-categories",
+            "start": 52283.29999999702
+          },
+          {
+            "method": "GET",
+            "path": "/api/1688-products",
+            "start": 52283.39999999851
+          }
+        ],
+        "rows": 1,
+        "start": 52273.699999999255,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-1688-products",
+        "frames": [],
+        "heading": "1688产品区",
+        "loading": [
+          "正在读取泽顺插件采集的 1688 商品…",
+          "正在加载…"
+        ]
+      }
+    },
+    {
+      "id": "mercado-collection",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": true,
+        "dataMs": 11.399999998509884,
+        "done": true,
+        "elapsedMs": 15044.800000000743,
+        "errors": false,
+        "lastChange": 67702.59999999776,
+        "module": "mercado-collection",
+        "pending": 2,
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/mercado-collection/items",
+            "start": 67701
+          },
+          {
+            "method": "GET",
+            "path": "/api/mercado-management-categories",
+            "start": 67701.59999999776
+          }
+        ],
+        "rows": 1,
+        "start": 67691.19999999925,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-mercado-collection",
+        "frames": [],
+        "heading": "美客多跟卖采集",
+        "loading": [
+          "正在读取数据…请稍候，数据读取完成后会自动显示。"
+        ]
+      }
+    },
+    {
+      "id": "ai-original-products",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": true,
+        "dataMs": 18,
+        "done": true,
+        "elapsedMs": 15046.599999997765,
+        "errors": false,
+        "lastChange": 83130.69999999925,
+        "module": "ai-original-products",
+        "pending": 1,
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/ai-original-products",
+            "start": 83129.19999999925
+          }
+        ],
+        "rows": 0,
+        "start": 83112.69999999925,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-ai-original-products",
+        "frames": [],
+        "heading": "AI原创产品",
+        "loading": [
+          "正在读取 1688 产品..."
+        ]
+      }
+    },
+    {
+      "id": "mercado-products",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": true,
+        "dataMs": 15.900000002235174,
+        "done": true,
+        "elapsedMs": 15038.400000002235,
+        "errors": false,
+        "lastChange": 98558.19999999924,
+        "module": "mercado-products",
+        "pending": 3,
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/mercado-products",
+            "start": 98554.59999999776
+          },
+          {
+            "method": "GET",
+            "path": "/api/zying-collection/categories",
+            "start": 98555.09999999776
+          },
+          {
+            "method": "GET",
+            "path": "/api/mercado-products/developers",
+            "start": 98555.29999999702
+          }
+        ],
+        "rows": 1,
+        "start": 98542.29999999702,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-mercado-products",
+        "frames": [],
+        "heading": "产品列表",
+        "loading": [
+          "正在读取产品开发…",
+          "正在读取数据…请稍候，数据读取完成后会自动显示。"
+        ]
+      }
+    },
+    {
+      "id": "ai-video",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 283.5,
+        "done": true,
+        "elapsedMs": 680.3999999985099,
+        "errors": false,
+        "lastChange": 187115,
+        "module": "ai-video",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 236.79999999701977,
+            "path": "/api/ai-videos/jobs",
+            "start": 186850,
+            "status": 200
+          }
+        ],
+        "rows": 0,
+        "start": 186831.5,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-ai-video",
+        "frames": [],
+        "heading": "AI 视频生成",
+        "loading": [
+          "服务已就绪，请添加原始素材。"
+        ]
+      }
+    },
+    {
+      "id": "mercado-publish-records",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 1122.4000000022352,
+        "done": true,
+        "elapsedMs": 1491.9000000022352,
+        "errors": false,
+        "lastChange": 189005.69999999923,
+        "module": "mercado-publish-records",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 490.5,
+            "path": "/api/mercado-publish-records",
+            "start": 187894.09999999776,
+            "status": 200
+          }
+        ],
+        "rows": 500,
+        "start": 187883.29999999705,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-mercado-publish-records",
+        "frames": [],
+        "heading": "产品上架记录",
+        "loading": []
+      }
+    },
+    {
+      "id": "mercado-shipping-standards",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 136.69999999925494,
+        "done": true,
+        "elapsedMs": 498,
+        "errors": false,
+        "lastChange": 189921.09999999776,
+        "module": "mercado-shipping-standards",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 98.60000000149012,
+            "path": "/api/mercado-shipping-rates",
+            "start": 189810.8999999985,
+            "status": 200
+          }
+        ],
+        "rows": 39,
+        "start": 189784.3999999985,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-mercado-shipping-standards",
+        "frames": [],
+        "heading": "美客多运费标准",
+        "loading": []
+      }
+    },
+    {
+      "id": "orders",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 4591.699999999255,
+        "done": true,
+        "elapsedMs": 4968.5,
+        "errors": false,
+        "lastChange": 208377.3999999985,
+        "module": "orders",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 4347,
+            "path": "/api/orders",
+            "start": 203801.09999999776,
+            "status": 200
+          }
+        ],
+        "rows": 196,
+        "start": 203785.69999999923,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-orders",
+        "frames": [],
+        "heading": "订单管理",
+        "loading": []
+      }
+    },
+    {
+      "id": "weight-dimensions-records",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": true,
+        "dataMs": 1119.699999999255,
+        "done": true,
+        "elapsedMs": 15014,
+        "errors": false,
+        "lastChange": 210795.09999999776,
+        "module": "weight-dimensions-records",
+        "pending": 1,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 1081.9000000022352,
+            "path": "/api/execution-agents",
+            "start": 209704.09999999776,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/weight-dimensions-records/saved",
+            "start": 209705.3999999985
+          }
+        ],
+        "rows": 1,
+        "start": 209675.3999999985,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-weight-dimensions-records",
+        "frames": [],
+        "heading": "重量尺寸变更记录",
+        "loading": [
+          "正在读取数据库已保存记录…",
+          "共 0 条 · 第 1 / 1 页"
+        ]
+      }
+    },
+    {
+      "id": "window-anomalies",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 1426.5,
+        "done": true,
+        "elapsedMs": 1814.10000000149,
+        "errors": true,
+        "lastChange": 226552.29999999705,
+        "module": "window-anomalies",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 1395.4000000022352,
+            "path": "/api/window-anomalies",
+            "start": 225136.09999999776,
+            "status": 200
+          }
+        ],
+        "rows": 28,
+        "start": 225125.79999999705,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-window-anomalies",
+        "frames": [],
+        "heading": "店铺状态",
+        "loading": []
+      }
+    },
+    {
+      "id": "store-tokens",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 612.1999999992549,
+        "done": true,
+        "elapsedMs": 1008.2999999970198,
+        "errors": false,
+        "lastChange": 245761.19999999923,
+        "module": "store-tokens",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 79.90000000223517,
+            "path": "/api/mercado-applications",
+            "start": 245196.09999999776,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 79.80000000074506,
+            "path": "/api/mercado-tokens",
+            "start": 245196.29999999705,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 380.30000000074506,
+            "path": "/api/mercado-tokens/authorization",
+            "start": 245340.8999999985,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 192.10000000149012,
+            "path": "/api/mercado-account-groups",
+            "start": 245563.29999999705,
+            "status": 200
+          }
+        ],
+        "rows": 149,
+        "start": 245149,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-store-tokens",
+        "frames": [],
+        "heading": "店铺授权",
+        "loading": []
+      }
+    },
+    {
+      "id": "store-links",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": true,
+        "dataMs": 14115,
+        "done": true,
+        "elapsedMs": 15033.400000002235,
+        "errors": false,
+        "lastChange": 261018.09999999776,
+        "module": "store-links",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 1569.4000000022352,
+            "path": "/api/store-links",
+            "start": 246929.09999999776,
+            "status": 200
+          }
+        ],
+        "rows": 50,
+        "start": 246903.09999999776,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-store-links",
+        "frames": [],
+        "heading": "店铺链接",
+        "loading": [
+          "后台修改完成：成功 1，部分成功 0，失败 0 · 1/1 · 成功 1 · 部分成功 0 · 失败 0"
+        ]
+      }
+    },
+    {
+      "id": "store-operations",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 2171.39999999851,
+        "done": true,
+        "elapsedMs": 2552.699999999255,
+        "errors": false,
+        "lastChange": 264741.09999999776,
+        "module": "store-operations",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 1438.0999999977648,
+            "path": "/api/store-links/operation-logs",
+            "start": 262587,
+            "status": 200
+          }
+        ],
+        "rows": 0,
+        "start": 262569.69999999925,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-store-operations",
+        "frames": [],
+        "heading": "店铺操作记录",
+        "loading": [
+          "已显示 30 条记录 · 展开卡片可查看详情"
+        ]
+      }
+    },
+    {
+      "id": "size-charts",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 18.5,
+        "done": true,
+        "elapsedMs": 394.3999999985099,
+        "errors": false,
+        "lastChange": 294512,
+        "module": "size-charts",
+        "pending": 0,
+        "requests": [],
+        "rows": 12,
+        "start": 294493.5,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-size-charts",
+        "frames": [
+          {
+            "id": "size-charts-frame",
+            "src": "http://127.0.0.1:5000/size-charts?embedded=1"
+          }
+        ],
+        "loading": []
+      }
+    },
+    {
+      "id": "clearance-alerts",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": true,
+        "dataMs": 5136.60000000149,
+        "done": true,
+        "elapsedMs": 15012.800000000743,
+        "errors": true,
+        "lastChange": 300495.8999999985,
+        "module": "clearance-alerts",
+        "pending": 1,
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/clearance-alerts",
+            "start": 295363.19999999925
+          },
+          {
+            "method": "GET",
+            "ms": 77.89999999850988,
+            "path": "/api/account-integrations/balance",
+            "start": 300418,
+            "status": 200
+          }
+        ],
+        "rows": 1,
+        "start": 295359.299999997,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-clearance-alerts",
+        "frames": [
+          {
+            "id": "clearance-alerts-frame",
+            "src": "http://127.0.0.1:5000/clearance-alerts?embedded=1"
+          }
+        ],
+        "loading": []
+      }
+    },
+    {
+      "id": "promotions",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 13.299999997019768,
+        "done": true,
+        "elapsedMs": 392.3999999985099,
+        "errors": false,
+        "lastChange": 314097.299999997,
+        "module": "promotions",
+        "pending": 0,
+        "requests": [],
+        "rows": 499,
+        "start": 314084,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-promotions",
+        "frames": [
+          {
+            "id": "promotions-frame",
+            "src": "http://127.0.0.1:5000/promotions?embedded=1"
+          }
+        ],
+        "heading": "活动管理",
+        "loading": []
+      }
+    },
+    {
+      "id": "appeal",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 1151.7000000029802,
+        "done": true,
+        "elapsedMs": 1506.7000000029802,
+        "errors": false,
+        "lastChange": 324275.5,
+        "module": "appeal",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 40.60000000149011,
+            "path": "/api/appeal-phrases",
+            "start": 323131.799999997,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 1122.300000000745,
+            "path": "/api/execution-agents",
+            "start": 323132.19999999925,
+            "status": 200
+          }
+        ],
+        "rows": 13,
+        "start": 323123.799999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-appeal",
+        "frames": [],
+        "heading": "自动化AI申诉",
+        "loading": []
+      }
+    },
+    {
+      "id": "ai-appeals",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 541.9000000022352,
+        "done": true,
+        "elapsedMs": 892.1000000014901,
+        "errors": true,
+        "lastChange": 325634,
+        "module": "ai-appeals",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 214.19999999925497,
+            "path": "/api/ai-appeal-records",
+            "start": 325098.19999999925,
+            "status": 200
+          }
+        ],
+        "rows": 500,
+        "start": 325092.09999999776,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-ai-appeals",
+        "frames": [],
+        "heading": "自动化申诉记录",
+        "loading": []
+      }
+    },
+    {
+      "id": "prohibited-listings",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 677.3000000007451,
+        "done": true,
+        "elapsedMs": 1083.699999999255,
+        "errors": false,
+        "lastChange": 327139.5,
+        "module": "prohibited-listings",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 371.3999999985099,
+            "path": "/api/prohibited-listings",
+            "start": 326490.69999999925,
+            "status": 200
+          }
+        ],
+        "rows": 343,
+        "start": 326462.19999999925,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-prohibited-listings",
+        "frames": [],
+        "heading": "禁限售列表",
+        "loading": []
+      }
+    },
+    {
+      "id": "risk-check",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": true,
+        "dataMs": 2219.300000000745,
+        "done": true,
+        "elapsedMs": 15045.699999999257,
+        "errors": false,
+        "lastChange": 338624.69999999925,
+        "module": "risk-check",
+        "pending": 1,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 2038.699999999255,
+            "path": "/api/risk-check/categories",
+            "start": 336428.09999999776,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 2165.699999999255,
+            "path": "/api/risk-check/options",
+            "start": 336428.3999999985,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/risk-check/results",
+            "start": 338477.09999999776
+          }
+        ],
+        "rows": 1,
+        "start": 336405.3999999985,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-risk-check",
+        "frames": [],
+        "heading": "侵权检测",
+        "loading": [
+          "正在加载侵权检测结果..."
+        ]
+      }
+    },
+    {
+      "id": "infringement-knowledge",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 104.40000000223516,
+        "done": true,
+        "elapsedMs": 491.30000000074506,
+        "errors": false,
+        "lastChange": 352045,
+        "module": "infringement-knowledge",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 73.40000000223517,
+            "path": "/api/infringement-knowledge",
+            "start": 351942.09999999776,
+            "status": 200
+          }
+        ],
+        "rows": 50,
+        "start": 351940.59999999776,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-infringement-knowledge",
+        "frames": [],
+        "heading": "侵权知识库",
+        "loading": []
+      }
+    },
+    {
+      "id": "reputation",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 1840.60000000149,
+        "done": true,
+        "elapsedMs": 2224.800000000745,
+        "errors": false,
+        "lastChange": 354851.69999999925,
+        "module": "reputation",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 1808,
+            "path": "/api/collections/options",
+            "start": 353024.09999999776,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 804,
+            "path": "/api/reputation/latest",
+            "start": 353024.59999999776,
+            "status": 200
+          }
+        ],
+        "rows": 314,
+        "start": 353011.09999999776,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-reputation",
+        "frames": [],
+        "heading": "声誉数据",
+        "loading": [
+          "当前没有失败店铺，无需补跑"
+        ]
+      }
+    },
+    {
+      "id": "api-reputation",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 2360.699999999255,
+        "done": true,
+        "elapsedMs": 2716.300000000745,
+        "errors": false,
+        "lastChange": 370188.59999999776,
+        "module": "api-reputation",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 793.1999999992549,
+            "path": "/api/reputation/latest",
+            "start": 368052,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 1225.5,
+            "path": "/api/collections/options",
+            "start": 368963.09999999776,
+            "status": 200
+          }
+        ],
+        "rows": 317,
+        "start": 367827.8999999985,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-api-reputation",
+        "frames": [],
+        "heading": "API 声誉",
+        "loading": []
+      }
+    },
+    {
+      "id": "order-analysis",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 999.39999999851,
+        "done": true,
+        "elapsedMs": 1370.5,
+        "errors": false,
+        "lastChange": 372115.59999999776,
+        "module": "order-analysis",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 959.6999999992548,
+            "path": "/api/order-analysis/high-after-sales",
+            "start": 371149,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 754.5,
+            "path": "/api/order-analysis/high-profits",
+            "start": 371149.19999999925,
+            "status": 200
+          }
+        ],
+        "rows": 101,
+        "start": 371116.19999999925,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-order-analysis",
+        "frames": [],
+        "heading": "订单分析",
+        "loading": []
+      }
+    },
+    {
+      "id": "store-analysis",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 173,
+        "done": true,
+        "elapsedMs": 556.4000000022352,
+        "errors": false,
+        "lastChange": 373188.799999997,
+        "module": "store-analysis",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 116.19999999925494,
+            "path": "/api/mercado-tokens",
+            "start": 373027,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 145.5,
+            "path": "/api/store-analysis",
+            "start": 373027.299999997,
+            "status": 200
+          }
+        ],
+        "rows": 2,
+        "start": 373015.799999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-store-analysis",
+        "frames": [],
+        "heading": "店铺分析",
+        "loading": []
+      }
+    },
+    {
+      "id": "salesperson-stats",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 263.80000000074506,
+        "done": true,
+        "elapsedMs": 660.5999999977648,
+        "errors": false,
+        "lastChange": 382825.5,
+        "module": "salesperson-stats",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 247.60000000149012,
+            "path": "/api/salesperson-stats",
+            "start": 382570.299999997,
+            "status": 200
+          }
+        ],
+        "rows": 3,
+        "start": 382561.69999999925,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-salesperson-stats",
+        "frames": [],
+        "heading": "业务员量统计",
+        "loading": [
+          "共 3 位业务员 · 打印面单 5 单 · 新增采购 1542 单"
+        ]
+      }
+    },
+    {
+      "id": "ad-analysis",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 1259.60000000149,
+        "done": true,
+        "elapsedMs": 1642.5,
+        "errors": false,
+        "lastChange": 385021.8999999985,
+        "module": "ad-analysis",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 880.3999999985099,
+            "path": "/api/ad-analysis",
+            "start": 383778.69999999925,
+            "status": 200
+          }
+        ],
+        "rows": 120,
+        "start": 383762.299999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-ad-analysis",
+        "frames": [],
+        "heading": "广告分析",
+        "loading": []
+      }
+    },
+    {
+      "id": "funds",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 1486.199999999255,
+        "done": true,
+        "elapsedMs": 1867.89999999851,
+        "errors": true,
+        "lastChange": 387551.69999999925,
+        "module": "funds",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 882.9000000022352,
+            "path": "/api/funds/latest",
+            "start": 386083.59999999776,
+            "status": 200
+          }
+        ],
+        "rows": 840,
+        "start": 386065.5,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-funds",
+        "frames": [],
+        "heading": "资金管理",
+        "loading": []
+      }
+    },
+    {
+      "id": "access",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 1401,
+        "done": true,
+        "elapsedMs": 1790.10000000149,
+        "errors": false,
+        "lastChange": 413060.09999999776,
+        "module": "access",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 653.6999999992549,
+            "path": "/api/access/catalog",
+            "start": 411708.5,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 1233.4000000022352,
+            "path": "/api/access/roles",
+            "start": 411709.59999999776,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 1050.300000000745,
+            "path": "/api/access/users",
+            "start": 411709.799999997,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 72.60000000149012,
+            "path": "/api/access/organizations",
+            "start": 412943.799999997,
+            "status": 200
+          }
+        ],
+        "rows": 26,
+        "start": 411659.09999999776,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-access",
+        "frames": [],
+        "heading": "人员与权限",
+        "loading": []
+      }
+    },
+    {
+      "id": "pre-sale",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 30.699999999254945,
+        "done": true,
+        "elapsedMs": 392.79999999701977,
+        "errors": false,
+        "lastChange": 414112.69999999925,
+        "module": "pre-sale",
+        "pending": 0,
+        "requests": [],
+        "rows": 20,
+        "start": 414082,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-pre-sale",
+        "frames": [],
+        "heading": "美客多售前问答",
+        "loading": [
+          "已展示上次更新的数据（2026-10-08T11:35:01.468Z）"
+        ]
+      }
+    },
+    {
+      "id": "customer-service",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": true,
+        "dataMs": 10230.89999999851,
+        "done": true,
+        "elapsedMs": 15022.39999999851,
+        "errors": false,
+        "lastChange": 425315.09999999776,
+        "module": "customer-service",
+        "pending": 2,
+        "requests": [
+          {
+            "method": "POST",
+            "ms": 397.5,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 415418.8999999985,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 95.90000000223516,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 417645.59999999776,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 160.19999999925494,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 417821.5,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 152.10000000149012,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 419743.799999997,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 127.79999999701975,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 419984.5,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 118.39999999850988,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 421898.19999999925,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 125.39999999850988,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 422115,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 775.3999999985099,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 424019.19999999925,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 1064.0999999977648,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 424243.69999999925,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 426797
+          },
+          {
+            "method": "POST",
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 427311
+          }
+        ],
+        "rows": 0,
+        "start": 415084.19999999925,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-customer-service",
+        "frames": [],
+        "heading": "售后处理",
+        "loading": [
+          "正在自动加载售后数据：已完成 0/144 家店铺"
+        ]
+      }
+    },
+    {
+      "id": "ai-weight-price",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 126.59999999776484,
+        "done": true,
+        "elapsedMs": 501.8999999985099,
+        "errors": false,
+        "lastChange": 444893.59999999776,
+        "module": "ai-weight-price",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 14.5,
+            "path": "/api/ai-weight-price/logs",
+            "start": 444876.59999999776,
+            "status": 200
+          }
+        ],
+        "rows": 54,
+        "start": 444767,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-ai-weight-price",
+        "frames": [
+          {
+            "id": "ai-weight-price-frame",
+            "src": "http://127.0.0.1:5000/ai-weight-price"
+          }
+        ],
+        "loading": []
+      }
+    },
+    {
+      "id": "infractions",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 372.5,
+        "done": true,
+        "elapsedMs": 775.8999999985099,
+        "errors": false,
+        "lastChange": 446273.3999999985,
+        "module": "infractions",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 94.30000000074506,
+            "path": "/api/ai-weight-price/logs",
+            "start": 446179.09999999776,
+            "status": 200
+          }
+        ],
+        "rows": 228,
+        "start": 445900.8999999985,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-infractions",
+        "frames": [
+          {
+            "id": "infraction-dashboard-frame",
+            "src": "http://127.0.0.1:5000/infringement-dashboard?embedded=1"
+          }
+        ],
+        "heading": "侵权数据",
+        "loading": []
+      }
+    },
+    {
+      "id": "ip-rights",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 180.80000000074503,
+        "done": true,
+        "elapsedMs": 573.1000000014901,
+        "errors": false,
+        "lastChange": 447466.09999999776,
+        "module": "ip-rights",
+        "pending": 0,
+        "requests": [],
+        "rows": 244,
+        "start": 447285.299999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-ip-rights",
+        "frames": [
+          {
+            "id": "ip-rights-dashboard-frame",
+            "src": "http://127.0.0.1:5000/ip-rights-dashboard?embedded=1"
+          }
+        ],
+        "loading": []
+      }
+    },
+    {
+      "id": "yandex",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 4315.300000000745,
+        "done": true,
+        "elapsedMs": 4718.900000002235,
+        "errors": false,
+        "lastChange": 470475.59999999776,
+        "module": "yandex",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "POST",
+            "ms": 54.30000000074506,
+            "path": "/api/yandex-console/start",
+            "start": 466166.09999999776,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 3496.599999997765,
+            "path": "/yandex-console/api/orders",
+            "start": 466602.19999999925,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 3653.300000000745,
+            "path": "/yandex-console/api/orders",
+            "start": 466602.3999999985,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 3749.099999997765,
+            "path": "/yandex-console/api/orders",
+            "start": 466602.5,
+            "status": 200
+          }
+        ],
+        "rows": 372,
+        "start": 466160.299999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-yandex",
+        "frames": [
+          {
+            "id": "yandex-console-frame",
+            "src": "/yandex-console/?embedded=1"
+          }
+        ],
+        "heading": "Yandex 店铺管理",
+        "loading": []
+      }
+    },
+    {
+      "id": "overview",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 22.600000001490116,
+        "done": true,
+        "elapsedMs": 386,
+        "errors": false,
+        "lastChange": 471523,
+        "module": "overview",
+        "pending": 0,
+        "requests": [],
+        "rows": 0,
+        "start": 471500.3999999985,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-overview",
+        "frames": [],
+        "heading": "你好，管理员",
+        "loading": []
+      }
+    },
+    {
+      "id": "inventory",
+      "visit": "first",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 11.199999999254942,
+        "done": true,
+        "elapsedMs": 388.8999999985099,
+        "errors": false,
+        "lastChange": 472460.19999999925,
+        "module": "inventory",
+        "pending": 0,
+        "requests": [],
+        "rows": 8,
+        "start": 472449,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-inventory",
+        "frames": [],
+        "heading": "库存管理",
+        "loading": [
+          "没有符合当前条件的库存可以调整筛选条件，或刷新数据。",
+          "库存数据更新于 19:39"
+        ]
+      }
+    },
+    {
+      "id": "tasks",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 1186.199999999255,
+        "done": true,
+        "elapsedMs": 15020.099999997765,
+        "errors": true,
+        "lastChange": 508641.8999999985,
+        "module": "tasks",
+        "pending": 1,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 1166.39999999851,
+            "path": "/api/execution-agents",
+            "start": 507465,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/tasks/daily/options",
+            "start": 507465.5
+          }
+        ],
+        "rows": 0,
+        "start": 507455.69999999925,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-tasks",
+        "frames": [],
+        "heading": "任务模块",
+        "loading": []
+      }
+    },
+    {
+      "id": "1688-products",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 862,
+        "done": true,
+        "elapsedMs": 1259,
+        "errors": false,
+        "lastChange": 523986,
+        "module": "1688-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 252.39999999850988,
+            "path": "/api/1688-products/options",
+            "start": 523152.5,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 118.60000000149012,
+            "path": "/api/mercado-management-categories",
+            "start": 523152.8999999985,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 634.2999999970198,
+            "path": "/api/1688-products",
+            "start": 523153,
+            "status": 200
+          }
+        ],
+        "rows": 50,
+        "start": 523124,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-1688-products",
+        "frames": [],
+        "heading": "1688产品区",
+        "loading": [
+          "已加载 50 件，数据来源：泽顺插件"
+        ]
+      }
+    },
+    {
+      "id": "mercado-collection",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 946.60000000149,
+        "done": true,
+        "elapsedMs": 1306.300000000745,
+        "errors": false,
+        "lastChange": 526124.8999999985,
+        "module": "mercado-collection",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 442.5,
+            "path": "/api/mercado-collection/items",
+            "start": 525196.8999999985,
+            "status": 200
+          }
+        ],
+        "rows": 100,
+        "start": 525178.299999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-mercado-collection",
+        "frames": [],
+        "heading": "美客多跟卖采集",
+        "loading": []
+      }
+    },
+    {
+      "id": "ai-original-products",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 1114.699999999255,
+        "done": true,
+        "elapsedMs": 1476.0999999977648,
+        "errors": false,
+        "lastChange": 545180.1999999993,
+        "module": "ai-original-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 491.69999999925494,
+            "path": "/api/ai-original-products",
+            "start": 544096.1999999993,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 338.8999999985099,
+            "path": "/api/ai-original-products/cost-summary",
+            "start": 544770.3999999985,
+            "status": 200
+          }
+        ],
+        "rows": 0,
+        "start": 544065.5,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-ai-original-products",
+        "frames": [],
+        "heading": "AI原创产品",
+        "loading": [
+          "已加载 63 件 1688 产品"
+        ]
+      }
+    },
+    {
+      "id": "mercado-products",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 703.8999999985099,
+        "done": true,
+        "elapsedMs": 1102.5,
+        "errors": false,
+        "lastChange": 547323.299999997,
+        "module": "mercado-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 157.69999999925494,
+            "path": "/api/mercado-products",
+            "start": 546648,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 86.60000000149012,
+            "path": "/api/mercado-products/developers",
+            "start": 546650.299999997,
+            "status": 200
+          }
+        ],
+        "rows": 100,
+        "start": 546619.3999999985,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-mercado-products",
+        "frames": [],
+        "heading": "产品列表",
+        "loading": []
+      }
+    },
+    {
+      "id": "orders",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 5106.699999999255,
+        "done": true,
+        "elapsedMs": 5468,
+        "errors": false,
+        "lastChange": 554011.299999997,
+        "module": "orders",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 3707.699999999255,
+            "path": "/api/orders",
+            "start": 549284,
+            "status": 200
+          }
+        ],
+        "rows": 196,
+        "start": 548904.5999999978,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-orders",
+        "frames": [],
+        "heading": "订单管理",
+        "loading": []
+      }
+    },
+    {
+      "id": "inventory",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 40.400000002235174,
+        "done": true,
+        "elapsedMs": 393.6000000014901,
+        "errors": false,
+        "lastChange": 607132.6999999993,
+        "module": "inventory",
+        "pending": 0,
+        "requests": [],
+        "rows": 8,
+        "start": 607092.299999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-inventory",
+        "frames": [],
+        "heading": "库存管理",
+        "loading": [
+          "没有符合当前条件的库存可以调整筛选条件，或刷新数据。",
+          "库存数据更新于 19:39"
+        ]
+      }
+    },
+    {
+      "id": "ai-video",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 31.5,
+        "done": true,
+        "elapsedMs": 407.1000000014901,
+        "errors": false,
+        "lastChange": 608139.3999999985,
+        "module": "ai-video",
+        "pending": 0,
+        "requests": [],
+        "rows": 0,
+        "start": 608107.8999999985,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-ai-video",
+        "frames": [],
+        "heading": "AI 视频生成",
+        "loading": [
+          "服务已就绪，请添加原始素材。"
+        ]
+      }
+    },
+    {
+      "id": "mercado-publish-records",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 2006.699999999255,
+        "done": true,
+        "elapsedMs": 2381.89999999851,
+        "errors": false,
+        "lastChange": 611172.3999999985,
+        "module": "mercado-publish-records",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 367.6000000014901,
+            "path": "/api/mercado-publish-records",
+            "start": 609314.8999999985,
+            "status": 200
+          }
+        ],
+        "rows": 500,
+        "start": 609165.6999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-mercado-publish-records",
+        "frames": [],
+        "heading": "产品上架记录",
+        "loading": []
+      }
+    },
+    {
+      "id": "mercado-shipping-standards",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 148.5,
+        "done": true,
+        "elapsedMs": 504.5999999977648,
+        "errors": false,
+        "lastChange": 612312.1999999993,
+        "module": "mercado-shipping-standards",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 78.69999999925494,
+            "path": "/api/mercado-shipping-rates",
+            "start": 612206.0999999978,
+            "status": 200
+          }
+        ],
+        "rows": 39,
+        "start": 612163.6999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-mercado-shipping-standards",
+        "frames": [],
+        "heading": "美客多运费标准",
+        "loading": []
+      }
+    },
+    {
+      "id": "weight-dimensions-records",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 51.30000000074506,
+        "done": true,
+        "elapsedMs": 454,
+        "errors": true,
+        "lastChange": 731755.6999999993,
+        "module": "weight-dimensions-records",
+        "pending": 0,
+        "requests": [],
+        "rows": 50,
+        "start": 731704.3999999985,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-weight-dimensions-records",
+        "frames": [],
+        "heading": "重量尺寸变更记录",
+        "loading": [
+          "已读取 82 条已保存记录",
+          "共 82 条 · 第 1 / 2 页"
+        ]
+      }
+    },
+    {
+      "id": "window-anomalies",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 120.80000000074506,
+        "done": true,
+        "elapsedMs": 516,
+        "errors": true,
+        "lastChange": 732940,
+        "module": "window-anomalies",
+        "pending": 0,
+        "requests": [],
+        "rows": 28,
+        "start": 732819.1999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-window-anomalies",
+        "frames": [],
+        "heading": "店铺状态",
+        "loading": []
+      }
+    },
+    {
+      "id": "store-tokens",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 1388,
+        "done": true,
+        "elapsedMs": 1753.199999999255,
+        "errors": false,
+        "lastChange": 735391.5,
+        "module": "store-tokens",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 105.19999999925494,
+            "path": "/api/mercado-applications",
+            "start": 734051,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 105,
+            "path": "/api/mercado-tokens",
+            "start": 734051.1999999993,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 995.39999999851,
+            "path": "/api/mercado-tokens/authorization",
+            "start": 734298.1999999993,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 477.30000000074506,
+            "path": "/api/mercado-account-groups",
+            "start": 734893.299999997,
+            "status": 200
+          }
+        ],
+        "rows": 149,
+        "start": 734003.5,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-store-tokens",
+        "frames": [],
+        "heading": "店铺授权",
+        "loading": []
+      }
+    },
+    {
+      "id": "store-links",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 2131.5,
+        "done": true,
+        "elapsedMs": 2533.10000000149,
+        "errors": false,
+        "lastChange": 779194.3999999985,
+        "module": "store-links",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 1654.300000000745,
+            "path": "/api/store-links",
+            "start": 777162.299999997,
+            "status": 200
+          }
+        ],
+        "rows": 50,
+        "start": 777062.8999999985,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-store-links",
+        "frames": [],
+        "heading": "店铺链接",
+        "loading": [
+          "后台修改完成：成功 1，部分成功 0，失败 0 · 1/1 · 成功 1 · 部分成功 0 · 失败 0"
+        ]
+      }
+    },
+    {
+      "id": "store-operations",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 1601.300000000745,
+        "done": true,
+        "elapsedMs": 1977.800000000745,
+        "errors": false,
+        "lastChange": 782142.8999999985,
+        "module": "store-operations",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 937.7999999970198,
+            "path": "/api/store-links/operation-logs",
+            "start": 780562.5,
+            "status": 200
+          }
+        ],
+        "rows": 0,
+        "start": 780541.5999999978,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-store-operations",
+        "frames": [],
+        "heading": "店铺操作记录",
+        "loading": [
+          "已显示 30 条记录 · 展开卡片可查看详情"
+        ]
+      }
+    },
+    {
+      "id": "size-charts",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 19.800000000745055,
+        "done": true,
+        "elapsedMs": 390.8999999985099,
+        "errors": false,
+        "lastChange": 783148.5,
+        "module": "size-charts",
+        "pending": 0,
+        "requests": [],
+        "rows": 12,
+        "start": 783128.6999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-size-charts",
+        "frames": [
+          {
+            "id": "size-charts-frame",
+            "src": "http://127.0.0.1:5000/size-charts?embedded=1"
+          }
+        ],
+        "loading": []
+      }
+    },
+    {
+      "id": "clearance-alerts",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": true,
+        "dataMs": 11,
+        "done": true,
+        "elapsedMs": 15038.099999997765,
+        "errors": false,
+        "lastChange": 795303.6999999993,
+        "module": "clearance-alerts",
+        "pending": 1,
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/clearance-alerts",
+            "start": 795296.5
+          }
+        ],
+        "rows": 1,
+        "start": 795292.6999999993,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-clearance-alerts",
+        "frames": [
+          {
+            "id": "clearance-alerts-frame",
+            "src": "http://127.0.0.1:5000/clearance-alerts?embedded=1"
+          }
+        ],
+        "loading": []
+      }
+    },
+    {
+      "id": "promotions",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 13.600000001490116,
+        "done": true,
+        "elapsedMs": 369.8999999985099,
+        "errors": false,
+        "lastChange": 810958.5,
+        "module": "promotions",
+        "pending": 0,
+        "requests": [],
+        "rows": 499,
+        "start": 810944.8999999985,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-promotions",
+        "frames": [
+          {
+            "id": "promotions-frame",
+            "src": "http://127.0.0.1:5000/promotions?embedded=1"
+          }
+        ],
+        "heading": "活动管理",
+        "loading": []
+      }
+    },
+    {
+      "id": "appeal",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 1370.60000000149,
+        "done": true,
+        "elapsedMs": 1743.699999999255,
+        "errors": false,
+        "lastChange": 813265.6999999993,
+        "module": "appeal",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 1350.60000000149,
+            "path": "/api/execution-agents",
+            "start": 811906.299999997,
+            "status": 200
+          }
+        ],
+        "rows": 13,
+        "start": 811895.0999999978,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-appeal",
+        "frames": [],
+        "heading": "自动化AI申诉",
+        "loading": []
+      }
+    },
+    {
+      "id": "ai-appeals",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 110.5,
+        "done": true,
+        "elapsedMs": 498.0999999977648,
+        "errors": true,
+        "lastChange": 829912.1999999993,
+        "module": "ai-appeals",
+        "pending": 0,
+        "requests": [],
+        "rows": 500,
+        "start": 829801.6999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-ai-appeals",
+        "frames": [],
+        "heading": "自动化申诉记录",
+        "loading": []
+      }
+    },
+    {
+      "id": "prohibited-listings",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 231.30000000074503,
+        "done": true,
+        "elapsedMs": 583.3000000007451,
+        "errors": false,
+        "lastChange": 831100.5999999978,
+        "module": "prohibited-listings",
+        "pending": 0,
+        "requests": [],
+        "rows": 343,
+        "start": 830869.299999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-prohibited-listings",
+        "frames": [],
+        "heading": "禁限售列表",
+        "loading": []
+      }
+    },
+    {
+      "id": "risk-check",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": true,
+        "dataMs": 46.19999999925494,
+        "done": true,
+        "elapsedMs": 15037.099999997765,
+        "errors": false,
+        "lastChange": 832115.8999999985,
+        "module": "risk-check",
+        "pending": 1,
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/risk-check/results",
+            "start": 832107.799999997
+          }
+        ],
+        "rows": 1,
+        "start": 832069.6999999993,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-risk-check",
+        "frames": [],
+        "heading": "侵权检测",
+        "loading": [
+          "正在加载侵权检测结果..."
+        ]
+      }
+    },
+    {
+      "id": "infringement-knowledge",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 19.199999999254945,
+        "done": true,
+        "elapsedMs": 397.5,
+        "errors": false,
+        "lastChange": 865960.5999999978,
+        "module": "infringement-knowledge",
+        "pending": 0,
+        "requests": [],
+        "rows": 50,
+        "start": 865941.3999999985,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-infringement-knowledge",
+        "frames": [],
+        "heading": "侵权知识库",
+        "loading": []
+      }
+    },
+    {
+      "id": "reputation",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 94.19999999925494,
+        "done": true,
+        "elapsedMs": 451.5999999977648,
+        "errors": false,
+        "lastChange": 867187.8999999985,
+        "module": "reputation",
+        "pending": 0,
+        "requests": [],
+        "rows": 314,
+        "start": 867093.6999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-reputation",
+        "frames": [],
+        "heading": "声誉数据",
+        "loading": [
+          "当前没有失败店铺，无需补跑"
+        ]
+      }
+    },
+    {
+      "id": "api-reputation",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 105.30000000074506,
+        "done": true,
+        "elapsedMs": 464.8999999985099,
+        "errors": false,
+        "lastChange": 868533,
+        "module": "api-reputation",
+        "pending": 0,
+        "requests": [],
+        "rows": 317,
+        "start": 868427.6999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-api-reputation",
+        "frames": [],
+        "heading": "API 声誉",
+        "loading": []
+      }
+    },
+    {
+      "id": "order-analysis",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 53.10000000149011,
+        "done": true,
+        "elapsedMs": 447.1000000014901,
+        "errors": false,
+        "lastChange": 869532.6999999993,
+        "module": "order-analysis",
+        "pending": 0,
+        "requests": [],
+        "rows": 101,
+        "start": 869479.5999999978,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-order-analysis",
+        "frames": [],
+        "heading": "订单分析",
+        "loading": []
+      }
+    },
+    {
+      "id": "store-analysis",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 116.59999999776484,
+        "done": true,
+        "elapsedMs": 500.19999999925494,
+        "errors": false,
+        "lastChange": 870680.0999999978,
+        "module": "store-analysis",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 72,
+            "path": "/api/store-analysis",
+            "start": 870581.6999999993,
+            "status": 200
+          }
+        ],
+        "rows": 2,
+        "start": 870563.5,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-store-analysis",
+        "frames": [],
+        "heading": "店铺分析",
+        "loading": []
+      }
+    },
+    {
+      "id": "salesperson-stats",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 129.80000000074506,
+        "done": true,
+        "elapsedMs": 497.9000000022352,
+        "errors": false,
+        "lastChange": 877720.0999999978,
+        "module": "salesperson-stats",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 102.69999999925494,
+            "path": "/api/salesperson-stats",
+            "start": 877605.1999999993,
+            "status": 200
+          }
+        ],
+        "rows": 3,
+        "start": 877590.299999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-salesperson-stats",
+        "frames": [],
+        "heading": "业务员量统计",
+        "loading": [
+          "共 3 位业务员 · 打印面单 5 单 · 新增采购 1542 单"
+        ]
+      }
+    },
+    {
+      "id": "ad-analysis",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 61.30000000074506,
+        "done": true,
+        "elapsedMs": 451.19999999925494,
+        "errors": false,
+        "lastChange": 878786.5,
+        "module": "ad-analysis",
+        "pending": 0,
+        "requests": [],
+        "rows": 120,
+        "start": 878725.1999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-ad-analysis",
+        "frames": [],
+        "heading": "广告分析",
+        "loading": []
+      }
+    },
+    {
+      "id": "funds",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 507,
+        "done": true,
+        "elapsedMs": 877.8999999985099,
+        "errors": true,
+        "lastChange": 880421,
+        "module": "funds",
+        "pending": 0,
+        "requests": [],
+        "rows": 840,
+        "start": 879914,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-funds",
+        "frames": [],
+        "heading": "资金管理",
+        "loading": []
+      }
+    },
+    {
+      "id": "access",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 47.20000000298023,
+        "done": true,
+        "elapsedMs": 438.70000000298023,
+        "errors": false,
+        "lastChange": 883704.5,
+        "module": "access",
+        "pending": 0,
+        "requests": [],
+        "rows": 26,
+        "start": 883657.299999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-access",
+        "frames": [],
+        "heading": "人员与权限",
+        "loading": []
+      }
+    },
+    {
+      "id": "pre-sale",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 34.099999997764826,
+        "done": true,
+        "elapsedMs": 390.3999999985099,
+        "errors": false,
+        "lastChange": 884749.5999999978,
+        "module": "pre-sale",
+        "pending": 0,
+        "requests": [],
+        "rows": 20,
+        "start": 884715.5,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-pre-sale",
+        "frames": [],
+        "heading": "美客多售前问答",
+        "loading": [
+          "已展示上次更新的数据（2026-10-08T11:35:01.468Z）"
+        ]
+      }
+    },
+    {
+      "id": "customer-service",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": true,
+        "dataMs": 14955.099999997765,
+        "done": true,
+        "elapsedMs": 15051.300000000743,
+        "errors": false,
+        "lastChange": 921349.799999997,
+        "module": "customer-service",
+        "pending": 1,
+        "requests": [
+          {
+            "method": "POST",
+            "ms": 255.79999999701977,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 906502.5,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 1290.9000000022352,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 908383.5999999978,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 1164.800000000745,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 908762.0999999978,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 339.4000000022352,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 911676.299999997,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 224.80000000074503,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 911933.1999999993,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 205.5,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 914019.5999999978,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 242.09999999776483,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 914161.1999999993,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 461.5,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 916228.1999999993,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 414.3999999985099,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 916407,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 517.6999999992549,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 918703.5999999978,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 542.6000000014901,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 918824.3999999984,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "ms": 116.19999999925494,
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 921224.5,
+            "status": 200
+          },
+          {
+            "method": "POST",
+            "path": "/api/mercado-communications/customer-service-aggregate",
+            "start": 921368.5
+          }
+        ],
+        "rows": 0,
+        "start": 906394.6999999993,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-customer-service",
+        "frames": [],
+        "heading": "售后处理",
+        "loading": [
+          "正在自动加载售后数据：已完成 0/144 家店铺"
+        ]
+      }
+    },
+    {
+      "id": "ai-weight-price",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 345.69999999925494,
+        "done": true,
+        "elapsedMs": 727.5,
+        "errors": false,
+        "lastChange": 922469.8999999984,
+        "module": "ai-weight-price",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 30.199999999254945,
+            "path": "/api/ai-weight-price/logs",
+            "start": 922438.5999999978,
+            "status": 200
+          }
+        ],
+        "rows": 54,
+        "start": 922124.1999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-ai-weight-price",
+        "frames": [
+          {
+            "id": "ai-weight-price-frame",
+            "src": "http://127.0.0.1:5000/ai-weight-price"
+          }
+        ],
+        "loading": []
+      }
+    },
+    {
+      "id": "infractions",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 91.90000000223516,
+        "done": true,
+        "elapsedMs": 491.1000000014901,
+        "errors": false,
+        "lastChange": 923516.6999999993,
+        "module": "infractions",
+        "pending": 0,
+        "requests": [],
+        "rows": 228,
+        "start": 923424.799999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-infractions",
+        "frames": [
+          {
+            "id": "infraction-dashboard-frame",
+            "src": "http://127.0.0.1:5000/infringement-dashboard?embedded=1"
+          }
+        ],
+        "heading": "侵权数据",
+        "loading": []
+      }
+    },
+    {
+      "id": "ip-rights",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 137.10000000149012,
+        "done": true,
+        "elapsedMs": 527.8000000007451,
+        "errors": false,
+        "lastChange": 937967,
+        "module": "ip-rights",
+        "pending": 0,
+        "requests": [],
+        "rows": 244,
+        "start": 937829.8999999984,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-ip-rights",
+        "frames": [
+          {
+            "id": "ip-rights-dashboard-frame",
+            "src": "http://127.0.0.1:5000/ip-rights-dashboard?embedded=1"
+          }
+        ],
+        "loading": []
+      }
+    },
+    {
+      "id": "yandex",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 13,
+        "done": true,
+        "elapsedMs": 408.5,
+        "errors": false,
+        "lastChange": 938974.5999999978,
+        "module": "yandex",
+        "pending": 0,
+        "requests": [],
+        "rows": 372,
+        "start": 938961.5999999978,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-yandex",
+        "frames": [
+          {
+            "id": "yandex-console-frame",
+            "src": "/yandex-console/?embedded=1"
+          }
+        ],
+        "heading": "Yandex 店铺管理",
+        "loading": []
+      }
+    },
+    {
+      "id": "overview",
+      "visit": "repeat",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 15.800000000745058,
+        "done": true,
+        "elapsedMs": 385.3999999985099,
+        "errors": false,
+        "lastChange": 939964.5,
+        "module": "overview",
+        "pending": 0,
+        "requests": [],
+        "rows": 0,
+        "start": 939948.6999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-overview",
+        "frames": [],
+        "heading": "你好，管理员",
+        "loading": []
+      }
+    },
+    {
+      "id": "1688-products",
+      "visit": "query-setup",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 589,
+        "done": true,
+        "elapsedMs": 990.0999999977648,
+        "errors": false,
+        "lastChange": 1000304.1999999993,
+        "module": "1688-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 291.5,
+            "path": "/api/1688-products/options",
+            "start": 999762,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 86.60000000149012,
+            "path": "/api/mercado-management-categories",
+            "start": 999762.5999999978,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 308.5,
+            "path": "/api/1688-products",
+            "start": 999762.799999997,
+            "status": 200
+          }
+        ],
+        "rows": 50,
+        "start": 999715.1999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-1688-products",
+        "frames": [],
+        "heading": "1688产品区",
+        "loading": [
+          "已加载 50 件，数据来源：泽顺插件"
+        ]
+      }
+    },
+    {
+      "id": "mercado-products",
+      "visit": "query-setup",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 1005.7000000029802,
+        "done": true,
+        "elapsedMs": 1380.300000000745,
+        "errors": false,
+        "lastChange": 1018255.5,
+        "module": "mercado-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 257.30000000074506,
+            "path": "/api/mercado-products",
+            "start": 1017348.6999999993,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 81.80000000074506,
+            "path": "/api/mercado-products/developers",
+            "start": 1017355.799999997,
+            "status": 200
+          }
+        ],
+        "rows": 100,
+        "start": 1017249.799999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-mercado-products",
+        "frames": [],
+        "heading": "产品列表",
+        "loading": []
+      }
+    },
+    {
+      "id": "ai-original-products",
+      "visit": "query-setup",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 1371.9000000022352,
+        "done": true,
+        "elapsedMs": 1746.800000000745,
+        "errors": false,
+        "lastChange": 1035230.6999999993,
+        "module": "ai-original-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 578.3000000007451,
+            "path": "/api/ai-original-products",
+            "start": 1033914.0999999978,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 423.1000000014901,
+            "path": "/api/ai-original-products/cost-summary",
+            "start": 1034735.3999999984,
+            "status": 200
+          }
+        ],
+        "rows": 0,
+        "start": 1033858.799999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-ai-original-products",
+        "frames": [],
+        "heading": "AI原创产品",
+        "loading": [
+          "已加载 63 件 1688 产品"
+        ]
+      }
+    },
+    {
+      "id": "mercado-collection",
+      "visit": "query-setup",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 743.9000000022352,
+        "done": true,
+        "elapsedMs": 1110.199999999255,
+        "errors": false,
+        "lastChange": 1125055,
+        "module": "mercado-collection",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 151.39999999850988,
+            "path": "/api/mercado-collection/items",
+            "start": 1124358.3999999985,
+            "status": 200
+          }
+        ],
+        "rows": 100,
+        "start": 1124311.0999999978,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-mercado-collection",
+        "frames": [],
+        "heading": "美客多跟卖采集",
+        "loading": []
+      }
+    },
+    {
+      "id": "infringement-knowledge",
+      "visit": "query-setup",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 31.600000001490116,
+        "done": true,
+        "elapsedMs": 395.5,
+        "errors": false,
+        "lastChange": 1145432,
+        "module": "infringement-knowledge",
+        "pending": 0,
+        "requests": [],
+        "rows": 50,
+        "start": 1145400.3999999985,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-infringement-knowledge",
+        "frames": [],
+        "heading": "侵权知识库",
+        "loading": []
+      }
+    },
+    {
+      "id": "mercado-products",
+      "visit": "query-setup",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 883.3999999985099,
+        "done": true,
+        "elapsedMs": 1287.10000000149,
+        "errors": false,
+        "lastChange": 1279076.299999997,
+        "module": "mercado-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 163.80000000074506,
+            "path": "/api/mercado-products",
+            "start": 1278219.5999999978,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 84.80000000074506,
+            "path": "/api/mercado-products/developers",
+            "start": 1278222.799999997,
+            "status": 200
+          }
+        ],
+        "rows": 100,
+        "start": 1278192.8999999985,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-mercado-products",
+        "frames": [],
+        "heading": "产品列表",
+        "loading": []
+      }
+    },
+    {
+      "id": "inventory",
+      "visit": "query-setup",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 43.30000000074506,
+        "done": true,
+        "elapsedMs": 443.80000000074506,
+        "errors": false,
+        "lastChange": 1499359.5999999978,
+        "module": "inventory",
+        "pending": 0,
+        "requests": [],
+        "rows": 8,
+        "start": 1499316.299999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-inventory",
+        "frames": [],
+        "heading": "库存管理",
+        "loading": [
+          "没有符合当前条件的库存可以调整筛选条件，或刷新数据。",
+          "库存数据更新于 19:39"
+        ]
+      }
+    },
+    {
+      "id": "store-links",
+      "visit": "query-setup",
+      "metrics": {
+        "action": "open",
+        "busy": true,
+        "dataMs": 14678.199999999257,
+        "done": true,
+        "elapsedMs": 15010.699999999257,
+        "errors": false,
+        "lastChange": 1659863.5999999978,
+        "module": "store-links",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 1804.60000000149,
+            "path": "/api/store-links",
+            "start": 1645277.3999999985,
+            "status": 200
+          }
+        ],
+        "rows": 50,
+        "start": 1645185.3999999985,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-store-links",
+        "frames": [],
+        "heading": "店铺链接",
+        "loading": [
+          "后台修改完成：成功 1，部分成功 0，失败 0 · 1/1 · 成功 1 · 部分成功 0 · 失败 0"
+        ]
+      }
+    },
+    {
+      "id": "reputation",
+      "visit": "query-setup",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 124.19999999925494,
+        "done": true,
+        "elapsedMs": 484.3999999985099,
+        "errors": false,
+        "lastChange": 2249297.1999999993,
+        "module": "reputation",
+        "pending": 0,
+        "requests": [],
+        "rows": 314,
+        "start": 2249173,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-reputation",
+        "frames": [],
+        "heading": "声誉数据",
+        "loading": [
+          "当前没有失败店铺，无需补跑"
+        ]
+      }
+    },
+    {
+      "id": "api-reputation",
+      "visit": "query-setup",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 120.40000000223516,
+        "done": true,
+        "elapsedMs": 479,
+        "errors": false,
+        "lastChange": 2255418.5,
+        "module": "api-reputation",
+        "pending": 0,
+        "requests": [],
+        "rows": 317,
+        "start": 2255298.0999999978,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-api-reputation",
+        "frames": [],
+        "heading": "API 声誉",
+        "loading": []
+      }
+    },
+    {
+      "id": "orders",
+      "visit": "query-setup",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 2458.29999999702,
+        "done": true,
+        "elapsedMs": 2828,
+        "errors": false,
+        "lastChange": 2314849.799999997,
+        "module": "orders",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 595.8000000007451,
+            "path": "/api/orders",
+            "start": 2312879.3999999985,
+            "status": 200
+          }
+        ],
+        "rows": 195,
+        "start": 2312391.5,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-orders",
+        "frames": [],
+        "heading": "订单管理",
+        "loading": []
+      }
+    },
+    {
+      "id": "promotions",
+      "visit": "query-setup",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 47.599999997764826,
+        "done": true,
+        "elapsedMs": 534.3999999985099,
+        "errors": false,
+        "lastChange": 3052825.799999997,
+        "module": "promotions",
+        "pending": 0,
+        "requests": [],
+        "rows": 499,
+        "start": 3052778.1999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-promotions",
+        "frames": [
+          {
+            "id": "promotions-frame",
+            "src": "http://127.0.0.1:5000/promotions?embedded=1"
+          }
+        ],
+        "heading": "活动管理",
+        "loading": []
+      }
+    },
+    {
+      "id": "size-charts",
+      "visit": "evidence",
+      "metrics": {
+        "action": "open",
+        "busy": false,
+        "dataMs": 11.199999999254942,
+        "done": true,
+        "elapsedMs": 371.8999999985099,
+        "errors": false,
+        "lastChange": 3090324.8999999985,
+        "module": "size-charts",
+        "pending": 0,
+        "requests": [],
+        "rows": 12,
+        "start": 3090313.6999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-size-charts",
+        "frames": [
+          {
+            "id": "size-charts-frame",
+            "src": "http://127.0.0.1:5000/size-charts?embedded=1"
+          }
+        ],
+        "loading": []
+      }
+    }
+  ],
+  "queries": [
+    {
+      "scenario": "订单：不存在的关键词/空结果",
+      "metrics": {
+        "action": "搜索",
+        "busy": false,
+        "dataMs": 3095.900000002235,
+        "done": true,
+        "elapsedMs": 3473.800000000745,
+        "errors": false,
+        "lastChange": 587275.1999999993,
+        "module": "orders",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 2802.5,
+            "path": "/api/orders",
+            "start": 584221.799999997,
+            "status": 200
+          }
+        ],
+        "rows": 1,
+        "start": 584179.299999997,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-orders",
+        "rows": 1,
+        "status": [
+          "没有符合当前筛选条件的数据可以调整筛选条件，或刷新数据。"
+        ]
+      }
+    },
+    {
+      "scenario": "订单：最近七天",
+      "metrics": {
+        "action": "搜索",
+        "busy": false,
+        "dataMs": 1659,
+        "done": true,
+        "elapsedMs": 2010.20000000298,
+        "errors": false,
+        "lastChange": 604878.299999997,
+        "module": "orders",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 777.5,
+            "path": "/api/orders",
+            "start": 603247.5999999978,
+            "status": 200
+          }
+        ],
+        "rows": 196,
+        "start": 603219.299999997,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-orders",
+        "rows": 196,
+        "status": []
+      }
+    },
+    {
+      "scenario": "1688：不存在标题/空结果",
+      "metrics": {
+        "action": "查询",
+        "busy": false,
+        "dataMs": 41,
+        "done": true,
+        "elapsedMs": 436.4000000022352,
+        "errors": false,
+        "lastChange": 1001094.299999997,
+        "module": "1688-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 28.199999999254945,
+            "path": "/api/1688-products",
+            "start": 1001054.0999999978,
+            "status": 200
+          }
+        ],
+        "rows": 1,
+        "start": 1001053.299999997,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-1688-products",
+        "rows": 1,
+        "status": [
+          "已加载 0 件，数据来源：泽顺插件",
+          "暂无 1688 商品；请先在 1688 商品页使用泽顺插件采集。"
+        ]
+      }
+    },
+    {
+      "scenario": "1688：清空查询恢复列表",
+      "metrics": {
+        "action": "查询",
+        "busy": false,
+        "dataMs": 370.9000000022352,
+        "done": true,
+        "elapsedMs": 770,
+        "errors": false,
+        "lastChange": 1001938,
+        "module": "1688-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 149.90000000223517,
+            "path": "/api/1688-products",
+            "start": 1001567.799999997,
+            "status": 200
+          }
+        ],
+        "rows": 50,
+        "start": 1001567.0999999978,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-1688-products",
+        "rows": 50,
+        "status": [
+          "已加载 50 件，数据来源：泽顺插件"
+        ]
+      }
+    },
+    {
+      "scenario": "产品列表：不存在关键词",
+      "metrics": {
+        "action": "筛选",
+        "busy": false,
+        "dataMs": 8398.10000000149,
+        "done": true,
+        "elapsedMs": 8778.5,
+        "errors": true,
+        "lastChange": 1027978.6999999993,
+        "module": "mercado-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 8372,
+            "path": "/api/mercado-products",
+            "start": 1019596.0999999978,
+            "status": 500
+          }
+        ],
+        "rows": 1,
+        "start": 1019580.5999999978,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-mercado-products",
+        "rows": 1,
+        "status": []
+      }
+    },
+    {
+      "scenario": "产品列表：恢复全部",
+      "metrics": {
+        "action": "筛选",
+        "busy": false,
+        "dataMs": 1050.7999999970198,
+        "done": true,
+        "elapsedMs": 1448.2999999970198,
+        "errors": false,
+        "lastChange": 1029520.299999997,
+        "module": "mercado-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 436.69999999925494,
+            "path": "/api/mercado-products",
+            "start": 1028470.8999999984,
+            "status": 200
+          }
+        ],
+        "rows": 100,
+        "start": 1028469.5,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-mercado-products",
+        "rows": 100,
+        "status": []
+      }
+    },
+    {
+      "scenario": "AI原创：关键词回车查询",
+      "metrics": {
+        "action": "Enter query",
+        "busy": false,
+        "dataMs": 185.80000000074503,
+        "done": true,
+        "elapsedMs": 544.2000000029802,
+        "errors": false,
+        "lastChange": 1036001.5999999978,
+        "module": "ai-original-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 122.69999999925494,
+            "path": "/api/ai-original-products",
+            "start": 1035816.5999999978,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 50,
+            "path": "/api/ai-original-products/cost-summary",
+            "start": 1035944.6999999993,
+            "status": 200
+          }
+        ],
+        "rows": 0,
+        "start": 1035815.799999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-ai-original-products",
+        "rows": 0,
+        "status": [
+          "已加载 0 件 1688 产品"
+        ]
+      }
+    },
+    {
+      "scenario": "AI原创：恢复全部",
+      "metrics": {
+        "action": "Enter query",
+        "busy": false,
+        "dataMs": 2528.400000002235,
+        "done": true,
+        "elapsedMs": 2882.800000000745,
+        "errors": false,
+        "lastChange": 1038934.1999999993,
+        "module": "ai-original-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 1559.2000000029802,
+            "path": "/api/ai-original-products",
+            "start": 1036406.299999997,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 449.3999999985099,
+            "path": "/api/ai-original-products/cost-summary",
+            "start": 1038391,
+            "status": 200
+          }
+        ],
+        "rows": 0,
+        "start": 1036405.799999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-ai-original-products",
+        "rows": 0,
+        "status": [
+          "已加载 63 件 1688 产品"
+        ]
+      }
+    },
+    {
+      "scenario": "跟卖采集：不存在关键词",
+      "metrics": {
+        "action": "筛选",
+        "busy": false,
+        "dataMs": 163.60000000149012,
+        "done": true,
+        "elapsedMs": 520.5,
+        "errors": false,
+        "lastChange": 1142897.5,
+        "module": "mercado-collection",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 146.19999999925494,
+            "path": "/api/mercado-collection/items",
+            "start": 1142741.1999999993,
+            "status": 200
+          }
+        ],
+        "rows": 1,
+        "start": 1142733.8999999985,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-mercado-collection",
+        "rows": 1,
+        "status": [
+          "没有符合当前筛选条件的数据可以调整筛选条件，或刷新数据。"
+        ]
+      }
+    },
+    {
+      "scenario": "跟卖采集：恢复全部",
+      "metrics": {
+        "action": "筛选",
+        "busy": false,
+        "dataMs": 686,
+        "done": true,
+        "elapsedMs": 1037.89999999851,
+        "errors": false,
+        "lastChange": 1144037.8999999985,
+        "module": "mercado-collection",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 141.5,
+            "path": "/api/mercado-collection/items",
+            "start": 1143352.799999997,
+            "status": 200
+          }
+        ],
+        "rows": 100,
+        "start": 1143351.8999999985,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-mercado-collection",
+        "rows": 100,
+        "status": []
+      }
+    },
+    {
+      "scenario": "知识库：不存在品牌",
+      "metrics": {
+        "action": "查询",
+        "busy": false,
+        "dataMs": 162.69999999925494,
+        "done": true,
+        "elapsedMs": 554.2999999970198,
+        "errors": false,
+        "lastChange": 1146198.6999999993,
+        "module": "infringement-knowledge",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 138.39999999850988,
+            "path": "/api/infringement-knowledge",
+            "start": 1146051.6999999993,
+            "status": 200
+          }
+        ],
+        "rows": 1,
+        "start": 1146036,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-infringement-knowledge",
+        "rows": 1,
+        "status": [
+          "暂无符合条件的品牌可调整筛选条件，或在「数据来源与同步」中收集线索。"
+        ]
+      }
+    },
+    {
+      "scenario": "知识库：恢复全部",
+      "metrics": {
+        "action": "查询",
+        "busy": false,
+        "dataMs": 595.7999999970198,
+        "done": true,
+        "elapsedMs": 995.2999999970198,
+        "errors": false,
+        "lastChange": 1147436.299999997,
+        "module": "infringement-knowledge",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 506.30000000074506,
+            "path": "/api/infringement-knowledge",
+            "start": 1146856.799999997,
+            "status": 200
+          }
+        ],
+        "rows": 50,
+        "start": 1146840.5,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-infringement-knowledge",
+        "rows": 50,
+        "status": []
+      }
+    },
+    {
+      "scenario": "产品列表：普通英文关键词无匹配复现",
+      "metrics": {
+        "action": "筛选",
+        "busy": false,
+        "dataMs": 8219.800000000745,
+        "done": true,
+        "elapsedMs": 8597.5,
+        "errors": true,
+        "lastChange": 1288348.5999999978,
+        "module": "mercado-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 8185.699999999255,
+            "path": "/api/mercado-products",
+            "start": 1280142.3999999985,
+            "status": 500
+          }
+        ],
+        "rows": 1,
+        "start": 1280128.799999997,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-mercado-products",
+        "rows": 1,
+        "status": []
+      }
+    },
+    {
+      "scenario": "产品列表：错误后恢复",
+      "metrics": {
+        "action": "筛选",
+        "busy": false,
+        "dataMs": 823.1999999992549,
+        "done": true,
+        "elapsedMs": 1206.4000000022352,
+        "errors": false,
+        "lastChange": 1289827.299999997,
+        "module": "mercado-products",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 196,
+            "path": "/api/mercado-products",
+            "start": 1289005,
+            "status": 200
+          }
+        ],
+        "rows": 100,
+        "start": 1289004.0999999978,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-mercado-products",
+        "rows": 100,
+        "status": []
+      }
+    },
+    {
+      "scenario": "库存：不存在订单或商品",
+      "metrics": {
+        "action": "搜索",
+        "busy": false,
+        "dataMs": 76.80000000074506,
+        "done": true,
+        "elapsedMs": 450.30000000074506,
+        "errors": false,
+        "lastChange": 1514741.8999999985,
+        "module": "inventory",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 38,
+            "path": "/api/inventory/stocks",
+            "start": 1514695.0999999978,
+            "status": 200
+          }
+        ],
+        "rows": 8,
+        "start": 1514665.0999999978,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-inventory",
+        "rows": 1,
+        "status": [
+          "没有符合当前条件的库存可以调整筛选条件，或刷新数据。",
+          "库存数据更新于 20:04"
+        ]
+      }
+    },
+    {
+      "scenario": "库存：恢复全部",
+      "metrics": {
+        "action": "搜索",
+        "busy": false,
+        "dataMs": 68.29999999701977,
+        "done": true,
+        "elapsedMs": 447,
+        "errors": false,
+        "lastChange": 1515303.799999997,
+        "module": "inventory",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 30.699999999254945,
+            "path": "/api/inventory/stocks",
+            "start": 1515260.6999999993,
+            "status": 200
+          }
+        ],
+        "rows": 8,
+        "start": 1515235.5,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-inventory",
+        "rows": 1,
+        "status": [
+          "没有符合当前条件的库存可以调整筛选条件，或刷新数据。",
+          "库存数据更新于 20:04"
+        ]
+      }
+    },
+    {
+      "scenario": "库存子页面：SKU 与平台库存",
+      "metrics": {
+        "action": "库存子页面：SKU 与平台库存",
+        "busy": false,
+        "dataMs": 2378.699999999255,
+        "done": true,
+        "elapsedMs": 2749.10000000149,
+        "errors": false,
+        "lastChange": 1642582.799999997,
+        "module": "inventory",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 122.40000000223516,
+            "path": "/api/inventory/skus",
+            "start": 1640306.5999999978,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 1791.300000000745,
+            "path": "/api/inventory/sku-mappings",
+            "start": 1640308.3999999985,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "ms": 316.29999999701977,
+            "path": "/api/inventory/reconciliation",
+            "start": 1640308.5,
+            "status": 200
+          }
+        ],
+        "rows": 507,
+        "start": 1640204.0999999978,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-inventory",
+        "rows": 504,
+        "status": [
+          "还没有内部 SKU，请先新建，再关联店铺商品或变体。",
+          "暂无商品映射；请在 SKU 行点击“添加映射”。",
+          "暂无 SKU 映射，请先添加店铺商品或变体。"
+        ]
+      }
+    },
+    {
+      "scenario": "库存子页面：货架管理",
+      "metrics": {
+        "action": "库存子页面：货架管理",
+        "busy": false,
+        "dataMs": 365.5999999977648,
+        "done": true,
+        "elapsedMs": 737.3999999985099,
+        "errors": false,
+        "lastChange": 1643343.0999999978,
+        "module": "inventory",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 269.70000000298023,
+            "path": "/api/inventory/shelves",
+            "start": 1643046.299999997,
+            "status": 200
+          }
+        ],
+        "rows": 507,
+        "start": 1642977.5,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-inventory",
+        "rows": 1,
+        "status": [
+          "SKU 数据已刷新 · 20:07"
+        ]
+      }
+    },
+    {
+      "scenario": "库存子页面：出入库日志",
+      "metrics": {
+        "action": "库存子页面：出入库日志",
+        "busy": false,
+        "dataMs": 118.40000000223516,
+        "done": true,
+        "elapsedMs": 505.70000000298023,
+        "errors": false,
+        "lastChange": 1643843.1999999993,
+        "module": "inventory",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 38.099999997764826,
+            "path": "/api/inventory/movements",
+            "start": 1643796,
+            "status": 200
+          }
+        ],
+        "rows": 507,
+        "start": 1643724.799999997,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-inventory",
+        "rows": 1,
+        "status": [
+          "暂无符合条件的出入库日志",
+          "SKU 数据已刷新 · 20:07"
+        ]
+      }
+    },
+    {
+      "scenario": "店铺链接：不存在关键词",
+      "metrics": {
+        "action": "搜索",
+        "busy": true,
+        "dataMs": 14794.79999999702,
+        "done": true,
+        "elapsedMs": 15032.599999997765,
+        "errors": false,
+        "lastChange": 1675466.799999997,
+        "module": "store-links",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 151.5,
+            "path": "/api/store-links",
+            "start": 1660678.5999999978,
+            "status": 200
+          }
+        ],
+        "rows": 1,
+        "start": 1660672,
+        "timedOut": true
+      },
+      "view": {
+        "active": "tab-store-links",
+        "rows": 1,
+        "status": [
+          "后台修改完成：成功 1，部分成功 0，失败 0 · 1/1 · 成功 1 · 部分成功 0 · 失败 0",
+          "没有匹配的店铺链接可以调整筛选条件，或刷新数据。"
+        ]
+      }
+    },
+    {
+      "scenario": "店铺链接：恢复全部",
+      "metrics": {
+        "action": "搜索",
+        "busy": false,
+        "dataMs": 8905.60000000149,
+        "done": true,
+        "elapsedMs": 9256.39999999851,
+        "errors": false,
+        "lastChange": 1684728,
+        "module": "store-links",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 681.1000000014901,
+            "path": "/api/store-links",
+            "start": 1675826.0999999978,
+            "status": 200
+          }
+        ],
+        "rows": 50,
+        "start": 1675822.3999999985,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-store-links",
+        "rows": 50,
+        "status": [
+          "后台修改完成：成功 1，部分成功 0，失败 0 · 1/1 · 成功 1 · 部分成功 0 · 失败 0"
+        ]
+      }
+    },
+    {
+      "scenario": "店铺链接：主列表空结果（排除后台同步进度）",
+      "metrics": {
+        "action": "搜索",
+        "elapsedMs": 1449.0999999977648,
+        "loading": false,
+        "module": "store-links",
+        "pending": false,
+        "primaryMs": 1071.199999999255,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 992.7999999970198,
+            "path": "/api/store-links",
+            "start": 1761657.5,
+            "status": 200
+          }
+        ],
+        "rows": 1
+      }
+    },
+    {
+      "scenario": "店铺链接：主列表恢复（排除后台同步进度）",
+      "metrics": {
+        "action": "搜索",
+        "elapsedMs": 1246.199999999255,
+        "loading": false,
+        "module": "store-links",
+        "pending": false,
+        "primaryMs": 895.3999999985099,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 551.3000000007451,
+            "path": "/api/store-links",
+            "start": 1763193.799999997,
+            "status": 200
+          }
+        ],
+        "rows": 50
+      }
+    },
+    {
+      "scenario": "声誉：本地关键词无结果",
+      "metrics": {
+        "action": "声誉：本地关键词无结果",
+        "busy": false,
+        "dataMs": 50,
+        "done": true,
+        "elapsedMs": 446.0999999977648,
+        "errors": false,
+        "lastChange": 2249725.1999999993,
+        "module": "reputation",
+        "pending": 0,
+        "requests": [],
+        "rows": 2,
+        "start": 2249675.1999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-reputation",
+        "rows": 2,
+        "status": [
+          "当前没有失败店铺，无需补跑",
+          "暂无符合业务员、账号组和名字筛选条件的声誉数据"
+        ]
+      }
+    },
+    {
+      "scenario": "声誉：恢复列表",
+      "metrics": {
+        "action": "声誉：恢复列表",
+        "busy": false,
+        "dataMs": 1549.300000000745,
+        "done": true,
+        "elapsedMs": 1923.300000000745,
+        "errors": false,
+        "lastChange": 2251680.8999999985,
+        "module": "reputation",
+        "pending": 0,
+        "requests": [],
+        "rows": 314,
+        "start": 2250131.5999999978,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-reputation",
+        "rows": 314,
+        "status": [
+          "当前没有失败店铺，无需补跑"
+        ]
+      }
+    },
+    {
+      "scenario": "声誉：七天单量排序",
+      "metrics": {
+        "action": "声誉：七天单量排序",
+        "busy": false,
+        "dataMs": 1848.0999999977648,
+        "done": true,
+        "elapsedMs": 2225,
+        "errors": false,
+        "lastChange": 2253915.299999997,
+        "module": "reputation",
+        "pending": 0,
+        "requests": [],
+        "rows": 314,
+        "start": 2252067.1999999993,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-reputation",
+        "rows": 314,
+        "status": [
+          "当前没有失败店铺，无需补跑"
+        ]
+      }
+    },
+    {
+      "scenario": "API声誉：关键词无结果",
+      "metrics": {
+        "action": "API声誉：关键词无结果",
+        "busy": false,
+        "dataMs": 57,
+        "done": true,
+        "elapsedMs": 447.79999999701977,
+        "errors": false,
+        "lastChange": 2255850.5,
+        "module": "api-reputation",
+        "pending": 0,
+        "requests": [],
+        "rows": 1,
+        "start": 2255793.5,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-api-reputation",
+        "rows": 1,
+        "status": [
+          "没有符合当前筛选条件的数据"
+        ]
+      }
+    },
+    {
+      "scenario": "API声誉：恢复列表",
+      "metrics": {
+        "action": "API声誉：恢复列表",
+        "busy": false,
+        "dataMs": 1334.199999999255,
+        "done": true,
+        "elapsedMs": 1737.5999999977648,
+        "errors": false,
+        "lastChange": 2257585.1999999993,
+        "module": "api-reputation",
+        "pending": 0,
+        "requests": [],
+        "rows": 317,
+        "start": 2256251,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-api-reputation",
+        "rows": 317,
+        "status": []
+      }
+    },
+    {
+      "scenario": "订单：打开详情",
+      "metrics": {
+        "action": "订单：打开详情",
+        "busy": false,
+        "dataMs": 1630.300000000745,
+        "done": true,
+        "elapsedMs": 1985.10000000149,
+        "errors": false,
+        "lastChange": 2338853.6999999993,
+        "module": "orders",
+        "pending": 0,
+        "requests": [],
+        "rows": 195,
+        "start": 2337223.3999999985,
+        "timedOut": false
+      },
+      "state": {
+        "active": "tab-orders",
+        "rows": 195,
+        "status": []
+      }
+    },
+    {
+      "scenario": "订单详情：打开产品资料",
+      "metrics": {
+        "action": "订单详情：打开产品资料",
+        "busy": false,
+        "dataMs": 13577.89999999851,
+        "done": true,
+        "elapsedMs": 15043.599999997765,
+        "errors": false,
+        "lastChange": 2431337.5999999978,
+        "module": "orders",
+        "pending": 1,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 1687,
+            "path": "/api/orders/product-detail",
+            "start": 2417901.3999999985,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/orders/product-detail",
+            "start": 2419595.299999997
+          }
+        ],
+        "rows": 195,
+        "start": 2417759.6999999993,
+        "timedOut": true
+      },
+      "state": {
+        "active": "tab-orders",
+        "rows": 195,
+        "status": []
+      }
+    },
+    {
+      "scenario": "订单：恢复全部日期筛选",
+      "metrics": {
+        "action": "搜索",
+        "busy": false,
+        "dataMs": 7137.79999999702,
+        "done": true,
+        "elapsedMs": 7502.699999999255,
+        "errors": false,
+        "lastChange": 2495616.799999997,
+        "module": "orders",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 5811.400000002235,
+            "path": "/api/orders",
+            "start": 2488520.0999999978,
+            "status": 200
+          }
+        ],
+        "rows": 195,
+        "start": 2488479,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-orders",
+        "rows": 195,
+        "status": []
+      }
+    },
+    {
+      "scenario": "活动管理：不存在活动或店铺",
+      "metrics": {
+        "action": "查询",
+        "busy": false,
+        "dataMs": 146.79999999701977,
+        "done": true,
+        "elapsedMs": 523.0999999977648,
+        "errors": false,
+        "lastChange": 3085772.299999997,
+        "module": "promotions",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 140.30000000074506,
+            "path": "/api/promotions",
+            "start": 3085631.0999999978,
+            "status": 200
+          }
+        ],
+        "rows": 3,
+        "start": 3085625.5,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-promotions",
+        "rows": 0,
+        "status": []
+      },
+      "frameRows": 3
+    },
+    {
+      "scenario": "活动管理：恢复列表",
+      "metrics": {
+        "action": "查询",
+        "busy": false,
+        "dataMs": 2979.60000000149,
+        "done": true,
+        "elapsedMs": 3347.60000000149,
+        "errors": false,
+        "lastChange": 3089199.6999999993,
+        "module": "promotions",
+        "pending": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "ms": 2923.400000002235,
+            "path": "/api/promotions",
+            "start": 3086220.299999997,
+            "status": 200
+          }
+        ],
+        "rows": 499,
+        "start": 3086220.0999999978,
+        "timedOut": false
+      },
+      "view": {
+        "active": "tab-promotions",
+        "rows": 0,
+        "status": []
+      },
+      "frameRows": 499
+    }
+  ],
+  "earlier": [
+    {
+      "module": "orders",
+      "action": "搜索",
+      "start": 235605.09999999776,
+      "lastChange": 246139.69999999925,
+      "pending": 0,
+      "requests": [
+        {
+          "path": "/api/orders",
+          "start": 235627.69999999925,
+          "method": "GET",
+          "status": 200,
+          "ms": 10115.5
+        },
+        {
+          "path": "/api/mercado-communications/customer-service-aggregate",
+          "start": 236639.09999999776,
+          "method": "POST",
+          "status": 200,
+          "ms": 172.19999999925494
+        },
+        {
+          "path": "/api/mercado-communications/customer-service-aggregate",
+          "start": 237020.59999999776,
+          "method": "POST",
+          "status": 200,
+          "ms": 299.9000000022352
+        },
+        {
+          "path": "/api/order-sync/status",
+          "start": 237585.59999999776,
+          "method": "GET",
+          "status": 200,
+          "ms": 23.300000000745058
+        },
+        {
+          "path": "/api/mercado-communications/customer-service-aggregate",
+          "start": 238812.69999999925,
+          "method": "POST",
+          "status": 200,
+          "ms": 140.5
+        },
+        {
+          "path": "/api/mercado-communications/customer-service-aggregate",
+          "start": 239321.8999999985,
+          "method": "POST",
+          "status": 200,
+          "ms": 97
+        },
+        {
+          "path": "/api/order-sync/status",
+          "start": 239609.59999999776,
+          "method": "GET",
+          "status": 200,
+          "ms": 31.800000000745058
+        },
+        {
+          "path": "/api/services/health",
+          "start": 240544,
+          "method": "GET",
+          "status": 200,
+          "ms": 88.09999999776483
+        },
+        {
+          "path": "/api/mercado-communications/customer-service-aggregate",
+          "start": 240954.3999999985,
+          "method": "POST",
+          "status": 200,
+          "ms": 254.80000000074506
+        },
+        {
+          "path": "/api/mercado-communications/customer-service-aggregate",
+          "start": 241419.8999999985,
+          "method": "POST",
+          "status": 200,
+          "ms": 81.80000000074506
+        },
+        {
+          "path": "/api/order-sync/status",
+          "start": 241643.59999999776,
+          "method": "GET",
+          "status": 200,
+          "ms": 35.100000001490116
+        },
+        {
+          "path": "/api/mercado-communications/customer-service-aggregate",
+          "start": 243211,
+          "method": "POST",
+          "status": 200,
+          "ms": 79.29999999701977
+        },
+        {
+          "path": "/api/mercado-communications/customer-service-aggregate",
+          "start": 243503.59999999776,
+          "method": "POST",
+          "status": 200,
+          "ms": 85
+        },
+        {
+          "path": "/api/order-sync/status",
+          "start": 243680.79999999702,
+          "method": "GET",
+          "status": 200,
+          "ms": 40.30000000074506
+        },
+        {
+          "path": "/api/mercado-communications/customer-service-aggregate",
+          "start": 245291.79999999702,
+          "method": "POST",
+          "status": 200,
+          "ms": 133.90000000223517
+        },
+        {
+          "path": "/api/mercado-communications/customer-service-aggregate",
+          "start": 245590.5,
+          "method": "POST",
+          "status": 200,
+          "ms": 107.69999999925494
+        },
+        {
+          "path": "/api/order-sync/status",
+          "start": 245722.59999999776,
+          "method": "GET",
+          "status": 200,
+          "ms": 380.4000000022352
+        }
+      ],
+      "done": true,
+      "elapsedMs": 10886.699999999255,
+      "dataMs": 10534.60000000149,
+      "busy": false,
+      "timedOut": false,
+      "rows": 196,
+      "errors": false
+    },
+    {
+      "module": "inventory",
+      "action": "搜索",
+      "start": 14848,
+      "lastChange": 15280.699999999255,
+      "pending": 0,
+      "requests": [
+        {
+          "path": "/api/inventory/stocks",
+          "start": 14851.5,
+          "method": "GET",
+          "status": 200,
+          "ms": 427.69999999925494
+        }
+      ],
+      "done": true,
+      "elapsedMs": 800.5999999977648,
+      "dataMs": 432.69999999925494,
+      "busy": false,
+      "timedOut": false,
+      "rows": 8,
+      "errors": false
+    },
+    {
+      "module": "tasks",
+      "action": "open",
+      "start": 36888.199999999255,
+      "lastChange": 175935,
+      "pending": 0,
+      "requests": [
+        {
+          "path": "/api/execution-agents",
+          "start": 36895.5,
+          "method": "GET",
+          "status": 200,
+          "ms": 6594.199999999255
+        },
+        {
+          "path": "/api/tasks/daily/options",
+          "start": 36896,
+          "method": "GET",
+          "status": 503,
+          "ms": 139039
+        },
+        {
+          "path": "/api/ai-weight-price/tasks",
+          "start": 37028.5,
+          "method": "GET",
+          "status": 200,
+          "ms": 95886.29999999702
+        }
+      ],
+      "done": true,
+      "elapsedMs": 15028.39999999851,
+      "dataMs": 6604.199999999255,
+      "busy": false,
+      "timedOut": true,
+      "rows": 0,
+      "errors": false
+    },
+    {
+      "module": "1688-products",
+      "action": "open",
+      "start": 52273.699999999255,
+      "lastChange": 133340.69999999925,
+      "pending": 0,
+      "requests": [
+        {
+          "path": "/api/1688-products/options",
+          "start": 52283,
+          "method": "GET",
+          "status": 200,
+          "ms": 80586.19999999925
+        },
+        {
+          "path": "/api/mercado-management-categories",
+          "start": 52283.29999999702,
+          "method": "GET",
+          "status": 200,
+          "ms": 80597.90000000224
+        },
+        {
+          "path": "/api/1688-products",
+          "start": 52283.39999999851,
+          "method": "GET",
+          "status": 200,
+          "ms": 81057.30000000075
+        }
+      ],
+      "done": true,
+      "elapsedMs": 15038,
+      "dataMs": 10.699999999254942,
+      "busy": true,
+      "timedOut": true,
+      "rows": 1,
+      "errors": false
+    },
+    {
+      "module": "mercado-collection",
+      "action": "open",
+      "start": 67691.19999999925,
+      "lastChange": 132881.19999999925,
+      "pending": 0,
+      "requests": [
+        {
+          "path": "/api/mercado-collection/items",
+          "start": 67701,
+          "method": "GET",
+          "error": "AbortError: signal is aborted without reason"
+        },
+        {
+          "path": "/api/mercado-management-categories",
+          "start": 67701.59999999776,
+          "method": "GET",
+          "status": 200,
+          "ms": 65179.60000000149
+        }
+      ],
+      "done": true,
+      "elapsedMs": 15044.800000000745,
+      "dataMs": 11.399999998509884,
+      "busy": true,
+      "timedOut": true,
+      "rows": 1,
+      "errors": false
+    },
+    {
+      "module": "ai-original-products",
+      "action": "open",
+      "start": 83112.69999999925,
+      "lastChange": 133682.19999999925,
+      "pending": 0,
+      "requests": [
+        {
+          "path": "/api/ai-original-products",
+          "start": 83129.19999999925,
+          "method": "GET",
+          "status": 200,
+          "ms": 50553
+        }
+      ],
+      "done": true,
+      "elapsedMs": 15046.599999997765,
+      "dataMs": 18,
+      "busy": true,
+      "timedOut": true,
+      "rows": 0,
+      "errors": false
+    },
+    {
+      "module": "mercado-products",
+      "action": "open",
+      "start": 98542.29999999702,
+      "lastChange": 182316,
+      "pending": 0,
+      "requests": [
+        {
+          "path": "/api/mercado-products",
+          "start": 98554.59999999776,
+          "method": "GET",
+          "error": "AbortError: signal is aborted without reason"
+        },
+        {
+          "path": "/api/zying-collection/categories",
+          "start": 98555.09999999776,
+          "method": "GET",
+          "status": 200,
+          "ms": 83760.90000000224
+        },
+        {
+          "path": "/api/mercado-products/developers",
+          "start": 98555.29999999702,
+          "method": "GET",
+          "error": "AbortError: signal is aborted without reason"
+        }
+      ],
+      "done": true,
+      "elapsedMs": 15038.400000002235,
+      "dataMs": 15.900000002235174,
+      "busy": true,
+      "timedOut": true,
+      "rows": 1,
+      "errors": false
+    }
+  ]
+}

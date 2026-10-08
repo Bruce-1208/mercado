@@ -43,3 +43,24 @@ def test_internal_product_route_passes_only_supported_store_parameters(monkeypat
     with workbench.app.test_request_context('/api/db/mercado-products?weight_status=missing&token_ids=7'):
         response = inspect.unwrap(workbench.api_db_mercado_products)()
     assert response.status_code == 200
+
+
+def test_single_page_transport_keeps_flag_and_scope(monkeypatch):
+    monkeypatch.setattr(api, 'DB_MODE', 'api')
+    request = Mock(return_value={'rows': [], 'total': None, 'total_exact': False, 'has_more': False})
+    monkeypatch.setattr(api, '_request', request)
+    api.list_mercado_product_items(include_total=False, token_ids=[7], limit=100)
+    assert request.call_args.kwargs['params']['include_total'] is False
+    assert request.call_args.kwargs['params']['token_ids'] == [7]
+
+
+def test_internal_single_page_flag_is_parsed(monkeypatch):
+    import bit.bit_interface as workbench
+    monkeypatch.setattr(workbench, 'reject_db_api_client_mode', lambda: None)
+    listing = Mock(return_value={'rows': [], 'total': None, 'has_more': False, 'total_exact': False})
+    monkeypatch.setattr(workbench, 'db_list_mercado_product_items', listing)
+    with workbench.app.test_request_context('/api/db/mercado-products?include_total=False&token_ids=7'):
+        response = inspect.unwrap(workbench.api_db_mercado_products)()
+    assert response.status_code == 200
+    assert listing.call_args.kwargs['include_total'] is False
+    assert listing.call_args.kwargs['token_ids'] == [7]

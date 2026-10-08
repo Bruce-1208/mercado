@@ -1,0 +1,90 @@
+[
+  {
+    "filter": {},
+    "full_ms": 3228.4,
+    "fast_ms": 1028.0,
+    "equal": {
+      "rows": true,
+      "total": true,
+      "pages": true,
+      "status_counts": true,
+      "country_counts": true,
+      "origin_counts": true,
+      "store_counts": true,
+      "salesperson_counts": true,
+      "group_counts": true
+    }
+  },
+  {
+    "filter": {
+      "country": "墨西哥"
+    },
+    "full_ms": 2770.1,
+    "fast_ms": 949.6,
+    "equal": {
+      "rows": true,
+      "total": true,
+      "pages": true,
+      "status_counts": true,
+      "country_counts": true,
+      "origin_counts": true,
+      "store_counts": true,
+      "salesperson_counts": true,
+      "group_counts": true
+    }
+  },
+  {
+    "filter": {
+      "page": 2
+    },
+    "full_ms": 2932.5,
+    "fast_ms": 992.4,
+    "equal": {
+      "rows": true,
+      "total": true,
+      "pages": true,
+      "status_counts": true,
+      "country_counts": true,
+      "origin_counts": true,
+      "store_counts": true,
+      "salesperson_counts": true,
+      "group_counts": true
+    }
+  },
+  {
+    "filter": {
+      "search": "FunctionalAuditNoMatch20261008"
+    },
+    "full_ms": 2557.0,
+    "fast_ms": 2598.0,
+    "equal": {
+      "rows": true,
+      "total": true,
+      "pages": true,
+      "status_counts": true,
+      "country_counts": true,
+      "origin_counts": true,
+      "store_counts": true,
+      "salesperson_counts": true,
+      "group_counts": true
+    }
+  },
+  {
+    "filter": {
+      "sort_by": "cost"
+    },
+    "full_ms": 3153.5,
+    "fast_ms": 1084.4,
+    "equal": {
+      "rows": true,
+      "total": true,
+      "pages": true,
+      "status_counts": true,
+      "country_counts": true,
+      "origin_counts": true,
+      "store_counts": true,
+      "salesperson_counts": true,
+      "group_counts": true
+    }
+  }
+]

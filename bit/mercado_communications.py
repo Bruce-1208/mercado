@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from datetime import datetime, timedelta, timezone
+import hashlib
+import json
 from typing import Any
 
 import requests
@@ -55,6 +58,103 @@ PRE_SALE_SPANISH_SITES = frozenset((
 ))
 
 
+def communication_date_bounds(payload: Mapping[str, Any]) -> tuple[float | None, float | None]:
+    """Interpret workbench calendar dates in Beijing time, with an exclusive end."""
+    dates = []
+    for key in ("date_from", "date_to"):
+        text = str(payload.get(key) or "").strip()
+        if not text:
+            dates.append(None)
+            continue
+        try:
+            parsed = datetime.strptime(text, "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValueError("日期必须使用 YYYY-MM-DD 格式") from exc
+        if parsed.strftime("%Y-%m-%d") != text:
+            raise ValueError("日期必须使用 YYYY-MM-DD 格式")
+        dates.append(parsed.replace(tzinfo=timezone(timedelta(hours=8))))
+    start, end = dates
+    if start is not None and end is not None and start > end:
+        raise ValueError("开始日期不能晚于结束日期")
+    return (
+        start.timestamp() if start is not None else None,
+        (end + timedelta(days=1)).timestamp() if end is not None else None,
+    )
+
+
+def communication_timestamp(value: Any) -> float | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.timestamp()
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def communication_date_matches(value: Any, bounds: tuple[float | None, float | None]) -> bool:
+    start, end = bounds
+    if start is None and end is None:
+        return True
+    timestamp = communication_timestamp(value)
+    return timestamp is not None and (start is None or timestamp >= start) and (
+        end is None or timestamp < end
+    )
+
+
+def query_pre_sale_question_pages(
+    search_page: Callable[[dict[str, Any]], Mapping[str, Any]],
+    payload: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Read the supported Questions pages and filter calendar dates locally.
+
+    The official API documents date_created sorting, but no date-range search
+    filter. Its total therefore describes the entire matching history.
+    """
+    bounds = communication_date_bounds(payload)
+    has_date_filter = any(value is not None for value in bounds)
+    filters = {
+        key: payload.get(key) for key in ("item_id", "user_id", "status")
+        if str(payload.get(key) or "").strip()
+    }
+    rows = []
+    source_total = 0
+    offset = 0
+    complete = False
+    while offset <= 1000:
+        page = search_page({
+            **filters,
+            "sort_fields": "date_created",
+            "sort_types": "DESC",
+            "limit": 100,
+            "offset": offset,
+        }) or {}
+        questions = [dict(row) for row in page.get("questions") or [] if isinstance(row, dict)]
+        source_total = max(source_total, int(page.get("total") or 0))
+        crossed_start = False
+        for row in questions:
+            timestamp = communication_timestamp(row.get("date_created"))
+            if bounds[0] is not None and timestamp is not None and timestamp < bounds[0]:
+                crossed_start = True
+            if communication_date_matches(row.get("date_created"), bounds):
+                rows.append(row)
+        offset += len(questions)
+        if crossed_start or offset >= source_total:
+            complete = True
+            break
+        if not questions:
+            break
+    return {
+        "questions": rows,
+        "official_total": len(rows) if has_date_filter else source_total,
+        "source_total": source_total,
+        "truncated": not complete,
+    }
+
+
 def _pre_sale_site_language(site_id: Any) -> str:
     site = str(site_id or "").strip().upper()[:3]
     if site == "MLB":
@@ -62,6 +162,17 @@ def _pre_sale_site_language(site_id: Any) -> str:
     if site in PRE_SALE_SPANISH_SITES:
         return "es"
     raise ValueError(f"无法识别站点 {site or '(empty)'} 的买家语言")
+
+
+def _claim_language(client, token, token_id, claim_id, get_order_contexts):
+    claim = client.get_claim(claim_id)
+    site_id = str(claim.get("site_id") or "").strip().upper()
+    if not site_id or site_id == "CBT":
+        contexts = get_order_contexts(int(token_id), [str(claim.get("resource_id") or "")]) if get_order_contexts else []
+        site_id = next((str(row.get("site_id") or "").upper() for row in contexts or [] if row.get("site_id")), "")
+    if not site_id or site_id == "CBT":
+        site_id = str(token.get("site_id") or "").strip().upper()
+    return site_id, _pre_sale_site_language(site_id)
 
 
 def _store_client(
@@ -129,6 +240,52 @@ def execute_store_communication(
     seller_id = str(token.get("meli_user_id") or "").strip()
     normalized_action = str(action or "").strip().lower().replace("_", "-")
 
+    if normalized_action == "claims-translate":
+        raw_texts = data.get("texts")
+        if not isinstance(raw_texts, list):
+            raise ValueError("待翻译内容必须是文本数组")
+        if len(raw_texts) > 100 or any(not isinstance(text, str) or not text.strip() or len(text) > 50000 for text in raw_texts):
+            raise ValueError("单次最多翻译 100 条非空文本，每条最多 50,000 字符")
+        if data.get("background") is True:
+            from bit.communication_preload import claim_translation_preload
+            digest = hashlib.sha256(json.dumps(raw_texts, ensure_ascii=False).encode()).hexdigest()
+            key = (int(token_id), str(data.get("claim_id") or ""), digest)
+            state = claim_translation_preload.read(key, lambda: execute_store_communication(
+                token_id, action, {**data, "background": False}, get_token=get_token,
+                refresh_token=refresh_token, get_order_contexts=get_order_contexts,
+                http=http, timeout=timeout, translator=translator))
+            if state.get("error") and data.get("retry") is True:
+                state = claim_translation_preload.read(key, lambda: execute_store_communication(
+                    token_id, action, {**data, "background": False}, get_token=get_token,
+                    refresh_token=refresh_token, get_order_contexts=get_order_contexts,
+                    http=http, timeout=timeout, translator=translator), refresh=True)
+            if state.get("pending"):
+                return {"pending": True}
+            if state.get("error"):
+                raise RuntimeError(state["error"])
+            return state["data"]
+        from erp.mercadolibre_translation import detect_text_language
+        _, local_language = _claim_language(client, token, token_id, data.get("claim_id"), get_order_contexts)
+        if len(raw_texts) > 100:
+            raise ValueError("单次最多翻译 100 条文本")
+        translations = []
+        for text in raw_texts:
+            # Short Portuguese/Spanish messages are ambiguous in isolation;
+            # the order's marketplace provides a reliable language context.
+            source = detect_text_language(str(text or ""), local_language)
+            translations.extend(translate_texts([text], source, "zh-CN", translator=translator))
+        return {"translations": translations}
+
+    if normalized_action == "claims-attachment":
+        return client.get_chat_attachment(data.get("attachment_id"), claim_id=data.get("claim_id"))
+
+    if normalized_action == "post-sale-attachment":
+        site_id = str(data.get("site_id") or "").upper()
+        if site_id in {"", "CBT"} and get_order_contexts and data.get("pack_id"):
+            contexts = get_order_contexts(int(token_id), [str(data["pack_id"])])
+            site_id = next((str(row.get("site_id") or "").upper() for row in contexts or [] if row.get("site_id")), "")
+        return client.get_chat_attachment(data.get("attachment_id"), site_id=site_id)
+
     if normalized_action == "pre-sale-translate":
         raw_texts = data.get("texts")
         if not isinstance(raw_texts, list):
@@ -172,6 +329,21 @@ def execute_store_communication(
         user_id = str(data.get("user_id") or "").strip() or None
         if not seller_id and not item_id:
             raise ValueError("该授权没有 Seller ID，不能读取售前问题")
+        if any(str(data.get(key) or "").strip() for key in ("date_from", "date_to")):
+            page = query_pre_sale_question_pages(
+                lambda filters: client.search_questions(seller_id=seller_id or None, **filters),
+                {**data, "status": ""},
+            )
+            counts = {status: 0 for status in PRE_SALE_SUMMARY_STATUSES}
+            for question in page["questions"]:
+                status = str(question.get("status") or "").strip().upper()
+                if status:
+                    counts[status] = counts.get(status, 0) + 1
+            return {
+                "total": page["official_total"],
+                "counts": counts,
+                "truncated": page["truncated"],
+            }
         common_filters = {
             "seller_id": seller_id or None,
             "item_id": item_id,
@@ -230,15 +402,36 @@ def execute_store_communication(
         )
         return result
     if normalized_action == "post-sale-messages":
-        if seller_id:
-            return client.get_post_sale_messages_for_seller(
+        # CBT tokens belong to the global account, while the seller endpoint
+        # requires the order's marketplace seller. Read the authorized pack
+        # through Global Selling instead of passing the CBT parent as seller.
+        if seller_id and str(token.get("site_id") or "").strip().upper() != "CBT":
+            result = client.get_post_sale_messages_for_seller(
                 data.get("pack_id"),
                 seller_id,
                 limit=data.get("limit", 50),
                 offset=data.get("offset", 0),
                 mark_as_read=False,
             )
-        return client.get_post_sale_messages(data.get("pack_id"), limit=data.get("limit", 50), offset=data.get("offset", 0))
+        else:
+            result = client.get_post_sale_messages(
+                data.get("pack_id"), limit=data.get("limit", 50), offset=data.get("offset", 0),
+                mark_as_read=False,
+            )
+        result = dict(result)
+        result["seller_id"] = seller_id
+        for message in result.get("messages") or ():
+            for resource in message.get("message_resources") or ():
+                if resource.get("name") == "sellers" and str(resource.get("id") or "").isdigit():
+                    result["seller_id"] = str(resource["id"])
+                    break
+            if result["seller_id"] != seller_id:
+                break
+        if data.get("include_order_context") and int(data.get("offset", 0) or 0) == 0:
+            _attach_order_contexts(
+                int(token_id), [result], [str(data.get("pack_id") or "")], get_order_contexts
+            )
+        return result
     if normalized_action == "post-sale-send":
         return client.send_post_sale_message(
             data.get("pack_id"),
@@ -306,6 +499,7 @@ def execute_store_communication(
                         pack_id=data.get("pack_id"),
                         date_from=data.get("date_from") or None,
                         date_to=data.get("date_to") or None,
+                        calendar_timezone=timezone(timedelta(hours=8)),
                         limit=page_limit,
                         offset=target_offset,
                     )
@@ -349,13 +543,29 @@ def execute_store_communication(
         )
         return result
     if normalized_action == "claims-detail":
-        return client.get_claim_bundle(data.get("claim_id"))
+        # Keep optional resources and their retry delays off the chat's path.
+        client.timeout = min(client.timeout, 8)
+        client.max_attempts = 2
+        return client.get_claim_bundle(data.get("claim_id"), section=data.get("section") or "all")
     if normalized_action == "claims-send":
-        return client.send_claim_message(
+        message = str(data.get("message") or "").strip()
+        translation = None
+        if data.get("auto_translate") is True:
+            if not message:
+                raise ValueError("请输入中文索赔回复内容")
+            site_id, language = _claim_language(client, token, token_id, data.get("claim_id"), get_order_contexts)
+            english = translate_texts([message], "zh-CN", "en", translator=translator)[0]
+            local = translate_texts([english], "en", language, translator=translator)[0]
+            label = "Português" if language == "pt-BR" else "Español"
+            message = f"English:\n{english}\n\n{label}:\n{local}"
+            translation = {"source_text": data.get("message"), "english": english,
+                           "local": local, "target_language": language, "site_id": site_id}
+        result = client.send_claim_message(
             data.get("claim_id"),
-            data.get("message", ""),
+            message,
             receiver_role=data.get("receiver_role", ""),
             attachments=data.get("attachments"),
         )
+        return {"result": result, "translation": translation} if translation else result
 
     raise ValueError("不支持的美客多消息操作")

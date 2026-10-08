@@ -1,0 +1,16 @@
+{
+  "user": {
+    "id": 19,
+    "username": "zhoule888",
+    "display_name": "周乐",
+    "organization_key": "wuhan-zeshun",
+    "role_key": "member"
+  },
+  "store": {
+    "id": 154,
+    "display_name": "周乐",
+    "organization_key": "wuhan-zeshun",
+    "enabled": 1
+  },
+  "settings": []
+}

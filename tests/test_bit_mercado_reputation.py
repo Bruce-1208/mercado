@@ -23,7 +23,7 @@ from bit.mercado_reputation import (
     fetch_store_reputation,
 )
 
-pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user")
+pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user", "subscribed_workbench_account")
 
 
 def test_official_user_status_reports_restriction_without_inventing_ban_days():
@@ -36,7 +36,7 @@ def test_official_user_status_reports_restriction_without_inventing_ban_days():
     })
 
     assert status["account_status"] == "restricted"
-    assert status["site_status_display"] == "暂停销售（官方 API 未提供封禁期限）"
+    assert status["site_status_display"] == "已封禁（站点销售暂停，API 未提供封禁期限）"
     assert status["status_codes"] == ["policy_suspension"]
     assert status["suspension_days"] is None
     assert status["site_status_source"] == "official_users_api"
@@ -46,7 +46,7 @@ def test_public_active_marketplace_status_is_not_treated_as_confirmed_normal():
     status = _site_status({"status": {"site_status": "active"}})
 
     assert status["account_status"] == "unknown"
-    assert status["site_status_display"] == "状态未确认（官方 API 仅返回公开 active）"
+    assert status["site_status_display"] == "待确认（API 仅返回公开 active）"
     assert status["sell_allowed"] is None
     assert status["list_allowed"] is None
 
@@ -61,10 +61,10 @@ def test_private_active_status_with_sell_and_list_permissions_is_normal():
     })
 
     assert status["account_status"] == "normal"
-    assert status["site_status_display"] == "正常"
+    assert status["site_status_display"] == "未封禁"
 
 
-def test_global_user_restriction_overrides_public_active_marketplace_status():
+def test_global_user_restriction_does_not_override_marketplace_status():
     local_status = _site_status({"status": {"site_status": "active"}})
     global_status = _site_status({
         "status": {
@@ -75,9 +75,9 @@ def test_global_user_restriction_overrides_public_active_marketplace_status():
 
     merged = _merge_site_status(local_status, global_status)
 
-    assert merged["account_status"] == "restricted"
-    assert merged["site_status_display"] == "暂停销售（官方 API 未提供封禁期限）"
-    assert merged["status_codes"] == ["global_restriction"]
+    assert merged["account_status"] == "unknown"
+    assert merged["site_status_display"] == "待确认（API 仅返回公开 active）"
+    assert merged["status_codes"] == []
 
 
 class FakeResponse:
@@ -141,8 +141,19 @@ def reputation_payload():
     }
 
 
+def supplemental_responses():
+    return [
+        FakeResponse({"cases": [], "paging": {"total": 0}}),
+        FakeResponse({"id": 5678, "site_id": "MLM", "status": {"sell": {"allow": True}}}),
+        FakeResponse({"paging": {"total": 0}}),
+        FakeResponse({"paging": {"total": 0}}),
+        FakeResponse({"paging": {"total": 0}}),
+        FakeResponse({"infractions": None, "paging": {"total": 0}}),
+    ]
+
+
 def test_official_reputation_endpoint_and_response_are_normalized():
-    http = FakeSession([FakeResponse(reputation_payload())])
+    http = FakeSession([FakeResponse(reputation_payload()), *supplemental_responses()])
 
     result = fetch_store_reputation(
         7,
@@ -174,6 +185,7 @@ def test_unauthorized_response_refreshes_token_once_and_retries():
         [
             FakeResponse({"message": "invalid token"}, status_code=401),
             FakeResponse(reputation_payload()),
+            *supplemental_responses(),
         ]
     )
     token = {
@@ -195,7 +207,7 @@ def test_unauthorized_response_refreshes_token_once_and_retries():
 
     assert result["total"] == 1
     assert refreshes == [9]
-    assert [call[1]["headers"]["Authorization"] for call in http.gets] == [
+    assert [call[1]["headers"]["Authorization"] for call in http.gets[:2]] == [
         "Bearer expired-access",
         "Bearer fresh-access",
     ]
@@ -227,6 +239,7 @@ def test_official_supplement_uses_orders_status_infractions_and_rights_holder_ap
         FakeResponse({"paging": {"total": 10}}),
         FakeResponse({"paging": {"total": 15}}),
         FakeResponse({"paging": {"total": 3}}),
+        FakeResponse({"infractions": None, "paging": {"total": 0}}),
     ])
     rows = [{"user_id": "seller-mlm", "site_id": "MLM"}]
 
@@ -238,7 +251,7 @@ def test_official_supplement_uses_orders_status_infractions_and_rights_holder_ap
     )
 
     row = rows[0]
-    assert row["site_status_display"] == "正常"
+    assert row["site_status_display"] == "未封禁"
     assert row["orders_previous_7d"] == 10
     assert row["orders_current_7d"] == 15
     assert row["direction"] == "增长"
@@ -269,10 +282,12 @@ def test_official_gradient_filters_each_marketplace_site_independently():
         FakeResponse({"paging": {"total": 20}}),
         FakeResponse({"paging": {"total": 10}}),
         FakeResponse({"paging": {"total": 0}}),
+        FakeResponse({"infractions": None, "paging": {"total": 0}}),
         FakeResponse({"site_status": "active"}),
         FakeResponse({"paging": {"total": 5}}),
         FakeResponse({"paging": {"total": 15}}),
         FakeResponse({"paging": {"total": 0}}),
+        FakeResponse({"infractions": None, "paging": {"total": 0}}),
     ])
     rows = [
         {"user_id": "seller-mx", "site_id": "MLM"},
@@ -575,7 +590,7 @@ def test_console_template_keeps_old_reputation_and_adds_api_panel():
     assert "reputation-warning-preview" in template
     assert "七天变化率由官方订单 API 自算" in template
     assert "每天北京时间 14:00 自动刷新" in template
-    assert 'id="reputation-browser-sync-btn"' in template
+    assert 'id="reputation-browser-sync-btn"' not in template
     assert "下次自动刷新 ${data.next_auto_refresh_at}" in template
     assert "账号状态" in reputation_table.group(1)
     assert "openReputationBrowser(this)" in template
@@ -724,11 +739,12 @@ def test_reputation_open_browser_queues_on_selected_agent_and_reports_status(mon
     enqueued = {}
 
     class AgentStore:
-        def get_agent(self, agent_id, *, online_seconds):
+        def get_agent(self, agent_id, *, online_seconds=90):
             assert agent_id == "office"
             assert online_seconds > 0
             return {
                 "agent_id": agent_id,
+                "owner_user_id": 1,
                 "name": "办公室电脑",
                 "online": True,
                 "capabilities": ["daily_task"],
@@ -749,6 +765,7 @@ def test_reputation_open_browser_queues_on_selected_agent_and_reports_status(mon
             return {
                 "job_id": job_id,
                 "job_type": "open_store",
+                "agent_id": "office",
                 "created_by_id": 1,
                 "status": "success",
                 "message": "本机任务执行完成",
@@ -779,6 +796,7 @@ def test_reputation_open_browser_queues_on_selected_agent_and_reports_status(mon
             "display_name": "测试员",
             "role_key": "super_admin",
             "is_platform_admin": True,
+            "organization_key": "wuhan-zeshun",
         }
 
     response = client.post(
@@ -790,7 +808,7 @@ def test_reputation_open_browser_queues_on_selected_agent_and_reports_status(mon
         },
     )
 
-    assert response.status_code == 202
+    assert response.status_code == 202, response.json
     payload = response.get_json()
     assert payload["data"]["status"] == "queued"
     assert payload["data"]["agent_name"] == "办公室电脑"
@@ -820,7 +838,7 @@ def test_reputation_open_browser_status_surfaces_agent_browser_error(monkeypatch
     monkeypatch.setattr(
         bit_interface,
         "get_local_agent_store",
-        lambda: SimpleNamespace(get_job=lambda _job_id: {
+        lambda: SimpleNamespace(get_agent=lambda _agent_id: {"owner_user_id": 1}, get_job=lambda _job_id: {
             "job_id": "open-store-error",
             "job_type": "open_store",
             "created_by_id": 1,
@@ -1213,7 +1231,7 @@ def test_default_reputation_collection_uses_api_and_writes_legacy_table(monkeypa
         "墨西哥",
         "成功",
     )
-    assert any("声誉混合更新完成" in line for line in logs)
+    assert any("声誉 API 更新完成" in line for line in logs)
 
 
 def test_selected_api_reputation_update_merges_only_returned_site(monkeypatch):
@@ -1330,14 +1348,15 @@ def test_reputation_scope_requires_explicit_reputation_update_switch():
     ) == {"MLC"}
 
 
-def test_system_warning_is_derived_from_official_api_status_and_errors():
+def test_system_warning_is_independent_of_status_and_collection_errors():
     assert bit_reputation_info._official_api_system_warning({
         "site_status_display": "暂停销售",
         "official_api_errors": ["七天变化率：接口限频"],
-    }) == "站点状态：暂停销售；七天变化率：接口限频"
+    }) is None
     assert bit_reputation_info._official_api_system_warning({
         "site_status_display": "正常",
-    }) == "正常"
+        "system_warning": "真实站点告警",
+    }) == "真实站点告警"
 
 
 def test_collection_options_keep_reputation_and_traffic_switches_independent(monkeypatch):
@@ -1411,7 +1430,7 @@ def test_account_status_update_does_not_open_browser_when_traffic_is_disabled(mo
     assert bit_reputation_info._api_auxiliary_config_rows(tokens, api_rows) == []
 
 
-def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkeypatch):
+def test_legacy_browser_auxiliary_flag_does_not_start_browser(monkeypatch):
     database_calls = []
     captured_browser_rows = []
     monkeypatch.setattr(
@@ -1551,12 +1570,7 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
         collect_browser_auxiliary=True,
     )
 
-    assert captured_browser_rows == [
-        (
-            "window-31", "混合店铺", "", "墨西哥", "", "", "",
-            {"visit_site_codes": ["MLM"]},
-        ),
-    ]
+    assert captured_browser_rows == []
     assert database_calls[0][1] == {"preserve_account_status": False}
     legacy_row = next(
         row for row in database_calls[0][0] if row[1] == "墨西哥"
@@ -1576,11 +1590,11 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
         None,
     ]
     assert legacy_row[10] != "2026-08-27 23:10:00"
-    assert legacy_row[11] == "[11, 22, 33]"
+    assert legacy_row[11] == "[]"
     mexico_api_row = next(
         row for row in result["api_rows"] if row["site_id"] == "MLM"
     )
-    assert mexico_api_row["visits"] == "[11, 22, 33]"
+    assert "visits" not in mexico_api_row
     assert mexico_api_row["infraction_count"] == 7
     assert mexico_api_row["rights_holder_count"] == 4
     assert mexico_api_row["infraction_recent_days"] == 100

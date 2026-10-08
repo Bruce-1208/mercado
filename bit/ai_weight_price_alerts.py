@@ -38,7 +38,9 @@ def check_pauses(store, secret_key, *, now=None, sender=send_alert):
                     notice = store.state("pause_email", {}) or {}
                     if notice.get("incident") == incident and (notice.get("sent") or now - notice.get("attempted_at", 0) < 60):
                         continue
-                    notice = {"incident": incident, "attempted_at": now, "sent": False}
+                    was_pending = notice.get("incident") == incident and notice.get("pending")
+                    notice = {"incident": incident, "attempted_at": now, "sent": False,
+                              "pending": False, "error": ""}
                     store.set_state("pause_email", notice)
                     try:
                         result = sender(user_id, {"event_type": "task_blocked", "source": "AI核重核价",
@@ -47,7 +49,7 @@ def check_pauses(store, secret_key, *, now=None, sender=send_alert):
                         if notice["sent"]:
                             notice["error"] = ""
                         elif result.get("pending"):
-                            notice["error"] = "同一事件的邮件正在由其他进程处理，稍后确认发送结果"
+                            notice["pending"] = True
                         elif result.get("unconfigured"):
                             notice["error"] = f"账号 {user_id} 的邮件通知尚未完成配置，请在集成与凭证设置中保存邮箱配置"
                         elif result.get("disabled"):
@@ -57,7 +59,10 @@ def check_pauses(store, secret_key, *, now=None, sender=send_alert):
                     except Exception as exc:
                         notice["error"] = str(exc)[:500]
                     store.set_state("pause_email", notice)
-                    if not notice["sent"]:
+                    if notice["pending"]:
+                        if not was_pending:
+                            store.log("人工验证超时邮件正在由其他进程处理，将在一分钟后确认发送结果", level="INFO")
+                    elif not notice["sent"]:
                         store.log("人工验证超时邮件发送失败，将在一分钟后重试：" + notice["error"], level="ERROR")
             finally:
                 lock.release()

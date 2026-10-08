@@ -1,22 +1,36 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
+  <script src="{{ url_for('static', filename='console-performance.js') }}?v=20261007-json-fix"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>尺码表管理 · 泽顺运营中心</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261004-responsive">
-  <link rel="stylesheet" href="{{ url_for('static', filename='size-charts.css') }}?v=20261002-filled">
-    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261004-responsive"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261007-date-filters">
+<script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261007"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='size-charts.css') }}?v=20261009-batch">
+    <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261007-date-filters"></script>
 </head>
 <body class="zs-standalone{{ ' sc-embedded' if embedded else '' }}">
   <main id="size-charts" class="sc-shell" data-can-manage="{{ 'true' if can_manage else 'false' }}">
     <header class="sc-header">
-      <div><div class="sc-eyebrow">MERCADO LIBRE · SIZE CHARTS</div><h1>尺码表管理</h1><p>选择已填好尺码和测量数据的模板，直接复用到其他店铺。</p></div>
+      <div><div class="sc-eyebrow">MERCADO LIBRE · SIZE CHARTS</div><h1>尺码表管理</h1><p>一次上传全部分类到所选店铺的全部授权站点。</p></div>
       <div class="sc-header-actions">{% if not embedded %}<span class="sc-user">{{ current_user.display_name or current_user.username }}</span><a class="sc-button" href="/">返回工作台</a>{% endif %}<button id="sc-new" class="sc-button primary" type="button" {% if not can_manage %}disabled{% endif %}>＋ 新建模板</button></div>
     </header>
     <div id="sc-error" class="sc-message sc-message-error" role="alert" hidden></div>
     <div id="sc-notice" class="sc-message sc-message-info" role="status" aria-live="polite" hidden></div>
     {% if not can_manage %}<div class="sc-message sc-message-info">当前账号可查看模板和上传记录。维护模板与上传需要尺码表执行权限。</div>{% endif %}
+    <section class="sc-panel sc-batch" aria-labelledby="sc-batch-title">
+      <div class="sc-panel-heading"><div><h2 id="sc-batch-title">全部分类一键上架</h2><p>自动包含全部 21 套内置分类模板及已保存的自定义模板，默认覆盖店铺全部授权站点，无需选择分类或站点。</p></div><span class="sc-badge sc-badge-success">全部分类 · 全部站点</span></div>
+      <div class="sc-editor-body">
+        <div class="sc-form-grid"><label>业务员<select id="sc-salesperson-filter"><option value="">全部业务员</option></select></label><label>店铺<select id="sc-store-filter"><option value="">全部店铺</option></select></label></div>
+        <div class="sc-builtin-actions"><button id="sc-batch-select-all" class="sc-button" type="button">选择筛选出的全部店铺</button><button id="sc-batch-clear" class="sc-button" type="button">清空选择</button><span id="sc-batch-count" class="sc-muted">已选 0 个店铺</span></div>
+        <div id="sc-batch-stores" class="sc-targets"><div class="sc-inline-empty">正在读取授权店铺…</div></div>
+        <p class="sc-hint">内置模板采用已填写的身体尺寸参考数据。成功记录自动跳过，明确失败可再次上传；结果待核对的记录会保留，避免重复创建。</p>
+        <div class="sc-upload-bar"><span id="sc-batch-summary" role="status" aria-live="polite">选择店铺后，一次上传全部分类。每个分类都会返回结果。</span><button id="sc-batch-upload" class="sc-button primary" type="button" {% if not can_manage %}disabled{% endif %}>上传全部分类到全部站点</button></div>
+        <progress id="sc-batch-progress" value="0" max="1" hidden aria-label="全部分类上传进度"></progress>
+        <div id="sc-batch-results" class="sc-preview-panel" hidden></div>
+      </div>
+    </section>
     <div class="sc-workspace">
       <aside class="sc-library sc-panel" aria-labelledby="sc-library-title">
         <div class="sc-library-head"><div><h2 id="sc-library-title">模板库 <span id="sc-template-count" class="sc-count">0</span></h2><p>完整数据保存一份，多店铺重复使用</p></div><button id="sc-reload" class="sc-icon-button" type="button" aria-label="刷新模板与上传记录">↻</button></div>
@@ -25,7 +39,7 @@
         <div class="sc-library-footer">本地模板可编辑；已上传尺码表的规格行由平台保留。修改后上传会生成新版本。</div>
       </aside>
       <div class="sc-main">
-        <section class="sc-panel sc-builtins" aria-labelledby="sc-builtin-title">
+        <details class="sc-panel sc-builtins" aria-labelledby="sc-builtin-title"><summary class="sc-reference-summary">查看或维护单个分类模板</summary>
           <div class="sc-panel-heading"><div><h2 id="sc-builtin-title">内置常用品类参考模板 <span id="sc-builtin-count" class="sc-count"></span></h2><p>尺码与数值已填好，选择一套即可保存并上传到其他店铺。</p></div><span class="sc-badge sc-badge-success">完整参考数据</span></div>
           <div class="sc-standard-body">
             <label class="sc-builtin-label" for="sc-builtin-select">选择商品与适用人群</label><select id="sc-builtin-select" class="sc-builtin-select"></select>
@@ -34,7 +48,7 @@
             <p id="sc-builtin-note" class="sc-hint"></p>
             <div class="sc-builtin-actions"><button id="sc-builtin-download" class="sc-button" type="button">下载完整模板</button><button id="sc-builtin-use" class="sc-button primary" type="button" {% if not can_manage %}disabled{% endif %}>使用并保存模板</button></div>
           </div>
-        </section>
+        </details>
         <details class="sc-panel sc-standards"><summary class="sc-reference-summary">自定义模板辅助：品类与尺码填写参考</summary>
           <div class="sc-panel-heading"><div><h2 id="sc-standard-title">品类填写参考 <span id="sc-standard-count" class="sc-count"></span></h2><p>以下仅提供尺码标签和测量说明，适用于维护新模板。复用已填模板请从左侧模板库选择。</p></div><button id="sc-standard-download" class="sc-button" type="button">下载品类参考包</button></div>
           <div class="sc-standard-body">
@@ -76,11 +90,11 @@
             <div id="sc-row-empty" class="sc-inline-empty">当前模板尚未包含尺码数据。可导入已填好的模板，或展开模板维护录入。</div>
             <div id="sc-grid-wrap" class="sc-grid-wrap" hidden><table class="sc-grid"><thead id="sc-grid-head"></thead><tbody id="sc-grid-rows"></tbody></table></div>
             <details id="sc-advanced" class="sc-advanced"><summary>高级数据 / 导入导出 <span>支持复杂字段、多值与结构化测量</span></summary><p>标准编辑表不支持的字段可在 JSON 中维护。应用后需重新保存与校验；导入不会直接上传。</p><textarea id="sc-json" rows="10" spellcheck="false" aria-label="尺码表模板 JSON" {% if not can_manage %}readonly{% endif %}></textarea><div class="sc-advanced-actions"><input id="sc-import-file" type="file" accept=".json,application/json" hidden><button id="sc-import" class="sc-button" type="button" {% if not can_manage %}disabled{% endif %}>导入 JSON</button><button id="sc-apply-json" class="sc-button" type="button" {% if not can_manage %}disabled{% endif %}>应用 JSON</button><button id="sc-export" class="sc-button" type="button">导出当前模板</button></div></details>
-            <div class="sc-section-title sc-section-space"><span class="sc-step">3</span><div><h3>选择上传店铺与站点</h3><p>同一模板会按每个店铺的官方要求分别校验。上传到平台后返回尺码表 ID，商品关联另行完成。</p></div><span id="sc-target-count" class="sc-count">已选 0 个站点</span></div>
+            <div class="sc-section-title sc-section-space"><span class="sc-step">3</span><div><h3>单模板上传 · 选择店铺</h3><p>自动覆盖该店铺全部授权站点。批量上传全部分类请使用页面顶部的一键上架。</p></div><span id="sc-target-count" class="sc-count">已选 0 个店铺</span></div>
             <div id="sc-targets" class="sc-targets"><div class="sc-inline-empty">正在读取授权店铺…</div></div>
             <div id="sc-site-names" class="sc-form-grid sc-site-names"></div>
             <p class="sc-hint">平台尺码表名称最多 60 个字符，仅使用字母、数字和空格。填写的尺码与测量内容仍以每个站点的官方要求为准。</p>
-            <div class="sc-upload-bar"><span id="sc-upload-hint">先保存模板，再校验选中的店铺与站点。</span><button id="sc-preview" class="sc-button" type="button" disabled>校验并预览</button><button id="sc-upload" class="sc-button primary" type="button" disabled>确认上传</button></div>
+            <div class="sc-upload-bar"><span id="sc-upload-hint">先保存模板，再校验选中的店铺与站点。</span><button id="sc-preview" class="sc-button" type="button" disabled>校验并预览</button><button id="sc-upload" class="sc-button primary" type="button" disabled>上传到授权店铺</button></div>
             <div id="sc-preview-panel" class="sc-preview-panel" hidden><div class="sc-preview-heading"><h3>校验结果</h3><span id="sc-preview-expiry" class="sc-muted"></span></div><div id="sc-preview-results"></div></div>
           </div>
         </section>
@@ -91,7 +105,7 @@
   <dialog id="sc-confirm-dialog" class="sc-dialog" aria-labelledby="sc-confirm-title"><form id="sc-confirm-form"><h2 id="sc-confirm-title">确认操作</h2><p id="sc-confirm-message"></p><label id="sc-confirm-input-label" class="sc-dialog-input" hidden>官方尺码表 ID<input id="sc-confirm-input" maxlength="100" autocomplete="off" placeholder="从平台尺码表列表核对并填写"></label><div class="sc-dialog-actions"><button id="sc-confirm-cancel" class="sc-button" type="button">取消</button><button id="sc-confirm-submit" class="sc-button primary" type="submit">确认</button></div></form></dialog>
   <div id="sc-toast" class="sc-toast" role="status" aria-live="polite" hidden></div>
   <script defer src="{{ url_for('static', filename='size-chart-presets.js') }}?v=20261002-filled"></script>
-  <script defer src="{{ url_for('static', filename='size-chart-builtins.js') }}?v=20261002-filled"></script>
-  <script defer src="{{ url_for('static', filename='size-charts.js') }}?v=20261002-filled"></script>
+  <script defer src="{{ url_for('static', filename='size-chart-builtins.js') }}?v=20261009-all-categories"></script>
+  <script defer src="{{ url_for('static', filename='size-charts.js') }}?v=20261009-all-sites-batch"></script>
 </body>
 </html>

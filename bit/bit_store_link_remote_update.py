@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 from erp.store_link_audit import audited, contextual_target, record
+from contextlib import contextmanager
+import json
+import logging
 import os
+from pathlib import Path
+import sqlite3
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -50,6 +56,15 @@ PACKAGE_FIELDS = (
 )
 
 _state_guard = threading.RLock()
+_recovery_guard = threading.Lock()
+_recovery_thread: threading.Thread | None = None
+_recovery_wakeup = threading.Event()
+REMOTE_UPDATE_RECOVERY_LOCK_KEY = "mercado_store_link_remote_update_recovery"
+_PENDING_STATUSES = ("queued", "starting", "running")
+_SAVED_ROW_FIELDS = (
+    "id", "token_id", "store_name", "item_id", "site_id", "status",
+    "is_current", "currency_id", *STORE_LINK_REMOTE_UPDATE_FIELDS,
+)
 _update_state = {
     "running": False,
     "task_id": "",
@@ -86,13 +101,108 @@ def _append_log(message: str) -> None:
         _update_state["logs"] = logs[-300:]
 
 
-def store_link_remote_update_status() -> dict[str, Any]:
+def _state_snapshot() -> dict[str, Any]:
     with _state_guard:
         state = dict(_update_state)
         state["changes"] = dict(state.get("changes") or {})
         state["results"] = [dict(row) for row in state.get("results") or []]
         state["logs"] = list(state.get("logs") or [])
     return state
+
+
+def _queue_path() -> Path:
+    return Path(os.environ.get("MERCADO_STORE_LINK_REMOTE_UPDATE_PATH") or
+                Path(__file__).resolve().parents[1] / "runtime_logs" / "store-link-remote-update.sqlite3")
+
+
+@contextmanager
+def _queue_connection():
+    path = _queue_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    database = sqlite3.connect(path, timeout=30)
+    database.row_factory = sqlite3.Row
+    try:
+        database.execute("PRAGMA journal_mode=WAL")
+        database.execute("""CREATE TABLE IF NOT EXISTS tasks (
+            id TEXT PRIMARY KEY, status TEXT NOT NULL, created REAL NOT NULL,
+            changes_json TEXT NOT NULL, state_json TEXT NOT NULL
+        )""")
+        database.execute("CREATE INDEX IF NOT EXISTS remote_update_pending ON tasks(status,created)")
+        database.execute("""CREATE TABLE IF NOT EXISTS items (
+            task_id TEXT NOT NULL, link_id INTEGER NOT NULL,
+            row_json TEXT NOT NULL, result_json TEXT,
+            PRIMARY KEY(task_id,link_id)
+        )""")
+        with database:
+            yield database
+    finally:
+        database.close()
+
+
+def _json(value) -> str:
+    return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def store_link_remote_update_status() -> dict[str, Any]:
+    state = _state_snapshot()
+    if _queue_path().exists():
+        with _queue_connection() as database:
+            row = database.execute("SELECT state_json FROM tasks ORDER BY created DESC,id DESC LIMIT 1").fetchone()
+        if row:
+            state = json.loads(row["state_json"])
+    return state
+
+
+def _enqueue_task(rows, changes, state) -> tuple[bool, dict]:
+    # Serialize submissions across processes. Only one unfinished bulk edit is
+    # accepted, matching the existing one-task UI without losing a racing start.
+    with _queue_connection() as database:
+        database.execute("BEGIN IMMEDIATE")
+        existing = database.execute(
+            "SELECT state_json FROM tasks WHERE status IN ('queued','starting','running') "
+            "ORDER BY created,id LIMIT 1"
+        ).fetchone()
+        if existing:
+            return False, json.loads(existing["state_json"])
+        database.execute("INSERT INTO tasks VALUES (?,?,?,?,?)",
+                         (state["task_id"], "queued", time.time(), _json(changes), _json(state)))
+        database.executemany("INSERT INTO items(task_id,link_id,row_json) VALUES(?,?,?)", [
+            (state["task_id"], int(row["id"]), _json({field: row.get(field) for field in _SAVED_ROW_FIELDS}))
+            for row in rows
+        ])
+    return True, state
+
+
+def _persist_task_state(task_id) -> None:
+    if not task_id:
+        return
+    state = _state_snapshot()
+    with _queue_connection() as database:
+        database.execute("UPDATE tasks SET status=?,state_json=? WHERE id=?",
+                         (state["status"], _json(state), task_id))
+
+
+def _checkpoint_item(task_id, result) -> None:
+    if not task_id:
+        return
+    with _queue_connection() as database:
+        database.execute("UPDATE items SET result_json=? WHERE task_id=? AND link_id=? AND result_json IS NULL",
+                         (_json(result), task_id, int(result["link_id"])))
+
+
+def _load_task(task_id) -> dict | None:
+    with _queue_connection() as database:
+        task = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if not task:
+            return None
+        items = database.execute("SELECT row_json,result_json FROM items WHERE task_id=? ORDER BY link_id", (task_id,)).fetchall()
+    changes = json.loads(task["changes_json"])
+    normalized = {"status": "deleted"} if changes.get("status") == "deleted" else _normalize_changes(changes)
+    return {
+        "state": json.loads(task["state_json"]), "status": task["status"], "changes": normalized,
+        "rows": [json.loads(item["row_json"]) for item in items if item["result_json"] is None],
+        "results": [json.loads(item["result_json"]) for item in items if item["result_json"] is not None],
+    }
 
 
 def _link_ids(values: Iterable[int]) -> list[int]:
@@ -303,25 +413,34 @@ def _update_one_link(
 def run_store_link_remote_update(
     rows: Iterable[Mapping[str, Any]],
     changes: Mapping[str, Any],
+    *,
+    task_id: str = "",
+    previous_results: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     rows = [dict(row) for row in rows]
+    results = [dict(result) for result in previous_results]
+    total_links = len(rows) + len(results)
+    prior_state = _state_snapshot()
     action = "删除" if changes.get("status") == "deleted" else "修改"
     _state_update(
         running=True,
         status="running",
         message=f"正在等待并{action}美客多后台链接",
-        total_links=len(rows),
-        processed_links=0,
-        success_count=0,
-        partial_count=0,
-        failed_count=0,
+        total_links=total_links,
+        processed_links=len(results),
+        success_count=sum(row["status"] == "success" for row in results),
+        partial_count=sum(row["status"] == "partial" for row in results),
+        failed_count=sum(row["status"] == "error" for row in results),
         current_item="",
-        started_at=_now_text(),
+        started_at=prior_state.get("started_at") or _now_text(),
         finished_at="",
-        results=[],
-        logs=[],
+        results=list(results[-200:]),
+        logs=list(prior_state.get("logs") or []) if task_id else [],
     )
-    _append_log(f"任务启动，共 {len(rows)} 条链接；{action}将直接写入 Mercado Libre 后台")
+    _append_log(f"任务启动，共 {total_links} 条链接；{action}将直接写入 Mercado Libre 后台")
+    if results:
+        _append_log(f"恢复任务：已记录 {len(results)} 条结果，继续处理剩余 {len(rows)} 条链接")
+    _persist_task_state(task_id)
 
     token_records: dict[int, dict[str, Any]] = {}
     token_errors: dict[int, str] = {}
@@ -335,7 +454,6 @@ def run_store_link_remote_update(
         except Exception as exc:
             token_errors[token_id] = str(exc)
 
-    results: list[dict[str, Any]] = []
     worker_count = max(1, min(STORE_LINK_REMOTE_UPDATE_WORKERS, len(rows)))
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = {}
@@ -351,6 +469,7 @@ def run_store_link_remote_update(
                     "applied_fields": [],
                     "errors": [f"店铺授权不可用：{token_errors[token_id]}"],
                 }
+                _checkpoint_item(task_id, result)
                 record("remote_update_item", result["status"], {"result": result, "task_id": _update_state.get("task_id")})
                 results.append(result)
                 _append_log(f"{item_id} 失败：{result['errors'][0]}")
@@ -372,6 +491,9 @@ def run_store_link_remote_update(
                     "applied_fields": [],
                     "errors": [str(exc)],
                 }
+            # Commit the item result before exposing progress. A service crash
+            # never turns an already checkpointed item into a repeated write.
+            _checkpoint_item(task_id, result)
             record("remote_update_item", result["status"], {"result": result, "task_id": _update_state.get("task_id")})
             results.append(result)
             if result["status"] == "success":
@@ -388,8 +510,9 @@ def run_store_link_remote_update(
                 partial_count=sum(row["status"] == "partial" for row in results),
                 failed_count=sum(row["status"] == "error" for row in results),
                 results=list(results[-200:]),
-                message=f"正在{action}美客多后台链接 {processed}/{len(rows)}",
+                message=f"正在{action}美客多后台链接 {processed}/{total_links}",
             )
+            _persist_task_state(task_id)
 
     failed = sum(row["status"] == "error" for row in results)
     partial = sum(row["status"] == "partial" for row in results)
@@ -409,30 +532,41 @@ def run_store_link_remote_update(
         results=list(results[-200:]),
     )
     _append_log(message)
-    return store_link_remote_update_status()
+    _persist_task_state(task_id)
+    return _state_snapshot()
 
 
-def _run_background(rows: list[dict[str, Any]], changes: dict[str, Any]) -> None:
+def _run_background(rows: list[dict[str, Any]], changes: dict[str, Any], task_id: str = "") -> None:
     task_lock = InterProcessLock(
         STORE_LINK_SYNC_LOCK_KEY,
         owner="bit_store_link_remote_update",
-        metadata={"task_id": _update_state.get("task_id"), "type": "remote_update"},
+        metadata={"task_id": task_id or _update_state.get("task_id"), "type": "remote_update"},
     )
     _state_update(message="正在等待当前店铺链接同步完成")
     _append_log("正在等待店铺链接同步锁，取得锁后再写入美客多后台")
+    _persist_task_state(task_id)
     if not task_lock.acquire(timeout=None):
         return
     try:
-        run_store_link_remote_update(rows, changes)
+        previous_results = []
+        if task_id:
+            # Read checkpoints only after taking the shared listing-write lock.
+            # A different process may have finished this queued job meanwhile.
+            task = _load_task(task_id)
+            if not task or task["status"] not in _PENDING_STATUSES:
+                return
+            rows, changes, previous_results = task["rows"], task["changes"], task["results"]
+        run_store_link_remote_update(rows, changes, task_id=task_id, previous_results=previous_results)
     except Exception as exc:
         _state_update(
             running=False,
-            status="error",
-            message=str(exc),
+            status="queued" if task_id else "error",
+            message=f"后台任务暂时中断，将自动恢复：{exc}" if task_id else str(exc),
             current_item="",
             finished_at=_now_text(),
         )
         _append_log(f"任务失败：{exc}")
+        _persist_task_state(task_id)
     finally:
         task_lock.release()
 
@@ -448,13 +582,15 @@ def start_store_link_remote_update(
     normalized = {"status": "deleted"} if delete else _normalize_changes(changes)
     rows = get_store_links_by_ids(ids)
     with _state_guard:
-        if _update_state.get("running"):
-            return False, store_link_remote_update_status()
-        _update_state.update(
+        current_state = store_link_remote_update_status()
+        if current_state.get("running"):
+            return False, current_state
+        state = dict(current_state)
+        state.update(
             running=True,
             task_id=uuid.uuid4().hex,
-            status="starting",
-            message="正在启动美客多后台删除任务" if delete else "正在启动美客多后台修改任务",
+            status="queued",
+            message="美客多后台删除任务已排队" if delete else "美客多后台修改任务已排队",
             total_links=len(rows),
             processed_links=0,
             success_count=0,
@@ -470,18 +606,84 @@ def start_store_link_remote_update(
             results=[],
             logs=[],
         )
-    thread = threading.Thread(
-        target=contextual_target(_run_background),
-        args=(rows, normalized),
-        name="mercado-store-link-remote-update",
-        daemon=True,
-    )
+        created, state = _enqueue_task(rows, normalized, state)
+        _update_state.update(state)
+    if not created:
+        return False, state
     try:
-        thread.start()
+        start_store_link_remote_update_recovery()
+        _recovery_wakeup.set()
     except Exception as exc:
-        _state_update(running=False, status="error", message=str(exc), finished_at=_now_text())
+        _state_update(running=False, status="queued", message=f"任务已保存，后台启动失败：{exc}")
+        _persist_task_state(state["task_id"])
         raise
     return True, store_link_remote_update_status()
+
+
+def _resume_next_task() -> bool:
+    with _queue_connection() as database:
+        pending = database.execute(
+            "SELECT id,state_json FROM tasks WHERE status IN ('queued','starting','running') "
+            "ORDER BY created,id LIMIT 1"
+        ).fetchone()
+    if not pending:
+        return False
+    _state_update(**json.loads(pending["state_json"]))
+    _state_update(running=True)
+    _run_background([], {}, pending["id"])
+    return True
+
+
+def resume_pending_store_link_remote_updates() -> bool:
+    """Recover one task under the same singleton lease used by the async drain."""
+    lease = InterProcessLock(REMOTE_UPDATE_RECOVERY_LOCK_KEY, owner="store-link-update-recovery")
+    if not lease.acquire(timeout=0):
+        return False
+    try:
+        return _resume_next_task()
+    finally:
+        lease.release()
+
+
+def _remote_update_recovery_loop() -> None:
+    while True:
+        lease = InterProcessLock(REMOTE_UPDATE_RECOVERY_LOCK_KEY, owner="store-link-update-recovery")
+        try:
+            acquired = lease.acquire(timeout=0)
+        except Exception:
+            logging.exception("启动店铺链接后台恢复调度失败，将自动重试")
+            acquired = False
+        if acquired:
+            try:
+                while True:
+                    try:
+                        recovered = _resume_next_task()
+                    except Exception:
+                        recovered = True
+                        logging.exception("恢复店铺链接后台修改任务失败，将自动重试")
+                    # A failed task stays queued; pace recovery to avoid tight
+                    # loops during a database or filesystem outage.
+                    _recovery_wakeup.wait(30 if recovered else 10)
+                    _recovery_wakeup.clear()
+            finally:
+                lease.release()
+        _recovery_wakeup.wait(30)
+        _recovery_wakeup.clear()
+
+
+def start_store_link_remote_update_recovery() -> bool:
+    """Start the persistent job drain once; call from the server worker bootstrap."""
+    global _recovery_thread
+    if bit_mysql.RUNTIME_SETTINGS.is_client:
+        return False
+    with _recovery_guard:
+        if _recovery_thread and _recovery_thread.is_alive():
+            return False
+        thread = threading.Thread(target=_remote_update_recovery_loop,
+                                  name="mercado-store-link-update-recovery", daemon=True)
+        thread.start()
+        _recovery_thread = thread
+        return True
 
 
 def start_store_link_remote_delete(link_ids):
@@ -489,7 +691,7 @@ def start_store_link_remote_delete(link_ids):
 
 
 @audited
-def _delete_one_link(row, token):
+def _delete_one_link(row, token, *, required_title=None, max_sold_quantity=None):
     """Delete only the selected marketplace item and verify before marking locally."""
     item_id = str(row.get("item_id") or "").strip().upper()
     result = {
@@ -512,13 +714,47 @@ def _delete_one_link(row, token):
                     or item.get("status") == "deleted"
                     or "deleted" in (item.get("sub_status") or []))
 
+        def retention_reason(item):
+            if required_title is not None and str(item.get("title") or "").strip() != required_title:
+                return "平台标题已变更或无法确认，保留链接"
+            if max_sold_quantity is not None:
+                value = item.get("sold_quantity")
+                try:
+                    sales = int(value)
+                    if isinstance(value, bool) or str(sales) != str(value) or sales < 0:
+                        raise ValueError()
+                except (TypeError, ValueError, OverflowError):
+                    return "平台销量无法确认，保留链接"
+                result["sold_quantity"] = sales
+                if sales > max_sold_quantity:
+                    return f"销量 {sales} 大于 {max_sold_quantity}，保留链接"
+            return ""
+
+        def retain(item):
+            reason = retention_reason(item)
+            if reason:
+                result.update(status="retained", retention_reason=reason)
+                return True
+            return False
+
         item = read_item()
         if not is_deleted(item):
+            if retain(item):
+                return result
             if item.get("status") not in {"paused", "closed"}:
+                previous_status = item.get("status")
                 client.update_global_item(item_id, {"status": "paused"})
                 item = read_item()
                 if item.get("status") not in {"paused", "closed"}:
                     raise ValueError("平台未确认链接已暂停，未继续删除")
+                if retain(item):
+                    # Sales/title may have changed while the pause was confirmed.
+                    # Restore the status so a protected link is actually retained.
+                    client.update_global_item(item_id, {"status": previous_status})
+                    restored = read_item()
+                    if restored.get("status") != previous_status:
+                        raise ValueError("保留链接后恢复原状态未确认，请核验平台状态")
+                    return result
             client.update_global_item(item_id, {"deleted": True})
             item = read_item()
             if not is_deleted(item):
@@ -539,5 +775,7 @@ def _delete_one_link(row, token):
 __all__ = [
     "run_store_link_remote_update",
     "start_store_link_remote_update",
+    "start_store_link_remote_update_recovery",
+    "resume_pending_store_link_remote_updates",
     "store_link_remote_update_status",
 ]

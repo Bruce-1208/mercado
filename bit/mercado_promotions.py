@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import logging
+import math
 import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
@@ -87,6 +90,7 @@ def sync_promotions(
                 adapter, secret = _adapter(secret)
                 accounts = _marketplace_accounts(adapter.client, str(secret.get("meli_user_id") or ""))
                 promotion_count = item_count = 0
+                product_cache = {}
                 for account in accounts:
                     user_id = str(account.get("user_id") or "")
                     site_id = str(account.get("site_id") or "").upper()
@@ -117,6 +121,30 @@ def sync_promotions(
                             continue
                         # Replace only after the iterator finishes completely.
                         items = list(adapter.iter_items(user_id, promotion_id))
+                        # Promotion responses may omit product names and images.
+                        for item in items:
+                            item_id = str(item.get("id") or item.get("item_id") or "")
+                            net = item.get("net_proceeds") or {}
+                            has_original_net = isinstance(net, dict) and net.get("original_amount") is not None
+                            if not item_id or (item.get("title") and item.get("thumbnail") and has_original_net):
+                                continue
+                            if item_id not in product_cache:
+                                try:
+                                    product_cache[item_id] = adapter.client.get_marketplace_item(item_id)
+                                except Exception:
+                                    product_cache[item_id] = {}
+                            product = product_cache[item_id] or {}
+                            pictures = product.get("pictures") or []
+                            main_image = pictures[0] if pictures else {}
+                            item["title"] = item.get("title") or product.get("title") or ""
+                            item["thumbnail"] = (item.get("thumbnail") or item.get("thumbnail_url")
+                                                 or main_image.get("secure_url") or main_image.get("url")
+                                                 or product.get("secure_thumbnail") or product.get("thumbnail") or "")
+                            if product.get("net_proceeds"):
+                                item["_listing_snapshot"] = {
+                                    "price": product.get("price"), "currency_id": product.get("currency_id"),
+                                    "net_proceeds": product["net_proceeds"],
+                                }
                         item_count += store.replace_items(local_id, items)
                     store.record_scope_sync(token_id, site_id, 'succeeded', seen_promotion_ids)
                 total_promotions += promotion_count
@@ -138,6 +166,141 @@ def sync_promotions(
         _sync_lock.release()
 
 
+def _finite_number(value):
+    if value is None or value == "" or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _same_price(left, right):
+    left, right = _finite_number(left), _finite_number(right)
+    return left is not None and right is not None and abs(left - right) < 0.005
+
+
+def _proceeds_record(value, *, price, price_currency, source, amount_key="amount"):
+    """Preserve an official amount and its quoted price without estimating it."""
+    price = _finite_number(price)
+    if price is None or price <= 0 or not price_currency:
+        return None
+    values = value if isinstance(value, list) else [value]
+    candidates = []
+    for entry in values:
+        if not isinstance(entry, dict):
+            continue
+        amount = _finite_number(entry.get(amount_key))
+        currency = str(entry.get("currency_id") or entry.get("currency") or "").strip().upper()
+        if amount is None or not currency:
+            continue
+        candidates.append({
+            "amount": amount, "currency_id": currency, "source": source,
+            "applies_to_price": price, "price_currency_id": str(price_currency or "").upper(),
+        })
+    return next((record for record in candidates if record["currency_id"] == "USD"), candidates[0] if candidates else None)
+
+
+def _normalise_item_proceeds(promotion, row):
+    raw = row.get("raw") or {}
+    currency = str(row.get("currency_id") or raw.get("currency_id") or (
+        "USD" if promotion.get("promotion_type") == "DEAL" else ""
+    )).strip().upper()
+    row["currency_id"] = currency
+    original_price = row.get("original_price")
+    net = row.get("net_proceeds") or raw.get("net_proceeds") or {}
+    before = _proceeds_record(net, price=original_price, price_currency=currency,
+                              source="promotion_api", amount_key="original_amount")
+    after = _proceeds_record(net, price=row.get("price"), price_currency=currency, source="promotion_api")
+    options = [after] if after else []
+    if isinstance(net, dict):
+        for reference in ("suggested_discounted_price", "max_discounted_price", "min_discounted_price"):
+            record = _proceeds_record(net.get(reference), price=raw.get(reference),
+                                      price_currency=currency, source="promotion_api")
+            if record:
+                options.append(record)
+    result = row.get("enrollment_result") or {}
+    response = result.get("response") or {}
+    if result.get("status") == "succeeded" and isinstance(response, dict):
+        response_currency = str(response.get("currency_id") or currency).strip().upper()
+        if response_currency == currency and _same_price(response.get("original_price"), original_price):
+            before = before or _proceeds_record(
+                response.get("net_proceeds"), price=original_price, price_currency=currency,
+                source="promotion_submission", amount_key="original_amount",
+            )
+        record = _proceeds_record(response.get("net_proceeds"), price=response.get("price"),
+                                  price_currency=response_currency, source="promotion_submission")
+        if record and response_currency == currency:
+            options.append(record)
+            if after is None and _same_price(row.get("price"), record["applies_to_price"]):
+                after = record
+    # A listing snapshot is a before-promotion reference only when its public
+    # price and currency match the promotion's original price.
+    listing = raw.get("_listing_snapshot") or {}
+    if isinstance(listing, dict) and listing.get("currency_id") == currency and _same_price(listing.get("price"), original_price):
+        before = before or _proceeds_record(listing.get("net_proceeds"), price=original_price,
+                                            price_currency=currency, source="listing_api")
+    row["net_proceeds_before"] = before
+    row["net_proceeds_after"] = after or (options[0] if options else None)
+    row["net_proceeds_options"] = options
+    return row
+
+
+def enrich_item_products(promotion, rows):
+    """Fill metadata and exact price references in the same authorized store/site."""
+    from erp.mercadolibre_store_link_store import _connect, STORE_LINK_TABLE
+    for row in rows:
+        _normalise_item_proceeds(promotion, row)
+    missing = [row for row in rows if not row.get("title") or not row.get("thumbnail") or not row.get("net_proceeds_before")]
+    if not missing:
+        return rows
+    connection = None
+    try:
+        connection = _connect()
+        with connection.cursor() as cursor:
+            ids = list(dict.fromkeys(row["item_id"] for row in missing))
+            products = {}
+            for start in range(0, len(ids), 500):
+                batch = ids[start:start + 500]
+                placeholders = ",".join(["%s"] * len(batch))
+                cursor.execute(
+                    f"SELECT item_id, title, thumbnail_url, price, currency_id, net_proceeds_usd, "
+                    f"net_proceeds_manual, remote_json FROM `{STORE_LINK_TABLE}` "
+                    f"WHERE token_id=%s AND site_id=%s AND item_id IN ({placeholders})",
+                    (promotion["token_id"], promotion["site_id"], *batch),
+                )
+                products.update({row["item_id"]: row for row in cursor.fetchall()})
+            for row in missing:
+                product = products.get(row["item_id"], {})
+                row["title"] = row.get("title") or product.get("title") or ""
+                row["thumbnail"] = row.get("thumbnail") or product.get("thumbnail_url") or ""
+                if row.get("net_proceeds_before"):
+                    continue
+                try:
+                    remote = json.loads(product.get("remote_json") or "{}")
+                except (TypeError, ValueError):
+                    remote = {}
+                if not isinstance(remote, dict):
+                    remote = {}
+                manual = bool(product.get("net_proceeds_manual"))
+                listing_price = product.get("price") if manual else remote.get("price")
+                listing_currency = product.get("currency_id") if manual else remote.get("currency_id")
+                if listing_currency != row.get("currency_id") or not _same_price(listing_price, row.get("original_price")):
+                    continue
+                values = {"amount": product.get("net_proceeds_usd"), "currency_id": "USD"} if manual else remote.get("net_proceeds")
+                row["net_proceeds_before"] = _proceeds_record(
+                    values, price=row.get("original_price"), price_currency=listing_currency,
+                    source="listing_manual" if manual else "listing_api",
+                )
+    except Exception:
+        logging.getLogger(__name__).warning("Unable to enrich promotion product metadata", exc_info=True)
+    finally:
+        if connection is not None:
+            connection.close()
+    return rows
+
+
 def create_preview(
     *,
     promotion_fk: int,
@@ -156,7 +319,7 @@ def create_preview(
     promotion_type = str(promotion.get("promotion_type") or "UNKNOWN").upper()
     if promotion_type not in WRITABLE_TYPES:
         raise ValueError(f"{promotion_type} 当前仅支持查看")
-    indexed = {int(item["id"]): item for item in store.list_items(promotion_fk)}
+    indexed = {int(item["id"]): item for item in enrich_item_products(promotion, store.list_items(promotion_fk))}
     preview_rows = []
     for intent in rows or []:
         item = indexed.get(int(intent.get("item_local_id") or 0))
@@ -174,7 +337,7 @@ def create_preview(
         if action == "enroll" and promotion_type in {"DEAL", "PRICE_DISCOUNT"}:
             try:
                 price = float(price)
-                if price <= 0:
+                if not math.isfinite(price) or price <= 0:
                     raise ValueError
             except (TypeError, ValueError):
                 reason = "请填写有效活动价"
@@ -198,9 +361,15 @@ def create_preview(
             "status": "blocked" if reason else "ready",
             "reason": reason,
             "deal_price": price,
+            "original_price": item.get("original_price"),
             "currency_id": item.get("currency_id") or raw.get("currency_id") or ("USD" if promotion_type == "DEAL" else ""),
             "start_date": str(intent.get("start_date") or ""),
             "finish_date": str(intent.get("finish_date") or ""),
+            "net_proceeds_before": item.get("net_proceeds_before"),
+            "net_proceeds_after": next((net for net in item.get("net_proceeds_options") or []
+                                         if _same_price(net.get("applies_to_price"), price)), None)
+            if action == "enroll" and promotion_type in {"DEAL", "PRICE_DISCOUNT"}
+            else item.get("net_proceeds_after"),
         })
     ready = [row for row in preview_rows if row["status"] == "ready"]
     expires_at = (_now() + timedelta(minutes=5)).replace(microsecond=0).isoformat()
@@ -224,6 +393,7 @@ def execute_preview(
     *,
     actor: str,
     store: PromotionStore | None = None,
+    background: bool = False,
 ) -> dict[str, Any]:
     store = store or PromotionStore()
     preview = store.get_preview(preview_id)
@@ -247,9 +417,30 @@ def execute_preview(
     adapter, _ = _adapter(secret)
     action = str(preview.get("action") or "")
     job_id = store.create_job(preview_id=preview_id, actor=actor, action=action, total=len(rows))
+    if background:
+        thread = threading.Thread(
+            target=_execute_job, args=(store, job_id, adapter, promotion, rows, action),
+            name=f"promotion-{job_id[:10]}", daemon=True,
+        )
+        thread.start()
+        return {"job_id": job_id, "action": action, "status": "running", "results": []}
+    return _execute_job(store, job_id, adapter, promotion, rows, action)
+
+
+def _execute_job(store, job_id, adapter, promotion, rows, action):
     results = []
     for row in rows:
-        result = {"item_id": row.get("item_id"), "status": "failed", "message": ""}
+        result = {
+            "item_id": row.get("item_id"), "item_local_id": row.get("item_local_id"),
+            "offer_id": row.get("offer_id"), "status": "failed", "message": "",
+            "deal_price": row.get("deal_price"), "currency_id": row.get("currency_id"),
+            "original_price": row.get("original_price"),
+            "net_proceeds_before": row.get("net_proceeds_before"),
+            "net_proceeds_after": row.get("net_proceeds_after"),
+        }
+        store.save_job_progress(job_id, results=results + [{
+            **result, "status": "unknown", "message": "正在提交，平台结果尚未确认，请勿重复报名",
+        }])
         try:
             if action == "enroll":
                 response = adapter.enroll_item(
@@ -267,6 +458,24 @@ def execute_preview(
                     offer_id=str(row.get("offer_id") or ""),
                 )
             result.update(status="succeeded", response=response)
+            if action == "enroll":
+                response_net = (response or {}).get("net_proceeds")
+                response_currency = str((response or {}).get("currency_id") or row.get("currency_id") or "").strip().upper()
+                same_currency = response_currency == str(row.get("currency_id") or "").strip().upper()
+                applied_price = (response or {}).get("price")
+                if applied_price is None and same_currency and promotion.get("promotion_type") in {"DEAL", "PRICE_DISCOUNT"}:
+                    applied_price = row.get("deal_price")
+                original_price = (response or {}).get("original_price")
+                if original_price is None and same_currency:
+                    original_price = row.get("original_price")
+                result["net_proceeds_after"] = _proceeds_record(
+                    response_net, price=applied_price,
+                    price_currency=response_currency, source="promotion_submission",
+                ) or (result.get("net_proceeds_after") if same_currency else None)
+                result["net_proceeds_before"] = _proceeds_record(
+                    response_net, price=original_price,
+                    price_currency=response_currency, source="promotion_submission", amount_key="original_amount",
+                ) or (result.get("net_proceeds_before") if same_currency else None)
             try:
                 if hasattr(store, "set_item_status"):
                     store.set_item_status(
@@ -274,6 +483,11 @@ def execute_preview(
                         str(row.get("item_id") or ""),
                         "pending_approval" if action == "enroll" else "withdrawn",
                     )
+                if action == "enroll" and hasattr(store, "record_item_submission"):
+                    applied_response = dict(response or {})
+                    if applied_response.get("price") is None and same_currency and promotion.get("promotion_type") in {"DEAL", "PRICE_DISCOUNT"}:
+                        applied_response["price"] = row.get("deal_price")
+                    store.record_item_submission(int(promotion.get("id") or 0), str(row.get("item_id") or ""), applied_response)
             except Exception:
                 # The remote mutation already succeeded; a stale local snapshot
                 # must not report that operation as a failed enrollment.
@@ -284,5 +498,6 @@ def execute_preview(
         except Exception as exc:
             result["message"] = str(exc)
         results.append(result)
+        store.save_job_progress(job_id, results=results)
     store.finish_job(job_id, results=results)
-    return {"job_id": job_id, "results": results}
+    return {"job_id": job_id, "action": action, "results": results}

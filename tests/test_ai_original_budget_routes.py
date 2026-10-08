@@ -45,7 +45,7 @@ def process_route(monkeypatch):
 
     def credentials(base_url):
         resolved.append(base_url)
-        return "DeepSeek", "saved-test-key"
+        return "dashscope", "saved-test-key"
 
     route = isolated_function("api_process_ai_original_products",
         db_get_mercado_product_items_by_ids=lambda ids: [
@@ -67,26 +67,26 @@ def process_route(monkeypatch):
 
 @pytest.mark.parametrize("options", [
     {},
-    {"model": "deepseek-flash", "base_url": "https://api.deepseek.com"},
-    {"model": "deepseek-v4-flash", "base_url": "https://api.deepseek.com/v1/"},
+    {"model": "qwen3.7-flash", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
+    {"model": "qwen3.7-flash", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/"},
 ])
 def test_mercado_route_fixes_official_flash_and_enables_worker_budget(process_route, options):
     payload, status = process_route.call(options)
     assert status == 202
     worker = process_route.started[0]
     assert worker["kwargs"] == {"cost_control": True}
-    assert worker["args"][1:4] == ("saved-test-key", "deepseek-flash", "https://api.deepseek.com")
+    assert worker["args"][1:4] == ("saved-test-key", "qwen3.7-flash", "https://dashscope.aliyuncs.com/compatible-mode/v1")
     assert worker["args"][5:8] == ("", "", "")
     assert worker["args"][-2:] == ("mercadolibre", "standard")
-    assert process_route.resolved == ["https://api.deepseek.com"]
-    assert process_route.preflights == [{"api_key": "saved-test-key", "base_url": "https://api.deepseek.com"}]
+    assert process_route.resolved == ["https://dashscope.aliyuncs.com/compatible-mode/v1"]
+    assert process_route.preflights == [{"api_key": "saved-test-key", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}]
     assert payload["data"]["cost_cap_yuan"] == 0.03
     assert payload["data"]["resume_at"] is None
     assert payload["data"]["running"] is True
 
 
 @pytest.mark.parametrize("options, message", [
-    ({"model": "deepseek-v4-pro"}, "仅支持 deepseek-flash"),
+    ({"model": "deepseek-v4-pro"}, "仅支持 qwen3.7-flash"),
     ({"base_url": "https://gateway.example/v1"}, "官方接口"),
     ({"base_url": "https://api.deepseek.com.evil.example"}, "官方接口"),
     ({"base_url": "https://api.deepseek.com/v1?redirect=other"}, "官方接口"),
@@ -297,3 +297,26 @@ def test_worker_lost_lock_after_reservation_save_prevents_model_dispatch(monkeyp
     assert "model" not in fixture.events
     assert fixture.state["results"][0]["status"] == "failed"
     assert "锁已失效" in fixture.state["results"][0]["message"]
+
+
+def test_qwen_worker_does_not_wait_for_deepseek_offpeak(monkeypatch):
+    fixture = make_worker(monkeypatch, {'id': 1, 'source_type': 'ai_original'})
+    def prepare(row, **kwargs):
+        kwargs['before_model_request']()
+        raise ValueError('stop before paid request')
+    monkeypatch.setattr(products, 'prepare_ai_original_product', prepare)
+    fixture.run([{'id': 1}], model='qwen3.7-flash', workers=1, cost_control=True)
+    assert 'wait' not in fixture.events
+    assert fixture.queue_states == []
+
+
+def test_qwen_credentials_do_not_fall_back_to_deepseek(monkeypatch):
+    import os
+    monkeypatch.setattr(deepseek, '_load_local_env', lambda: None)
+    monkeypatch.delenv('DASHSCOPE_API_KEY', raising=False)
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'wrong-provider-key')
+    resolver = isolated_function('_resolve_ai_original_text_api_key', os=os, Path=Path,
+                                 _account_api_key=lambda provider: '')
+    assert resolver('https://dashscope.aliyuncs.com/compatible-mode/v1') == ('dashscope', '')
+    monkeypatch.setenv('DASHSCOPE_API_KEY', 'correct-provider-key')
+    assert resolver('https://dashscope.aliyuncs.com/compatible-mode/v1') == ('dashscope', 'correct-provider-key')

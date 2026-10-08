@@ -1,0 +1,11 @@
+{
+  "agent_version": "1.2.8",
+  "windows_runtime_smoke_test": "passed under Wine during final build",
+  "macos_runtime_smoke_test": "passed on arm64",
+  "rename_persistence_and_heartbeat_tests": "passed",
+  "offline_tests_passed": 75,
+  "business_version": "6b909907f8ad90b4a646d92d",
+  "all_published_hashes_match": true,
+  "worker_test_limitation": "Not verified: collection requires live database/API",
+  "installed_remote_windows_clients": "Require replacing executable on target computer"
+}

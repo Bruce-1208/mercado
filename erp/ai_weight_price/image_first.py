@@ -3,6 +3,8 @@ import time
 import logging
 from contextlib import contextmanager
 
+from erp.ai_usage_billing import usage_context
+
 
 @contextmanager
 def timed_stage(key, stage):
@@ -15,11 +17,18 @@ def timed_stage(key, stage):
 
 
 from .browser import CircuitOpen, NoExactMatch, SearchTimeout, Stopped, WritebackMismatch
-from .models import ModelServiceError, number, erp_value_equal, parse_dimensions_evidence, parse_weight_evidence
+from .models import ModelServiceError, number, erp_value_equal, supplier_dimensions_evidence, parse_weight_evidence
 from .pricing import protect_net_income, usd_cost
 
 
 def process(service, task, browser, models, config):
+    with usage_context(product_id=task["erp_goods_id"],
+                       task_id=config.get("run_id") or task["erp_goods_id"],
+                       task_type="ai_weight_price", task_name="AI 核重核价"):
+        return _process(service, task, browser, models, config)
+
+
+def _process(service, task, browser, models, config):
     key = task["erp_goods_id"]
     store = service.store
     try:
@@ -157,7 +166,7 @@ def process(service, task, browser, models, config):
         # only when one of the fields is genuinely missing.
         cost = sku.get("price")
         weight = parse_weight_evidence(sku.get("raw_weight", ""))
-        dimensions = parse_dimensions_evidence(sku.get("raw_dimensions") or sku.get("label", ""))
+        dimensions = supplier_dimensions_evidence(sku, detail)
         dimensions_notice = ""
         if not dimensions:
             dimensions_notice = "1688未读取到完整包装尺寸，保留智赢原尺寸"

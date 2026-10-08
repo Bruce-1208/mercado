@@ -328,11 +328,11 @@ class FakeBrowser:
     def replies(self,task):
         return self.reply
     def write(self,task,before_save):
-        before_save({"net_income_usd":"10","weight_g":"400"})
+        before_save({"net_income_usd":"10","weight_g":"400","review_status":"待审核"})
         if self.fail_write:
             raise ValueError("保存失败")
         self.written.append(task)
-        return {"net_income_usd":task["net_income_usd"],"weight_g":task["weight_g"]}
+        return {"net_income_usd":task["net_income_usd"],"weight_g":task["weight_g"],"review_status":"通过"}
 
 
 class FakeModel:
@@ -443,8 +443,30 @@ def test_lower_calculated_net_income_keeps_original_and_only_writes_weight(servi
     assert saved["pricing"]["net_income_writeback_usd"] == "10"
     assert saved["pricing"]["net_income_retained_original"] is True
     assert "net_income_usd" not in saved["write_intent"]
+    assert saved["write_intent"]["review_status"] == "通过"
+    assert saved["erp_before"]["review_status"] == "待审核"
+    assert saved["erp_after"]["review_status"] == "通过"
     assert "仅修改重量" in saved["pricing"]["net_income_adjustment"]
     assert saved["decision_reason"] == saved["pricing"]["net_income_adjustment"]
+
+
+@pytest.mark.parametrize("actual_status", ["待审核", None])
+def test_legacy_save_requires_approved_status_readback(service, actual_status):
+    row = task(service.store, matched=True, weight_g="450")
+
+    class UnapprovedBrowser(FakeBrowser):
+        def write(self, current, before_save):
+            actual = super().write(current, before_save)
+            actual["review_status"] = actual_status
+            return actual
+
+    service.finish(row, UnapprovedBrowser(), validate({"writeback_enabled": True}))
+
+    saved = service.store.get("g1")
+    assert saved["status"] == "exception"
+    assert saved["write_verified"] is False
+    assert saved["erp_after"]["review_status"] == actual_status
+    assert "外部写入结果不确定" in saved["exception_detail"]
 
 
 def test_exchange_failure_never_writes_and_edit_clears_old_conversion(service, monkeypatch):

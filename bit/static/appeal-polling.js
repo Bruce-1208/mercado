@@ -1,4 +1,4 @@
-/* Short, sequential log requests; automation continues independently on Agent. */
+/* Short log requests follow the selected independent execution process. */
 (() => {
     function wait(milliseconds) {
         return new Promise(resolve => {
@@ -14,7 +14,7 @@
         });
     }
 
-    async function follow(taskId, {onLog, onState, onRetry, onRecovered}) {
+    async function follow(taskId, {onLog, onState, onRetry, onRecovered, fetchEvents = fetch}) {
         let after = 0;
         let failures = 0;
         while (true) {
@@ -26,7 +26,7 @@
             const timeout = window.setTimeout(() => controller.abort(), 15000);
             let data;
             try {
-                const response = await fetch(
+                const response = await fetchEvents(
                     `/api/run_shensu/${encodeURIComponent(taskId)}/events?after=${after}`,
                     {cache: "no-store", signal: controller.signal},
                 );

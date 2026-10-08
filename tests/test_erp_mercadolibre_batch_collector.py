@@ -64,6 +64,17 @@ def test_volumetric_weight_is_not_written_into_actual_weight():
     assert result["volumetric_weight_kg"] == 1
 
 
+@pytest.mark.parametrize("text, expected", [
+    ("重量：280g丨$2.61低 尺寸：30×30×2（计抛300g）", 280),
+    ("重量：0.8kg低运费 尺寸：30×30×2（计抛300g）", 800),
+    ("重量：280克运费$2.61", 280),
+    ("重量： 体积重量300g低", None),
+    ("重量：280grams", None),
+])
+def test_plugin_weight_unit_can_be_followed_by_chinese_label(text, expected):
+    assert parse_plugin_metrics(text)["weight_g"] == expected
+
+
 def test_merge_listing_candidates_normalizes_and_deduplicates_ids():
     rows = merge_listing_candidates(
         [],

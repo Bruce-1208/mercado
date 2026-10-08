@@ -2,7 +2,7 @@
 (() => {
     'use strict';
     const labels = {loading: '正在加载', empty: '暂无数据', error: '查询失败', partial: '部分成功', denied: '权限不足', success: '操作成功', info: '提示'};
-    const hints = {loading: '请稍候，数据读取完成后会自动显示。', empty: '可以调整筛选条件，或刷新数据。', error: '请检查网络后重新加载；提交结果不确定时，先查询任务状态。', partial: '请查看失败明细，仅处理未成功的项目。', denied: '请联系管理员开通权限，或切换有权限的账号。'};
+    const hints = {loading: '请稍候，数据读取完成后会自动显示。', empty: '可以调整筛选条件，或刷新数据。', error: '本次列表读取未完成，请稍后重新加载。', partial: '请查看失败明细，仅处理未成功的项目。', denied: '请联系管理员开通权限，或切换有权限的账号。'};
     function feedback(node, kind = 'info') {
         if (!node) return;
         node.classList.add('zs-feedback');

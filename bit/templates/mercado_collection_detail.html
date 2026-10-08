@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ detail.title if detail else '采集详情' }} · 美客多跟卖采集</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='mercado-collection-detail.css') }}?v=20261008">
+  <script defer src="{{ url_for('static', filename='mercado-collection-detail.js') }}?v=20261008"></script>
+</head>
+<body>
+{% macro metadata(rows) %}
+  <dl class="detail-metadata">{% for field in rows %}<div><dt>{{ field.name }}</dt><dd>{{ field.value }}</dd></div>{% endfor %}</dl>
+{% endmacro %}
+<main class="detail-shell">
+  <header class="detail-header">
+    <nav aria-label="当前位置"><a href="/?tab=mercado-collection">美客多跟卖采集</a><span aria-hidden="true"> / </span><span>采集详情</span></nav>
+    <a id="collection-detail-back" class="detail-button" href="/?tab=mercado-collection">← 返回采集列表</a>
+  </header>
+  {% if error %}
+  <section class="detail-panel detail-error" role="alert"><h1>暂时无法查看采集详情</h1><p>{{ error }}</p>{% if retry %}<a class="detail-button" href="">重新加载</a>{% endif %}</section>
+  {% else %}
+  <div class="detail-title"><div><p class="detail-eyebrow">MERCADO LIBRE · 商品资料</p><h1>{{ detail.title }}</h1><p class="detail-muted">{{ detail.item_id }} · 采集详情</p></div>{% if detail.source_url %}<a class="detail-button" href="{{ detail.source_url }}" target="_blank" rel="noopener noreferrer">打开源商品 ↗</a>{% endif %}</div>
+  <nav class="detail-sections" aria-label="详情内容"><a href="#pictures">全部图片（{{ detail.images|length }}）</a><a href="#attributes">商品属性</a><a href="#description">商品描述</a><a href="#variants">规格变体</a><a href="#records">采集记录</a></nav>
+  <div class="detail-overview">
+    <section id="pictures" class="detail-panel"><h2>全部商品图片 <span>{{ detail.images|length }}</span></h2>
+      {% if detail.images %}
+      <a id="collection-main-image-link" class="detail-main-image" href="{{ detail.images[0] }}" target="_blank" rel="noopener noreferrer"><img id="collection-main-image" src="{{ detail.images[0] }}" alt="商品图片 1" fetchpriority="high"></a>
+      <p id="collection-image-position" class="detail-muted" aria-live="polite">第 1 / {{ detail.images|length }} 张 · 点击大图查看原图</p>
+      <div class="detail-gallery">{% for image in detail.images %}<button class="detail-thumbnail" type="button" data-image-url="{{ image }}" data-position="{{ loop.index }}" aria-label="查看商品图片 {{ loop.index }}" aria-pressed="{{ 'true' if loop.first else 'false' }}"><img src="{{ image }}" alt="商品图片 {{ loop.index }}" loading="lazy"></button>{% endfor %}</div>
+      {% else %}<p class="detail-empty">未采集到商品图片</p>{% endif %}
+    </section>
+    <div class="detail-summary"><section class="detail-panel"><h2>基本信息</h2>{{ metadata(detail.basic) }}</section>
+    <section class="detail-panel"><h2>价格与物流</h2>{{ metadata(detail.financial) }}<p class="detail-muted">净收益 = 美元售价 − 15% 佣金 − 当前运费</p></section></div>
+  </div>
+  <section id="attributes" class="detail-panel"><h2>商品属性 <span>{{ detail.attributes|length }}</span></h2>{% if detail.attributes %}{{ metadata(detail.attributes) }}{% else %}<p class="detail-empty">未采集到商品属性</p>{% endif %}</section>
+  <section id="description" class="detail-panel"><h2>商品描述</h2>{% for description in detail.descriptions %}<article class="detail-description"><h3>{{ description.name }}</h3>{% if description.title %}<p class="detail-description-title">{{ description.title }}</p>{% endif %}{% if description.text %}<div class="detail-description-text">{{ description.text }}</div>{% else %}<p class="detail-empty">未采集到商品描述</p>{% endif %}</article>{% endfor %}</section>
+  <section id="variants" class="detail-panel"><h2>规格变体 <span>{{ detail.variants|length }}</span></h2>{% if detail.variants %}<div class="detail-variants">{% for variant in detail.variants %}{% set variant_index = loop.index %}<article class="detail-variant"><h3>规格 {{ loop.index }} <small>{{ variant.id }}</small></h3>{{ metadata(variant.attributes) }}<dl class="detail-metadata"><div><dt>价格</dt><dd>{{ variant.price }}</dd></div><div><dt>可售数量</dt><dd>{{ variant.quantity }}</dd></div><div><dt>SKU</dt><dd>{{ variant.sku }}</dd></div></dl>{% if variant.other %}{{ metadata(variant.other) }}{% endif %}<div class="detail-variant-images">{% for image in variant.images %}<a href="{{ image }}" target="_blank" rel="noopener noreferrer"><img src="{{ image }}" alt="规格 {{ variant_index }} 图片 {{ loop.index }}" loading="lazy"></a>{% endfor %}</div></article>{% endfor %}</div>{% else %}<p class="detail-empty">未采集到规格变体</p>{% endif %}</section>
+  {% if detail.terms %}<section class="detail-panel"><h2>销售条款</h2>{{ metadata(detail.terms) }}</section>{% endif %}
+  {% if detail.other %}<section class="detail-panel"><h2>其他商品信息</h2>{{ metadata(detail.other) }}</section>{% endif %}
+  <section id="records" class="detail-panel"><h2>采集与处理记录</h2>{{ metadata(detail.records) }}</section>
+  {% endif %}
+</main>
+</body>
+</html>

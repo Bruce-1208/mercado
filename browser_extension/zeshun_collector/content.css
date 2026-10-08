@@ -85,9 +85,41 @@
   }
 }
 
-/* Keep listing data inside the same visual card as the native product. */
-.zeshun-collector-product-card {
+/* Reserve space below every product instead of relying on native hover
+   expansion. Include content wrappers and the LI so none can clip the data. */
+.zeshun-collector-list-item,
+.zeshun-collector-product-card,
+.zeshun-collector-data-host {
   min-width: 0;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.zeshun-collector-product-card:not(.zeshun-collector-product-card--horizontal) {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: var(--zs-aligned-card-height, 0px);
+}
+
+.zeshun-collector-product-card:not(.zeshun-collector-product-card--horizontal) > * { flex-shrink: 0; }
+
+.zeshun-collector-data-content {
+  flex-wrap: wrap !important;
+}
+
+.zeshun-collector-data-host > .zeshun-product-info {
+  display: block !important;
+  position: relative !important;
+  flex: 0 0 auto;
+  align-self: stretch;
+  grid-column: 1 / -1;
+  height: auto !important;
+  max-height: none !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  margin-top: var(--zs-aligned-panel-gap, 0px);
+  min-height: var(--zs-aligned-panel-height, 0px);
 }
 
 .zeshun-product-info {
@@ -127,6 +159,9 @@
 }
 
 .zeshun-product-info * { box-sizing: border-box; }
+.zeshun-product-info.zeshun-product-info > [style*="--zs-aligned-row-height"] {
+  min-height: var(--zs-aligned-row-height);
+}
 .zeshun-product-info .zs-info-header {
   display: flex;
   align-items: flex-start;
@@ -170,7 +205,7 @@
 .zeshun-product-info .zs-info-reputation { border-color: #b7e2cb; color: #176b43; background: #e9f7ef; }
 .zeshun-product-info .zs-info-seller {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   flex-wrap: wrap;
   gap: 2px 5px;
   min-width: 0;
@@ -200,7 +235,8 @@
   min-width: 0;
   gap: 5px;
 }
-.zeshun-product-info .zs-info-row > .zs-info-label { flex: 0 0 36px; }
+.zeshun-product-info .zs-info-row > .zs-info-label,
+.zeshun-product-info .zs-info-seller > .zs-info-label { flex: 0 0 48px; }
 .zeshun-product-info .zs-info-value { min-width: 0; overflow-wrap: anywhere; }
 .zeshun-product-info .zs-info-stats { display: flex; justify-content: space-between; gap: 12px; }
 .zeshun-product-info .zs-info-measure > .zs-info-value { flex: 1; }
@@ -215,6 +251,8 @@
   color: var(--zs-data-secondary);
   font-size: 11px;
   white-space: nowrap;
+  min-width: 64px;
+  justify-content: flex-end;
 }
 .zeshun-product-info .zs-info-freight.is-selected { color: #176b43; font-weight: 600; }
 .zeshun-product-info .zs-info-low { color: #b45309; font-size: 10px; font-weight: 400; }

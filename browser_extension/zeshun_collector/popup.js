@@ -89,6 +89,7 @@ let activeTab = null;
 let detailPage = false;
 let productDetailDataReady = false;
 let authenticated = false;
+let canUseYandex = false;
 let pagePlatform = "mercado";
 let zyingContext = null;
 let zyingRefreshing = false;
@@ -247,8 +248,8 @@ async function refreshZeshunCategories() {
 }
 
 function syncYandexControls() {
-  yandexStartButton.disabled = !authenticated || yandexBusy || ["queued", "running"].includes(yandexRun?.status);
-  yandexOpenResultsButton.disabled = !Number.isSafeInteger(Number(yandexRun?.id)) || Number(yandexRun?.id) <= 0;
+  yandexStartButton.disabled = !canUseYandex || yandexBusy || ["queued", "running"].includes(yandexRun?.status);
+  yandexOpenResultsButton.disabled = !canUseYandex || !Number.isSafeInteger(Number(yandexRun?.id)) || Number(yandexRun?.id) <= 0;
 }
 
 function renderYandexStatus(run, fallbackMessage = "等待启动") {
@@ -265,6 +266,7 @@ function renderYandexStatus(run, fallbackMessage = "等待启动") {
 
 async function loadYandexStatus() {
   clearTimeout(yandexPollTimer);
+  if (!canUseYandex) return;
   try {
     const response = await runtimeMessage({type: "GET_YANDEX_SEARCH_STATUS"});
     if (!response.ok) throw new Error(response.error || "读取 Yandex 采集进度失败");
@@ -453,6 +455,7 @@ function showResult(message, kind) {
 }
 
 function showMode(mode) {
+  if (mode === "yandex" && !canUseYandex) mode = "product";
   if (mode === "weight-price" || mode === "weight-dimensions") mode = "product";
   const yandex = mode === "yandex";
   const zying = mode === "zying";
@@ -460,15 +463,22 @@ function showMode(mode) {
   const weightPrice = mode === "weight-price";
   const weightDimensions = mode === "weight-dimensions";
   const purchase = mode === "purchase";
+  const appeal = mode === "appeal";
+  const zyingOrder = mode === "zying-order";
   if (!yandex) clearTimeout(yandexPollTimer);
-  productPanel.hidden = yandex || zying || zyingInfringement || weightPrice || weightDimensions || purchase;
+  productPanel.hidden = yandex || zying || zyingInfringement || weightPrice || weightDimensions || purchase || appeal || zyingOrder;
+  document.getElementById("zying-order-panel").hidden = !zyingOrder;
+  document.getElementById("zying-order-mode").classList.toggle("active", zyingOrder);
+  globalThis.ZeshunOrderPopup?.setVisible(zyingOrder);
   yandexPanel.hidden = !yandex;
   zyingPanel.hidden = !zying;
   zyingInfringementPanel.hidden = !zyingInfringement;
   weightPricePanel.hidden = !weightPrice;
   weightDimensionsPanel.hidden = !weightDimensions;
   purchasePanel.hidden = !purchase;
-  productModeButton.classList.toggle("active", !yandex && !zying && !zyingInfringement && !weightPrice && !weightDimensions && !purchase);
+  document.getElementById("appeal-panel").hidden = !appeal;
+  document.getElementById("appeal-mode").classList.toggle("active", appeal);
+  productModeButton.classList.toggle("active", !yandex && !zying && !zyingInfringement && !weightPrice && !weightDimensions && !purchase && !appeal && !zyingOrder);
   yandexModeButton.classList.toggle("active", yandex);
   zyingModeButton.classList.toggle("active", zying);
   zyingInfringementModeButton.classList.toggle("active", zyingInfringement);
@@ -484,6 +494,7 @@ function showMode(mode) {
   }
   if (weightDimensions) loadWeightDimensionsStatus();
   if (purchase) loadPurchaseTrackingStatus();
+  globalThis.ZeshunAppealPopup?.setVisible(appeal);
 }
 
 function isZyingPage(tab) {
@@ -503,10 +514,25 @@ async function refreshState() {
   const response = await runtimeMessage({type: "GET_STATE"});
   queueCount.textContent = String(response.queueLength || 0);
   authenticated = Boolean(response.authenticated);
+  canUseYandex = authenticated && response.user?.role_key === "super_admin";
+  yandexModeButton.hidden = !canUseYandex;
+  document.getElementById("yandex-support").hidden = !canUseYandex;
+  if (!canUseYandex) {
+    clearTimeout(yandexPollTimer);
+    yandexRun = null;
+    if (!yandexPanel.hidden) showMode("product");
+  }
   if (authenticated && response.user) {
     authStatus.textContent = `泽顺账号：${response.user.display_name || response.user.username}` +
       (response.compatibilityMode ? "（兼容模式）" : "");
     authStatus.className = "auth-line logged-in";
+    if (/请先登录泽顺控制台账号|插件登录已失效/.test(resultBox.textContent)) {
+      resultBox.hidden = true;
+      resultBox.textContent = "";
+    }
+    if (/请先登录泽顺控制台账号|插件登录已失效/.test(zeshunCategoriesError)) {
+      zeshunCategoriesRequested = false;
+    }
   } else {
     authStatus.textContent = "泽顺账号：未登录，请在设置登录，或从控制台重新下载插件";
     authStatus.className = "auth-line logged-out";
@@ -527,6 +553,8 @@ async function refreshState() {
   zyingInfringementStartButton.disabled = !authenticated || !zyingContext || zyingInfringementRunning || zyingRefreshing;
   syncWeightPriceControls();
   syncWeightDimensionsControls();
+  globalThis.ZeshunAppealPopup?.syncControls();
+  globalThis.ZeshunOrderPopup?.syncControls();
   if (response.purchaseTracking) renderPurchaseTrackingStatus(response.purchaseTracking);
 }
 
@@ -671,7 +699,7 @@ function renderPurchaseTrackingStatus(state = {}) {
 async function loadPurchaseTrackingStatus() {
   try {
     const response = await runtimeMessage({type: "GET_PURCHASE_TRACKING_REQUEST"});
-    if (!response.ok) throw new Error(response.error || "读取订单物流同步任务失败");
+    if (!response.ok) throw new Error(response.error || "读取物流号同步任务失败");
     renderPurchaseTrackingStatus(response);
   } catch (error) {
     purchasePageStatus.textContent = error.message || String(error);
@@ -793,7 +821,7 @@ async function loadZyingStatus() {
     if (!response.ok) throw new Error(response.error || "读取智赢采集状态失败");
     zyingRunning = Boolean(response.running);
     const summary = response.summary || {};
-    zyingTaskStatus.textContent = response.message || (zyingRunning ? "采集中" : "等待启动");
+    zyingTaskStatus.textContent = response.message || (zyingRunning ? "同步中" : "等待启动");
     zyingSummary.textContent = `入库 ${Number(summary.inserted_count || 0)} · 已有跳过 ${Number(summary.skipped_existing_count || 0)} · 重复 ${Number(summary.duplicate_count || 0)}`;
     const logs = Array.isArray(response.logs) ? response.logs : [];
     zyingLog.textContent = logs.length ? logs.slice(-80).join("\n") : "等待任务启动…";
@@ -1183,6 +1211,7 @@ document.getElementById("retry").addEventListener("click", async event => {
 productModeButton.addEventListener("click", () => showMode("product"));
 yandexModeButton.addEventListener("click", () => showMode("yandex"));
 yandexStartButton.addEventListener("click", async () => {
+  if (!canUseYandex) return;
   const keyword = yandexKeyword.value.trim();
   const count = Number(yandexCount.value);
   if (!keyword || keyword.length > 200) return showResult("关键词须为 1–200 个字符", "error");
@@ -1207,6 +1236,7 @@ yandexKeyword.addEventListener("keydown", event => {
   if (event.key === "Enter") yandexStartButton.click();
 });
 yandexOpenResultsButton.addEventListener("click", async () => {
+  if (!canUseYandex) return;
   try {
     const response = await runtimeMessage({type: "OPEN_YANDEX_SEARCH_RESULTS"});
     if (!response.ok) throw new Error(response.error || "打开 Yandex 采集结果失败");
@@ -1386,8 +1416,8 @@ zyingStartButton.addEventListener("click", async () => {
     showResult("起始产品编号必须是正整数，或留空从分类首件开始。", "error");
     return;
   }
-  if (!Number.isInteger(maxItems) || maxItems < 1 || maxItems > 10000) {
-    showResult("最多产品数必须是 1–10000 的整数。", "error");
+  if (!Number.isSafeInteger(maxItems) || maxItems < 1) {
+    showResult("最多产品数必须是正整数。", "error");
     return;
   }
   if (!zyingContext) {
@@ -1412,13 +1442,13 @@ zyingStartButton.addEventListener("click", async () => {
         product_developer_name: zyingDeveloper.selectedOptions[0]?.textContent || ""
       }
     });
-    if (!response.ok) throw new Error(response.error || "启动智赢产品采集失败");
+    if (!response.ok) throw new Error(response.error || "启动智赢产品同步失败");
     zyingRunning = true;
     await loadZyingStatus();
   } catch (error) {
     showResult(error.message || String(error), "error");
   } finally {
-    zyingStartButton.textContent = "启动产品采集";
+    zyingStartButton.textContent = "启动产品同步";
     zyingStartButton.disabled = !authenticated || !zyingContext || zyingRunning || zyingRefreshing || zeshunCategoriesLoading;
   }
 });
@@ -1428,7 +1458,7 @@ zyingStopButton.addEventListener("click", async () => {
   zyingStopButton.textContent = "结束中…";
   try {
     const response = await runtimeMessage({type: "STOP_ZYING_COLLECTION"});
-    if (!response.ok) throw new Error(response.error || "结束智赢产品采集失败");
+    if (!response.ok) throw new Error(response.error || "结束智赢产品同步失败");
     await loadZyingStatus();
   } catch (error) {
     showResult(error.message || String(error), "error");
@@ -1560,3 +1590,8 @@ document.getElementById("settings").addEventListener("click", () => chrome.runti
 initialize();
 initializeProductBatch().catch(error => showResult(error.message || String(error), "error"));
 initializeYandexOptions().catch(error => showResult(error.message || String(error), "error"));
+
+// Refresh the account after returning from the console or extension settings.
+window.addEventListener("focus", () => {
+  refreshState().catch(error => showResult(error.message || String(error), "error"));
+});

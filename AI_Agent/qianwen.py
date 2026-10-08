@@ -1,4 +1,5 @@
 from openai import OpenAI
+from erp.ai_usage_billing import record_usage
 
 # 指向本地 Ollama 服务
 client = OpenAI(
@@ -15,6 +16,9 @@ def get_ai_response(user_input):
             {"role": "user", "content": user_input},
         ],
     )
+    record_usage(response, model="qwen2.5-coder:14b", provider="ollama",
+                 base_url="http://localhost:11434/v1/",
+                 task_type="ai_appeal", task_name="本地 AI 客服申诉")
     return response.choices[0].message.content
 
 

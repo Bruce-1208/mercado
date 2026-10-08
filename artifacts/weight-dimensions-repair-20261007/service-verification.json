@@ -1,0 +1,12 @@
+{
+  "web": {
+    "status": 200
+  },
+  "worker": {
+    "status": 403
+  },
+  "history_script": {
+    "status": 200,
+    "matches_saved_source": true
+  }
+}

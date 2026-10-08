@@ -9,7 +9,7 @@ import threading
 import time
 from copy import deepcopy
 from erp.query_cache import QueryCache
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Iterable, Mapping
 
@@ -23,6 +23,7 @@ STORE_LINK_SALES_PAGE_INDEX = "idx_erp_meli_store_link_sales_page"
 STORE_LINK_SITE_PAGE_INDEX = "idx_erp_meli_store_link_site_page"
 STORE_LINK_CATEGORY_PAGE_INDEX = "idx_erp_meli_store_link_category_page"
 STORE_LINK_SEARCH_INDEX = "idx_erp_meli_store_link_search"
+STORE_LINK_METADATA_INDEX = "idx_erp_meli_link_scoped_metadata"
 # Cover the page-id lookup so alternative sorts never read remote_json for
 # every listing. Tie breakers follow the direction to permit reverse scans.
 STORE_LINK_SORT_INDEXES = {
@@ -51,6 +52,9 @@ _store_link_schema_ready = False
 _sync_state_schema_ready = False
 _filtered_count_cache = QueryCache(ttl=15, max_entries=512)
 _metadata_cache_lock = threading.RLock()
+_metadata_cache_generation = 0
+_metadata_refreshes: dict[tuple[Any, ...], threading.Event] = {}
+_metadata_index_cache = QueryCache(ttl=60, max_entries=4)
 _metadata_cache: dict[str, Any] = {"expires_at": 0.0, "data": None}
 _scoped_metadata_cache: dict[tuple[int, ...], dict[str, Any]] = {}
 _recent_sales_cache_lock = threading.RLock()
@@ -81,6 +85,12 @@ def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
         elif isinstance(value, bytes):
             result[key] = value.decode("utf-8", errors="replace")
     result["is_current"] = bool(result.get("is_current"))
+    if "quality_score" in result:
+        try:
+            score = Decimal(str(result["quality_score"]))
+            result["quality_score"] = float(score) if score.is_finite() and 0 <= score <= 100 else None
+        except (InvalidOperation, TypeError, ValueError):
+            result["quality_score"] = None
     return result
 
 
@@ -129,6 +139,7 @@ def _migrate_store_link_table(cursor: Any) -> None:
             `remote_json` LONGTEXT NULL,
             `is_current` TINYINT(1) NOT NULL DEFAULT 1,
             `last_synced_at` DATETIME NOT NULL,
+            `listed_at` DATETIME NULL,
             `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`),
@@ -145,6 +156,7 @@ def _migrate_store_link_table(cursor: Any) -> None:
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
+    _ensure_column(cursor, "listed_at", "DATETIME NULL")
     _ensure_column(cursor, "sync_marker", "VARCHAR(64) NULL AFTER `dimensions_manual`")
     net_manual_added = _ensure_column(
         cursor,
@@ -197,6 +209,10 @@ def ensure_store_link_table(cursor: Any) -> None:
         }
         if not {"sync_marker", "net_proceeds_manual", "remote_json"}.issubset(columns):
             _migrate_store_link_table(cursor)
+        from erp.store_link_visits_store import ensure_visits_table
+        ensure_visits_table(cursor)
+        from erp.store_link_visit_schedule import ensure_schedule_table
+        ensure_schedule_table(cursor)
         required_indexes = {
             STORE_LINK_SALES_PAGE_INDEX: (
                 "INDEX",
@@ -277,6 +293,8 @@ def _migrate_store_link_sync_state_table(cursor: Any) -> None:
         CREATE TABLE IF NOT EXISTS `{STORE_LINK_SYNC_STATE_TABLE}` (
             `token_id` BIGINT NOT NULL,
             `requested_at` DATETIME NULL,
+            `request_version` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            `started_request_version` BIGINT UNSIGNED NOT NULL DEFAULT 0,
             `last_started_at` DATETIME NULL,
             `last_completed_at` DATETIME NULL,
             `last_status` VARCHAR(32) NOT NULL DEFAULT 'pending',
@@ -319,6 +337,22 @@ def ensure_store_link_sync_state_table(cursor: Any) -> None:
         }
         if not {"token_id", "last_completed_at", "last_error"}.issubset(columns):
             _migrate_store_link_sync_state_table(cursor)
+        elif {"request_version", "started_request_version"}.difference(columns):
+            # Requests can arrive in the same second as a scan starts. A durable
+            # generation prevents completion from clearing one of those newer
+            # requests, including after a worker or service restart.
+            for name in ("request_version", "started_request_version"):
+                if name in columns:
+                    continue
+                try:
+                    cursor.execute(
+                        f"ALTER TABLE `{STORE_LINK_SYNC_STATE_TABLE}` "
+                        f"ADD COLUMN `{name}` BIGINT UNSIGNED NOT NULL DEFAULT 0"
+                    )
+                except Exception as exc:
+                    # Another web/scheduler process may have migrated first.
+                    if not exc.args or exc.args[0] != 1060:
+                        raise
         _sync_state_schema_ready = True
 
 
@@ -348,10 +382,11 @@ def request_store_link_sync(
             cursor.executemany(
                 f"""
                 INSERT INTO `{STORE_LINK_SYNC_STATE_TABLE}` (
-                    `token_id`, `requested_at`, `last_status`, `last_error`
-                ) VALUES (%s, %s, 'queued', NULL)
+                    `token_id`, `requested_at`, `request_version`, `last_status`, `last_error`
+                ) VALUES (%s, %s, 1, 'queued', NULL)
                 ON DUPLICATE KEY UPDATE
                     `requested_at` = VALUES(`requested_at`),
+                    `request_version` = `request_version` + 1,
                     `last_status` = 'queued',
                     `last_error` = NULL
                 """,
@@ -439,6 +474,7 @@ def mark_store_link_sync_started(
                 ) VALUES (%s, %s, 'running', NULL)
                 ON DUPLICATE KEY UPDATE
                     `last_started_at` = VALUES(`last_started_at`),
+                    `started_request_version` = `request_version`,
                     `last_status` = 'running',
                     `last_error` = NULL
                 """,
@@ -479,12 +515,14 @@ def mark_store_link_sync_finished(
                     ) VALUES (%s, %s, %s, %s, NULL)
                     ON DUPLICATE KEY UPDATE
                         `last_completed_at` = VALUES(`last_completed_at`),
-                        `last_status` = VALUES(`last_status`),
+                        `last_status` = CASE
+                            WHEN `requested_at` IS NOT NULL
+                              AND `request_version` <> `started_request_version`
+                            THEN 'queued' ELSE VALUES(`last_status`) END,
                         `last_error` = NULL,
                         `requested_at` = CASE
                             WHEN `requested_at` IS NULL
-                              OR `last_started_at` IS NULL
-                              OR `requested_at` <= `last_started_at`
+                              OR `request_version` = `started_request_version`
                             THEN NULL ELSE `requested_at` END
                     """,
                     (int(token_id), finished_at, finished_at, status),
@@ -496,7 +534,11 @@ def mark_store_link_sync_finished(
                         `token_id`, `last_started_at`, `last_status`, `last_error`
                     ) VALUES (%s, %s, 'error', %s)
                     ON DUPLICATE KEY UPDATE
-                        `last_status` = 'error', `last_error` = VALUES(`last_error`)
+                        `last_status` = CASE
+                            WHEN `requested_at` IS NOT NULL
+                              AND `request_version` <> `started_request_version`
+                            THEN 'queued' ELSE 'error' END,
+                        `last_error` = VALUES(`last_error`)
                     """,
                     (int(token_id), finished_at, str(error or "")[:4000]),
                 )
@@ -515,7 +557,12 @@ def list_due_store_link_token_ids(
     limit: int = 1000,
     connection_factory: Callable[[], Any] | None = None,
 ) -> list[int]:
-    """Return authorized stores with a queued request or an expired sync clock."""
+    """Return queued, interrupted, or overdue stores; errors retain their backoff.
+
+    A running row is immediately eligible for recovery. The caller must acquire
+    the store-sync task lock before processing it, so a live worker keeps its
+    ownership while a restarted worker can resume without an hour-long delay.
+    """
 
     due_before = (
         datetime.now().replace(microsecond=0) - timedelta(days=max(1, int(interval_days)))
@@ -538,14 +585,17 @@ def list_due_store_link_token_ids(
                 WHERE tokens.`enabled` = 1
                   AND (
                     sync_state.`requested_at` IS NOT NULL
+                    OR sync_state.`last_status` = 'running'
                     OR sync_state.`last_completed_at` IS NULL
                     OR sync_state.`last_completed_at` <= %s
                 )
                   AND (
                     sync_state.`last_started_at` IS NULL
+                    OR sync_state.`last_status` IN ('queued', 'running')
                     OR sync_state.`last_started_at` <= %s
                   )
                 ORDER BY
+                    CASE WHEN sync_state.`last_completed_at` IS NULL THEN 0 ELSE 1 END,
                     CASE WHEN sync_state.`requested_at` IS NOT NULL THEN 0 ELSE 1 END,
                     COALESCE(sync_state.`requested_at`, sync_state.`last_completed_at`) ASC,
                     tokens.`id` ASC
@@ -631,6 +681,10 @@ def _decorate_store_link_markers(rows: list[dict[str, Any]]) -> None:
         promotion_markers = set()
         promotion_details = None
         clearance_states = {}
+    try:
+        available_details = promotion_store.available_item_details(identities)
+    except Exception:
+        available_details = None
     # The ad-analysis module already keeps the last successful remote snapshot.
     # Use it as a read-only fallback so ads created before the marker store was
     # introduced are still visible when that snapshot is available.
@@ -671,6 +725,11 @@ def _decorate_store_link_markers(rows: list[dict[str, Any]]) -> None:
         # response without knowing the UI's terminology.
         row["enrolled_promotions"] = promotion_details.get(identity, []) if promotion_details is not None else None
         clearance = clearance_states.get(identity, {})
+        row["available_promotions"] = (
+            available_details.get(identity, [])
+            if available_details is not None and clearance.get("status", "unknown") != "unknown"
+            else None
+        )
         row["clearance_status"] = clearance.get("status", "unknown")
         row["clearance_checked_at"] = clearance.get("checked_at", "")
         row["clearance_promotions"] = clearance.get("activities", [])
@@ -936,6 +995,22 @@ def _net_proceeds_usd(item: Mapping[str, Any]) -> Any:
     return None
 
 
+def listing_start_time(item: Mapping[str, Any]) -> str | None:
+    """Platform listing start, stored in UTC; never use local ingestion time."""
+    for key in ("start_time", "date_created"):
+        value = item.get(key)
+        if not isinstance(value, str) or not value.strip():
+            continue
+        try:
+            parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+    return None
+
+
 def listing_record(token: Mapping[str, Any], item: Mapping[str, Any], synced_at: str) -> dict[str, Any]:
     """Normalize one official API listing while keeping package values editable."""
 
@@ -963,6 +1038,9 @@ def listing_record(token: Mapping[str, Any], item: Mapping[str, Any], synced_at:
         "currency_id": str(item.get("currency_id") or "")[:16],
         "available_quantity": item.get("available_quantity"),
         "sold_quantity": item.get("sold_quantity"),
+        "total_visits": item.get("total_visits"),
+        "visits_updated_at": item.get("visits_updated_at"),
+        "visits_error": item.get("visits_error"),
         "seller_sku": _seller_sku(item)[:255],
         "category_id": str(item.get("category_id") or "")[:64],
         "listing_type_id": str(item.get("listing_type_id") or "")[:64],
@@ -972,6 +1050,7 @@ def listing_record(token: Mapping[str, Any], item: Mapping[str, Any], synced_at:
         "package_width_cm": width,
         "package_height_cm": height,
         "net_proceeds_usd": _net_proceeds_usd(item),
+        "listed_at": listing_start_time(item),
         "remote_json": _dumps(item),
         "is_current": 1,
         "last_synced_at": synced_at,
@@ -1038,8 +1117,8 @@ def replace_store_snapshot(
                     `listing_type_id`, `weight_g`, `volumetric_weight_kg`,
                     `package_length_cm`, `package_width_cm`, `package_height_cm`,
                     `net_proceeds_usd`, `sync_marker`, `remote_json`, `is_current`,
-                    `last_synced_at`
-                ) VALUES ({", ".join(["%s"] * 26)})
+                    `last_synced_at`, `listed_at`
+                ) VALUES ({", ".join(["%s"] * 27)})
                 ON DUPLICATE KEY UPDATE
                     `store_name` = VALUES(`store_name`), `seller_id` = VALUES(`seller_id`),
                     `site_id` = VALUES(`site_id`),
@@ -1060,6 +1139,7 @@ def replace_store_snapshot(
                     `package_width_cm` = IF(`dimensions_manual` = 1, `package_width_cm`, COALESCE(VALUES(`package_width_cm`), `package_width_cm`)),
                     `package_height_cm` = IF(`dimensions_manual` = 1, `package_height_cm`, COALESCE(VALUES(`package_height_cm`), `package_height_cm`)),
                     `net_proceeds_usd` = IF(`net_proceeds_manual` = 1, `net_proceeds_usd`, COALESCE(VALUES(`net_proceeds_usd`), `net_proceeds_usd`)),
+                    `listed_at` = COALESCE(VALUES(`listed_at`), `listed_at`),
                     `sync_marker` = VALUES(`sync_marker`),
                     `remote_json` = VALUES(`remote_json`), `is_current` = 1,
                     `last_synced_at` = VALUES(`last_synced_at`)
@@ -1076,12 +1156,14 @@ def replace_store_snapshot(
                             "listing_type_id", "weight_g", "volumetric_weight_kg",
                             "package_length_cm", "package_width_cm", "package_height_cm",
                             "net_proceeds_usd", "sync_marker", "remote_json", "is_current",
-                            "last_synced_at",
+                            "last_synced_at", "listed_at",
                         )
                     )
                 )
             if values:
                 cursor.executemany(sql, values)
+                from erp.store_link_visit_schedule import enqueue
+                enqueue(cursor, rows)
         connection.commit()
         updated = len(existing)
         return {"total": len(rows), "inserted": len(rows) - updated, "updated": updated}
@@ -1128,8 +1210,10 @@ def finalize_store_snapshot(
 def invalidate_store_link_metadata_cache() -> None:
     """Discard low-frequency filters and totals after synchronized data changes."""
 
+    global _metadata_cache_generation
     _filtered_count_cache.clear()
     with _metadata_cache_lock:
+        _metadata_cache_generation += 1
         _metadata_cache.update({
             "expires_at": 0.0, "data": None,
             "expires_at_without_categories": 0.0,
@@ -1240,6 +1324,61 @@ def _recent_sales_for_pairs(
     return result
 
 
+def _metadata_index_exists(cursor: Any) -> bool:
+    def load():
+        cursor.execute(
+            "SELECT 1 AS `index_exists` FROM `information_schema`.`STATISTICS` "
+            "WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = %s "
+            "AND `INDEX_NAME` = %s AND `IS_VISIBLE` = 'YES' LIMIT 1",
+            (STORE_LINK_TABLE, STORE_LINK_METADATA_INDEX),
+        )
+        return bool((cursor.fetchone() or {}).get("index_exists"))
+    return _metadata_index_cache.get_or_load(STORE_LINK_METADATA_INDEX, load)
+
+
+def _query_store_link_categories(cursor: Any, *, token_ids=None) -> list[dict[str, Any]]:
+    from erp.mercadolibre_collection_store import ensure_collection_tables
+    ensure_collection_tables(cursor)
+    scoped = None if token_ids is None else sorted(set(token_ids))
+    if scoped == []:
+        return []
+    token_values = tuple(scoped or ())
+    link_token_clause = (
+        "AND links.`token_id` IN (" + ", ".join(["%s"] * len(scoped)) + ")"
+        if scoped is not None else ""
+    )
+    # A category-only index cannot cover permission checks on token_id.
+    index_hint = (
+        f"FORCE INDEX (`{STORE_LINK_CATEGORY_PAGE_INDEX}`)" if scoped is None
+        else f"FORCE INDEX (`{STORE_LINK_METADATA_INDEX}`)" if _metadata_index_exists(cursor)
+        else "FORCE INDEX (`idx_erp_meli_store_link_store`)"
+    )
+    cursor.execute(
+        f"""
+    SELECT category_counts.`category_id`,
+           COALESCE(NULLIF(product.`category_name`, ''), '') AS `category_name`,
+           category_counts.`link_count`
+    FROM (
+        SELECT links.`category_id`, MIN(links.`id`) AS `sample_link_id`,
+               COUNT(*) AS `link_count`
+        FROM `{STORE_LINK_TABLE}` AS links
+        {index_hint}
+        WHERE links.`is_current` = 1
+          AND links.`category_id` IS NOT NULL AND links.`category_id` <> ''
+          {link_token_clause}
+        GROUP BY links.`category_id`
+    ) AS category_counts
+    LEFT JOIN `{STORE_LINK_TABLE}` AS sample_link
+      ON sample_link.`id` = category_counts.`sample_link_id`
+    LEFT JOIN `{PRODUCT_TABLE}` AS product
+      ON product.`source_item_id` = sample_link.`item_id` AND product.`organization_key` = (SELECT CASE WHEN owner_token.`organization_key` IN ('', 'default') THEN 'wuhan-zeshun' ELSE owner_token.`organization_key` END FROM `mercado_store_tokens` AS owner_token WHERE owner_token.`id` = sample_link.`token_id`)
+    ORDER BY `category_name`, category_counts.`category_id`
+    """,
+        token_values,
+    )
+    return [_json_safe_row(row) for row in cursor.fetchall()]
+
+
 def _query_store_link_metadata(
     cursor: Any, *, token_ids: Iterable[int] | None = None,
     include_categories: bool = True,
@@ -1311,10 +1450,16 @@ def _query_store_link_metadata(
     link_token_clause = token_where.replace(" WHERE", " AND").replace(
         "`token_id`", "links.`token_id`"
     )
+    has_scoped_index = scoped_token_ids is not None and _metadata_index_exists(cursor)
+    metadata_index_hint = (
+        f"FORCE INDEX (`{STORE_LINK_METADATA_INDEX}`)" if has_scoped_index
+        else "FORCE INDEX (`idx_erp_meli_store_link_store`)" if scoped_token_ids is not None
+        else ""
+    )
     cursor.execute(
         f"""
         SELECT links.`site_id`, COUNT(*) AS `link_count`
-        FROM `{STORE_LINK_TABLE}` AS links
+        FROM `{STORE_LINK_TABLE}` AS links {metadata_index_hint}
         WHERE links.`is_current` = 1
           AND links.`site_id` IS NOT NULL AND links.`site_id` <> ''
           {link_token_clause}
@@ -1323,58 +1468,69 @@ def _query_store_link_metadata(
         token_values,
     )
     sites = [_json_safe_row(row) for row in cursor.fetchall()]
-    if include_categories:
+    mercado_categories = (
+        _query_store_link_categories(cursor, token_ids=scoped_token_ids)
+        if include_categories else []
+    )
+    if scoped_token_ids is not None:
+        summary_where = token_where
+        summary_index_hint = (
+            metadata_index_hint if has_scoped_index
+            else "FORCE INDEX (`idx_erp_meli_store_link_store`)"
+        )
+        last_sync_sql = (
+            ", MAX(CASE WHEN `is_current` = 1 THEN `last_synced_at` END) AS `last_synced_at`"
+            if has_scoped_index else ""
+        )
         cursor.execute(
-            f"""
-        SELECT category_counts.`category_id`,
-               COALESCE(NULLIF(product.`category_name`, ''), '') AS `category_name`,
-               category_counts.`link_count`
-        FROM (
-            SELECT links.`category_id`, MIN(links.`id`) AS `sample_link_id`,
-                   COUNT(*) AS `link_count`
-            FROM `{STORE_LINK_TABLE}` AS links
-            FORCE INDEX (`{STORE_LINK_CATEGORY_PAGE_INDEX}`)
-            WHERE links.`is_current` = 1
-              AND links.`category_id` IS NOT NULL AND links.`category_id` <> ''
-              {link_token_clause}
-            GROUP BY links.`category_id`
-        ) AS category_counts
-        LEFT JOIN `{STORE_LINK_TABLE}` AS sample_link
-          ON sample_link.`id` = category_counts.`sample_link_id`
-        LEFT JOIN `{PRODUCT_TABLE}` AS product
-          ON product.`source_item_id` = sample_link.`item_id`
-        ORDER BY `category_name`, category_counts.`category_id`
-        """,
+            f"SELECT COUNT(*) AS `all_count`, "
+            "COALESCE(SUM(`is_current` = 1), 0) AS `current_count`, "
+            "COUNT(DISTINCT CASE WHEN `is_current` = 1 THEN `token_id` END) AS `store_count`"
+            f"{last_sync_sql} FROM `{STORE_LINK_TABLE}` {summary_index_hint}{summary_where}",
             token_values,
         )
-        mercado_categories = [_json_safe_row(row) for row in cursor.fetchall()]
+        summary = dict(cursor.fetchone() or {})
+        if not has_scoped_index and int(summary.get("current_count") or 0):
+            # The ordered limit can stop at the first permitted timestamp;
+            # MAX with a token predicate otherwise reads every large row.
+            cursor.execute(
+                f"SELECT `last_synced_at` FROM `{STORE_LINK_TABLE}` "
+                f"FORCE INDEX (`{STORE_LINK_SORT_INDEXES['last_synced_at']}`) "
+                "WHERE `is_current` = 1" + token_where.replace(" WHERE", " AND")
+                + " ORDER BY `last_synced_at` DESC LIMIT 1",
+                token_values,
+            )
+            summary["last_synced_at"] = (cursor.fetchone() or {}).get("last_synced_at")
+        elif not has_scoped_index:
+            summary["last_synced_at"] = None
     else:
-        mercado_categories = []
-    summary_where = token_where.replace("`token_id`", f"`{STORE_LINK_TABLE}`.`token_id`")
-    cursor.execute(
-        f"SELECT COUNT(*) AS `all_count` FROM `{STORE_LINK_TABLE}`{summary_where}",
-        token_values,
-    )
-    summary = dict(cursor.fetchone() or {})
-    current_token_clause = token_where.replace(" WHERE", " AND")
-    cursor.execute(
-        f"SELECT COUNT(*) AS `current_count` FROM `{STORE_LINK_TABLE}` "
-        f"WHERE `is_current` = 1{current_token_clause}",
-        token_values,
-    )
-    summary.update(cursor.fetchone() or {})
-    cursor.execute(
-        f"SELECT COUNT(DISTINCT `token_id`) AS `store_count` "
-        f"FROM `{STORE_LINK_TABLE}` WHERE `is_current` = 1{current_token_clause}",
-        token_values,
-    )
-    summary.update(cursor.fetchone() or {})
-    cursor.execute(
-        f"SELECT MAX(`last_synced_at`) AS `last_synced_at` "
-        f"FROM `{STORE_LINK_TABLE}` WHERE `is_current` = 1{current_token_clause}",
-        token_values,
-    )
-    summary.update(cursor.fetchone() or {})
+        summary_where = token_where.replace("`token_id`", f"`{STORE_LINK_TABLE}`.`token_id`")
+        cursor.execute(
+            f"SELECT COUNT(*) AS `all_count` FROM `{STORE_LINK_TABLE}`{summary_where}",
+            token_values,
+        )
+        summary = dict(cursor.fetchone() or {})
+        current_token_clause = token_where.replace(" WHERE", " AND")
+        cursor.execute(
+            f"SELECT COUNT(*) AS `current_count` FROM `{STORE_LINK_TABLE}` "
+            f"WHERE `is_current` = 1{current_token_clause}",
+            token_values,
+        )
+        summary.update(cursor.fetchone() or {})
+        cursor.execute(
+            f"SELECT COUNT(DISTINCT `token_id`) AS `store_count` "
+            f"FROM `{STORE_LINK_TABLE}` WHERE `is_current` = 1{current_token_clause}",
+            token_values,
+        )
+        summary.update(cursor.fetchone() or {})
+        cursor.execute(
+            f"SELECT MAX(`last_synced_at`) AS `last_synced_at` "
+            f"FROM `{STORE_LINK_TABLE}` WHERE `is_current` = 1{current_token_clause}",
+            token_values,
+        )
+        summary.update(cursor.fetchone() or {})
+    for count_field in ("all_count", "current_count", "store_count"):
+        summary[count_field] = int(summary.get(count_field) or 0)
     return {
         "group_map": group_map,
         "groups": groups,
@@ -1393,51 +1549,87 @@ def _store_link_metadata(
     token_ids: Iterable[int] | None = None,
     include_categories: bool = True,
 ) -> dict[str, Any]:
-    if token_ids is not None:
-        scoped_key = (include_categories, *tuple(sorted({
-            int(value) for value in token_ids or () if int(value or 0) > 0
-        })))
-        if not use_cache:
-            return _query_store_link_metadata(cursor, token_ids=token_ids, include_categories=include_categories)
-        now = time.monotonic()
-        with _metadata_cache_lock:
-            cached_entry = _scoped_metadata_cache.get(scoped_key)
-            if (
-                cached_entry
-                and float(cached_entry.get("expires_at") or 0) > now
-                and cached_entry.get("data") is not None
-            ):
-                return deepcopy(cached_entry["data"])
-            metadata = _query_store_link_metadata(cursor, token_ids=token_ids, include_categories=include_categories)
-            _scoped_metadata_cache[scoped_key] = {
-                "expires_at": time.monotonic() + STORE_LINK_METADATA_CACHE_SECONDS,
-                "data": deepcopy(metadata),
-            }
-            if len(_scoped_metadata_cache) > 256:
-                oldest_key = min(
-                    _scoped_metadata_cache,
-                    key=lambda key: float(
-                        _scoped_metadata_cache[key].get("expires_at") or 0
-                    ),
-                )
-                _scoped_metadata_cache.pop(oldest_key, None)
-            return metadata
+    scoped_ids = None if token_ids is None else tuple(sorted({
+        int(value) for value in token_ids if int(value or 0) > 0
+    }))
+    scoped_key = (include_categories, *(scoped_ids or ()))
+    suffix = "" if include_categories else "_without_categories"
+
+    def query(query_cursor):
+        if scoped_ids is None and include_categories:
+            return _query_store_link_metadata(query_cursor)
+        return _query_store_link_metadata(
+            query_cursor, token_ids=scoped_ids, include_categories=include_categories,
+        )
+
+    def load():
+        if cursor is not None:
+            return query(cursor)
+        # The category picker shares the base statistics already loaded by the
+        # listing. Only its category query needs another database checkout.
+        if include_categories:
+            metadata = _store_link_metadata(
+                None, use_cache=use_cache, token_ids=scoped_ids, include_categories=False,
+            )
+        connection = _connect()
+        try:
+            with connection.cursor() as query_cursor:
+                ensure_store_link_table(query_cursor)
+                if include_categories:
+                    metadata["mercado_categories"] = _query_store_link_categories(
+                        query_cursor, token_ids=scoped_ids,
+                    )
+                    return metadata
+                return query(query_cursor)
+        finally:
+            connection.close()
+
     if not use_cache:
-        return (_query_store_link_metadata(cursor) if include_categories
-                else _query_store_link_metadata(cursor, include_categories=False))
-    now = time.monotonic()
-    with _metadata_cache_lock:
-        cache_suffix = "" if include_categories else "_without_categories"
-        cached = _metadata_cache.get("data" + cache_suffix)
-        if cached is not None and float(_metadata_cache.get("expires_at" + cache_suffix) or 0) > now:
-            return deepcopy(cached)
-        metadata = (_query_store_link_metadata(cursor) if include_categories
-                    else _query_store_link_metadata(cursor, include_categories=False))
-        _metadata_cache.update({
-            "expires_at" + cache_suffix: time.monotonic() + STORE_LINK_METADATA_CACHE_SECONDS,
-            "data" + cache_suffix: deepcopy(metadata),
-        })
+        return load()
+    while True:
+        # Never hold the shared lock during SQL or while waiting for a refresh.
+        # Production callers pass no cursor, so waiters hold no DB connection.
+        with _metadata_cache_lock:
+            generation = _metadata_cache_generation
+            if scoped_ids is None:
+                cached = _metadata_cache.get("data" + suffix)
+                expires_at = _metadata_cache.get("expires_at" + suffix, 0)
+            else:
+                entry = _scoped_metadata_cache.get(scoped_key) or {}
+                cached, expires_at = entry.get("data"), entry.get("expires_at", 0)
+            if cached is not None and float(expires_at or 0) > time.monotonic():
+                return deepcopy(cached)
+            refresh_key = (generation, include_categories, scoped_ids)
+            pending = _metadata_refreshes.get(refresh_key)
+            if pending is None:
+                pending = threading.Event()
+                _metadata_refreshes[refresh_key] = pending
+                break
+        pending.wait()
+    try:
+        metadata = load()
+        with _metadata_cache_lock:
+            if generation == _metadata_cache_generation:
+                expires_at = time.monotonic() + STORE_LINK_METADATA_CACHE_SECONDS
+                if scoped_ids is None:
+                    _metadata_cache.update({
+                        "data" + suffix: deepcopy(metadata),
+                        "expires_at" + suffix: expires_at,
+                    })
+                else:
+                    _scoped_metadata_cache[scoped_key] = {
+                        "data": deepcopy(metadata), "expires_at": expires_at,
+                    }
+                    if len(_scoped_metadata_cache) > 256:
+                        oldest = min(_scoped_metadata_cache, key=lambda key:
+                                     _scoped_metadata_cache[key]["expires_at"])
+                        _scoped_metadata_cache.pop(oldest, None)
         return metadata
+    finally:
+        with _metadata_cache_lock:
+            _metadata_refreshes.pop(refresh_key, None)
+            pending.set()
+
 
 
 def list_store_links(
@@ -1512,7 +1704,7 @@ def list_store_links(
     if category_filter in {"uncategorized", "unclassified", "none"}:
         conditions.append(
             f"NOT EXISTS (SELECT 1 FROM `{PRODUCT_TABLE}` AS categorized_product "
-            "WHERE categorized_product.`source_item_id` = links.`item_id` "
+            "WHERE categorized_product.`source_item_id` = links.`item_id` AND categorized_product.`organization_key` = (SELECT CASE WHEN owner_token.`organization_key` IN ('', 'default') THEN 'wuhan-zeshun' ELSE owner_token.`organization_key` END FROM `mercado_store_tokens` AS owner_token WHERE owner_token.`id` = links.`token_id`) "
             "AND categorized_product.`management_category_id` IS NOT NULL)"
         )
     elif category_filter:
@@ -1524,7 +1716,7 @@ def list_store_links(
             raise ValueError("产品分类编号无效")
         conditions.append(
             f"EXISTS (SELECT 1 FROM `{PRODUCT_TABLE}` AS categorized_product "
-            "WHERE categorized_product.`source_item_id` = links.`item_id` "
+            "WHERE categorized_product.`source_item_id` = links.`item_id` AND categorized_product.`organization_key` = (SELECT CASE WHEN owner_token.`organization_key` IN ('', 'default') THEN 'wuhan-zeshun' ELSE owner_token.`organization_key` END FROM `mercado_store_tokens` AS owner_token WHERE owner_token.`id` = links.`token_id`) "
             "AND categorized_product.`management_category_id` = %s)"
         )
         values.append(normalized_category_id)
@@ -1584,16 +1776,24 @@ def list_store_links(
     sort_direction = (
         "ASC" if str(direction_source or "").strip().lower() == "asc" else "DESC"
     )
+    metadata = None
+    if connection_factory is None:
+        # Read or await cached filters before borrowing the page connection.
+        metadata = _store_link_metadata(
+            None, use_cache=True, token_ids=scoped_token_ids,
+            include_categories=include_categories,
+        )
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
+            from erp.mercadolibre_collection_store import ensure_collection_tables
+            ensure_collection_tables(cursor)
             ensure_store_link_table(cursor)
-            metadata = _store_link_metadata(
-                cursor,
-                use_cache=connection_factory is None,
-                token_ids=scoped_token_ids,
-                include_categories=include_categories,
-            )
+            if metadata is None:
+                metadata = _store_link_metadata(
+                    cursor, use_cache=False, token_ids=scoped_token_ids,
+                    include_categories=include_categories,
+                )
             group_map = metadata["group_map"]
             groups = metadata["groups"]
             stores = metadata["stores"]
@@ -1791,8 +1991,11 @@ def list_store_links(
                 SELECT full_links.`id`, full_links.`token_id`, full_links.`store_name`,
                        full_links.`seller_id`, full_links.`site_id`, full_links.`item_id`,
                        full_links.`title`, full_links.`permalink`, full_links.`thumbnail_url`,
+                       JSON_EXTRACT(IF(JSON_VALID(full_links.`remote_json`),
+                           full_links.`remote_json`, '{{}}'), '$.pictures') AS pictures,
                        full_links.`status`, full_links.`price`, full_links.`currency_id`,
                        full_links.`available_quantity`, full_links.`sold_quantity`,
+                       visits.`total_visits`, visits.`visits_updated_at`, visits.`visits_error`,
                        full_links.`seller_sku`, full_links.`category_id`,
                        full_links.`listing_type_id`, full_links.`weight_g`,
                        full_links.`volumetric_weight_kg`, full_links.`package_length_cm`,
@@ -1800,13 +2003,17 @@ def list_store_links(
                        full_links.`net_proceeds_usd`, full_links.`price_manual`,
                        full_links.`weight_manual`, full_links.`dimensions_manual`,
                        full_links.`net_proceeds_manual`, full_links.`is_current`,
-                       full_links.`last_synced_at`, full_links.`created_at`,
+                       full_links.`last_synced_at`, full_links.`listed_at`, full_links.`created_at`,
                        full_links.`updated_at`, page_ids.`sales_14d`,
+                       JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(full_links.`remote_json`),
+                           full_links.`remote_json`, '{{}}'), '$.listing_performance.score')) AS quality_score,
                        product.`category_name`, product.`management_category_id`,
                        management_category.`name` AS `management_category_name`
                 FROM `{STORE_LINK_TABLE}` AS full_links
+                LEFT JOIN `erp_mercadolibre_store_link_visits` AS visits
+                  ON visits.`token_id` = full_links.`token_id` AND visits.`item_id` = full_links.`item_id`
                 LEFT JOIN `{PRODUCT_TABLE}` AS product
-                  ON product.`source_item_id` = full_links.`item_id`
+                  ON product.`source_item_id` = full_links.`item_id` AND product.`organization_key` = (SELECT CASE WHEN owner_token.`organization_key` IN ('', 'default') THEN 'wuhan-zeshun' ELSE owner_token.`organization_key` END FROM `mercado_store_tokens` AS owner_token WHERE owner_token.`id` = full_links.`token_id`)
                 LEFT JOIN `{MANAGEMENT_CATEGORY_TABLE}` AS management_category
                   ON management_category.`id` = product.`management_category_id`
                 INNER JOIN (
@@ -1841,22 +2048,22 @@ def list_store_links(
                     (int(row.get("token_id") or 0), str(row.get("site_id") or "").upper()),
                     "",
                 )
-            _decorate_store_link_markers(rows)
-        return {
-            "rows": rows,
-            "stores": stores,
-            "store_groups": store_groups,
-            "sites": sites,
-            "groups": groups,
-            "mercado_categories": mercado_categories,
-            "summary": summary,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "pages": pages,
-        }
     finally:
         connection.close()
+    _decorate_store_link_markers(rows)
+    return {
+        "rows": rows,
+        "stores": stores,
+        "store_groups": store_groups,
+        "sites": sites,
+        "groups": groups,
+        "mercado_categories": mercado_categories,
+        "summary": summary,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": pages,
+    }
 
 
 def _decimal_change(field: str, value: Any) -> Decimal | None:

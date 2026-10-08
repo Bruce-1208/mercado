@@ -1,0 +1,52 @@
+{
+  "scope": "Real MySQL + production route body/gzip + actual product HTML/JS; isolated local HTTP. Excludes production auth/proxy and external image completion.",
+  "runs": [
+    {
+      "seconds": 0.11120000000018626,
+      "rows": 50,
+      "status": "已加载 50 件，数据来源：泽顺插件",
+      "network": "local",
+      "page_size": 50
+    },
+    {
+      "seconds": 0.1095,
+      "rows": 63,
+      "status": "已加载 63 件，数据来源：泽顺插件",
+      "network": "local",
+      "page_size": 100
+    },
+    {
+      "seconds": 0.1043999999994412,
+      "rows": 63,
+      "status": "已加载 63 件，数据来源：泽顺插件",
+      "network": "local",
+      "page_size": 200
+    },
+    {
+      "seconds": 0.2805999999996275,
+      "rows": 50,
+      "status": "已加载 50 件，数据来源：泽顺插件",
+      "network": "5Mbps_100ms",
+      "page_size": 50
+    },
+    {
+      "seconds": 0.38029999999981373,
+      "rows": 63,
+      "status": "已加载 63 件，数据来源：泽顺插件",
+      "network": "5Mbps_100ms",
+      "page_size": 100
+    },
+    {
+      "seconds": 0.3871000000005588,
+      "rows": 63,
+      "status": "已加载 63 件，数据来源：泽顺插件",
+      "network": "5Mbps_100ms",
+      "page_size": 200
+    }
+  ],
+  "api": {
+    "seconds": 0.09,
+    "wire_bytes": 88500,
+    "encoding": "gzip"
+  }
+}

@@ -74,6 +74,9 @@ def open_knowledge(page, rows=None):
             "madrid_from_date": "2026-10-01", "running": False, "status": "idle",
             "history": [], "logs": [], "summary": {},
         }})))
+    group = page.locator('.nav-section[data-group="risk"]')
+    if group.count() and not group.evaluate("e => e.open"):
+        group.locator('summary').click()
     page.locator('.tab-button[data-tab="infringement-knowledge"]').click()
     page.locator("#infringement-knowledge-body .knowledge-brand").first.wait_for()
     return state
@@ -141,6 +144,27 @@ def test_knowledge_filters_and_pagination_keep_global_summary(console_page):
     assert page.locator("#infringement-knowledge-body .empty-state").get_attribute("colspan") == "6"
 
 
+def test_wipo_blacklist_is_displayed_filtered_and_editable_as_effective_rule(console_page):
+    page = console_page
+    rows = [
+        {**knowledge_rows()[0], "list_type": "blacklist", "notes": "WIPO 商标自动加入黑名单"},
+        {**knowledge_rows()[0], "id": 2, "brand_name": "AI Source", "source_type": "analysis"},
+    ]
+    state = open_knowledge(page, rows)
+    first = page.locator("#infringement-knowledge-body tr").first
+    assert first.locator(".knowledge-list-badge").inner_text() == "风险拦截"
+    assert first.locator("[data-edit]").inner_text() == "编辑"
+    assert page.locator("#infringement-knowledge-blacklist").inner_text() == "1"
+    page.locator('[data-knowledge-filter="blacklist"]').click()
+    page.wait_for_function("document.querySelectorAll('#infringement-knowledge-body .knowledge-brand').length === 1")
+    page.locator("#infringement-knowledge-source-filter").select_option("wipo")
+    page.wait_for_function("document.querySelector('#infringement-knowledge-source-filter').value === 'wipo'")
+    page.locator("#infringement-knowledge-body [data-edit]").click()
+    assert page.locator("#infringement-knowledge-list-type").input_value() == "blacklist"
+    assert page.locator("#infringement-knowledge-scope-mode").input_value() == "global"
+    assert not state["errors"]
+
+
 def test_knowledge_late_search_response_cannot_replace_latest_results(console_page):
     page = console_page
     open_knowledge(page)
@@ -169,7 +193,7 @@ def test_knowledge_late_search_response_cannot_replace_latest_results(console_pa
     assert page.locator("#infringement-knowledge-body .knowledge-brand").all_inner_texts() == ["Latest matching brand"]
 
 
-@pytest.mark.parametrize("decision", ["blacklist", "whitelist"])
+@pytest.mark.parametrize("decision", ["blacklist", "whitelist", "borderline"])
 def test_knowledge_editor_defaults_to_pending_and_requires_decision_basis(console_page, decision):
     page = console_page
     state = open_knowledge(page)
@@ -201,9 +225,15 @@ def test_knowledge_editor_defaults_to_pending_and_requires_decision_basis(consol
     assert len(state["writes"]) == 1
     page.locator("#infringement-knowledge-notes").fill("已核验授权，仅限指定墨西哥店铺和产品。")
     page.locator("#save-infringement-knowledge-btn").click()
+    assert editor.is_visible()
+    assert "至少填写一个站点" in page.locator("#knowledge-editor-error").inner_text()
+    page.locator("#infringement-knowledge-scope-sites").fill("MLM")
+    page.locator("#infringement-knowledge-scope-shops").fill("18")
+    page.locator("#save-infringement-knowledge-btn").click()
     editor.wait_for(state="hidden")
     assert state["writes"][-1][2]["list_type"] == decision
     assert state["writes"][-1][2]["notes"] == "已核验授权，仅限指定墨西哥店铺和产品。"
+    assert state["writes"][-1][2]["scope"] == {"mode": "scoped", "sites": ["MLM"], "categories": [], "shops": ["18"]}
     assert not state["errors"]
 
 
@@ -216,10 +246,13 @@ def test_knowledge_review_existing_evidence_and_save_decision(console_page):
     assert "123456" in page.locator("#knowledge-editor-evidence").inner_text()
     page.locator("#infringement-knowledge-list-type").select_option("blacklist")
     page.locator("#infringement-knowledge-notes").fill("已复核商标记录，限制当前类目使用。")
+    page.locator("#infringement-knowledge-scope-categories").fill("MLM1234")
     page.locator("#save-infringement-knowledge-btn").click()
     page.locator("#infringement-knowledge-dialog").wait_for(state="hidden")
     assert state["writes"] == [("PUT", "/api/infringement-knowledge/1", {
         "brand_name": "Trail Source", "list_type": "blacklist", "notes": "已复核商标记录，限制当前类目使用。",
+        "aliases": [], "scope": {"mode": "scoped", "sites": [], "categories": ["MLM1234"], "shops": []},
+        "valid_until": None, "rule_version": 1,
     })]
 
 
@@ -237,7 +270,7 @@ def test_knowledge_view_only_user_can_read_details_but_cannot_mutate(console_pag
     assert page.locator("#infringement-knowledge-dialog").is_hidden()
     page.locator("#infringement-knowledge-body [data-edit]").first.click()
     assert page.locator("#infringement-knowledge-dialog").is_visible()
-    for field in ("brand", "list-type", "notes"):
+    for field in ("brand", "list-type", "notes", "aliases", "scope-mode", "scope-sites", "scope-categories", "scope-shops", "valid-until", "source-detail"):
         assert page.locator(f"#infringement-knowledge-{field}").is_disabled()
     assert page.locator("#save-infringement-knowledge-btn").is_hidden()
     page.locator("#infringement-knowledge-form").dispatch_event("submit")
@@ -258,3 +291,52 @@ def test_knowledge_source_and_notes_are_safe_text(console_page):
     assert body.locator("img, script").count() == 0
     assert hostile in body.inner_text()
     assert not page.evaluate("Boolean(window.knowledgeInjection)")
+
+
+def test_knowledge_legacy_global_and_structured_scope_are_visible(console_page):
+    page = console_page
+    rows = knowledge_rows()[:3]
+    rows[2].update(scope={"mode": "scoped", "sites": ["MLM"], "categories": [], "shops": ["18"]},
+                   scope_label="站点：MLM · 店铺：18", aliases=["Authorized Alias"], rule_version=4,
+                   reviewed_by="reviewer", valid_until="2026-12-31")
+    open_knowledge(page, rows)
+    assert "企业内通用规则（历史记录）" in page.locator("#infringement-knowledge-body tr").nth(1).inner_text()
+    scoped = page.locator("#infringement-knowledge-body tr").nth(2)
+    assert "店铺：18" in scoped.inner_text() and "Authorized Alias" in scoped.inner_text()
+    assert "v4 · reviewer" in scoped.inner_text()
+    scoped.locator("[data-edit]").click()
+    assert page.locator("#infringement-knowledge-scope-mode").input_value() == "scoped"
+    assert page.locator("#infringement-knowledge-scope-shops").input_value() == "18"
+    assert page.locator("#infringement-knowledge-rule-version").input_value() == "4"
+
+
+def test_knowledge_detail_evidence_history_and_related_results_are_safe(console_page):
+    page = console_page
+    state = open_knowledge(page, knowledge_rows()[:1])
+    hostile = '<img src=x onerror="window.knowledgeInjection=true">'
+    page.route("**/api/infringement-knowledge/1", lambda route: route.fulfill(
+        content_type="application/json", body=json.dumps({"status": "success", "data": {
+            "record": {**knowledge_rows()[0], "original_source_type": "wipo", "reviewed_by": "reviewer", "rule_version": 2},
+            "evidence": [{"source_type": "wipo", "source_detail": hostile, "payload": {"registration": "123456"}}],
+            "history": [{"rule_version": 2, "action": "review", "actor": "reviewer", "after": {"notes": hostile}}],
+        }})))
+    page.route("**/api/infringement-knowledge/1/products?*", lambda route: route.fulfill(
+        content_type="application/json", body=json.dumps({"status": "success", "data": {"rows": [
+            {"source_type": "collection_list", "source_row_id": 20, "title": hostile,
+             "risk_level": 2, "association": "matched_rule", "checked_at": "2026-10-06"},
+        ]}})))
+    page.locator("#infringement-knowledge-body [data-edit]").click()
+    page.locator("#knowledge-review-history").evaluate("e => e.open = true")
+    page.get_by_text("v2 · 复核保存", exact=True).wait_for()
+    assert page.locator("#knowledge-review-history-content img, #knowledge-review-history-content script").count() == 0
+    assert "reviewer" in page.locator("#knowledge-review-history-content").inner_text()
+    page.keyboard.press("Escape")
+    page.locator("#infringement-knowledge-body [data-related]").click()
+    page.get_by_text("检测命中本规则", exact=True).wait_for()
+    assert page.locator("#knowledge-products-body img, #knowledge-products-body script").count() == 0
+    page.evaluate("window.openMercadoInfringementDetail = (mode,id) => window.relatedOpened = {mode,id}")
+    page.locator("#knowledge-products-body [data-open-risk]").click()
+    assert page.locator("#knowledge-products-dialog").is_hidden()
+    assert page.evaluate("window.relatedOpened") == {"mode": "collection", "id": 20}
+    assert not page.evaluate("Boolean(window.knowledgeInjection)")
+    assert not state["errors"]

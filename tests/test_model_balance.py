@@ -125,12 +125,11 @@ def test_overview_lists_every_saved_provider_without_requesting_billing_with_mod
     result = balance.get_account_balance_overview(
         31, {f'{provider}_configured': True for provider in PROVIDERS}, key, force=True,
     )
-    assert [item['provider'] for item in result['providers']] == list(PROVIDERS)
-    assert keys_read == ['deepseek']
-    assert calls == [(31, 'account-private-token', True)]
-    assert result['providers'][0]['balances'][0]['amount'] == '20.50'
+    assert [item['provider'] for item in result['providers']] == [p for p in PROVIDERS if p != 'deepseek']
+    assert keys_read == []
+    assert calls == []
     assert result['status'] == 'unsupported'
-    for item in result['providers'][1:]:
+    for item in result['providers']:
         assert item['status'] == 'unsupported'
         assert item['balances'] == []
         assert 'checked_at' not in item
@@ -160,8 +159,8 @@ def test_overview_keeps_other_providers_when_deepseek_key_cannot_be_read(missing
     result = balance.get_account_balance_overview(
         31, {'deepseek_configured': True, 'dashscope_configured': True}, key,
     )
-    assert result['status'] == 'error'
-    assert [item['status'] for item in result['providers']] == ['error', 'unsupported']
+    assert result['status'] == 'unsupported'
+    assert [item['status'] for item in result['providers']] == ['unsupported']
     assert 'do-not-expose-storage-detail' not in repr(result)
 
 
@@ -185,7 +184,7 @@ def test_balances_api_only_uses_logged_in_accounts_saved_tokens(tmp_path, monkey
 
     monkeypatch.setattr(balance, 'get_balance_alert', query)
     monkeypatch.setattr(workbench, '_resolve_ai_original_text_api_key', lambda *args: pytest.fail('No shared fallback'))
-    for user_id, names in [(31, ['deepseek', 'openai']), (32, ['wan']), (33, [])]:
+    for user_id, names in [(31, ['openai']), (32, ['wan']), (33, [])]:
         client = workbench.app.test_client()
         with client.session_transaction() as flask_session:
             flask_session['workbench_user'] = {'id': user_id, 'username': 'tester', 'access_version': 0}
@@ -196,9 +195,9 @@ def test_balances_api_only_uses_logged_in_accounts_saved_tokens(tmp_path, monkey
         data = response.get_json()['data']
         assert [item['provider'] for item in data['providers']] == names
         if user_id == 31:
-            assert data['status'] == 'low'
+            assert data['status'] == 'unsupported'
         assert 'secret' not in response.get_data(as_text=True)
-    assert calls == [(31, 'account-31-secret', True)]
+    assert calls == []
 
 
 def test_balances_api_requires_login():

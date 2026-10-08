@@ -44,19 +44,19 @@ test('Mercado enforces Flash official endpoint and excludes stale paid-image fie
     document.getElementById('ai-original-image-api-key').value = 'stale-key';
     loadAiOriginalTaskStatus = async () => {};`);
   await run('processSelectedAiOriginalProducts()');
-  assert.equal(requests[0].body.model, 'deepseek-flash');
-  assert.equal(requests[0].body.base_url, 'https://api.deepseek.com');
+  assert.equal(requests[0].body.model, 'qwen3.7-flash');
+  assert.equal(requests[0].body.base_url, 'https://dashscope.aliyuncs.com/compatible-mode/v1');
   for (const field of ['image_model', 'image_base_url', 'image_api_key']) assert.equal(requests[0].body[field], '');
 });
 
 test('Mercado locks settings while other-platform values survive a platform round trip', () => {
   const {run, nodes} = setup();
   run('renderAiOriginalPlatformSettings()');
-  assert.equal(nodes.get('ai-original-model').value, 'deepseek-flash');
+  assert.equal(nodes.get('ai-original-model').value, 'qwen3.7-flash');
   assert.equal(nodes.get('ai-original-model').readOnly, true);
   assert.equal(nodes.get('ai-original-image-model').disabled, true);
   run(`document.getElementById('ai-original-platform').value = 'amazon'; renderAiOriginalPlatformSettings();`);
-  assert.equal(nodes.get('ai-original-model').value, 'deepseek-v4-pro');
+  assert.equal(nodes.get('ai-original-model').value, 'qwen3.7-flash');
   assert.equal(nodes.get('ai-original-model').readOnly, false);
   run(`document.getElementById('ai-original-model').value = 'custom-model';
     document.getElementById('ai-original-base-url').value = 'https://other.example';

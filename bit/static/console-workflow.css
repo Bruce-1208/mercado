@@ -7,7 +7,7 @@
 .zs-publish-workspace > summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
 .zs-advanced-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 10px 0; }
 .zs-advanced-grid > [hidden], .zs-streamlined-products [hidden] { display: none !important; }
-#tab-orders .order-filters.zs-simple-filters { grid-template-columns: minmax(130px, .7fr) minmax(180px, 1fr) minmax(220px, 1.6fr) auto; }
+#tab-orders .order-filters.zs-simple-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 #tab-orders .zs-advanced-grid .order-filter-field { grid-column: auto; min-width: 0; }
 #mercado-product-filters.zs-simple-filters { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
 #mercado-product-filters .market-filter-heading { display: none; }

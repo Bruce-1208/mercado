@@ -9,15 +9,67 @@ import pytest
 from test_console_ui_browser import console_browser, console_page
 
 
-def open_detail(page, order_id="100"):
-    page.evaluate("""id => {
-        orderRows = [{id, pack_id:'PACK-100', country:'墨西哥', status:'找货-没汇总',
+def open_detail(page, order_id="100", **fields):
+    page.evaluate("""({id, fields}) => {
+        orderRows = [{id, pack_id:'PACK-100', country:'墨西哥', status:'已发-在途中',
             shop_name:'测试店铺', salesperson:'测试业务员', amount:20, fee:3, freight:4,
+            actual_freight_usd:4, quoted_freight_usd:3.5, freight_pending_shipment:false,
             balance:13, income:91, cost:50, profit:41, purchase_order:'采购-100',
             ordered_at:'2026-10-04 08:00', shipping_deadline:'2026-10-05 18:00',
-            title:'Camisa', product_id:'MLM123', seller_sku:'SKU-123', quantity:2}];
+            title:'Camisa', product_id:'MLM123', seller_sku:'SKU-123', quantity:2, ...fields}];
         showOrderDetail(0);
-    }""", order_id)
+    }""", {"id": order_id, "fields": fields})
+
+
+@pytest.mark.parametrize("width", [1440, 390])
+def test_order_freight_displays_api_quote_and_actual_only_after_shipment(console_page, width):
+    page = console_page
+    page.set_viewport_size({"width": width, "height": 1000})
+    open_detail(page, status="待发", quoted_freight_usd=7.25,
+                actual_freight_usd=9.5, freight=7.25, freight_pending_shipment=True, balance=None)
+    page.evaluate("renderOrderRows(orderRows)")
+    freight_cell = page.locator("#order-table-body tr td").nth(5)
+    assert freight_cell.locator("strong").inner_text() == "标价 $7.25"
+    assert freight_cell.locator("span").all_inner_texts() == ["实际 —", "差额 —"]
+    assert "美客多 API" in freight_cell.locator("div").get_attribute("title")
+    assert "发货后同步" in freight_cell.locator("div").get_attribute("title")
+    detail = page.locator("#order-detail-dialog")
+    settlement_freight = detail.locator('.order-detail-finance-row[data-operator="−"]').nth(1).locator("strong")
+    balance = detail.get_by_text("结余", exact=True).locator("..").locator("strong")
+    balance_cell = page.locator("#order-table-body tr td").nth(6)
+    assert settlement_freight.inner_text() == "$7.25"
+    assert detail.get_by_text("标价运费", exact=True).count() == 1
+    assert balance.inner_text() == "$9.75"
+    assert balance_cell.inner_text() == "$9.75"
+    assert "发货后结算" not in detail.inner_text()
+
+    # A quote or the legacy freight alias must not fill an unavailable actual charge.
+    page.evaluate("""() => {
+        Object.assign(orderRows[0], {status:'已发-在途中', freight_pending_shipment:false,
+            actual_freight_usd:null, freight:7.25});
+        renderOrderRows(orderRows);
+        showOrderDetail(0);
+    }""")
+    assert freight_cell.locator("span").all_inner_texts() == ["实际 —", "差额 —"]
+    assert settlement_freight.inner_text() == "$7.25"
+    assert balance.inner_text() == "$9.75"
+
+    page.evaluate("""() => {
+        Object.assign(orderRows[0], {actual_freight_usd:9.5, freight:7.25, balance:7.5});
+        renderOrderRows(orderRows);
+        showOrderDetail(0);
+    }""")
+    assert freight_cell.locator("strong").inner_text() == "标价 $7.25"
+    assert freight_cell.locator("span").all_inner_texts() == ["实际 $9.50", "差额 +$2.25"]
+    assert settlement_freight.inner_text() == "$9.50"
+    assert detail.get_by_text("实际运费", exact=True).count() == 1
+    assert balance.inner_text() == "$7.50"
+    assert balance_cell.inner_text() == "$7.50"
+
+    page.evaluate("orderRows[0].quoted_freight_usd = null; renderOrderRows(orderRows)")
+    assert freight_cell.locator("strong").inner_text() == "标价 待同步"
+    assert "待计算" not in freight_cell.inner_text()
+    assert page.locator('#order-freight-variance-filter option[value="pending_quote"]').text_content() == "标价运费待同步"
 
 
 @pytest.mark.parametrize("width", [1440, 390])

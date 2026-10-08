@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re
 import time
 from datetime import datetime, timedelta, timezone
+from html import unescape
 from typing import Any, Callable, Mapping
 
 import requests
@@ -326,28 +328,24 @@ def _site_status(profile: Mapping[str, Any]) -> dict[str, Any]:
     if required_action and required_action not in status_codes:
         status_codes.append(required_action)
     lowered = raw_status.casefold()
-    if sell_allowed is False:
-        display = "暂停销售（官方 API 未提供封禁期限）"
-    elif list_allowed is False:
-        display = "限制刊登（官方 API 未提供封禁期限）"
-    elif lowered in ("active", "enabled", "ok") and (
-        sell_allowed is True and list_allowed is True
-    ):
-        # ``site_status`` is public.  A Global Selling token querying one of its
-        # marketplace child users normally receives only ``active`` even when
-        # Seller Center has restricted that marketplace.  Treat it as healthy
-        # only when the private sell/list permissions are present as well.
-        display = "正常"
-    elif lowered in ("blocked", "disabled", "inactive", "suspended"):
-        display = "账号停用（官方 API 未提供封禁期限）"
-    elif lowered in ("active", "enabled", "ok"):
-        display = "状态未确认（官方 API 仅返回公开 active）"
-    elif raw_status:
-        display = raw_status
+    if sell_allowed is False or lowered in ("blocked", "disabled", "suspended"):
+        account_status = "restricted"
+        display = "已封禁（站点销售暂停，API 未提供封禁期限）"
     elif sell_allowed is True:
-        display = "正常"
+        account_status = "normal"
+        display = "未封禁" + ("（限制刊登）" if list_allowed is False else "")
+    elif list_allowed is False:
+        account_status = "unknown"
+        display = "待确认（限制刊登，销售权限未提供）"
+    elif lowered in ("active", "enabled", "ok"):
+        account_status = "unknown"
+        display = "待确认（API 仅返回公开 active）"
+    elif raw_status:
+        account_status = "unknown"
+        display = f"待确认（API 状态：{raw_status}）"
     else:
-        display = "未知"
+        account_status = "unknown"
+        display = "待确认（API 未提供销售权限）"
     return {
         "site_status": raw_status or None,
         "site_status_display": display,
@@ -355,15 +353,8 @@ def _site_status(profile: Mapping[str, Any]) -> dict[str, Any]:
         "list_allowed": list_allowed,
         "status_codes": status_codes,
         "required_action": required_action or None,
-        "account_status": (
-            "normal"
-            if display == "正常"
-            else (
-                "unknown"
-                if display == "未知" or display.startswith("状态未确认")
-                else "restricted"
-            )
-        ),
+        "account_status": account_status,
+        "is_banned": {"restricted": True, "normal": False}.get(account_status),
         "suspension_until": "",
         "suspension_days": None,
         "suspension_remaining_days": None,
@@ -373,21 +364,11 @@ def _site_status(profile: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _merge_site_status(local_status: Mapping[str, Any], global_status: Mapping[str, Any] | None):
-    """站点与主账号任一受限即显示受限，避免子账号公开字段漏报。"""
+    """主账号状态没有站点作用范围，不能覆盖站点结论。"""
     local = dict(local_status or {})
     global_value = dict(global_status or {})
-    if global_value.get("account_status") == "restricted" and local.get("account_status") != "restricted":
-        selected = global_value
-    else:
-        selected = local
-    codes = []
-    for value in (*list(global_value.get("status_codes") or []), *list(local.get("status_codes") or [])):
-        text = str(value or "").strip()
-        if text and text not in codes:
-            codes.append(text)
-    selected["status_codes"] = codes
-    selected["global_site_status"] = global_value.get("site_status")
-    return selected
+    local["global_site_status"] = global_value.get("site_status")
+    return local
 
 
 def _sample_site_listing_status(
@@ -507,26 +488,35 @@ def _sample_site_listing_status(
 def _apply_listing_sample_status(
     row: dict[str, Any], sample: Mapping[str, Any]
 ) -> None:
-    """Apply the configured binary listing rule; retain sample diagnostics separately."""
-
+    """Combine account permissions with listing evidence without inferring a ban."""
     row.update(dict(sample))
-    sample_status = sample.get("listing_sample_status")
     row.setdefault("site_status_official_display", row.get("site_status_display"))
     row.setdefault("site_status_official_account_status", row.get("account_status"))
+    official_status = row.get("site_status_official_account_status")
+    row["site_status_source"] = "official_status_evidence"
+    # Current explicit permissions/restrictions take precedence over item state.
+    if official_status in {"restricted", "normal"}:
+        row["account_status"] = official_status
+        row["site_status_display"] = row["site_status_official_display"]
+        return
+    if row.get("list_allowed") is False:
+        # 刊登限制本身不证明整站封禁，也不能被商品抽样替换掉。
+        return
+
     row.update({"suspension_until": "", "suspension_days": None,
-                "suspension_remaining_days": None, "suspension_total_days": None})
-    if sample_status == "active":
-        row.update({
-            "account_status": "normal",
-            "site_status_display": "活跃中",
-            "site_status_source": "official_listing_api",
-        })
+                "suspension_remaining_days": None, "suspension_total_days": None,
+                "account_status": "unknown"})
+    if sample.get("listing_sample_status") == "active":
+        display = "有在售商品（账号权限待确认）"
+    elif sample.get("listing_sample_error"):
+        display = "待确认（刊登读取异常）"
+    elif sample.get("listing_sample_status") == "inactive":
+        display = ("待确认（暂无商品）"
+                   if sample.get("listing_sample_expected_count") == 0
+                   else "待确认（抽样未见在售商品）")
     else:
-        row.update({
-            "account_status": "restricted",
-            "site_status_display": "暂停状态",
-            "site_status_source": "official_listing_api",
-        })
+        display = "待确认（数据不足）"
+    row["site_status_display"] = display
 
 
 def _infraction_total(
@@ -556,6 +546,87 @@ def _infraction_total(
     if not isinstance(payload, Mapping):
         raise MercadoReputationError("美客多违规接口返回格式错误")
     return _paging_total(payload)
+
+
+def _notice_text(value: Any) -> str:
+    """把官方 reason/remedy 的 HTML 转成可显示的完整正文。"""
+    text = str(value or "")
+    text = re.sub(r"<(script|style)\b[^>]*>.*?</\1\s*>", "", text, flags=re.I | re.S)
+    text = re.sub(r"<\s*(?:br\s*/?|/p|/div|/li)\s*>", "\n", text, flags=re.I)
+    return unescape(re.sub(r"<[^>]+>", "", text)).strip()
+
+
+def _latest_site_warning(access_token, seller_id, site_id, *, http=None, timeout=30):
+    """读取站点 API 可提供的最新违规告警，不限近 100 天、不限商品类型。
+
+    官方接口按发生时间倒序；跨站点记录不进入候选。接口只提供部分
+    违规管理记录，不能将空结果解释为后台历史告警全部为空。
+    """
+    if not seller_id or site_id not in SITE_NAMES:
+        raise MercadoReputationError("缺少有效站点卖家 ID 或站点 ID")
+    offset = 0
+    for _page in range(100):
+        payload = _fetch_json(
+            access_token, f"/marketplace/moderations/infractions/{seller_id}",
+            params={"sort": "date_created_desc", "limit": 20, "offset": offset},
+            http=http, timeout=timeout, label="美客多站点最新告警接口",
+        )
+        if not isinstance(payload, Mapping) or "infractions" not in payload:
+            raise MercadoReputationError("站点告警接口缺少 infractions 字段")
+        values = payload["infractions"]
+        paging = _mapping(payload.get("paging"))
+        total = _number(paging.get("total"))
+        if total is None or total < 0 or int(total) != total:
+            raise MercadoReputationError("站点告警接口缺少有效分页总数")
+        if values is None and total == 0:
+            values = []
+        if not isinstance(values, list) or any(not isinstance(v, Mapping) for v in values):
+            raise MercadoReputationError("站点告警接口返回格式错误")
+        if payload.get("sorting_type", "date_created_desc") != "date_created_desc":
+            raise MercadoReputationError("站点告警接口未确认按发生时间倒序")
+        candidates = []
+        for notice in values:
+            notice_site = str(notice.get("site_id") or "").strip().upper()
+            if not notice_site:
+                item_id = str(notice.get("related_item_id") or notice.get("element_id") or "").upper()
+                notice_site = item_id[:3] if item_id[:3] in SITE_NAMES else ""
+            if not notice_site:
+                raise MercadoReputationError("告警记录缺少站点归属，无法确认最新告警")
+            if notice_site != site_id:
+                continue
+            if notice.get("user_id") is not None and str(notice["user_id"]) != seller_id:
+                raise MercadoReputationError("告警记录卖家与站点卖家不一致")
+            date = str(notice.get("date_created") or "").strip()
+            try:
+                occurred = datetime.fromisoformat(date.replace("Z", "+00:00"))
+                if occurred.tzinfo is None:
+                    raise ValueError("missing timezone")
+            except ValueError as exc:
+                raise MercadoReputationError("告警发生时间无效，无法确认最新一条") from exc
+            reason = _notice_text(notice.get("reason"))
+            remedy = _notice_text(notice.get("remedy"))
+            if not reason:
+                raise MercadoReputationError("站点告警缺少完整原因")
+            candidates.append((occurred, notice, date, reason, remedy))
+        if candidates:
+            _date, latest, date, reason, remedy = max(candidates, key=lambda v: v[0])
+            return {
+                "system_warning": "\n".join(v for v in (date, reason, remedy) if v),
+                "system_warning_id": str(latest.get("id") or ""),
+                "system_warning_occurred_at": date,
+                "system_warning_source": "official_site_infractions_api",
+                "system_warning_status": "success",
+            }
+        if offset + len(values) >= total:
+            return {
+                "system_warning": "暂无 API 告警（仅限接口可获取记录）",
+                "system_warning_source": "official_site_infractions_api",
+                "system_warning_status": "empty",
+            }
+        if not values:
+            raise MercadoReputationError("站点告警分页不完整")
+        offset += len(values)
+    raise MercadoReputationError("站点告警分页超出读取上限，未确认最新告警")
 
 
 def _case_rows(payload: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -636,7 +707,7 @@ def enrich_reputation_with_official_data(
     timeout: int = 30,
     include_listing_sample: bool = False,
 ) -> list[dict[str, Any]]:
-    """补齐站点状态、订单变化率及近 100 天官方违规统计；可选补充刊登抽样判定。"""
+    """补齐站点封禁、最新 API 告警、订单变化及近 100 天违规统计。"""
 
     current_time = now or datetime.now(timezone.utc)
     if current_time.tzinfo is None:
@@ -645,25 +716,6 @@ def enrich_reputation_with_official_data(
     current_start = current_time - timedelta(days=7)
     previous_start = current_time - timedelta(days=14)
     cutoff = current_time - timedelta(days=OFFICIAL_INFRACTION_DAYS)
-
-    global_status = None
-    global_status_error = ""
-    if str(global_user_id or "").strip():
-        try:
-            global_profile = _fetch_json(
-                access_token,
-                f"/users/{str(global_user_id).strip()}",
-                http=http,
-                timeout=timeout,
-                label="美客多主账号状态接口",
-            )
-            if not isinstance(global_profile, Mapping):
-                raise MercadoReputationError("美客多主账号状态接口返回格式错误")
-            global_status = _site_status(global_profile)
-        except MercadoReputationError as exc:
-            if exc.status_code == 401:
-                raise
-            global_status_error = str(exc)
 
     try:
         rights_counts = _rights_holder_counts(
@@ -683,8 +735,11 @@ def enrich_reputation_with_official_data(
         seller_id = str(row.get("user_id") or "").strip()
         site_id = str(row.get("site_id") or "").strip().upper()
         errors: list[str] = []
+        row["site_status_checked_at"] = current_time.isoformat()
 
         try:
+            if not seller_id or site_id not in SITE_NAMES:
+                raise MercadoReputationError("缺少有效站点卖家 ID 或站点 ID")
             profile = _fetch_json(
                 access_token,
                 f"/users/{seller_id}",
@@ -694,19 +749,23 @@ def enrich_reputation_with_official_data(
             )
             if not isinstance(profile, Mapping):
                 raise MercadoReputationError("美客多站点状态接口返回格式错误")
-            row.update(_merge_site_status(_site_status(profile), global_status))
+            if not seller_id:
+                raise MercadoReputationError("缺少站点卖家 ID")
+            if profile.get("id") is not None and str(profile["id"]) != seller_id:
+                raise MercadoReputationError("账号接口卖家与站点卖家不一致")
+            if profile.get("site_id") and str(profile["site_id"]).upper() != site_id:
+                raise MercadoReputationError("账号接口返回了其他站点")
+            row.update(_site_status(profile))
         except MercadoReputationError as exc:
             if exc.status_code == 401:
                 raise
-            if global_status is not None:
-                row.update(dict(global_status))
-            else:
-                row.update({
-                    "site_status": None,
-                    "site_status_display": "获取失败",
-                    "account_status": "unknown",
-                    "site_status_source": "official_users_api",
-                })
+            row.update({
+                "site_status": None,
+                "site_status_display": "待确认（站点状态 API 读取失败）",
+                "account_status": "unknown",
+                "is_banned": None,
+                "site_status_source": "official_users_api",
+            })
             errors.append(f"站点状态：{exc}")
 
         if include_listing_sample:
@@ -779,6 +838,19 @@ def enrich_reputation_with_official_data(
             row["infraction_count"] = None
             errors.append(f"侵权数量：{exc}")
 
+        row["system_warning_checked_at"] = current_time.isoformat()
+        try:
+            row.update(_latest_site_warning(
+                access_token, seller_id, site_id, http=http, timeout=timeout,
+            ))
+        except MercadoReputationError as exc:
+            if exc.status_code == 401:
+                raise
+            row.update({"system_warning": None, "system_warning_status": "failed",
+                        "system_warning_source": "official_site_infractions_api",
+                        "system_warning_error": str(exc)})
+            errors.append(f"系统告警：{exc}")
+
         row["rights_holder_count"] = (
             rights_counts.get(site_id, 0) if not rights_error else None
         )
@@ -787,8 +859,6 @@ def enrich_reputation_with_official_data(
         row["rights_holder_source"] = "official_api"
         if rights_error:
             errors.append(f"权利人数量：{rights_error}")
-        if global_status_error:
-            errors.append(f"主账号状态：{global_status_error}")
         row["official_api_errors"] = errors
     return rows
 
@@ -817,17 +887,13 @@ def fetch_store_reputation(
                 timeout=timeout,
             )
             loaded = normalize_reputation_payload(payload)
-            # 旧测试数据和历史授权可能没有 meli_user_id；这种情况下仍返回
-            # 主声誉数据，待授权资料补全后再启用官方附加指标。
-            if str(current_token.get("meli_user_id") or "").strip():
-                enrich_reputation_with_official_data(
-                    loaded["rows"],
-                    str(current_token.get("access_token") or ""),
-                    global_user_id=current_token.get("meli_user_id"),
-                    http=http,
-                    timeout=timeout,
-                    include_listing_sample=True,
-                )
+            enrich_reputation_with_official_data(
+                loaded["rows"],
+                str(current_token.get("access_token") or ""),
+                http=http,
+                timeout=timeout,
+                include_listing_sample=False,
+            )
             return loaded
 
         try:

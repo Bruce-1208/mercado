@@ -1,0 +1,1686 @@
+{
+  "product_id": 16326847,
+  "simulated_discovery_outage": true,
+  "calls": [
+    "/marketplace/domain_discovery/search",
+    "/categories/CBT24790/attributes"
+  ],
+  "category": {
+    "category_id": "CBT24790",
+    "category_name": "Costumes",
+    "category_prediction_query": "Children's Cosplay Costume",
+    "category_search_history": [
+      "Children's Cosplay Costume"
+    ],
+    "category_selection_source": "known_cbt_catalog",
+    "schema_fingerprint": "e68ec1cb44a891598ceef63231064e4212efd7073cc14d1d0e52fc991bf281f3",
+    "attributes_ready": true,
+    "attributes": [
+      {
+        "id": "BRAND",
+        "name": "Brand",
+        "value_name": "Generic"
+      },
+      {
+        "id": "CHARACTER",
+        "name": "Character",
+        "value_name": "Scream",
+        "value_id": "49601815"
+      },
+      {
+        "id": "GENDER",
+        "name": "Gender",
+        "value_name": "Babies",
+        "value_id": "371795"
+      },
+      {
+        "id": "MAIN_MATERIAL",
+        "name": "Main material",
+        "value_name": "Cotton",
+        "value_id": "466793"
+      },
+      {
+        "id": "INCLUDES_ACCESSORIES",
+        "name": "Includes accessories",
+        "value_name": "Yes",
+        "value_id": "242085"
+      },
+      {
+        "id": "ACCESSORIES_INCLUDED",
+        "name": "Accessories included",
+        "value_name": "Mask",
+        "value_id": "2307515"
+      },
+      {
+        "id": "ITEM_CONDITION",
+        "name": "Item condition",
+        "value_name": "New",
+        "value_id": "2230284"
+      }
+    ]
+  },
+  "status": "completed",
+  "result": {
+    "category_id": "CBT24790",
+    "category_name": "Costumes",
+    "category_prediction_query": "Children's Cosplay Costume",
+    "category_search_history": [
+      "Children's Cosplay Costume"
+    ],
+    "category_selection_source": "known_cbt_catalog",
+    "schema_fingerprint": "e68ec1cb44a891598ceef63231064e4212efd7073cc14d1d0e52fc991bf281f3",
+    "attributes_ready": true,
+    "attributes": [
+      {
+        "id": "BRAND",
+        "name": "Brand",
+        "value_name": "Generic"
+      },
+      {
+        "id": "CHARACTER",
+        "name": "Character",
+        "value_name": "Scream",
+        "value_id": "49601815"
+      },
+      {
+        "id": "GENDER",
+        "name": "Gender",
+        "value_name": "Babies",
+        "value_id": "371795"
+      },
+      {
+        "id": "MAIN_MATERIAL",
+        "name": "Main material",
+        "value_name": "Cotton",
+        "value_id": "466793"
+      },
+      {
+        "id": "INCLUDES_ACCESSORIES",
+        "name": "Includes accessories",
+        "value_name": "Yes",
+        "value_id": "242085"
+      },
+      {
+        "id": "ACCESSORIES_INCLUDED",
+        "name": "Accessories included",
+        "value_name": "Mask",
+        "value_id": "2307515"
+      },
+      {
+        "id": "ITEM_CONDITION",
+        "name": "Item condition",
+        "value_name": "New",
+        "value_id": "2230284"
+      }
+    ],
+    "variations": [
+      {
+        "id": "5790027126762",
+        "sku_id": "5790027126762",
+        "seller_sku": "",
+        "label": "死侍新款紧身衣 / S 110cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool new style tight suit"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "S 110cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 28,
+        "price_text": "28.00",
+        "available_quantity": 9919,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍新款紧身衣 / S 110cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126763",
+        "sku_id": "5790027126763",
+        "seller_sku": "",
+        "label": "死侍新款紧身衣 / M120cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool new style tight suit"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "M 120cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 28,
+        "price_text": "28.00",
+        "available_quantity": 9590,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍新款紧身衣 / M120cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126764",
+        "sku_id": "5790027126764",
+        "seller_sku": "",
+        "label": "死侍新款紧身衣 / L 130cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool new style tight suit"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "L 130cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 28,
+        "price_text": "28.00",
+        "available_quantity": 9981,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍新款紧身衣 / L 130cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126765",
+        "sku_id": "5790027126765",
+        "seller_sku": "",
+        "label": "死侍新款紧身衣 / XL 140cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool new style tight suit"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XL 140cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 28,
+        "price_text": "28.00",
+        "available_quantity": 9483,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍新款紧身衣 / XL 140cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126766",
+        "sku_id": "5790027126766",
+        "seller_sku": "",
+        "label": "死侍新款紧身衣 / XXL 150cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool new style tight suit"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XXL 150cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 28,
+        "price_text": "28.00",
+        "available_quantity": 9990,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍新款紧身衣 / XXL 150cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126767",
+        "sku_id": "5790027126767",
+        "seller_sku": "",
+        "label": "死侍新款紧身衣+背包+双剑 / S 110cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool new style tight suit + backpack + double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Backpack"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "S 110cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 54,
+        "price_text": "54.00",
+        "available_quantity": 9946,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍新款紧身衣+背包+双剑 / S 110cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126768",
+        "sku_id": "5790027126768",
+        "seller_sku": "",
+        "label": "死侍新款紧身衣+背包+双剑 / M120cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool new style tight suit + backpack + double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Backpack"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "M 120cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 54,
+        "price_text": "54.00",
+        "available_quantity": 9687,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍新款紧身衣+背包+双剑 / M120cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126769",
+        "sku_id": "5790027126769",
+        "seller_sku": "",
+        "label": "死侍新款紧身衣+背包+双剑 / L 130cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool new style tight suit + backpack + double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Backpack"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "L 130cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 54,
+        "price_text": "54.00",
+        "available_quantity": 9682,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍新款紧身衣+背包+双剑 / L 130cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126770",
+        "sku_id": "5790027126770",
+        "seller_sku": "",
+        "label": "死侍新款紧身衣+背包+双剑 / XL 140cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool new style tight suit + backpack + double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Backpack"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XL 140cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 54,
+        "price_text": "54.00",
+        "available_quantity": 9694,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍新款紧身衣+背包+双剑 / XL 140cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126771",
+        "sku_id": "5790027126771",
+        "seller_sku": "",
+        "label": "死侍新款紧身衣+背包+双剑 / XXL 150cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool new style tight suit + backpack + double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Backpack"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XXL 150cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 54,
+        "price_text": "54.00",
+        "available_quantity": 9713,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍新款紧身衣+背包+双剑 / XXL 150cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126772",
+        "sku_id": "5790027126772",
+        "seller_sku": "",
+        "label": "死侍紧身衣 手套款 / S 110cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool tight suit glove version"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Gloves"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "S 110cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 28,
+        "price_text": "28.00",
+        "available_quantity": 9999,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍紧身衣 手套款 / S 110cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126773",
+        "sku_id": "5790027126773",
+        "seller_sku": "",
+        "label": "死侍紧身衣 手套款 / M120cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool tight suit glove version"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Gloves"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "M 120cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 28,
+        "price_text": "28.00",
+        "available_quantity": 10000,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍紧身衣 手套款 / M120cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126774",
+        "sku_id": "5790027126774",
+        "seller_sku": "",
+        "label": "死侍紧身衣 手套款 / L 130cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool tight suit glove version"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Gloves"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "L 130cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 28,
+        "price_text": "28.00",
+        "available_quantity": 9998,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍紧身衣 手套款 / L 130cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126775",
+        "sku_id": "5790027126775",
+        "seller_sku": "",
+        "label": "死侍紧身衣 手套款 / XL 140cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool tight suit glove version"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Gloves"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XL 140cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 28,
+        "price_text": "28.00",
+        "available_quantity": 9998,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍紧身衣 手套款 / XL 140cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126776",
+        "sku_id": "5790027126776",
+        "seller_sku": "",
+        "label": "死侍紧身衣 手套款 / XXL 150cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool tight suit glove version"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Gloves"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XXL 150cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 28,
+        "price_text": "28.00",
+        "available_quantity": 9999,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍紧身衣 手套款 / XXL 150cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126777",
+        "sku_id": "5790027126777",
+        "seller_sku": "",
+        "label": "死侍紧身衣 手套款+背包+双剑 / S 110cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool tight suit glove version + backpack + double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Gloves"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "S 110cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 54,
+        "price_text": "54.00",
+        "available_quantity": 9956,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍紧身衣 手套款+背包+双剑 / S 110cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126778",
+        "sku_id": "5790027126778",
+        "seller_sku": "",
+        "label": "死侍紧身衣 手套款+背包+双剑 / M120cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool tight suit glove version + backpack + double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Gloves"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "M 120cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 54,
+        "price_text": "54.00",
+        "available_quantity": 9946,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍紧身衣 手套款+背包+双剑 / M120cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126779",
+        "sku_id": "5790027126779",
+        "seller_sku": "",
+        "label": "死侍紧身衣 手套款+背包+双剑 / L 130cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool tight suit glove version + backpack + double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Gloves"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "L 130cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 54,
+        "price_text": "54.00",
+        "available_quantity": 9944,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍紧身衣 手套款+背包+双剑 / L 130cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126780",
+        "sku_id": "5790027126780",
+        "seller_sku": "",
+        "label": "死侍紧身衣 手套款+背包+双剑 / XL 140cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool tight suit glove version + backpack + double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Gloves"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XL 140cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 54,
+        "price_text": "54.00",
+        "available_quantity": 9972,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍紧身衣 手套款+背包+双剑 / XL 140cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126781",
+        "sku_id": "5790027126781",
+        "seller_sku": "",
+        "label": "死侍紧身衣 手套款+背包+双剑 / XXL 150cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool tight suit glove version + backpack + double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Gloves"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XXL 150cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 54,
+        "price_text": "54.00",
+        "available_quantity": 9989,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍紧身衣 手套款+背包+双剑 / XXL 150cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126782",
+        "sku_id": "5790027126782",
+        "seller_sku": "",
+        "label": "死侍背包 / S 110cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool backpack"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "No",
+            "value_id": "242084"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "S 110cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 10,
+        "price_text": "10.00",
+        "available_quantity": 9967,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍背包 / S 110cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126783",
+        "sku_id": "5790027126783",
+        "seller_sku": "",
+        "label": "死侍背包 / M120cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool backpack"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "No",
+            "value_id": "242084"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "M 120cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 10,
+        "price_text": "10.00",
+        "available_quantity": 9905,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍背包 / M120cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126784",
+        "sku_id": "5790027126784",
+        "seller_sku": "",
+        "label": "死侍背包 / L 130cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool backpack"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "No",
+            "value_id": "242084"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "L 130cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 10,
+        "price_text": "10.00",
+        "available_quantity": 9941,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍背包 / L 130cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126785",
+        "sku_id": "5790027126785",
+        "seller_sku": "",
+        "label": "死侍背包 / XL 140cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool backpack"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "No",
+            "value_id": "242084"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XL 140cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 10,
+        "price_text": "10.00",
+        "available_quantity": 9998,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍背包 / XL 140cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126786",
+        "sku_id": "5790027126786",
+        "seller_sku": "",
+        "label": "死侍背包 / XXL 150cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool backpack"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "No",
+            "value_id": "242084"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XXL 150cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 10,
+        "price_text": "10.00",
+        "available_quantity": 9997,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍背包 / XXL 150cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126787",
+        "sku_id": "5790027126787",
+        "seller_sku": "",
+        "label": "死侍双剑 / S 110cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "No",
+            "value_id": "242084"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "S 110cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 15,
+        "price_text": "15.00",
+        "available_quantity": 9932,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍双剑 / S 110cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126788",
+        "sku_id": "5790027126788",
+        "seller_sku": "",
+        "label": "死侍双剑 / M120cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "No",
+            "value_id": "242084"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "M 120cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 15,
+        "price_text": "15.00",
+        "available_quantity": 9995,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍双剑 / M120cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126789",
+        "sku_id": "5790027126789",
+        "seller_sku": "",
+        "label": "死侍双剑 / L 130cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "No",
+            "value_id": "242084"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "L 130cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 15,
+        "price_text": "15.00",
+        "available_quantity": 9988,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍双剑 / L 130cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126790",
+        "sku_id": "5790027126790",
+        "seller_sku": "",
+        "label": "死侍双剑 / XL 140cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "No",
+            "value_id": "242084"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XL 140cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 15,
+        "price_text": "15.00",
+        "available_quantity": 9997,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍双剑 / XL 140cm",
+        "weight_g": 400
+      },
+      {
+        "id": "5790027126791",
+        "sku_id": "5790027126791",
+        "seller_sku": "",
+        "label": "死侍双剑 / XXL 150cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "No",
+            "value_id": "242084"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XXL 150cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 15,
+        "price_text": "15.00",
+        "available_quantity": 9995,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍双剑 / XXL 150cm",
+        "weight_g": 400
+      },
+      {
+        "id": "6116788727647",
+        "sku_id": "6116788727647",
+        "seller_sku": "",
+        "label": "死侍双剑 / XS100cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "No",
+            "value_id": "242084"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XS 100cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 10,
+        "price_text": "10.00",
+        "available_quantity": 1000,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍双剑 / XS100cm",
+        "weight_g": 400
+      },
+      {
+        "id": "6116788727648",
+        "sku_id": "6116788727648",
+        "seller_sku": "",
+        "label": "死侍背包 / XS100cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool backpack"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "No",
+            "value_id": "242084"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XS 100cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 10,
+        "price_text": "10.00",
+        "available_quantity": 950,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍背包 / XS100cm",
+        "weight_g": 400
+      },
+      {
+        "id": "6116788727649",
+        "sku_id": "6116788727649",
+        "seller_sku": "",
+        "label": "死侍新款紧身衣 / XS100cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool new style tight suit"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XS 100cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 28,
+        "price_text": "28.00",
+        "available_quantity": 9998,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍新款紧身衣 / XS100cm",
+        "weight_g": 400
+      },
+      {
+        "id": "6116788727650",
+        "sku_id": "6116788727650",
+        "seller_sku": "",
+        "label": "死侍紧身衣 手套款 / XS100cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool tight suit glove version"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Gloves"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XS 100cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 28,
+        "price_text": "28.00",
+        "available_quantity": 30,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍紧身衣 手套款 / XS100cm",
+        "weight_g": 400
+      },
+      {
+        "id": "6116788727651",
+        "sku_id": "6116788727651",
+        "seller_sku": "",
+        "label": "死侍新款紧身衣+背包+双剑 / XS100cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool new style tight suit + backpack + double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Backpack"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XS 100cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 54,
+        "price_text": "54.00",
+        "available_quantity": 997,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍新款紧身衣+背包+双剑 / XS100cm",
+        "weight_g": 400
+      },
+      {
+        "id": "6116788727652",
+        "sku_id": "6116788727652",
+        "seller_sku": "",
+        "label": "死侍紧身衣 手套款+背包+双剑 / XS100cm",
+        "attribute_combinations": [
+          {
+            "id": "CHARACTER",
+            "name": "Character",
+            "value_name": "Deadpool"
+          },
+          {
+            "id": "MODEL",
+            "name": "Model",
+            "value_name": "Deadpool tight suit glove version + backpack + double swords"
+          },
+          {
+            "id": "INCLUDES_ACCESSORIES",
+            "name": "Includes accessories",
+            "value_name": "Yes",
+            "value_id": "242085"
+          },
+          {
+            "id": "ACCESSORIES_INCLUDED",
+            "name": "Accessories included",
+            "value_name": "Gloves"
+          },
+          {
+            "id": "SIZE",
+            "name": "Size",
+            "value_name": "XS 100cm"
+          },
+          {
+            "id": "GENDER",
+            "name": "Gender",
+            "value_name": "Boys",
+            "value_id": "339667"
+          }
+        ],
+        "price": 54,
+        "price_text": "54.00",
+        "available_quantity": 0,
+        "image_url": "",
+        "raw_weight": "400g",
+        "raw_text": "死侍紧身衣 手套款+背包+双剑 / XS100cm",
+        "weight_g": 400
+      }
+    ],
+    "missing_required_attributes": []
+  }
+}

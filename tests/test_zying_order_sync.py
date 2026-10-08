@@ -99,14 +99,28 @@ def test_stopping_agent_sync_during_order_snapshot_prevents_enqueue():
     agent_sync.start_preparing(71, "agent-123456789", {}, read, Store(), required_version="v1")
     assert entered.wait(1)
     stopping = agent_sync.stop_preparing(71)
-    assert stopping["phase"] == "stopping"
+    assert stopping["phase"] == "stopped"
+    assert stopping["running"] is False
+    thread = agent_sync.preparing["71"]["thread"]
     release.set()
-    deadline = time.monotonic() + 3
-    while agent_sync.preparing_status(71)["running"] and time.monotonic() < deadline:
-        time.sleep(0.01)
+    thread.join(3)
+    assert not thread.is_alive()
     state = agent_sync.preparing_status(71)
     assert state["phase"] == "stopped"
     assert not enqueued.is_set()
+
+
+def test_stopped_preparation_does_not_hide_new_server_task():
+    sync = AgentSync()
+    manager = SyncManager()
+    sync.preparing["71"] = {"state": {"started_at": 1, "running": False, "phase": "stopped"}}
+    manager.jobs["71"] = {"started_at": 2, "running": True, "phase": "waiting_login"}
+
+    class Store:
+        def list_jobs(self, **kwargs):
+            return []
+
+    assert sync.owner_status(Store(), 71, manager) == manager.status(71)
 
 
 def test_partial_failure_and_user_isolation():
@@ -277,12 +291,12 @@ def test_start_failure_returns_json_and_edge_is_mandatory(monkeypatch):
 
 
 @pytest.fixture
-def agent_routes(monkeypatch, tmp_path, isolated_legacy_console_user):
+def agent_routes(monkeypatch, tmp_path, isolated_legacy_console_user, subscribed_workbench_account):
     from bit import bit_interface as app_module
     from bit import zying_order_sync as sync
     from bit.local_agent_hub import LocalAgentStore
     store = LocalAgentStore(tmp_path / "agents.sqlite3")
-    store.heartbeat("agent-001", name="测试电脑", capabilities=["daily_task"])
+    store.heartbeat("agent-001", name="测试电脑", capabilities=["daily_task"], owner_user_id=71)
     monkeypatch.setattr(app_module, "get_local_agent_store", lambda: store)
     monkeypatch.setattr(app_module, "current_local_agent_bundle", lambda: {"version": "test"})
     monkeypatch.setattr(app_module, "_authorized_token_ids_for_user", lambda: {7})
@@ -320,7 +334,7 @@ def test_default_agent_permission_and_filtered_payload(agent_routes):
     app_module, client, store, calls = agent_routes
     assert client.post("/api/orders/zying-sync/start", json={"execution_target": "server"}).status_code == 403
     assert client.post("/api/orders/zying-sync/start", json={}).status_code == 400
-    assert client.post("/api/orders/zying-sync/start", json={"agent_id": "offline-agent"}).status_code == 400
+    assert client.post("/api/orders/zying-sync/start", json={"agent_id": "offline-agent"}).status_code == 403
     response = client.post("/api/orders/zying-sync/start?store_id=7&store_id=99", json={"agent_id": "agent-001"})
     assert response.status_code == 202
     assert response.json["data"]["phase"] == "loading"
@@ -365,7 +379,10 @@ def test_agent_login_owner_scope_persistence_and_stop_blocks_writes(agent_routes
     assert calls[0][1]["purchase_cost"] == "18.50"
     outsider.post(path, headers=headers, json=row)
     assert len(calls) == 1
-    assert client.post("/api/orders/zying-sync/stop").json["data"]["phase"] == "stopping"
+    stopped = client.post("/api/orders/zying-sync/stop").json["data"]
+    assert stopped["phase"] == "stopped"
+    assert stopped["running"] is False
+    assert job_id in store.cancellation_job_ids("agent-001")
     assert outsider.post(path, headers=headers, json=row).json["data"]["stop"] is True
     assert len(calls) == 1
     # Forced worker shutdown may provide no result.json; keep saved progress.
@@ -376,6 +393,31 @@ def test_agent_login_owner_scope_persistence_and_stop_blocks_writes(agent_routes
     assert state["phase"] == "stopped"
     assert state["updated"] == 1
     assert state["running"] is False
+
+
+@pytest.mark.parametrize("legacy_stop", [False, True])
+def test_agent_stop_allows_new_computer_before_old_agent_acknowledges(agent_routes, legacy_stop):
+    app_module, client, store, calls = agent_routes
+    store.heartbeat("agent-002", name="另一台电脑", capabilities=["daily_task"], owner_user_id=71)
+    assert client.post("/api/orders/zying-sync/start", json={"agent_id": "agent-001"}).status_code == 202
+    job_id = wait_for_agent_job(store)["job_id"]
+    store.claim_job("agent-001")
+    if legacy_stop:
+        store.request_cancel(job_id)
+    else:
+        assert client.post("/api/orders/zying-sync/stop").json["data"]["running"] is False
+    state = client.get("/api/orders/zying-sync/status").json["data"]
+    assert state["running"] is False and state["phase"] == "stopped"
+    assert client.post("/api/orders/zying-sync/start", json={"agent_id": "agent-002"}).status_code == 202
+    headers = {"X-Internal-Token": "agent-001"}
+    # The old worker may still be alive, but it cannot write or resurrect the job.
+    late = client.post(f"/api/local-agents/zying-sync/{job_id}", headers=headers,
+                       json={"action": "row", "order_id": "2000001", "detail": detail()})
+    assert late.json["data"]["stop"] is True
+    store.append_event(job_id, "agent-001", status="running", result={"phase": "syncing"})
+    assert store.get_job(job_id)["status"] == "stopped"
+    assert job_id in store.cancellation_job_ids("agent-001")
+    assert not calls
 
 
 @pytest.mark.parametrize("during_lookup", [False, True])
@@ -675,3 +717,104 @@ def test_compact_agent_response_preserves_server_result_history(agent_routes):
     assert len(store.get_job(job['job_id'])['result']['results']) == 1
     full = client.post(path, headers=headers, json={'action': 'control'})
     assert len(full.json['data']['results']) == 1
+
+
+def test_agent_rechecks_login_without_losing_job():
+    from bit.zying_order_sync import run_agent_sync, ZyingLoginRequired
+    actions = []
+    class Reader:
+        checks = 0
+        def ensure_login(self):
+            self.checks += 1
+            if self.checks == 1:
+                raise ZyingLoginRequired('still on login page')
+        def lookup(self, row):
+            assert self.checks == 2
+            return detail()
+    reader = Reader()
+    @contextmanager
+    def browser(options):
+        yield reader
+    def request(method, path, **kwargs):
+        action = kwargs['json']['action']
+        actions.append(action)
+        return {'phase': 'waiting_login' if action == 'login_required' else 'syncing'}
+    state = run_agent_sync({'job_id': 'login-retry', 'payload': {'rows': [{'id': '2000001'}]}},
+                           threading.Event(), request, browser)
+    assert state['phase'] == 'completed'
+    assert actions == ['ready', 'login_required', 'control', 'row']
+
+
+def test_agent_recovers_control_transport_failure_but_does_not_replay_write():
+    from bit.zying_order_sync import run_agent_sync
+    from bit.bit_db_api import DatabaseAPIUnavailableError
+    actions = []
+    class Stop:
+        def is_set(self): return False
+        def wait(self, delay): return False
+    @contextmanager
+    def browser(options):
+        class Reader:
+            def lookup(self, row): return detail()
+        yield Reader()
+    def request(method, path, **kwargs):
+        action = kwargs['json']['action']
+        actions.append(action)
+        if len(actions) == 1 or action == 'row':
+            raise DatabaseAPIUnavailableError('HTTP 502')
+        return {'phase': 'syncing'}
+    with pytest.raises(DatabaseAPIUnavailableError):
+        run_agent_sync({'job_id': 'connection-retry', 'payload': {'rows': [{'id': '2000001'}]}},
+                       Stop(), request, browser)
+    assert actions == ['ready', 'ready', 'row']
+
+
+def test_agent_login_required_restores_confirmation_and_preserves_progress(agent_routes):
+    _, client, store, _ = agent_routes
+    client.post('/api/orders/zying-sync/start', json={'agent_id': 'agent-001'})
+    job = wait_for_agent_job(store)
+    store.claim_job('agent-001')
+    path = '/api/local-agents/zying-sync/' + job['job_id']
+    headers = {'X-Internal-Token': 'agent-001'}
+    client.post(path, headers=headers, json={'action': 'ready'})
+    client.post('/api/orders/zying-sync/confirm-login')
+    response = client.post(path, headers=headers, json={'action': 'login_required'})
+    assert response.json['data']['phase'] == 'waiting_login'
+    assert response.json['data']['completed'] == 0
+    assert client.post('/api/orders/zying-sync/confirm-login').status_code == 200
+    assert client.post(path, headers=headers, json={'action': 'control'}).json['data']['phase'] == 'syncing'
+
+
+def test_agent_error_displays_worker_reason_instead_of_exit_code():
+    from bit.zying_order_sync import AgentSync
+    state = AgentSync().status({'job_id': 'failed-job', 'status': 'error',
+        'message': '本机业务进程异常退出：1',
+        'result': {'worker_error': '智赢登录状态已失效', 'message': '正在查询智赢采购信息'}})
+    assert state['message'] == '智赢登录状态已失效'
+    assert not state['running']
+
+
+def test_login_confirmation_reloads_authentication_from_other_tab():
+    from playwright.sync_api import sync_playwright
+    from bit.zying_order_sync import ZyingPage, ORDER_URL, SEARCH_PLACEHOLDER
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        context.route('**/*', lambda route: route.fulfill(content_type='text/html; charset=utf-8', body=f'''
+            <input placeholder="{SEARCH_PLACEHOLDER}" hidden>
+            <script>
+              if (localStorage.getItem('logged_in')) document.querySelector('input').hidden = false;
+              else location.hash = '/login';
+            </script>'''))
+        try:
+            page = context.new_page()
+            page.goto(ORDER_URL)
+            login = context.new_page()
+            login.goto(ORDER_URL)
+            login.evaluate("localStorage.setItem('logged_in', 'yes')")
+            assert page.url.endswith('#/login')
+            ZyingPage(page).ensure_login()
+            assert page.url == ORDER_URL
+            assert page.get_by_placeholder(SEARCH_PLACEHOLDER, exact=True).is_visible()
+        finally:
+            browser.close()

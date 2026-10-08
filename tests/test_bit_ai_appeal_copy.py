@@ -87,7 +87,7 @@ def test_generate_ai_appeal_copy_rejects_reason_over_fifty_characters():
 
 
 def test_generate_ai_appeal_copy_requires_manual_token():
-    with pytest.raises(ValueError, match="手动填写 DeepSeek Token"):
+    with pytest.raises(ValueError, match="手动填写 千问 Token"):
         bit_ai_appeal_copy.generate_ai_appeal_copy("侵权", ["MLM123"], "")
 
 
@@ -106,12 +106,14 @@ def test_model_output_must_be_text(value):
 
 def test_generation_bounds_request_and_hides_provider_secrets():
     def chat(messages, **kwargs):
-        assert kwargs['thinking'] is False
-        assert kwargs['timeout'] == 60
+        assert kwargs['thinking'] is True
+        assert kwargs['thinking_budget'] == 4096
+        assert kwargs['max_tokens'] == 8192
+        assert kwargs['timeout'] == 120
         assert kwargs['max_retries'] == 0
         raise RuntimeError('Authorization: manual-secret')
 
-    with pytest.raises(RuntimeError, match='DeepSeek 话术生成失败') as error:
+    with pytest.raises(RuntimeError, match='千问 话术生成失败') as error:
         bit_ai_appeal_copy.generate_ai_appeal_copy(
             '侵权', ['MLM1'], 'manual-secret',
             product_loader=lambda ids: [{'product_id': 'MLM1', 'title': '灯'}],
@@ -156,7 +158,7 @@ def test_deepseek_wrapper_applies_request_limits(monkeypatch):
         [], api_key='manual-secret', thinking=False, timeout=60, max_retries=0,
     ) == '请人工复核。'
     assert captured['options'] == {'timeout': 60, 'max_retries': 0}
-    assert captured['request']['extra_body'] == {'thinking': {'type': 'disabled'}}
+    assert captured['request']['extra_body'] == {'enable_thinking': False}
 
 
 def test_store_contexts_use_matching_authorization(monkeypatch):

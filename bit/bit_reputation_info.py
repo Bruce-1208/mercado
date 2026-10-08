@@ -3405,172 +3405,15 @@ def get_reputation_info_all_browser(
     selected_shops=None,
     selected_sites=None,
 ):
-    """历史浏览器采集实现；仅保留兼容，不再由默认业务流程调用。"""
-    start = int(time.time())
-    print(start)
-    root_path = Path(__file__).resolve().parent
-    rows = list_config_rows(
-        include_ignored=False,
-        authorization_flag="visit_stats_enabled",
-    )
-    rows = [row for row in rows if row and row[0]]
-    rows = _deduplicate_config_rows(rows)
-    rows = filter_config_rows(
-        rows,
-        selected_shops=selected_shops,
-        selected_sites=selected_sites,
-    )
-    if (selected_shops or selected_sites) and not rows:
-        raise ValueError("所选店铺和站点没有可执行的声誉采集配置")
-
-    outcomes = _execute_reputation_rows(
-        rows,
+    """兼容旧入口，执行纯 API 声誉更新。"""
+    return get_reputation_info_all(
         max_workers=max_workers,
         stagger_min_seconds=stagger_min_seconds,
         stagger_max_seconds=stagger_max_seconds,
+        retry_failed=retry_failed,
+        selected_shops=selected_shops,
+        selected_sites=selected_sites,
     )
-
-    retry_rounds = (
-        env_int("BIT_COLLECTION_RETRY_ROUNDS", 2, 0)
-        if retry_failed
-        else 0
-    )
-    permanent_login_failures = set()
-    for retry_round in range(1, retry_rounds + 1):
-        retry_plan = _prepare_reputation_retry_rows(
-            outcomes,
-            permanent_login_failures=permanent_login_failures,
-        )
-        if not retry_plan:
-            break
-        retry_site_count = sum(len(_split_sites(row[3])) for _key, row in retry_plan)
-        print(
-            f"{get_now_time()}声誉第 {retry_round}/{retry_rounds} 轮补跑 "
-            f"{len(retry_plan)} 家、{retry_site_count} 个失败站点"
-        )
-        wait_for_batch_resume("声誉失败补跑")
-        retry_rows = [row for _original_key, row in retry_plan]
-        retry_outcomes = _execute_reputation_rows(
-            retry_rows,
-            max_workers=max_workers,
-            stagger_min_seconds=stagger_min_seconds,
-            stagger_max_seconds=stagger_max_seconds,
-            lease_wait_seconds=env_float(
-                "BIT_RETRY_WINDOW_LOCK_WAIT_SECONDS",
-                DEFAULT_RETRY_LOCK_WAIT_SECONDS,
-            ),
-        )
-        for original_key, retry_row in retry_plan:
-            retry_outcome = retry_outcomes.get(row_key(retry_row))
-            if retry_outcome is not None:
-                outcomes[original_key] = merge_site_retry_outcome(
-                    outcomes[original_key],
-                    retry_outcome,
-                )
-
-    reputation_info_sum = []
-    result = []
-    for _row, browser_reputations, browser_result in outcomes.values():
-        reputation_info_sum.extend(browser_reputations)
-        result.extend(browser_result)
-
-    reputation_info_sum_str = "\n".join(map(str, reputation_info_sum))
-    print(reputation_info_sum_str)
-
-    end = int(time.time())
-    print(get_now_time() + "总花费", end - start)
-    failure_report_path = write_unreadable_site_report("声誉采集", result)
-    if failure_report_path:
-        print(f"{get_now_time()}无法读取站点已记录：{failure_report_path}")
-
-    df = pd.DataFrame(
-        reputation_info_sum,
-        columns=[
-            "店铺名",
-            "站点",
-            "声誉颜色",
-            "总单量",
-            "投诉率",
-            "延误率",
-            "取消率",
-            "增加或减少",
-            "近七天变化率",
-            "系统告警",
-            "更新时间",
-            "一周流量趋势"
-        ],
-    )
-
-    now = datetime.now()
-    scoped_collection = bool(selected_shops or selected_sites)
-    replace_targets = [
-        (str(row[1] or "").strip(), site)
-        for row in rows
-        for site in _split_sites(row[3])
-        if str(row[1] or "").strip() and site
-    ]
-    date_str = datetime.now().strftime(
-        "%Y-%m-%d-%H%M%S" if scoped_collection else "%Y-%m-%d-%H"
-    )
-    output_dir = root_path / "美客多声誉"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    scope_suffix = "-选定范围" if scoped_collection else ""
-    output_path = output_dir / f"武汉泽顺店铺声誉信息汇总{scope_suffix}{date_str}.xlsx"
-
-    post_errors = []
-    for step_name, action in (
-        (
-            "写入声誉数据",
-            lambda: (
-                inset_reputation_info(
-                    reputation_info_sum,
-                    merge_latest=True,
-                    replace_targets=replace_targets,
-                )
-                if scoped_collection
-                else inset_reputation_info(reputation_info_sum)
-            ),
-        ),
-        ("写入声誉任务记录", lambda: insert_task_record(result)),
-        ("导出声誉汇总", lambda: df.to_excel(output_path, index=False)),
-    ):
-        try:
-            action()
-        except Exception as exc:
-            post_errors.append(f"{step_name}失败：{exc}")
-            print(f"{get_now_time()}{step_name}失败：{exc}")
-
-    email_sent = False
-    if output_path.exists():
-        email_sent = bool(
-            send_info(
-                "美客多所有店铺声誉汇总",
-                "",
-                output_path,
-                output_path.name,
-            )
-        )
-        print(get_now_time() + ("发送邮件成功" if email_sent else "发送邮件失败，汇总文件已保留"))
-
-    if post_errors:
-        raise RuntimeError("；".join(post_errors))
-    return {
-        "data": reputation_info_sum,
-        "results": result,
-        "output_path": str(output_path),
-        "failure_report_path": str(failure_report_path) if failure_report_path else "",
-        "email_sent": email_sent,
-        "selected_shops": list(selected_shops or ()),
-        "selected_sites": list(selected_sites or ()),
-        "max_workers": max_workers,
-        "failed_shops": sorted(
-            {
-                str(row[1] or "")
-                for row in result
-                if len(row) >= 4 and str(row[3] or "") != "成功"
-            }
-        ),
-    }
 
 
 def _normalize_api_site_code(value):
@@ -3613,17 +3456,8 @@ def _emit_api_collection_progress(callback, event, **payload):
 
 
 def _official_api_system_warning(api_row):
-    warnings = []
-    site_status = str(api_row.get("site_status_display") or "").strip()
-    if site_status and site_status.casefold() not in (
-        "正常", "active", "enabled", "ok"
-    ):
-        warnings.append(f"站点状态：{site_status}")
-    for value in api_row.get("official_api_errors") or ():
-        text = str(value or "").strip()
-        if text and text not in warnings:
-            warnings.append(text)
-    return "；".join(warnings) or "正常"
+    """告警只包含实际记录；账号状态和采集异常不属于告警。"""
+    return api_row.get("system_warning")
 
 
 def _api_reputation_database_row(store_name, api_row, updated_at):
@@ -3641,10 +3475,10 @@ def _api_reputation_database_row(store_name, api_row, updated_at):
         _format_api_percentage(api_row.get("cancellations_rate_percent")),
         str(api_row.get("direction") or ""),
         str(api_row.get("gradient_rate") or ""),
-        None,  # Browser sync owns system warnings; preserve the last value.
+        _official_api_system_warning(api_row),
         updated_at,
         "[]",
-        str(api_row.get("site_status_display") or "未知"),
+        str(api_row.get("site_status_display") or "待确认（API 未提供销售权限）"),
         -1 if api_row.get("infraction_count") is None else api_row.get("infraction_count"),
         -1 if api_row.get("rights_holder_count") is None else api_row.get("rights_holder_count"),
         api_row.get("orders_current_7d"),
@@ -3800,13 +3634,13 @@ def _merge_api_auxiliary_rows(api_rows, database_rows, auxiliary_rows):
             database_row[11] = api_row["visits"]
         if not has_account_risk_data:
             continue
-        if api_row.get("site_status_source") == "official_listing_api":
+        if api_row.get("site_status_source") in {"official_listing_api", "official_status_evidence"}:
             if system_warning:
                 api_row["system_warning"] = system_warning
                 if database_row is not None:
                     database_row[9] = system_warning
-            # Listing samples own account status, including an inconclusive
-            # sample. Risk cards supply warnings rather than a second verdict.
+            # Keep the API evidence verdict. Risk cards supply warnings
+            # rather than silently replacing current permission evidence.
             continue
         restriction = {
             "account_status": auxiliary.get("account_status"),
@@ -3922,7 +3756,7 @@ def get_reputation_info_all(
     export_excel=True,
     collect_browser_auxiliary=False,
 ):
-    """通过 Mercado Libre 官方 API 更新声誉并兼容原有声誉数据链路。"""
+    """通过 Mercado Libre 官方 API 更新声誉、站点最新告警和封禁状态。"""
     started_monotonic = time.monotonic()
     root_path = Path(__file__).resolve().parent
     selected_shop_keys = {
@@ -4145,92 +3979,9 @@ def get_reputation_info_all(
     auxiliary_rows = []
     auxiliary_task_rows = []
     auxiliary_config_error = ""
-    if collect_browser_auxiliary and api_rows:
-        traffic_enabled_keys = {
-            (
-                str(
-                    token.get("display_name")
-                    or token.get("nickname")
-                    or token.get("id")
-                    or ""
-                ).strip().casefold(),
-                site_code,
-            )
-            for token in tokens
-            for site_code in _token_enabled_site_codes(
-                token, "visit_stats_enabled"
-            )
-        }
-        try:
-            auxiliary_configs = _api_auxiliary_config_rows(tokens, api_rows)
-        except Exception as exc:
-            auxiliary_configs = []
-            auxiliary_config_error = f"匹配授权店铺浏览器窗口失败：{exc}"
-            _emit_api_collection_log(auxiliary_config_error, log_callback)
-
-        _emit_api_collection_log(
-            f"开始七天流量采集：{len(auxiliary_configs)} 家店铺，"
-            "仅读取已启用站点的七天流量；账号状态和声誉指标来自官方 API",
-            log_callback,
-        )
-        if auxiliary_configs:
-            auxiliary_outcomes = _execute_reputation_auxiliary_rows(
-                auxiliary_configs,
-                max_workers=requested_workers,
-                stagger_min_seconds=stagger_min_seconds,
-                stagger_max_seconds=stagger_max_seconds,
-            )
-            for _row, browser_auxiliary, browser_result in auxiliary_outcomes.values():
-                auxiliary_rows.extend(browser_auxiliary)
-                auxiliary_task_rows.extend(browser_result)
-            task_rows.extend(auxiliary_task_rows)
-
-        auxiliary_by_key = _merge_api_auxiliary_rows(
-            api_rows,
-            reputation_rows,
-            auxiliary_rows,
-        )
-        for api_row in api_rows:
-            store_name = str(api_row.get("store_name") or "").strip()
-            site_id = _normalize_api_site_code(
-                api_row.get("site_id") or api_row.get("site_name")
-            )
-            site_name = str(api_row.get("site_name") or site_id).strip()
-            key = (store_name.casefold(), site_id)
-            if key not in traffic_enabled_keys:
-                continue
-            auxiliary = auxiliary_by_key.get(key)
-            if auxiliary is None:
-                error_text = auxiliary_config_error or "未找到匹配的浏览器店铺/站点配置"
-                task_rows.append((
-                    "获取声誉辅助信息",
-                    store_name,
-                    site_name,
-                    f"失败：{error_text}"[:180],
-                    get_now_time(),
-                ))
-            else:
-                error_text = str(auxiliary.get("error") or "").strip()
-            if error_text:
-                failure = {
-                    "token_id": int(api_row.get("token_id") or 0),
-                    "store_name": store_name,
-                    "site_id": site_id,
-                    "stage": "browser_auxiliary",
-                    "error": error_text,
-                }
-                failures.append(failure)
-                _emit_api_collection_log(
-                    f"{store_name}{site_name}：声誉 API 成功，七天流量读取失败，"
-                    f"{error_text}",
-                    log_callback,
-                )
-            else:
-                _emit_api_collection_log(
-                    f"{store_name}{site_name}：七天流量趋势合并完成",
-                    log_callback,
-                )
-
+    # 参数保留以兼容旧调用方，但声誉更新始终只走 API。
+    if collect_browser_auxiliary:
+        _emit_api_collection_log("声誉更新仅使用 API，已忽略旧浏览器辅助采集开关", log_callback)
     api_rows.sort(
         key=lambda row: (
             str(row.get("store_name") or ""),
@@ -4400,7 +4151,7 @@ def get_reputation_info_all(
     }
     success_stores = max(0, len(tokens) - len(failed_store_names))
     _emit_api_collection_log(
-        f"声誉混合更新完成：完整成功 {success_stores} 家，"
+        f"声誉 API 更新完成：完整成功 {success_stores} 家，"
         f"异常 {len(failed_store_names)} 家，"
         f"共 {len(api_rows)} 个站点，耗时 {elapsed_seconds} 秒",
         log_callback,

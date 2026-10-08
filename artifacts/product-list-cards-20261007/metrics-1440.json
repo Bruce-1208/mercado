@@ -1,0 +1,102 @@
+{
+  "viewport": 1440,
+  "documentWidth": 1440,
+  "documentClientWidth": 1440,
+  "listWidth": 1126,
+  "listScrollWidth": 1126,
+  "columns": 1,
+  "cards": [
+    {
+      "x": 275,
+      "y": 761.1875,
+      "width": 1126,
+      "height": 154.03125
+    },
+    {
+      "x": 275,
+      "y": 925.21875,
+      "width": 1126,
+      "height": 154.03125
+    },
+    {
+      "x": 275,
+      "y": 1089.25,
+      "width": 1126,
+      "height": 154.03125
+    },
+    {
+      "x": 275,
+      "y": 1253.28125,
+      "width": 1126,
+      "height": 154.03125
+    },
+    {
+      "x": 275,
+      "y": 1417.3125,
+      "width": 1126,
+      "height": 154.03125
+    },
+    {
+      "x": 275,
+      "y": 1581.34375,
+      "width": 1126,
+      "height": 154.03125
+    }
+  ],
+  "cardOverflow": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "emptyState": {
+    "bodyWidth": 1126,
+    "rowWidth": 1126,
+    "scrollWidth": 1440,
+    "clientWidth": 1440,
+    "overflowing": []
+  },
+  "interactionChecks": [
+    "single_selection",
+    "selected_card_style",
+    "select_all",
+    "expand_details",
+    "review_update",
+    "edit_save",
+    "risk_detail",
+    "single_item_detection",
+    "bulk_edit_dialog",
+    "bilingual_preview_dialog",
+    "full_width_empty_state"
+  ],
+  "mutations": [
+    {
+      "kind": "review",
+      "payload": {
+        "product_item_ids": [
+          101
+        ],
+        "review_status": "approved"
+      }
+    },
+    {
+      "kind": "edit",
+      "payload": {
+        "title": "都市轻量双肩背包 · 多口袋防泼水款 · 离线编辑验证",
+        "main_image_url": "http://console.test/__qa/main-images/backpack.svg",
+        "price": 586.04,
+        "category_id": "MLM123456",
+        "weight_g": 320,
+        "package_length_cm": 24,
+        "package_width_cm": 16,
+        "package_height_cm": 32,
+        "description_text": "适合日常生活使用。无品牌标识，包装尺寸与实际重量已登记。",
+        "variations": [],
+        "variation_dimensions": []
+      }
+    }
+  ],
+  "pageErrors": []
+}

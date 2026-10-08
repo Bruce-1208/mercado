@@ -17,10 +17,10 @@ def _json_object(text: str) -> dict[str, Any]:
     value = re.sub(r"^```(?:json)?\s*|\s*```$", "", str(text or "").strip(), flags=re.I)
     start, end = value.find("{"), value.rfind("}")
     if start < 0 or end <= start:
-        raise ValueError("DeepSeek 未返回有效 JSON")
+        raise ValueError("千问 未返回有效 JSON")
     result = json.loads(value[start : end + 1])
     if not isinstance(result, dict):
-        raise ValueError("DeepSeek 返回的文案格式无效")
+        raise ValueError("千问 返回的文案格式无效")
     return result
 
 
@@ -203,7 +203,7 @@ def generate_collection_copy(
                 f"\n上次结果未通过校验：{exc}。请重新生成完整 JSON，重点确保两个标题各 50–60 个字符，"
                 "并删除所有品牌词；不要截断标题。"
             )
-    raise ValueError(str(last_error or "DeepSeek 文案未通过校验"))
+    raise ValueError(str(last_error or "千问 文案未通过校验"))
 
 
 __all__ = ["generate_collection_copy"]

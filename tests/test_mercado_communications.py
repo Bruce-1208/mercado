@@ -136,6 +136,47 @@ def test_workbench_reads_pack_without_marking_messages_as_read():
     assert kwargs["params"]["mark_as_read"] == "false"
 
 
+def test_cbt_pack_read_uses_global_endpoint_and_returns_marketplace_seller():
+    records = {7: {"id": 7, "meli_user_id": "3502155126", "site_id": "CBT", "access_token": "secret"}}
+    session = Session([Response(payload={
+        "paging": {"total": 3},
+        "messages": [{"from": {"user_id": "3502163832"}, "message_resources": [
+            {"name": "packs", "id": "2000015068017241"},
+            {"name": "sellers", "id": "3502163832"},
+        ]}],
+    })])
+
+    result = execute_store_communication(
+        7, "post-sale-messages", {"pack_id": "2000015068017241", "limit": 20, "offset": 1},
+        get_token=records.get, refresh_token=lambda _token_id: None, http=session,
+    )
+
+    assert result["seller_id"] == "3502163832"
+    assert result["paging"]["total"] == 3
+    method, url, kwargs = session.calls[0]
+    assert method == "GET"
+    assert url.endswith("/marketplace/messages/packs/2000015068017241")
+    assert kwargs["params"] == {"limit": 20, "offset": 1, "mark_as_read": "false"}
+    assert kwargs["headers"]["Authorization"] == "Bearer secret"
+
+
+def test_cbt_pack_read_preserves_permission_denial_without_refreshing():
+    records = {7: {"id": 7, "meli_user_id": "3502155126", "site_id": "CBT", "access_token": "secret"}}
+    session = Session([Response(status_code=403, payload={"message": "Forbidden for CBT model 6 sellers."})])
+    refreshed = []
+
+    with pytest.raises(MercadoCommunicationError) as error:
+        execute_store_communication(
+            7, "post-sale-messages", {"pack_id": "2000015068017241"},
+            get_token=records.get, refresh_token=refreshed.append, http=session,
+        )
+
+    assert error.value.status_code == 403
+    assert error.value.model_6_restricted
+    assert len(session.calls) == 1
+    assert not refreshed
+
+
 def test_unread_conversations_are_enriched_with_local_order_context():
     records = {
         7: {
@@ -869,14 +910,10 @@ def test_customer_service_claim_can_open_exact_store_bit_browser(monkeypatch):
         lambda window_id: released.append(window_id),
     )
 
-    response = bit_interface.app.test_client().post(
-        "/api/mercado-claims/9/open-browser",
-        json={"claim_id": "5568513900"},
-    )
+    result = bit_interface._open_mercado_claim_browser(9, "5568513900")
 
-    assert response.status_code == 200
-    assert response.get_json()["data"]["window_id"] == "window-abc"
-    assert response.get_json()["data"]["claim_id"] == "5568513900"
+    assert result["window_id"] == "window-abc"
+    assert result["claim_id"] == "5568513900"
     assert opened == [(
         "window-abc",
         {"api_lock_timeout": 5, "request_timeout": 20},
@@ -915,13 +952,9 @@ def test_customer_service_claim_browser_uses_order_shop_name_hint(monkeypatch):
     )
     monkeypatch.setattr(bit_interface, "releaseBrowserLease", lambda _window_id: None)
 
-    response = bit_interface.app.test_client().post(
-        "/api/mercado-claims/9/open-browser",
-        json={"claim_id": "5568513900", "shop_name": "订单所属店铺"},
-    )
+    result = bit_interface._open_mercado_claim_browser(9, "5568513900", "订单所属店铺")
 
-    assert response.status_code == 200
-    assert response.get_json()["data"]["window_id"] == "window-from-order"
+    assert result["window_id"] == "window-from-order"
     assert opened == ["window-from-order"]
 
 
@@ -938,13 +971,8 @@ def test_customer_service_claim_browser_requires_exact_store_binding(monkeypatch
     )
     monkeypatch.setattr(bit_interface, "list_shop_configs", lambda **_kwargs: [])
 
-    response = bit_interface.app.test_client().post(
-        "/api/mercado-claims/9/open-browser",
-        json={"claim_id": "5568513900"},
-    )
-
-    assert response.status_code == 400
-    assert "未绑定比特浏览器窗口" in response.get_json()["message"]
+    with pytest.raises(ValueError, match="未绑定比特浏览器窗口"):
+        bit_interface._open_mercado_claim_browser(9, "5568513900")
 
 
 def test_customer_service_supports_owner_group_aggregation_and_row_store_replies():

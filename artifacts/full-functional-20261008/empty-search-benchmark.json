@@ -1,0 +1,18 @@
+[
+  {
+    "search_kind": "plain",
+    "visit": 1,
+    "error_type": "OperationalError",
+    "error_code": 3024,
+    "elapsed_ms": 8210.64,
+    "statements": 1
+  },
+  {
+    "search_kind": "underscores",
+    "visit": 1,
+    "error_type": "OperationalError",
+    "error_code": 3024,
+    "elapsed_ms": 8156.01,
+    "statements": 1
+  }
+]

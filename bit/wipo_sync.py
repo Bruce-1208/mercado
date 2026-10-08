@@ -1,4 +1,4 @@
-"""Pull authorized trademark feeds into the knowledge review queue.
+"""Pull authorized trademark feeds into the persistent brand blacklist.
 
 Uses the official Madrid daily update files by default; the complete Global
 Brand Database requires a separate authorized JSON/CSV feed.
@@ -30,6 +30,9 @@ LOCAL = timezone(timedelta(hours=8))
 MAX_BYTES = 50 * 1024 * 1024
 MAX_ROWS = 250_000
 MAX_PAGES = 1000
+IMPORT_BATCH_ROWS = 500
+BLACKLIST_POLICY_VERSION = 1
+WRITE_COUNTS = ("inserted", "updated", "unchanged", "restored", "skipped_manual", "skipped_deleted")
 SOURCE = "WIPO Global Brand Database"
 DISCLAIMER = ("The World Intellectual Property Organization (WIPO) bears no responsibility "
               "for the integrity or accuracy of the data contained herein, in particular due, "
@@ -39,7 +42,7 @@ DEFAULT_SETTINGS = {"enabled": True, "source_mode": "madrid", "madrid_from_date"
                     "feed_url": "", "format": "auto", "interval_hours": 24, "token_encrypted": ""}
 DEFAULT_STATE = {"running": False, "status": "idle", "message": "等待 WIPO 马德里商标每日增量同步",
                  "started_at": "", "finished_at": "", "last_success_at": "", "next_run_at": "",
-                 "summary": {}, "logs": [], "madrid_through_date": ""}
+                 "summary": {}, "logs": [], "madrid_through_date": "", "blacklist_policy_version": 0}
 
 
 def now_text():
@@ -101,8 +104,8 @@ def normalize_feed_rows(rows):
                     merged[field] = values
             continue
         details[key] = detail
-        unique[key] = {"brand_name": brand, "list_type": "pending", "source_type": "wipo",
-                       "notes": "WIPO 商标数据同步，仅作为待复核线索，需人工确认处置。",
+        unique[key] = {"brand_name": brand, "list_type": "blacklist", "source_type": "wipo",
+                       "notes": "WIPO 商标数据自动导入品牌风险黑名单。",
                        "evidence_count": 1}
     if not unique:
         raise ValueError("数据源没有可用的文字商标；请核对品牌字段和文件格式")
@@ -238,6 +241,11 @@ class WipoSyncService:
     def __init__(self, secret_key, *, path=None, writer=None, fetcher=fetch_feed):
         self.path = Path(path or os.environ.get("BIT_WIPO_SYNC_PATH") or
                          Path(__file__).resolve().parents[1] / ".data" / "wipo-sync.sqlite3")
+        from bit.knowledge_organization import organization, LEGACY_ORGANIZATION
+        self.organization_key = organization()
+        if self.organization_key != LEGACY_ORGANIZATION:
+            suffix = "org-" + self.organization_key
+            self.path = self.path.with_name(self.path.stem + "." + suffix + self.path.suffix)
         self.secret_key, self.writer, self.fetcher = secret_key, writer, fetcher
         self.guard = threading.RLock()
         self.thread = self.scheduler = None
@@ -253,6 +261,7 @@ class WipoSyncService:
             os.chmod(self.path, 0o600)
             db.execute("CREATE TABLE IF NOT EXISTS wipo_values (key TEXT PRIMARY KEY, data TEXT NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS wipo_history (id INTEGER PRIMARY KEY, data TEXT NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS wipo_pending_rows (position INTEGER PRIMARY KEY, data TEXT NOT NULL)")
             yield db
             db.commit()
         except BaseException:
@@ -274,6 +283,75 @@ class WipoSyncService:
     def _write(self, db, key, value):
         db.execute("INSERT INTO wipo_values(key,data) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET data=excluded.data",
                    (key, json.dumps(value, ensure_ascii=False)))
+
+    @staticmethod
+    def _source_fingerprint(settings):
+        source = {key: settings.get(key) for key in
+                  ("source_mode", "feed_url", "format", "token_encrypted")}
+        source["madrid_from_date"] = settings.get("configured_madrid_from_date", settings.get("madrid_from_date"))
+        return hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
+
+    def _clear_batch(self, db):
+        db.execute("DELETE FROM wipo_pending_rows")
+        db.execute("DELETE FROM wipo_values WHERE key='batch'")
+
+    def _stage_batch(self, rows, summary, settings):
+        """Commit downloaded rows before importing; a restart reuses this snapshot."""
+        batch = {"fingerprint": self._source_fingerprint(settings), "total": len(rows), "processed": 0,
+                 "summary": {**summary, **{key: 0 for key in WRITE_COUNTS}, "processed": 0, "total": len(rows)}}
+        with self.database() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._clear_batch(db)
+            db.executemany("INSERT INTO wipo_pending_rows(position,data) VALUES (?,?)",
+                           ((position, json.dumps(row, ensure_ascii=False)) for position, row in enumerate(rows)))
+            self._write(db, "batch", batch)
+        return batch
+
+    def _import_batch(self, batch, writer):
+        from bit.knowledge_organization import scope
+        while batch["processed"] < batch["total"]:
+            with self.database() as db:
+                rows = [json.loads(row[0]) for row in db.execute(
+                    "SELECT data FROM wipo_pending_rows WHERE position>=? ORDER BY position LIMIT ?",
+                    (batch["processed"], IMPORT_BATCH_ROWS))]
+            if not rows:
+                raise ValueError("WIPO 导入批次不完整，请重新保存数据源配置后重试")
+            with scope(self.organization_key):
+                result = writer(rows)
+            # The writer is idempotent. If the process exits between its commit
+            # and this checkpoint, only this chunk is replayed.
+            for key in WRITE_COUNTS:
+                batch["summary"][key] += int(result.get(key) or 0)
+            batch["processed"] += len(rows)
+            batch["summary"]["processed"] = batch["processed"]
+            with self.database() as db:
+                db.execute("BEGIN IMMEDIATE")
+                self._write(db, "batch", batch)
+                state = self._read(db, "state", DEFAULT_STATE)
+                state["summary"] = batch["summary"]
+                state["message"] = f"正在导入 WIPO 黑名单：{batch['processed']} / {batch['total']} 个品牌"
+                self._write(db, "state", state)
+        return batch["summary"]
+
+    def _migrate_blacklist(self):
+        # Injected writers own their test/custom storage; production migrates
+        # all existing WIPO rows once per enterprise before fetching more data.
+        if self.writer is not None:
+            return 0
+        with self.database() as db:
+            state = self._read(db, "state", DEFAULT_STATE)
+            if state["blacklist_policy_version"] >= BLACKLIST_POLICY_VERSION:
+                return 0
+        from bit.bit_mysql import migrate_wipo_blacklist
+        from bit.knowledge_organization import scope
+        with scope(self.organization_key):
+            count = migrate_wipo_blacklist()
+        with self.database() as db:
+            db.execute("BEGIN IMMEDIATE")
+            state = self._read(db, "state", DEFAULT_STATE)
+            state["blacklist_policy_version"] = BLACKLIST_POLICY_VERSION
+            self._write(db, "state", state)
+        return count
 
     def _cipher(self):
         from cryptography.fernet import Fernet
@@ -337,6 +415,7 @@ class WipoSyncService:
 
     def status(self):
         with self.guard, self.database() as db:
+            db.execute("BEGIN IMMEDIATE")
             state = self._read(db, "state", DEFAULT_STATE)
             if state["running"]:
                 lock = InterProcessLock(self.lock_key, owner="wipo-recovery")
@@ -344,11 +423,11 @@ class WipoSyncService:
                     try:
                         settings = self._read(db, "settings", DEFAULT_SETTINGS)
                         state.update(running=False, status="interrupted", finished_at=now_text(),
-                                     message="上次同步被中断，可以重新同步",
-                                     next_run_at=((datetime.now(LOCAL) + timedelta(hours=1)).isoformat(timespec="seconds")
-                                                  if settings["enabled"] else ""))
+                                     message="上次同步被中断，已保留导入进度，自动同步将立即续跑",
+                                     next_run_at=(now_text() if settings["enabled"] else ""))
                         self._write(db, "state", state)
                         db.execute("INSERT INTO wipo_history(data) VALUES (?)", (json.dumps(state, ensure_ascii=False),))
+                        db.execute("DELETE FROM wipo_history WHERE id NOT IN (SELECT id FROM wipo_history ORDER BY id DESC LIMIT 50)")
                     finally:
                         lock.release()
             state["history"] = [json.loads(row[0]) for row in db.execute(
@@ -376,9 +455,10 @@ class WipoSyncService:
                 return {**self.status(), "started": False, "running": True, "message": "WIPO 同步正在执行"}
             try:
                 with self.database() as db:
+                    db.execute("BEGIN IMMEDIATE")
                     state = self._read(db, "state", DEFAULT_STATE)
                     state.update(running=True, status="running", started_at=now_text(), finished_at="",
-                                 message="正在拉取 WIPO 商标数据", summary={}, logs=[])
+                                 message="正在自动导入 WIPO 品牌黑名单", summary={}, logs=[])
                     self._write(db, "state", state)
                     private_settings = self._read(db, "settings", DEFAULT_SETTINGS)
                     private_settings["configured_madrid_from_date"] = private_settings["madrid_from_date"]
@@ -407,38 +487,68 @@ class WipoSyncService:
             lock.transfer_to_current_thread()
             if ready is not None:
                 ready.set()
-            self._log("正在读取数据源，新增商标线索进入待复核，不覆盖人工处置")
-            token = ""
-            if settings["source_mode"] == "feed" and settings["token_encrypted"]:
-                try:
-                    token = self._cipher().decrypt(settings["token_encrypted"].encode()).decode()
-                except Exception as exc:
-                    raise ValueError("数据源 Token 无法解密，请重新保存 Token") from exc
-            fetcher = self.fetcher
-            if settings["source_mode"] == "madrid" and fetcher is fetch_feed:
-                from bit.wipo_madrid import fetch_madrid_updates
-                fetcher = fetch_madrid_updates
-            rows, summary = fetcher(settings, token)
-            self._log(f"已拉取 {summary['fetched']} 条记录，去重后 {summary['unique']} 个品牌；正在写入待复核线索")
+            migrated = self._migrate_blacklist()
+            self._log(f"历史 WIPO 品牌补入黑名单 {migrated} 个；开始自动导入，保留人工处置")
             writer = self.writer
             if writer is None:
                 from bit.bit_mysql import upsert_wipo_infringement_knowledge
                 writer = upsert_wipo_infringement_knowledge
-            if rows:
-                summary.update(writer(rows))
+            with self.database() as db:
+                batch = self._read(db, "batch", {})
+                if batch and batch["fingerprint"] != self._source_fingerprint(settings):
+                    self._clear_batch(db)
+                    batch = {}
+            if batch:
+                self._log(f"从已保存进度继续导入：{batch['processed']} / {batch['total']} 个品牌")
             else:
-                summary.update(inserted=0, updated=0, unchanged=0, restored=0,
-                               skipped_manual=0, skipped_deleted=0)
+                token = ""
+                if settings["source_mode"] == "feed" and settings["token_encrypted"]:
+                    try:
+                        token = self._cipher().decrypt(settings["token_encrypted"].encode()).decode()
+                    except Exception as exc:
+                        raise ValueError("数据源 Token 无法解密，请重新保存 Token") from exc
+                fetcher = self.fetcher
+                if settings["source_mode"] == "madrid" and fetcher is fetch_feed:
+                    from bit.wipo_madrid import fetch_madrid_updates
+                    fetcher = fetch_madrid_updates
+                    reported_at = 0
+                    def download_progress(cached, expected):
+                        nonlocal reported_at
+                        moment = time.monotonic()
+                        if moment - reported_at < 15 and cached != expected:
+                            return
+                        reported_at = moment
+                        with self.database() as db:
+                            db.execute("BEGIN IMMEDIATE")
+                            state = self._read(db, "state", DEFAULT_STATE)
+                            state["summary"] = {"cached_download_bytes": cached, "archive_bytes": expected}
+                            total = f" / {expected / 1048576:.1f} MB" if expected else " MB"
+                            state["message"] = f"正在下载 WIPO 日期包：已保存 {cached / 1048576:.1f}{total}，重启后继续下载"
+                            self._write(db, "state", state)
+                    # Commit each official date package independently so a
+                    # large backlog or restart cannot discard completed days.
+                    settings = {**settings, "madrid_batch_packages": 1,
+                                "madrid_cache_dir": str(self.path.parent / (self.path.stem + ".downloads")),
+                                "madrid_download_progress": download_progress}
+                rows, summary = fetcher(settings, token)
+                summary["historical_blacklisted"] = migrated
+                batch = self._stage_batch(rows, summary, settings)
+                self._log(f"已保存 {summary['unique']} 个品牌的导入批次；正在写入黑名单")
+            summary = batch["summary"]
+            summary = self._import_batch(batch, writer)
             outcome = "success"
-            message = (f"同步完成：新增 {summary.get('inserted', 0)}，更新 {summary.get('updated', 0)}，"
+            message = (f"黑名单同步完成：新增 {summary.get('inserted', 0)}，更新 {summary.get('updated', 0)}，"
                        f"保留人工处置 {summary.get('skipped_manual', 0)}，"
                        f"跳过已删除 {summary.get('skipped_deleted', 0)}，"
-                       f"未变化 {summary.get('unchanged', 0)}；新增线索需人工复核")
+                       f"未变化 {summary.get('unchanged', 0)}")
             if summary.get("remaining_packages"):
                 message += f"；尚有 {summary['remaining_packages']} 个日期包，自动同步将在下一轮继续"
         except ValueError as exc:
             # Only controlled parser/validation messages are exposed.
             message = str(exc)
+            if getattr(exc, "summary", {}).get("resume_pending"):
+                summary = exc.summary
+                outcome = "continuing"
         except Exception:
             logging.error("WIPO 数据同步失败，请检查数据源或数据库连接")
             message = "WIPO 同步失败，请检查数据源或数据库连接后重试"
@@ -455,10 +565,14 @@ class WipoSyncService:
                     if outcome == "success":
                         state["last_success_at"] = state["finished_at"]
                         if (settings["source_mode"] == "madrid"
-                                and current["madrid_from_date"] == settings.get("configured_madrid_from_date", settings["madrid_from_date"])):
+                                and self._source_fingerprint(current) == self._source_fingerprint(settings)):
                             state["madrid_through_date"] = summary.get("madrid_through_date") or state["madrid_through_date"]
+                        self._clear_batch(db)
                     delay = current["interval_hours"] if outcome == "success" else 1
-                    wait = timedelta(minutes=1) if outcome == "success" and summary.get("remaining_packages") else timedelta(hours=delay)
+                    continuing = outcome == "continuing" or (outcome == "success" and summary.get("remaining_packages"))
+                    wait = timedelta(minutes=1) if continuing else timedelta(hours=delay)
+                    if self._source_fingerprint(current) != self._source_fingerprint(settings):
+                        wait = timedelta()
                     state["next_run_at"] = ((datetime.now(LOCAL) + wait).isoformat(timespec="seconds")
                                             if current["enabled"] else "")
                     self._write(db, "state", state)
@@ -472,7 +586,9 @@ class WipoSyncService:
         if not settings["enabled"] or state["running"]:
             return False
         due = state["next_run_at"]
-        if due and datetime.fromisoformat(due) > datetime.now(LOCAL):
+        needs_migration = (self.writer is None and state["blacklist_policy_version"] < BLACKLIST_POLICY_VERSION
+                           and state["status"] in {"idle", "success"})
+        if not needs_migration and due and datetime.fromisoformat(due) > datetime.now(LOCAL):
             return False
         return self.start_sync().get("started", False)
 
@@ -495,11 +611,37 @@ class WipoSyncService:
 
 _service = None
 _service_guard = threading.Lock()
+_services = {}
 
 
 def get_service(secret_key):
+    from bit.knowledge_organization import organization, LEGACY_ORGANIZATION
     global _service
+    key = organization()
     with _service_guard:
-        if _service is None:
-            _service = WipoSyncService(secret_key)
-        return _service
+        if key == LEGACY_ORGANIZATION:
+            if _service is None:
+                _service = WipoSyncService(secret_key)
+            return _service
+        if key not in _services:
+            _services[key] = WipoSyncService(secret_key)
+        service = _services[key]
+    service.start_scheduler()
+    return service
+
+
+def start_schedulers(secret_key):
+    """Discover persisted enterprise settings; retain the legacy default path."""
+    from bit.knowledge_organization import scope, LEGACY_ORGANIZATION
+    with scope(LEGACY_ORGANIZATION):
+        legacy = get_service(secret_key)
+        scheduler = legacy.start_scheduler()
+    prefix = legacy.path.stem + ".org-"
+    for path in legacy.path.parent.glob(prefix + "*" + legacy.path.suffix):
+        key = path.name[len(prefix):-len(legacy.path.suffix)]
+        try:
+            with scope(key):
+                get_service(secret_key)
+        except ValueError:
+            logging.error("跳过企业标识无效的 WIPO 配置文件")
+    return scheduler

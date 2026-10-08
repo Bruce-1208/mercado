@@ -217,3 +217,58 @@ test('task termination sends stop and unlocks actions only after stopped status'
     assert.equal(get('wdr-zying-execute').disabled, false);
     assert.equal(get('wdr-state').textContent, '任务已终结');
 });
+
+test('history closes interrupted stages only from a terminal result in the same execution', async () => {
+    const elements = new Map();
+    function element() {
+        return {style: {}, value: '', files: [], children: [], disabled: false, listeners: {}, classList: {contains: () => true, add() {}},
+            addEventListener(name, callback) { this.listeners[name] = callback; },
+            replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); },
+            querySelector(name) { return this[name] ||= element(); }, showModal() { this.open = true; }};
+    }
+    const get = id => { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); };
+    const progress = (execution_id, message, extra = {}) => ({
+        execution_id, time: '2026-10-07T10:00:00', stage: '美客多链接', status: '进行中',
+        marketplace_item_id: 'MLM111', message, ...extra,
+    });
+    const terminal = (execution_id, stage, status, extra = {}) => ({
+        execution_id, time: '2026-10-07T10:01:00', stage, status,
+        product_id: 'local-product', marketplace_item_id: 'MLM222', message: 'terminal', ...extra,
+    });
+    const logs = [
+        progress('failure', 'phase failed'), terminal('failure', '任务', '失败'),
+        progress('recovered', 'phase recovered'), terminal('recovered', '任务恢复', '已中断'),
+        progress('stopped', 'phase stopped'), terminal('stopped', '任务', '已终结'),
+        progress('agent', 'phase agent', {stage: '智赢 Agent', status: '执行中', marketplace_item_id: 'MLM222'}),
+        terminal('agent', '智赢 Agent', '已终结'),
+        progress('active', 'phase active', {status: '执行中'}), terminal('another-batch', '任务', '失败'),
+        progress('', 'phase legacy'), terminal('', '任务', '失败'),
+        terminal('earlier', '任务恢复', '已中断', {time: '2026-10-07T09:59:00'}), progress('earlier', 'phase newer'),
+        progress('other-target', 'phase other target'), terminal('other-target', '美客多链接', '失败'),
+        progress('unrelated-stage', 'phase unrelated stage'), terminal('unrelated-stage', '净收益', '失败'),
+    ];
+    const row = {order_number: '123', can_execute_zeshun: true, execution_logs: logs,
+        zeshun_execution_status: '失败', execution_status: '已中断'};
+    let initialize;
+    const context = {URL, URLSearchParams, Set, Map, console, MutationObserver: class {observe() {}},
+        document: {hidden: false, getElementById: get, createElement: element,
+            addEventListener(name, callback) { if (name === 'DOMContentLoaded') initialize = callback; }},
+        window: {location: {href: 'http://localhost/'}, setTimeout() {}},
+        fetch: async url => ({ok: true, headers: {get: () => 'application/json'}, json: async () => ({data:
+            url.includes('/saved?') ? {task_id: 'task', status: 'ready', record_total: 1, records: [row]} : {agents: []}})}),
+    };
+    vm.runInNewContext(fs.readFileSync('bit/static/weight-dimensions-records.js', 'utf8'), context);
+    initialize(); await new Promise(setImmediate);
+    get('wdr-table').tbody.children[0].children[5].children[0].listeners.click();
+    const statuses = new Map(get('wdr-history-body').children.map(tr => [tr.children[9].textContent, tr.children[7].textContent]));
+    for (const message of ['phase failed', 'phase recovered', 'phase stopped', 'phase agent']) {
+        assert.equal(statuses.get(message), '阶段已结束', message);
+    }
+    assert.equal(statuses.get('phase active'), '执行中');
+    assert.equal(statuses.get('phase legacy'), '进行中', 'legacy history must not infer a result from current row status');
+    assert.equal(statuses.get('phase newer'), '执行中', 'an earlier terminal event cannot close a newer stage');
+    assert.equal(statuses.get('phase other target'), '执行中', 'another listing result cannot close a same-stage listing');
+    assert.equal(statuses.get('phase unrelated stage'), '执行中');
+    get('wdr-history-status').value = '阶段已结束'; get('wdr-history-status').listeners.change();
+    assert.equal(get('wdr-history-body').children.length, 4);
+});

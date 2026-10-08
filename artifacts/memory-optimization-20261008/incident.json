@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-08",
+  "timezone": "Asia/Shanghai",
+  "service": "worker",
+  "port": 5001,
+  "before": {
+    "pid": 43516,
+    "physical_footprint_gib": 24.1,
+    "query_rows_sent": 1688531
+  },
+  "after": {
+    "pid": 59991,
+    "physical_footprint_mib": 173.2,
+    "web_http_status": 200
+  },
+  "restart": "SIGTERM; old process exited before any SIGKILL was sent",
+  "validation": "87 related tests passed; 7 broader failures reproduced with pre-change functions",
+  "limitation": "20,000-row real-data sample, not full-table mixed-load validation"
+}

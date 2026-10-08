@@ -67,7 +67,7 @@ def extract_brand_names(
     chat_client=None,
     log_callback=None,
 ):
-    """使用 DeepSeek 按批提取标题中明确出现的品牌、商标或受保护 IP。"""
+    """使用 千问 按批提取标题中明确出现的品牌、商标或受保护 IP。"""
     if chat_client is None:
         from AI_Agent.deepseek import chat_deepseek
 

@@ -39,6 +39,7 @@ def test_manifest_is_chrome_edge_manifest_v3_and_declares_supported_sites():
     assert "cookies" in manifest["permissions"]
     assert "scripting" in manifest["permissions"]
     assert "webNavigation" in manifest["permissions"]
+    assert "debugger" in manifest["permissions"]
     assert "http://127.0.0.1/*" in manifest["host_permissions"]
     image_script = next(item for item in manifest["content_scripts"] if item.get("js") == ["content-1688.js"])
     assert image_script["all_frames"] is True
@@ -62,6 +63,10 @@ def test_all_extension_javascript_has_valid_syntax():
     for filename in (
         "collector-core.js",
         "product-batch.js",
+        "appeal-page.js",
+        "appeal-mail.js",
+        "appeal-runner.js",
+        "appeal-popup.js",
         "launcher.js",
         "content.js",
         "background.js",
@@ -71,6 +76,7 @@ def test_all_extension_javascript_has_valid_syntax():
         "content-zying.js",
         "zying-page.js",
         "1688-page.js",
+        "1688-verification.js",
         "purchase-tracking-content.js",
     ):
         subprocess.run(
@@ -133,7 +139,7 @@ def test_1688_search_results_expose_per_card_collection_buttons():
     assert 'button.textContent = "采集"' in content
     assert 'source_platform: "1688"' in content
     assert 'scrape_status: "partial"' in content
-    assert 'chrome.runtime.sendMessage({type: "SUBMIT_PRODUCT", product})' in content
+    assert 'sendRuntimeMessage({type: "SUBMIT_PRODUCT", product})' in content
 
 
 def test_console_downloads_complete_zeshun_extension_package(tmp_path):
@@ -160,6 +166,7 @@ def test_console_downloads_complete_zeshun_extension_package(tmp_path):
         assert "content-zying.js" in names
         assert "zying-page.js" in names
         assert "1688-page.js" in names
+        assert "1688-verification.js" in names
         assert "README.md" in names
         assert names == set(workbench.BROWSER_EXTENSION_PACKAGE_FILES)
         archive.extractall(tmp_path)
@@ -391,11 +398,13 @@ def test_integrated_ai_weight_price_is_read_only_from_other_terminals(monkeypatc
     assert write.get_json()["daily_limit"] == 13
 
 
-def test_list_card_collection_only_opens_china_or_managed_products():
+def test_list_card_collection_automatically_collects_eligible_products():
     content = (EXTENSION / "content.js").read_text(encoding="utf-8")
     background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
-    assert 'window.open(button.dataset.collectionUrl, "_blank", "noopener")' in content
+    assert 'type: "COLLECT_MERCADO_URL", url: button.dataset.collectionUrl' in content
+    assert 'window.open(button.dataset.collectionUrl' not in content
+    assert 'case "COLLECT_MERCADO_URL": return collectMercadoUrl(message.url)' in background
     assert "extractCardProduct(candidate.card, candidate.url)" not in content
     assert "仅采集自发货和半托管" in content
     core = (EXTENSION / "collector-core.js").read_text(encoding="utf-8")

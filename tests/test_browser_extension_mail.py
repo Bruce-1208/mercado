@@ -1,4 +1,7 @@
+import hashlib
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -91,7 +94,9 @@ def test_mail_settings_reject_invalid_values(tmp_path, field, value):
         mail.save_settings(9, payload, "secret", tmp_path / "mail.json")
 
 
-def test_browser_extension_notification_routes(monkeypatch):
+def test_browser_extension_notification_routes(
+    monkeypatch, isolated_legacy_console_user, subscribed_workbench_account,
+):
     from bit import bit_interface as workbench
 
     workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
@@ -137,3 +142,95 @@ def test_incident_receipt_survives_process_cache_reset(tmp_path):
 def test_awp_requires_enabled_email(tmp_path):
     with pytest.raises(ValueError, match='必须启用邮件'):
         mail.require_alert_email(7, 'secret', tmp_path / 'missing.json')
+
+
+@pytest.fixture
+def incident_mail(tmp_path, monkeypatch):
+    from bit import bit_runtime_lock
+
+    monkeypatch.setattr(bit_runtime_lock, 'RUNTIME_LOCK_DIR', tmp_path / 'locks')
+    monkeypatch.setattr(mail, '_recent', {})
+    path = tmp_path / 'mail.json'
+    mail.save_settings(7, {
+        'enabled': True, 'sender_email': 'notice@qq.com', 'receiver_email': 'ops@example.com',
+        'smtp_host': 'smtp.qq.com', 'smtp_port': 465, 'smtp_security': 'ssl', 'smtp_password': 'code',
+    }, 'secret', path)
+    event = {'event_type': 'task_blocked', 'source': 'AI核重核价', 'message': '验证码',
+             'incident_id': 'concurrent-pause'}
+    digest = hashlib.sha256(f'{path.resolve()}|7|{event["incident_id"]}'.encode()).hexdigest()
+    receipt = path.parent / 'mail-receipts' / (digest + '.json')
+    FakeSMTP.messages.clear()
+    return path, event, digest, receipt
+
+
+def test_sent_incident_is_confirmed_even_while_its_lock_is_held(incident_mail):
+    from bit.bit_runtime_lock import InterProcessLock
+
+    path, event, digest, _receipt = incident_mail
+    assert mail.send_alert(7, event, 'secret', path, smtp_ssl=FakeSMTP)['sent']
+    held = InterProcessLock('awp_mail_' + digest)
+    assert held.acquire()
+    try:
+        result = mail.send_alert(7, event, 'secret', path, smtp_ssl=FakeSMTP)
+        assert result == {'sent': False, 'deduplicated': True}
+        assert len(FakeSMTP.messages) == 1
+    finally:
+        held.release()
+
+
+def test_receipt_written_during_lock_contention_is_confirmed(incident_mail, monkeypatch):
+    from bit import bit_runtime_lock
+
+    path, event, _digest, receipt = incident_mail
+
+    def complete_other_sender(_lock):
+        receipt.parent.mkdir(parents=True)
+        receipt.write_text(json.dumps({'sent_at': 100}), encoding='utf-8')
+        return False
+
+    monkeypatch.setattr(bit_runtime_lock.InterProcessLock, 'acquire', complete_other_sender)
+    assert mail.send_alert(7, event, 'secret', path, smtp_ssl=FakeSMTP) == {
+        'sent': False, 'deduplicated': True,
+    }
+    assert not FakeSMTP.messages
+
+
+def test_concurrent_incident_sends_one_email_and_confirms_on_retry(incident_mail):
+    path, event, _digest, receipt = incident_mail
+    sending = threading.Event()
+    finish = threading.Event()
+
+    class BlockingSMTP(FakeSMTP):
+        def send_message(self, message):
+            sending.set()
+            assert finish.wait(5), 'test did not release SMTP sender'
+            super().send_message(message)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        first = pool.submit(mail.send_alert, 7, event, 'secret', path, smtp_ssl=BlockingSMTP)
+        try:
+            assert sending.wait(5)
+            assert mail.send_alert(7, event, 'secret', path, smtp_ssl=FakeSMTP) == {
+                'sent': False, 'pending': True,
+            }
+            assert not receipt.exists()
+        finally:
+            finish.set()
+        assert first.result(timeout=5)['sent']
+
+    assert mail.send_alert(7, event, 'secret', path, smtp_ssl=FakeSMTP)['deduplicated']
+    assert len(FakeSMTP.messages) == 1
+
+
+def test_incident_smtp_failure_releases_lock_and_allows_retry(incident_mail):
+    path, event, _digest, receipt = incident_mail
+
+    class FailedSMTP(FakeSMTP):
+        def send_message(self, _message):
+            raise TimeoutError('SMTP temporarily unavailable')
+
+    with pytest.raises(TimeoutError, match='SMTP temporarily unavailable'):
+        mail.send_alert(7, event, 'secret', path, smtp_ssl=FailedSMTP)
+    assert not receipt.exists()
+    assert mail.send_alert(7, event, 'secret', path, smtp_ssl=FakeSMTP)['sent']
+    assert len(FakeSMTP.messages) == 1

@@ -1,4 +1,7 @@
+import pytest
 from bit import bit_interface, service_split, wipo_routes, wipo_sync
+
+pytestmark = pytest.mark.usefixtures("subscribed_workbench_account")
 
 
 def test_wipo_public_route_uses_existing_permissions_and_masks_configuration(monkeypatch):
@@ -34,9 +37,10 @@ def test_internal_wipo_records_require_token_and_use_blacklist_writer(monkeypatc
     assert response.status_code == 200 and written == [{"brand_name": "Brand"}]
 
 
-def test_wipo_scheduler_and_routes_use_central_worker_only(monkeypatch):
+def test_wipo_scheduler_and_routes_use_central_worker_only(monkeypatch, tmp_path):
     calls = []
     class Service:
+        path = tmp_path / "wipo.sqlite3"
         def start_scheduler(self):
             calls.append("started")
     monkeypatch.setattr(wipo_sync, "get_service", lambda _: Service())

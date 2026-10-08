@@ -8,6 +8,7 @@ API page or a failed rollout cannot overwrite existing store-link records.
 from __future__ import annotations
 
 import json
+import math
 import os
 import sqlite3
 import uuid
@@ -244,7 +245,7 @@ class PromotionStore:
             value = f"%{search}%"
             params.extend((value, value, value))
         if status:
-            clauses.append("status_raw=?")
+            clauses.append("p.status_raw=?")
             params.append(status)
         if promotion_type:
             clauses.append("promotion_type=?")
@@ -297,12 +298,20 @@ class PromotionStore:
                              p.deadline_date ASC, p.id DESC""",
                 params,
             ).fetchall()
-        return [self._row(row) for row in rows]
+        result = [self._row(row) for row in rows]
+        outcomes = self._enrollment_results_by_promotion(row["id"] for row in result)
+        for row in result:
+            row["enrollment_summary"] = self._enrollment_summary(outcomes.get(row["id"], []))
+        return result
 
     def get_promotion(self, promotion_fk: int) -> dict[str, Any] | None:
         with self._connect() as db:
             row = db.execute("SELECT * FROM promotions WHERE id=?", (int(promotion_fk),)).fetchone()
-        return self._row(row) if row else None
+        if not row:
+            return None
+        result = self._row(row)
+        result["enrollment_summary"] = self.enrollment_summary(promotion_fk)
+        return result
 
     def list_items(self, promotion_fk: int) -> list[dict[str, Any]]:
         with self._connect() as db:
@@ -310,12 +319,184 @@ class PromotionStore:
                 "SELECT * FROM promotion_items WHERE promotion_fk=? ORDER BY status_raw, item_id",
                 (int(promotion_fk),),
             ).fetchall()
-        return [self._row(row) for row in rows]
+        outcomes = {row["item_id"]: row for row in self.enrollment_results(promotion_fk)}
+        result = [self._row(row) for row in rows]
+        for row in result:
+            row["enrollment_result"] = outcomes.get(row["item_id"])
+        return result
+
+    @staticmethod
+    def _page_number(value: Any, default: int, maximum: int | None = None) -> int:
+        try:
+            number = int(value)
+        except (TypeError, ValueError, OverflowError):
+            number = default
+        number = max(1, number)
+        return min(number, maximum) if maximum is not None else number
+
+    def list_items_page(
+        self, promotion_fk: int, *, page: int = 1, page_size: int = 50,
+        target_item_id: str = "",
+    ) -> dict[str, Any]:
+        """Fetch only the requested product page before attaching enrollment results."""
+        page_size = self._page_number(page_size, 50, 100)
+        page = self._page_number(page, 1)
+        promotion_fk = int(promotion_fk)
+        with self._connect() as db:
+            total = int(db.execute(
+                "SELECT COUNT(*) FROM promotion_items WHERE promotion_fk=?",
+                (promotion_fk,),
+            ).fetchone()[0])
+            pages = max(1, (total + page_size - 1) // page_size)
+            target = str(target_item_id or "").strip()
+            if target:
+                # Prefer an enrollable candidate, then the first ordinary row.
+                # The local ID breaks ties for repeated offer/candidate identities.
+                selected = db.execute(
+                    """SELECT status_raw, item_id, id FROM promotion_items
+                    WHERE promotion_fk=? AND item_id=? COLLATE NOCASE
+                    ORDER BY CASE WHEN LOWER(status_raw)='candidate' THEN 0 ELSE 1 END,
+                        status_raw, item_id, id LIMIT 1""",
+                    (promotion_fk, target),
+                ).fetchone()
+                if selected:
+                    preceding = int(db.execute(
+                        """SELECT COUNT(*) FROM promotion_items WHERE promotion_fk=?
+                        AND (status_raw, item_id, id) < (?, ?, ?)""",
+                        (promotion_fk, selected["status_raw"], selected["item_id"], selected["id"]),
+                    ).fetchone()[0])
+                    page = preceding // page_size + 1
+            page = min(page, pages)
+            rows = db.execute(
+                """SELECT * FROM promotion_items WHERE promotion_fk=?
+                ORDER BY status_raw, item_id, id LIMIT ? OFFSET ?""",
+                (promotion_fk, page_size, (page - 1) * page_size),
+            ).fetchall()
+        result = [self._row(row) for row in rows]
+        outcomes = {
+            row["item_id"]: row
+            for row in self.enrollment_results(promotion_fk, item_ids=[row["item_id"] for row in result])
+        }
+        for row in result:
+            row["enrollment_result"] = outcomes.get(row["item_id"])
+        return {"rows": result, "page": page, "page_size": page_size, "total": total, "pages": pages}
+
+    @staticmethod
+    def _enrollment_summary(results: Iterable[dict[str, Any]]) -> dict[str, int]:
+        summary = {"succeeded": 0, "failed": 0, "unknown": 0, "total": 0}
+        for row in results:
+            status = row.get("status")
+            summary[status if status in {"succeeded", "failed", "unknown"} else "unknown"] += 1
+            summary["total"] += 1
+        return summary
+
+    def _enrollment_results_by_promotion(self, promotion_ids: Iterable[int]) -> dict[int, list[dict[str, Any]]]:
+        """Latest enrollment per platform item, retained across item snapshot replacement."""
+        ids = list(dict.fromkeys(int(value) for value in promotion_ids))
+        outcomes: dict[int, dict[str, dict[str, Any]]] = {}
+        with self._connect() as db:
+            for start in range(0, len(ids), 500):
+                batch = ids[start:start + 500]
+                jobs = db.execute(
+                    """SELECT j.*, v.promotion_fk FROM promotion_jobs j
+                    JOIN promotion_previews v ON v.preview_id=j.preview_id
+                    WHERE j.action='enroll' AND v.promotion_fk IN ("""
+                    + ",".join("?" for _ in batch)
+                    + ") ORDER BY j.created_at DESC, j.rowid DESC",
+                    batch,
+                ).fetchall()
+                for stored in jobs:
+                    job = self._row(stored)
+                    bucket = outcomes.setdefault(job["promotion_fk"], {})
+                    for raw in reversed(job.get("results") or []):
+                        if not isinstance(raw, dict):
+                            continue
+                        item_id = str(raw.get("item_id") or "")
+                        if not item_id or item_id in bucket:
+                            continue
+                        bucket[item_id] = dict(
+                            raw, item_id=item_id, job_id=job["job_id"],
+                            created_at=job["created_at"], finished_at=job["finished_at"],
+                        )
+        return {key: list(value.values()) for key, value in outcomes.items()}
+
+    @staticmethod
+    def _latest_enrollment_sql(promotion_fk: int, item_ids=None):
+        clauses = ["j.action='enroll'", "v.promotion_fk=?", "entry.type='object'"]
+        params: list[Any] = [int(promotion_fk)]
+        item_expression = "CAST(json_extract(entry.value, '$.item_id') AS TEXT)"
+        clauses.append(f"COALESCE({item_expression}, '') != ''")
+        if item_ids is not None:
+            ids = list(dict.fromkeys(str(value) for value in item_ids if str(value or "")))
+            if not ids:
+                clauses.append("0")
+            else:
+                clauses.append(f"{item_expression} IN ({','.join('?' for _ in ids)})")
+                params.extend(ids)
+        sql = """WITH ranked AS (
+            SELECT entry.value AS result_json,
+                CAST(json_extract(entry.value, '$.item_id') AS TEXT) AS item_id,
+                j.job_id, j.created_at, j.finished_at, j.rowid AS job_order,
+                CAST(entry.key AS INTEGER) AS result_order,
+                ROW_NUMBER() OVER (
+                    PARTITION BY CAST(json_extract(entry.value, '$.item_id') AS TEXT)
+                    ORDER BY j.created_at DESC, j.rowid DESC, CAST(entry.key AS INTEGER) DESC
+                ) AS result_rank
+            FROM promotion_jobs j
+            JOIN promotion_previews v ON v.preview_id=j.preview_id
+            JOIN json_each(CASE WHEN json_valid(j.results_json)
+                THEN j.results_json ELSE '[]' END) entry
+            WHERE """ + " AND ".join(clauses) + "\n) "
+        return sql, params
+
+    def enrollment_summary(self, promotion_fk: int) -> dict[str, int]:
+        """Aggregate retained results in SQLite without loading every result payload."""
+        sql, params = self._latest_enrollment_sql(promotion_fk)
+        with self._connect() as db:
+            rows = db.execute(sql + """SELECT
+                CASE WHEN json_extract(result_json, '$.status') IN ('succeeded','failed','unknown')
+                    THEN json_extract(result_json, '$.status') ELSE 'unknown' END AS status,
+                COUNT(*) AS result_count FROM ranked WHERE result_rank=1 GROUP BY status""", params).fetchall()
+        summary = {"succeeded": 0, "failed": 0, "unknown": 0, "total": 0}
+        for row in rows:
+            summary[row["status"]] = int(row["result_count"])
+            summary["total"] += int(row["result_count"])
+        return summary
+
+    def enrollment_results(
+        self, promotion_fk: int, *, item_ids: Iterable[str] | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        sql, params = self._latest_enrollment_sql(promotion_fk, item_ids)
+        sql += "SELECT * FROM ranked WHERE result_rank=1 ORDER BY created_at DESC, job_order DESC, result_order DESC"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(self._page_number(limit, 50, 100))
+        with self._connect() as db:
+            rows = db.execute(sql, params).fetchall()
+        return [dict(
+            json.loads(row["result_json"]), item_id=row["item_id"], job_id=row["job_id"],
+            created_at=row["created_at"], finished_at=row["finished_at"],
+        ) for row in rows]
+
+    def latest_job(self, promotion_fk: int, *, result_limit: int | None = None) -> dict[str, Any] | None:
+        rows = self.list_jobs(limit=1, promotion_fk=promotion_fk, result_limit=result_limit)
+        return rows[0] if rows else None
 
     def applied_item_details(
         self, keys: Iterable[tuple[int, str, str]]
     ) -> dict[tuple[int, str, str], list[dict[str, Any]]]:
         """Return listing identities currently enrolled in a synced activity."""
+        return self._item_activity_details(keys, (
+            "pending_approval", "pending", "programmed", "scheduled",
+            "started", "active", "approved",
+        ))
+
+    def available_item_details(self, keys):
+        """Platform candidates only; enrollment is never inferred from the parent."""
+        return self._item_activity_details(keys, ("candidate",))
+
+    def _item_activity_details(self, keys, applied_statuses):
         normalized = []
         for token_id, site_id, item_id in keys or ():
             try:
@@ -333,10 +514,6 @@ class PromotionStore:
             return {}
         # Candidate means that the platform is offering the product the chance
         # to enroll; it is deliberately excluded from the applied marker.
-        applied_statuses = (
-            "pending_approval", "pending", "programmed", "scheduled",
-            "started", "active", "approved",
-        )
         status_sql = ",".join("?" for _ in applied_statuses)
         result = {}
         with self._connect() as db:
@@ -454,6 +631,71 @@ class PromotionStore:
             )
             return int(result.rowcount or 0)
 
+    def record_item_submission(self, promotion_fk: int, item_id: str, response: dict[str, Any]) -> None:
+        """Retain returned promotional prices/net amounts until the next official sync."""
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT * FROM promotion_items WHERE promotion_fk=? AND item_id=?",
+                (int(promotion_fk), str(item_id)),
+            ).fetchall()
+            for stored in rows:
+                item = self._row(stored)
+                previous_price, previous_original = item["price"], item["original_price"]
+                previous_currency = item["currency_id"]
+                raw = dict(item.get("raw") or {})
+                response_currency = str(response.get("currency_id") or previous_currency).strip().upper()
+                currency_changed = response_currency != str(previous_currency or "").strip().upper()
+                if currency_changed:
+                    # Values quoted in the old currency cannot be carried into
+                    # a response using a new listing-price currency.
+                    item["price"] = item["original_price"] = None
+                    item["min_price"] = item["max_price"] = None
+                    for key in ("price", "original_price", "min_price", "max_price",
+                                "min_discounted_price", "max_discounted_price", "suggested_discounted_price"):
+                        raw.pop(key, None)
+                for key in ("price", "original_price"):
+                    value = response.get(key)
+                    try:
+                        number = float(value)
+                    except (TypeError, ValueError):
+                        continue
+                    if not math.isfinite(number) or number <= 0:
+                        continue
+                    item[key] = number
+                    raw[key] = number
+                if response.get("currency_id"):
+                    item["currency_id"] = response_currency
+                    raw["currency_id"] = item["currency_id"]
+                if isinstance(response.get("net_proceeds"), (dict, list)):
+                    item["net_proceeds"] = response["net_proceeds"]
+                    raw["net_proceeds"] = item["net_proceeds"]
+                elif currency_changed:
+                    item["net_proceeds"] = raw["net_proceeds"] = {}
+                elif item["price"] != previous_price or item["original_price"] != previous_original:
+                    # Changing the quote cannot re-label an old amount as the
+                    # proceeds for the newly submitted price. Candidate price
+                    # references remain valid at their independently quoted prices.
+                    excluded = set()
+                    if item["price"] != previous_price:
+                        excluded.update(("amount", "selling_fee", "shipping_fee"))
+                    if item["original_price"] != previous_original:
+                        excluded.add("original_amount")
+                    values = item.get("net_proceeds") or {}
+                    if isinstance(values, dict):
+                        values = {key: value for key, value in values.items() if key not in excluded}
+                    elif isinstance(values, list):
+                        values = [{key: value for key, value in entry.items() if key not in excluded}
+                                  for entry in values if isinstance(entry, dict)]
+                    else:
+                        values = {}
+                    item["net_proceeds"] = raw["net_proceeds"] = values
+                db.execute(
+                    """UPDATE promotion_items SET price=?, original_price=?, currency_id=?, min_price=?, max_price=?,
+                        net_proceeds_json=?, raw_json=? WHERE id=?""",
+                    (item["price"], item["original_price"], item["currency_id"], item["min_price"], item["max_price"],
+                     _json(item.get("net_proceeds") or {}), _json(raw), item["id"]),
+                )
+
     def create_preview(self, *, actor: str, action: str, promotion_fk: int, payload: dict[str, Any], expires_at: str) -> str:
         preview_id = uuid.uuid4().hex
         with self._connect() as db:
@@ -471,6 +713,12 @@ class PromotionStore:
     def create_job(self, *, preview_id: str, actor: str, action: str, total: int) -> str:
         job_id = uuid.uuid4().hex
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            existing = db.execute(
+                "SELECT job_id FROM promotion_jobs WHERE preview_id=? LIMIT 1", (preview_id,)
+            ).fetchone()
+            if existing:
+                raise ValueError("该预览已提交，请查看执行记录，勿重复报名")
             db.execute(
                 """INSERT INTO promotion_jobs
                    (job_id, preview_id, actor, action, status, total_count, created_at)
@@ -478,6 +726,16 @@ class PromotionStore:
                 (job_id, preview_id, actor, action, int(total), _now()),
             )
         return job_id
+
+    def save_job_progress(self, job_id: str, *, results: list[dict[str, Any]]) -> None:
+        success = sum(row.get("status") == "succeeded" for row in results)
+        unknown = sum(row.get("status") == "unknown" for row in results)
+        with self._connect() as db:
+            db.execute(
+                """UPDATE promotion_jobs SET success_count=?, failed_count=?,
+                   unknown_count=?, results_json=? WHERE job_id=?""",
+                (success, len(results) - success - unknown, unknown, _json(results), job_id),
+            )
 
     def finish_job(self, job_id: str, *, results: list[dict[str, Any]]) -> None:
         success = sum(1 for row in results if row.get("status") == "succeeded")
@@ -491,10 +749,47 @@ class PromotionStore:
                 (status, success, failed, unknown, _json(results), _now(), str(job_id)),
             )
 
-    def list_jobs(self, limit: int = 100) -> list[dict[str, Any]]:
+    def list_jobs(
+        self, limit: int = 100, *, token_ids: Iterable[int] | None = None,
+        promotion_fk: int | None = None, result_limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        clauses, params = [], []
+        if token_ids is not None:
+            ids = list(dict.fromkeys(int(value) for value in token_ids))
+            if not ids:
+                return []
+            clauses.append("p.token_id IN (" + ",".join("?" for _ in ids) + ")")
+            params.extend(ids)
+        if promotion_fk is not None:
+            clauses.append("v.promotion_fk=?")
+            params.append(int(promotion_fk))
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        params.append(max(1, min(int(limit), 500)))
+        job_columns = "j.*"
+        if result_limit is not None:
+            result_limit = self._page_number(result_limit, 50, 100)
+            job_columns = """j.job_id, j.preview_id, j.actor, j.action, j.status,
+                j.total_count, j.success_count, j.failed_count, j.unknown_count,
+                j.created_at, j.finished_at,
+                json_array_length(CASE WHEN json_valid(j.results_json)
+                    THEN j.results_json ELSE '[]' END) AS results_total,
+                (SELECT json_group_array(json(value)) FROM (
+                    SELECT value FROM json_each(CASE WHEN json_valid(j.results_json)
+                        THEN j.results_json ELSE '[]' END) ORDER BY CAST(key AS INTEGER) LIMIT ?
+                )) AS results_json"""
+            params.insert(0, result_limit)
         with self._connect() as db:
             rows = db.execute(
-                "SELECT * FROM promotion_jobs ORDER BY created_at DESC LIMIT ?",
-                (max(1, min(int(limit), 500)),),
+                "SELECT " + job_columns + """, v.promotion_fk, p.name AS promotion_name,
+                    p.promotion_id, p.store_name, p.site_id, p.token_id
+                FROM promotion_jobs j
+                JOIN promotion_previews v ON v.preview_id=j.preview_id
+                JOIN promotions p ON p.id=v.promotion_fk"""
+                + where + " ORDER BY j.created_at DESC, j.rowid DESC LIMIT ?",
+                params,
             ).fetchall()
-        return [self._row(row) for row in rows]
+        result = [self._row(row) for row in rows]
+        if result_limit is not None:
+            for row in result:
+                row["results_truncated"] = row["results_total"] > len(row.get("results") or [])
+        return result

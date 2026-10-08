@@ -1,0 +1,335 @@
+{
+  "store": "cs",
+  "salesperson": "杨雨萌",
+  "store_id": 70,
+  "templates": 21,
+  "sites": [
+    "MLM",
+    "MLB",
+    "MLC",
+    "MCO",
+    "MLA",
+    "MLU"
+  ],
+  "initial_batch": {
+    "succeeded": 12,
+    "skipped": 1,
+    "failed": 8
+  },
+  "after_fix": {
+    "succeeded": 8,
+    "skipped": 13,
+    "failed": 0,
+    "unknown": 0
+  },
+  "ui_repeat_test": {
+    "task_id": "33c7afe42df74e48b35ebe4c335a954b",
+    "total": 21,
+    "completed": 21,
+    "succeeded": 0,
+    "skipped": 21,
+    "failed": 0,
+    "unknown": 0,
+    "status": "success"
+  },
+  "official_verified": [
+    {
+      "template": "女装短裤参考尺码表",
+      "chart_id": "9629871",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "女装长裤／牛仔裤参考尺码表",
+      "chart_id": "9173782",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "男装短裤参考尺码表",
+      "chart_id": "9629873",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "男装长裤／牛仔裤参考尺码表",
+      "chart_id": "9173784",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "女童长裤参考尺码表",
+      "chart_id": "9629835",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 6
+    },
+    {
+      "template": "女童T 恤参考尺码表",
+      "chart_id": "9173786",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 6
+    },
+    {
+      "template": "男童长裤参考尺码表",
+      "chart_id": "9173752",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 6
+    },
+    {
+      "template": "男童T 恤参考尺码表",
+      "chart_id": "9173788",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 6
+    },
+    {
+      "template": "女装打底裤参考尺码表",
+      "chart_id": "9629839",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "女装女式上衣参考尺码表",
+      "chart_id": "9629841",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "女装连衣裙参考尺码表",
+      "chart_id": "9629845",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "女装睡衣参考尺码表",
+      "chart_id": "9629875",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "女装卫衣参考尺码表",
+      "chart_id": "9173754",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "女装夹克／外套参考尺码表",
+      "chart_id": "9173756",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "女装衬衫参考尺码表",
+      "chart_id": "9173758",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "女装T 恤参考尺码表",
+      "chart_id": "9173760",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "男装睡衣参考尺码表",
+      "chart_id": "9629877",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "男装卫衣参考尺码表",
+      "chart_id": "9629851",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "男装夹克／外套参考尺码表",
+      "chart_id": "9173764",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "男装衬衫参考尺码表",
+      "chart_id": "9629853",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    },
+    {
+      "template": "男装T 恤参考尺码表",
+      "chart_id": "9629681",
+      "creation_confirmed_sites": [
+        "CBT",
+        "MCO",
+        "MLA",
+        "MLB",
+        "MLC",
+        "MLM",
+        "MLU"
+      ],
+      "official_rows": 7
+    }
+  ],
+  "tests": {
+    "python": 104,
+    "javascript": 31
+  }
+}

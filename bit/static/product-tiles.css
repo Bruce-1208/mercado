@@ -1,0 +1,353 @@
+/* Shared newspaper-style product tiles across all four product workspaces. */
+#products-1688-body,
+#mercado-list-module #mercado-list-body,
+#tab-ai-original-products #ai-original-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    align-items: start;
+    gap: 10px;
+    padding: 0;
+    background: transparent;
+}
+.products-1688-page .p1688-table-wrap,
+#mercado-list-module .market-table-wrap {
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+.products-1688-page .p1688-table,
+#mercado-list-module .market-product-table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    border: 0;
+}
+.products-1688-page .p1688-table :is(colgroup, thead),
+#mercado-list-module .market-product-table thead { display: none; }
+#products-1688-body > tr,
+#mercado-list-module.collection-mode #mercado-list-body > tr,
+#mercado-list-module .market-product-card,
+#tab-ai-original-products .ai-original-card {
+    min-width: 0;
+    border: 1px solid #dfe3e8;
+    border-radius: 4px;
+    background: #fff;
+    box-shadow: none;
+}
+#products-1688-body > tr,
+#mercado-list-module.collection-mode #mercado-list-body > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px 10px;
+    padding: 10px;
+}
+#products-1688-body > tr > td,
+#mercado-list-module.collection-mode #mercado-list-body > tr > td {
+    display: block;
+    position: static;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+#products-1688-body td[data-label]::before,
+#mercado-list-module.collection-mode td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    color: #728095;
+    font-size: 11px;
+    font-weight: 500;
+}
+#products-1688-body td:nth-child(2),
+#products-1688-body td:last-child,
+#mercado-list-module.collection-mode .market-collection-row > td:is(:nth-child(5), :nth-child(13), :nth-child(14), :last-child) { grid-column: 1 / -1; }
+#products-1688-body td:is(:first-child, :nth-child(2), :last-child)::before,
+#mercado-list-module.collection-mode .market-collection-row > td:is(:first-child, :nth-child(2), :nth-child(5))::before { display: none; }
+#products-1688-body .p1688-product-copy strong { white-space: normal; line-height: 1.6; }
+#products-1688-body .p1688-thumb,
+#mercado-list-module.collection-mode .market-product-image { width: 88px; height: 88px; object-fit: contain; border-radius: 4px; }
+#products-1688-body .p1688-product-image-link { flex-basis: 88px; }
+#mercado-list-module.collection-mode .market-collection-row > td:nth-child(2) { justify-self: end; }
+#mercado-list-module.collection-mode .market-product-title { max-width: none; white-space: normal; line-height: 1.6; }
+#products-1688-body > tr:has(td[colspan]),
+#mercado-list-module #mercado-list-body > tr:has(td[colspan]),
+#ai-original-grid > .empty-state { grid-column: 1 / -1; }
+#products-1688-body td[colspan],
+#mercado-list-module.collection-mode td[colspan] { grid-column: 1 / -1; padding: 36px 16px; text-align: center; }
+#products-1688-body > tr:has(input:checked),
+#mercado-list-module.collection-mode .market-collection-row:has(input:checked),
+#mercado-list-module .market-product-card.is-selected,
+#tab-ai-original-products .ai-original-card.selected { border-color: #2563eb; box-shadow: 0 0 0 1px #2563eb; }
+#tab-ai-original-products .ai-original-card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas: 'head' 'media' 'source' 'copy' 'fields';
+    gap: 0;
+    padding: 0 16px 16px;
+}
+#tab-ai-original-products .ai-original-image-pair { grid-template-columns: repeat(2, 88px); }
+#tab-ai-original-products .ai-original-image-pair :is(img, .ai-original-image-empty, .ai-original-image-placeholder) { width: 88px; height: 88px; border-radius: 4px; }
+#tab-ai-original-products .ai-original-copy { margin: 14px 0; padding: 14px 0; border: 0; border-top: 1px solid #edf1f5; border-bottom: 1px solid #edf1f5; }
+#tab-ai-original-products .ai-original-fields { grid-column: auto; }
+#mercado-list-module .market-card-finance { border-radius: 4px; }
+#mercado-list-module .market-card-image { border-radius: 4px; }
+@media (max-width: 650px) {
+    #products-1688-body,
+    #mercado-list-module #mercado-list-body,
+    #tab-ai-original-products #ai-original-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    #products-1688-body .p1688-row-actions :is(button, a),
+    #products-1688-body select { min-height: 40px; }
+}
+#products-1688-body .p1688-thumb { flex: 0 0 88px; }
+#products-1688-body input[type="checkbox"],
+#mercado-list-module .market-row-select { width: 16px; height: 16px; margin: 0; }
+
+/* Compact scan: smaller media and spacing, with long AI drafts on demand. */
+#mercado-list-module.product-mode #mercado-list-body {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: 10px;
+}
+#products-1688-body .p1688-thumb { width: 56px; height: 56px; flex-basis: 56px; }
+#products-1688-body .p1688-product-image-link { flex-basis: 56px; }
+#products-1688-body > .p1688-editable-row { position: relative; }
+#products-1688-body > .p1688-editable-row > td:first-child { position: absolute; top: 10px; right: 10px; }
+#products-1688-body > .p1688-editable-row > td:nth-child(2) { padding-right: 22px; }
+#products-1688-body .p1688-product-copy strong { font-size: 13px; line-height: 1.4; }
+#products-1688-body td[data-label]::before,
+#mercado-list-module.collection-mode td[data-label]::before { line-height: 1.3; }
+#mercado-list-module.collection-mode .market-collection-row { position: relative; }
+#mercado-list-module.collection-mode .market-collection-row > td:first-child { position: absolute; top: 10px; right: 10px; }
+#mercado-list-module.collection-mode .market-collection-row > td:nth-child(2) { grid-column: 1; grid-row: 1 / 3; justify-self: start; }
+#mercado-list-module.collection-mode .market-collection-row > td:nth-child(3) { grid-column: 2; padding-right: 20px; }
+#mercado-list-module.collection-mode .market-collection-row > td:nth-child(4) { grid-column: 2; }
+#mercado-list-module.collection-mode .market-product-image { width: 56px; height: 56px; }
+#mercado-list-module.collection-mode .market-collection-row .market-metric-note { font-size: 11px; line-height: 1.3; margin-top: 2px; }
+#mercado-list-module .market-card-header,
+#mercado-list-module .market-card-footer { padding: 7px 10px; gap: 8px; }
+#mercado-list-module .market-card-main { grid-template-columns: 56px minmax(0, 1fr); gap: 8px; padding: 10px; }
+#mercado-list-module .market-card-image { height: 56px; }
+#mercado-list-module .market-card-main h4 { font-size: 13px; line-height: 1.4; }
+#mercado-list-module.product-mode .market-card-main .market-product-title { -webkit-line-clamp: 2; }
+#mercado-list-module .market-card-id { margin-top: 3px; }
+#mercado-list-module .market-card-finance { margin: 0 10px 8px; padding: 7px; gap: 5px; }
+#mercado-list-module .market-card-label { margin-bottom: 2px; }
+#mercado-list-module .market-card-specs,
+#mercado-list-module .market-card-controls { padding: 0 10px 8px; gap: 8px; }
+#mercado-list-module .market-card-status { margin: 0 10px; padding: 7px 0; }
+#mercado-list-module .market-card-risk { margin-top: 5px; }
+#mercado-list-module .market-card-risk .mi-row-risk { gap: 3px 6px; }
+#mercado-list-module .market-card-risk .mi-row-risk > small { flex-basis: auto; }
+#mercado-list-module .market-card-details { margin: 0 10px; }
+#mercado-list-module .market-card-details > summary { padding: 8px 0; }
+#tab-ai-original-products .ai-original-card { padding: 0 10px 10px; contain-intrinsic-height: auto 540px; }
+#tab-ai-original-products .ai-original-card-head { padding: 8px 0; margin-bottom: 8px; gap: 6px; }
+#tab-ai-original-products .ai-original-image-pair { grid-template-columns: repeat(2, 56px); gap: 8px; margin-bottom: 8px; }
+#tab-ai-original-products .ai-original-image-pair :is(img, .ai-original-image-empty, .ai-original-image-placeholder) { width: 56px; height: 56px; }
+#tab-ai-original-products .ai-original-image-pair figcaption { margin-top: 3px; }
+#tab-ai-original-products .ai-original-source .ai-original-section-label { display: none; }
+#tab-ai-original-products .ai-original-source h4 { margin-bottom: 5px; line-height: 1.4; }
+#tab-ai-original-products .ai-original-source p { margin: 3px 0; }
+#tab-ai-original-products .ai-original-source > p:first-of-type { display: none; } /* ID is in the card header. */
+#tab-ai-original-products .ai-original-copy { margin: 8px 0; padding: 7px 0; }
+#tab-ai-original-products .ai-original-copy > details { margin: 0; padding: 0; border: 0; }
+#tab-ai-original-products .ai-original-copy-details > summary,
+#tab-ai-original-products .ai-original-check-panel > summary { cursor: pointer; color: #526176; font-size: 12px; line-height: 1.6; }
+#tab-ai-original-products .ai-original-copy-details > p { margin: 5px 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+#tab-ai-original-products .ai-original-edit-button { margin-top: 6px; }
+#tab-ai-original-products .ai-original-fields { gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#tab-ai-original-products .ai-original-fields > label input { height: 32px; margin-top: 3px; }
+#tab-ai-original-products .ai-original-check-panel { padding-bottom: 7px; margin-bottom: 0; }
+#tab-ai-original-products .ai-original-package-dimensions { padding: 6px 8px; }
+@media (max-width: 650px) {
+    #mercado-list-module.product-mode #mercado-list-body { grid-template-columns: minmax(0, 1fr); }
+    #tab-ai-original-products .ai-original-copy-details > summary,
+    #tab-ai-original-products .ai-original-check-panel > summary { padding: 5px 0; }
+    #tab-ai-original-products .ai-original-fields > label input { min-height: 40px; }
+}
+#mercado-list-module.collection-mode #mercado-list-body > .market-collection-row > td:first-child { position: absolute; top: 10px; right: 10px; }
+#mercado-list-module.collection-mode .market-product-image { display: block; background: #f6f8fb; }
+#mercado-list-module.collection-mode .mercado-infringement-cell .mi-row-risk { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+#mercado-list-module.collection-mode .mercado-infringement-cell .mi-row-actions { display: flex; gap: 5px; }
+#tab-ai-original-products .ai-original-card {
+    grid-template-columns: 120px minmax(0, 1fr);
+    grid-template-areas: 'head head' 'media source' 'copy copy' 'fields fields';
+    column-gap: 8px;
+}
+#tab-ai-original-products .ai-original-source h4 { font-size: 12px; }
+#tab-ai-original-products .ai-original-fields { grid-column: 1 / -1; }
+
+/* Keep every AI product tile the same size, including failed and expanded drafts. */
+#tab-ai-original-products #ai-original-grid > .ai-original-card {
+    height: 660px;
+    min-height: 660px;
+    max-height: 660px;
+    grid-template-rows: 42px 106px 220px minmax(0, 1fr);
+    contain-intrinsic-height: 660px;
+}
+#tab-ai-original-products .ai-original-source h4 {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    height: 34px;
+}
+#tab-ai-original-products .ai-original-copy,
+#tab-ai-original-products .ai-original-fields {
+    min-height: 0;
+    overflow: auto;
+}
+#tab-ai-original-products .ai-original-copy > .ai-original-title-label {
+    margin: 0 0 3px;
+    font-size: 11px;
+    line-height: 16px;
+}
+#tab-ai-original-products .ai-original-copy > .ai-original-title-text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    height: 38px;
+    margin: 0 0 6px;
+    font-size: 12px;
+    line-height: 19px;
+}
+.ai-original-card-tooltip {
+    position: fixed;
+    z-index: 10000;
+    box-sizing: border-box;
+    width: min(460px, calc(100vw - 24px));
+    max-height: min(420px, calc(100vh - 24px));
+    padding: 12px 14px;
+    border: 1px solid #dce3ee;
+    border-radius: 8px;
+    background: #fff;
+    color: #8f3838;
+    box-shadow: 0 8px 28px rgba(24, 39, 61, .18);
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow: auto;
+    pointer-events: auto;
+}
+.ai-original-card-tooltip[hidden] { display: none; }
+#tab-ai-original-products .ai-original-badge[data-card-notice] { cursor: help; }
+
+/* First-level Mercado tiles: key figures first, supporting information on demand. */
+#tab-mercado-collection .mercado-workbench-heading-copy > p,
+#tab-mercado-products .mercado-workbench-heading-copy > p,
+#mercado-list-module :is(#mercado-list-description, #mercado-list-badge, #mercado-filter-hint, #mercado-list-layout-hint) {
+    display: none;
+}
+#mercado-list-module .market-card-main .market-card-id { line-height: 1.4; }
+#mercado-list-module .market-card-specs dd { line-height: 1.4; }
+#mercado-list-module :is(.market-card-risk, .mercado-infringement-cell) .mi-row-risk > small { display: none; }
+#mercado-list-module :is(.market-card-risk, .mercado-infringement-cell) .mi-row-actions {
+    margin-left: auto;
+    flex-wrap: wrap;
+}
+#mercado-list-module.collection-mode #mercado-list-body > .market-collection-row {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px 8px;
+}
+/* Share row heights across adjacent cards while allowing every title to grow. */
+@supports (grid-template-rows: subgrid) {
+    #mercado-list-module.collection-mode #mercado-list-body { align-items: stretch; }
+    #mercado-list-module.collection-mode #mercado-list-body > .market-collection-row {
+        grid-row: span 9;
+        grid-template-rows: subgrid;
+    }
+}
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td {
+    grid-column: auto;
+    grid-row: auto;
+}
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="主图"] {
+    grid-column: 1 / 3;
+    grid-row: 1 / 3;
+}
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="标题"] {
+    grid-column: 1 / -1;
+    grid-row: 3;
+}
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="泽顺业务员"] {
+    grid-column: 3 / -1;
+    grid-row: 1;
+    padding-right: 20px;
+    color: #728095;
+    font-size: 11px;
+}
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="商品编号"] {
+    grid-column: 3 / -1;
+    grid-row: 2;
+    color: #728095;
+    font-size: 11px;
+}
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td:is([data-label="泽顺业务员"], [data-label="商品编号"]) strong { font-weight: 400; }
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td:is([data-label="标题"], [data-label="泽顺业务员"], [data-label="商品编号"], [data-label="采集详情"])::before { display: none; }
+#mercado-list-module.collection-mode .market-product-title {
+    display: block;
+    -webkit-line-clamp: unset;
+    overflow: visible;
+    min-height: 4.2em;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    line-height: 1.4;
+}
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="美元售价"] { grid-column: 1 / 3; }
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="当前运费"] { grid-column: 3 / 5; }
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="净收益"] { grid-column: 5 / -1; }
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td:is([data-label="美元售价"], [data-label="当前运费"], [data-label="净收益"]) {
+    grid-row: 4;
+    padding: 7px;
+    border-radius: 4px;
+    background: #f7f9fc;
+}
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="净收益"] .market-metric-main { color: #15805b; font-weight: 700; }
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="净收益"] .market-net-negative { color: #c23939; }
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="实际重量"] { grid-column: 1 / 4; grid-row: 5; }
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="包装尺寸"] { grid-column: 4 / -1; grid-row: 5; }
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td:is([data-label="审核 / 上架状态"], [data-label="侵权风险"], [data-label="采集时间"], [data-label="采集详情"]) { grid-column: 1 / -1; }
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="审核 / 上架状态"] {
+    grid-row: 6;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding-top: 7px;
+    border-top: 1px solid #edf1f5;
+}
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td:is([data-label="审核 / 上架状态"], [data-label="侵权风险"])::before { display: none; }
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="侵权风险"] { grid-row: 7; }
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="采集时间"] {
+    grid-row: 8;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+    color: #60738e;
+    font-size: 11px;
+    line-height: 1.5;
+}
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="采集时间"]::before { margin-bottom: 0; }
+#mercado-list-module.collection-mode .market-collection-time,
+#mercado-list-module.collection-mode .market-metric-main { font-variant-numeric: tabular-nums; }
+#mercado-list-module.collection-mode .market-metric-main {
+    display: block;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="采集详情"] { grid-row: 9; }
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row .market-status-tag { margin: 0; font-size: 11px; }
+#mercado-list-module .market-collection-detail-link { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #edf1f5; padding-top: 10px; color: #2563eb; font-size: 13px; text-decoration: none; }
+#mercado-list-module .market-collection-detail-link:hover { color: #1d4ed8; text-decoration: underline; }
+#mercado-list-module .market-collection-detail-link:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }

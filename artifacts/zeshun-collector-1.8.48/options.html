@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>泽顺商品采集助手设置</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div class="logo"><img src="icon128.png" alt="武汉泽顺 Logo"></div>
+      <div>
+        <h1>泽顺商品采集助手设置</h1>
+        <p>连接武汉泽顺综合服务台</p>
+      </div>
+    </header>
+    <section>
+      <label for="console-url">控制台地址</label>
+      <input id="console-url" type="url" placeholder="https://wuhanzeshun.com" autocomplete="url">
+      <small>默认连接公网泽顺控制台；本地测试或兼容旧版工作台时可填写 <code>http://127.0.0.1:5000</code>。</small>
+      <small>AI 核重核价由插件直接驱动当前 Edge；服务端负责模型计算、业务数据和进度保存。</small>
+
+      <label for="username">泽顺控制台账号</label>
+      <input id="username" type="text" placeholder="请输入账号" autocomplete="username">
+
+      <label for="password">泽顺控制台密码</label>
+      <input id="password" type="password" placeholder="请输入密码" autocomplete="current-password">
+      <small>从控制台下载的插件会自动使用下载账号登录，72 小时后失效。也可在这里登录或切换账号；密码不会保存。</small>
+
+      <div id="auth-status" class="auth-status">当前未登录</div>
+
+      <label class="check-row">
+        <input id="open-after" type="checkbox">
+        <span>采集成功后自动打开泽顺控制台</span>
+      </label>
+
+      <div class="settings-divider"></div>
+      <p class="section-help">模型 Token、邮件提醒和 Webhook 已集中到泽顺控制台的“集成与凭证设置”，并与当前泽顺账号绑定。</p>
+      <div class="actions mail-actions">
+        <button id="open-integrations" type="button">打开控制台配置中心</button>
+      </div>
+
+      <div class="actions">
+        <button id="login" class="primary" type="button">登录并测试</button>
+        <button id="save" type="button">保存地址</button>
+        <button id="logout" type="button">退出登录</button>
+      </div>
+      <div id="message" class="message" hidden></div>
+    </section>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>

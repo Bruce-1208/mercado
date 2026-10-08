@@ -1,0 +1,1248 @@
+{
+  "start_at": "2026-10-05T04:24:32.580233+00:00",
+  "end_at": "2026-10-07T04:24:32.580233+00:00",
+  "candidate_count": 147,
+  "printed_order_count": 0,
+  "printed_order_ids": [],
+  "shipment_count": 0,
+  "wallet_charge_cents": 0,
+  "failed_order_count": 147,
+  "download_path": "",
+  "results": [
+    {
+      "shop_name": "大展宏图",
+      "site": "阿根廷",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018841418848: 业务员 黄羽飞 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018841418848"
+      ]
+    },
+    {
+      "shop_name": "向华章1",
+      "site": "智利",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018838942992: 业务员 向子立 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018838942992"
+      ]
+    },
+    {
+      "shop_name": "刘威豪1",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018836069330: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018836069330"
+      ]
+    },
+    {
+      "shop_name": "刘威豪1",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018836473410: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018836473410"
+      ]
+    },
+    {
+      "shop_name": "孙董一郎1",
+      "site": "智利",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018823714452: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018838832132: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018823714452",
+        "2000018838832132"
+      ]
+    },
+    {
+      "shop_name": "孙董一郎1",
+      "site": "阿根廷",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018825163940: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018825163940"
+      ]
+    },
+    {
+      "shop_name": "孙董一郎3",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018838932124: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018838932124"
+      ]
+    },
+    {
+      "shop_name": "吴佳侃1",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018831751954: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018837087804: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018837248306: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 4,
+      "shipment_count": 0,
+      "failed_count": 4,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018831751954",
+        "2000018837087804",
+        "2000018837248306",
+        "2000018837248328"
+      ]
+    },
+    {
+      "shop_name": "向子立5",
+      "site": "智利",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018820170458: 业务员 向子立 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018841896024: 业务员 向子立 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018820170458",
+        "2000018841896024"
+      ]
+    },
+    {
+      "shop_name": "孙董一郎2",
+      "site": "阿根廷",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018836413218: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018837523898: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018836413218",
+        "2000018837523898"
+      ]
+    },
+    {
+      "shop_name": "孙董一郎2",
+      "site": "智利",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018840284938: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018841003622: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018840284938",
+        "2000018841003622"
+      ]
+    },
+    {
+      "shop_name": "孙董一郎4",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018827221582: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018836268784: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018827221582",
+        "2000018836268784"
+      ]
+    },
+    {
+      "shop_name": "徐家强3",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018826987878: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018826987878"
+      ]
+    },
+    {
+      "shop_name": "向子立4",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018822423540: 业务员 向子立 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018830701116: 业务员 向子立 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018832264774: 业务员 向子立 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 6,
+      "shipment_count": 0,
+      "failed_count": 6,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018822423540",
+        "2000018830701116",
+        "2000018832264774",
+        "2000018839868506",
+        "2000018842100396",
+        "2000018842122570"
+      ]
+    },
+    {
+      "shop_name": "招财猫",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018820157986: 业务员 胡瑞泽 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018825224428: 业务员 胡瑞泽 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018820157986",
+        "2000018825224428"
+      ]
+    },
+    {
+      "shop_name": "招财猫",
+      "site": "智利",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018825968980: 业务员 胡瑞泽 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018825968980"
+      ]
+    },
+    {
+      "shop_name": "张健3",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018821471996: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018821471996"
+      ]
+    },
+    {
+      "shop_name": "张健3",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018841377558: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018841384524: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018842357800: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 3,
+      "shipment_count": 0,
+      "failed_count": 3,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018841377558",
+        "2000018841384524",
+        "2000018842357800"
+      ]
+    },
+    {
+      "shop_name": "招财猫11",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018831178844: 业务员 胡瑞泽 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018834163148: 业务员 胡瑞泽 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018831178844",
+        "2000018834163148"
+      ]
+    },
+    {
+      "shop_name": "招财猫11",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018835103424: 业务员 胡瑞泽 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018835103424"
+      ]
+    },
+    {
+      "shop_name": "张健1",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018820527156: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018824559214: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018829146792: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 6,
+      "shipment_count": 0,
+      "failed_count": 6,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018820527156",
+        "2000018824559214",
+        "2000018829146792",
+        "2000018833910832",
+        "2000018835595066",
+        "2000018838830756"
+      ]
+    },
+    {
+      "shop_name": "梁山好汉222",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018837638582: 业务员 黄羽飞 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018837638582"
+      ]
+    },
+    {
+      "shop_name": "杨雨萌f",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018821374378: 业务员 杨雨萌 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018821374378"
+      ]
+    },
+    {
+      "shop_name": "李安琪2",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018820259188: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018820259188"
+      ]
+    },
+    {
+      "shop_name": "李安琪2",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018840237782: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018841044772: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018840237782",
+        "2000018841044772"
+      ]
+    },
+    {
+      "shop_name": "段思齐3",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018835920962: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018835920962"
+      ]
+    },
+    {
+      "shop_name": "吴佳侃2",
+      "site": "阿根廷",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018820071002: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018823992262: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018835518936: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 5,
+      "shipment_count": 0,
+      "failed_count": 5,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018820071002",
+        "2000018823992262",
+        "2000018835518936",
+        "2000018837063808",
+        "2000018837075314"
+      ]
+    },
+    {
+      "shop_name": "吴佳侃2",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018823550634: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018823736730: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018824866904: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 6,
+      "shipment_count": 0,
+      "failed_count": 6,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018823550634",
+        "2000018823736730",
+        "2000018824866904",
+        "2000018835471348",
+        "2000018840838740",
+        "2000018842007744"
+      ]
+    },
+    {
+      "shop_name": "吴佳侃2",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018823961904: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018823961904"
+      ]
+    },
+    {
+      "shop_name": "段思齐1",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018841276018: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018841276018"
+      ]
+    },
+    {
+      "shop_name": "段思齐1",
+      "site": "阿根廷",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018841935118: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018841935118"
+      ]
+    },
+    {
+      "shop_name": "来财马",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018820226904: 业务员 胡瑞泽 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018820226908: 业务员 胡瑞泽 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018822951388: 业务员 胡瑞泽 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 3,
+      "shipment_count": 0,
+      "failed_count": 3,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018820226904",
+        "2000018820226908",
+        "2000018822951388"
+      ]
+    },
+    {
+      "shop_name": "来财马",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018830172794: 业务员 胡瑞泽 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018830172794"
+      ]
+    },
+    {
+      "shop_name": "流光溢彩",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018835487682: 业务员 黄羽飞 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018835487682"
+      ]
+    },
+    {
+      "shop_name": "段思齐2",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018824307608: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018831695036: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018824307608",
+        "2000018831695036"
+      ]
+    },
+    {
+      "shop_name": "张昕1",
+      "site": "智利",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018818417220: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018834774714: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:08",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018818417220",
+        "2000018834774714"
+      ]
+    },
+    {
+      "shop_name": "张昕1",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018818587410: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018826915928: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018828614554: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 5,
+      "shipment_count": 0,
+      "failed_count": 5,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018818587410",
+        "2000018826915928",
+        "2000018828614554",
+        "2000018837162384",
+        "2000018841346234"
+      ]
+    },
+    {
+      "shop_name": "张昕1",
+      "site": "阿根廷",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018825263356: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018825263356"
+      ]
+    },
+    {
+      "shop_name": "蒋学斌2",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018834134878: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018834125752: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018834125752",
+        "2000018834134878"
+      ]
+    },
+    {
+      "shop_name": "段思齐4",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018825973654: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018834425480: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018835455866: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 3,
+      "shipment_count": 0,
+      "failed_count": 3,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018825973654",
+        "2000018834425480",
+        "2000018835455866"
+      ]
+    },
+    {
+      "shop_name": "王碟2",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018826211758: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018826211758"
+      ]
+    },
+    {
+      "shop_name": "王碟2",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018841614600: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018841614600"
+      ]
+    },
+    {
+      "shop_name": "王俊琦2",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018834380794: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018838869706: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018834380794",
+        "2000018838869706"
+      ]
+    },
+    {
+      "shop_name": "蒋学斌4",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018824619458: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018824619458"
+      ]
+    },
+    {
+      "shop_name": "蒋学斌4",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018828172012: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018828172012"
+      ]
+    },
+    {
+      "shop_name": "遥遥领先16",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018839644876: 业务员 管理员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018839644876"
+      ]
+    },
+    {
+      "shop_name": "遥遥领先11号店",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018834983902: 业务员 管理员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018834983902"
+      ]
+    },
+    {
+      "shop_name": "遥遥领先11号店",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018836058636、2000018836062230: 业务员 管理员 余额不足：余额 0.00 元，本次需 6.00 元，请先充值；本次未扣费；2000018840649428: 业务员 管理员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 3,
+      "shipment_count": 0,
+      "failed_count": 3,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018836058636",
+        "2000018836062230",
+        "2000018840649428"
+      ]
+    },
+    {
+      "shop_name": "遥遥领先13号店",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018832572264: 业务员 管理员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018833202444: 业务员 管理员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018832572264",
+        "2000018833202444"
+      ]
+    },
+    {
+      "shop_name": "虎",
+      "site": "阿根廷",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018821180890: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018821180890"
+      ]
+    },
+    {
+      "shop_name": "虎",
+      "site": "智利",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018828791448: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018832593774: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018832604694: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 3,
+      "shipment_count": 0,
+      "failed_count": 3,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018828791448",
+        "2000018832593774",
+        "2000018832604694"
+      ]
+    },
+    {
+      "shop_name": "遥遥领先19号店",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018840015962: 业务员 管理员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018840015962"
+      ]
+    },
+    {
+      "shop_name": "蒋学斌1",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018831336230: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018831327134、2000018831338246: 业务员 张泽文 余额不足：余额 0.00 元，本次需 6.00 元，请先充值；本次未扣费；2000018831336252: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 9,
+      "shipment_count": 0,
+      "failed_count": 9,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018831327134",
+        "2000018831332718",
+        "2000018831336230",
+        "2000018831336252",
+        "2000018831338246",
+        "2000018831523912",
+        "2000018831533038",
+        "2000018831607478",
+        "2000018831611230"
+      ]
+    },
+    {
+      "shop_name": "遥遥领先5号店",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018837725628: 业务员 管理员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018837725628"
+      ]
+    },
+    {
+      "shop_name": "遥遥领先22号店",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018835648058: 业务员 管理员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018835648058"
+      ]
+    },
+    {
+      "shop_name": "遥遥领先22号店",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018837607370: 业务员 管理员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018837607370"
+      ]
+    },
+    {
+      "shop_name": "遥遥领先21号店",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018836139532: 业务员 管理员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018836139532"
+      ]
+    },
+    {
+      "shop_name": "郭兆亿1",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018832525266: 业务员 学员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018832525266"
+      ]
+    },
+    {
+      "shop_name": "遥遥领先1号店",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018820031812: 业务员 管理员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018838051494: 业务员 管理员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018840234964: 业务员 管理员 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 4,
+      "shipment_count": 0,
+      "failed_count": 4,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018820031812",
+        "2000018838051494",
+        "2000018840234964",
+        "2000018842254348"
+      ]
+    },
+    {
+      "shop_name": "顺财羊",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018831414702: 业务员 胡瑞泽 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018831414702"
+      ]
+    },
+    {
+      "shop_name": "金满园2",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018837465684: 业务员 黄羽飞 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018837465684"
+      ]
+    },
+    {
+      "shop_name": "杨雨萌11",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018820966170: 业务员 杨雨萌 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018823707428: 业务员 杨雨萌 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018838693488: 业务员 杨雨萌 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 4,
+      "shipment_count": 0,
+      "failed_count": 4,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018820966170",
+        "2000018823707428",
+        "2000018838693488",
+        "2000018841981512"
+      ]
+    },
+    {
+      "shop_name": "杨雨萌11",
+      "site": "智利",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018821838870: 业务员 杨雨萌 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018823366728: 业务员 杨雨萌 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018825339792: 业务员 杨雨萌 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 10,
+      "shipment_count": 0,
+      "failed_count": 10,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018821838870",
+        "2000018823366728",
+        "2000018825339792",
+        "2000018828328572",
+        "2000018829489168",
+        "2000018829490918",
+        "2000018832860592",
+        "2000018836274076",
+        "2000018837309584",
+        "2000018840352428"
+      ]
+    },
+    {
+      "shop_name": "杨雨萌11",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018837108582: 业务员 杨雨萌 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 1,
+      "shipment_count": 0,
+      "failed_count": 1,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018837108582"
+      ]
+    },
+    {
+      "shop_name": "金满园1",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018825735084: 业务员 黄羽飞 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018836541446: 业务员 黄羽飞 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018825735084",
+        "2000018836541446"
+      ]
+    },
+    {
+      "shop_name": "钱程似锦4",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018820770902、2000018820786194: 业务员 张泽文 余额不足：余额 0.00 元，本次需 6.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018820770902",
+        "2000018820786194"
+      ]
+    },
+    {
+      "shop_name": "顺风顺水(fti)",
+      "site": "墨西哥",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018834200702: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018842315918: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 2,
+      "shipment_count": 0,
+      "failed_count": 2,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018834200702",
+        "2000018842315918"
+      ]
+    },
+    {
+      "shop_name": "龙争虎斗",
+      "site": "巴西",
+      "status": "failed",
+      "message": "已生成 0 个面单，扣费 0.00 元；2000018822293158: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018826270848: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费；2000018832475942: 业务员 张泽文 余额不足：余额 0.00 元，本次需 3.00 元，请先充值；本次未扣费",
+      "attempts": 0,
+      "selected_count": 5,
+      "shipment_count": 0,
+      "failed_count": 5,
+      "fallback_used": false,
+      "finished_at": "2026-10-07 12:28:09",
+      "output_files": [],
+      "wallet_charge_cents": 0,
+      "failed_order_ids": [
+        "2000018822293158",
+        "2000018826270848",
+        "2000018832475942",
+        "2000018833649494",
+        "2000018833731244"
+      ]
+    }
+  ]
+}
