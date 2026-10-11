@@ -21,12 +21,13 @@
         .pill{white-space:nowrap}.pill.bad{background:#fef2f2;color:var(--bad)}.result-cell{min-width:150px;max-width:300px}.result-note,.net-note{display:block;margin-top:5px;color:var(--muted);font-size:12px;overflow-wrap:anywhere}.result-note.bad{color:var(--bad)}.result-counts{display:flex;flex-wrap:wrap;gap:5px}.enrollment-results{margin:14px 16px;padding:14px;border:1px solid var(--line);border-radius:10px;background:#f8fafc}.enrollment-results h4{margin:0 0 9px;font-size:14px}.enrollment-results .result-counts{margin-bottom:10px}.operation-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;padding:8px 0;border-top:1px solid var(--line)}.operation-row .result-note{margin:0;flex-basis:100%}.net-cell{min-width:155px;font-variant-numeric:tabular-nums}.net-cell strong{white-space:nowrap}.preview-net{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:18px;color:var(--muted);font-size:12px}.preview-net .net-note{margin:0}.item-table{min-width:1560px}
         .hidden{display:none!important}body.embedded{background:#fff}body.embedded main{max-width:none;padding:18px;min-height:100vh}body.embedded .hero{justify-content:flex-end;margin-bottom:16px}body.embedded .hero>div{display:none}@media(max-width:900px){main{padding:16px 12px}.topbar{padding:0 12px}.filters{grid-template-columns:1fr 1fr}.filters .field:first-child{grid-column:1/-1}.stats{grid-template-columns:1fr 1fr}.hero{flex-direction:column}.user{display:none}}@media(max-width:560px){.filters{grid-template-columns:1fr}.filters .field:first-child{grid-column:auto}.stats{grid-template-columns:1fr}.brand small{display:none}}
     </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261010-clean">
+    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261012-system">
 <script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261007"></script>
     <script src="{{ url_for('static', filename='console-performance.js') }}?v=20261007-json-fix"></script>
     <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261007-date-filters"></script>
     <script src="{{ url_for('static', filename='data-freshness.js') }}?v=20261011-audit"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261011-compact">
+    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261012-system">
+    <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}?v=20261012-system">
 </head>
 <body class="zs-standalone{% if embedded %} embedded{% endif %}">
 {% if not embedded %}<header class="topbar"><div class="brand"><div class="mark">M</div><div><h1>活动管理</h1><small>Mercado Libre 店群促销工作台</small></div></div><div class="top-actions"><span class="user">{{ current_user.display_name or current_user.username }}</span><a class="back" href="/">返回综合服务台</a></div></header>{% endif %}

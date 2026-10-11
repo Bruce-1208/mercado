@@ -3,13 +3,47 @@
     --zs-brand: #2563eb;
     --zs-brand-hover: #1d4ed8;
     --zs-brand-tint: #eff6ff;
-    --zs-canvas: #f6f8fa;
+    --zs-canvas: #f3f6fb;
     --zs-card: #fff;
     --zs-card-soft: #f8fafc;
     --zs-heading: #172033;
     --zs-copy: #344054;
     --zs-secondary: #64748b;
-    --zs-stroke: #e3e8ee;
+    --zs-stroke: #dce4ef;
+    --zs-stroke-strong: #b6c4d6;
+    --zs-brand-line: #bfdbfe;
+    --zs-white: #fff;
+    --zs-success: #15803d;
+    --zs-success-tint: #f0fdf4;
+    --zs-warning: #92400e;
+    --zs-warning-tint: #fffbeb;
+    --zs-danger: #b91c1c;
+    --zs-danger-hover: #991b1b;
+    --zs-danger-tint: #fef2f2;
+    --zs-nav: #172338;
+    --zs-nav-surface: #223149;
+    --zs-nav-stroke: #42516a;
+    --zs-nav-copy: #d5deec;
+    --zs-nav-muted: #aebed4;
+    --zs-nav-hover: #263852;
+    --zs-nav-active: #254c83;
+    --zs-nav-focus: #9bc4ff;
+    --zs-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --zs-text-small: 12px;
+    --zs-text-body: 13px;
+    --zs-text-title: 20px;
+    --zs-space-1: 4px;
+    --zs-space-2: 8px;
+    --zs-space-3: 12px;
+    --zs-space-4: 16px;
+    --zs-space-6: 24px;
+    --zs-radius-card: 10px;
+    --zs-radius-control: 6px;
+    --zs-radius-dialog: 14px;
+    --zs-height-compact: 32px;
+    --zs-height-touch: 44px;
+    --zs-focus: 0 0 0 3px rgb(37 99 235 / 16%);
+    --zs-shadow-overlay: 0 16px 48px rgb(15 23 42 / 16%);
     --zs-shadow: none;
     --zs-corner: 10px;
     --zs-control-corner: 8px;
@@ -19,7 +53,7 @@ body.zs-console,
 body.zs-standalone {
     background: var(--zs-canvas);
     color: var(--zs-heading);
-    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    font-family: var(--zs-font);
 }
 
 /* Main desk: retain each module's layout while aligning its surfaces and hierarchy. */

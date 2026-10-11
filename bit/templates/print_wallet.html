@@ -6,8 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ '打印充值管理' if wallet_admin else '打印余额' }} · 泽顺运营中心</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='print-wallet.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261010-clean">
-    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261011-compact">
+  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261012-system">
+    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261012-system">
+    <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}?v=20261012-system">
 </head>
 <body class="zs-standalone zs-account" data-admin="{{ 'true' if wallet_admin else 'false' }}" data-user-id="{{ current_user.id }}">
   <header><strong>ZS · 泽顺运营中心</strong><nav aria-label="页面导航"><a href="/">返回工作台</a><a href="/billing">账户订阅</a></nav></header>
