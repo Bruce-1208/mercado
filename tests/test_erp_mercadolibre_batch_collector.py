@@ -115,9 +115,9 @@ def test_collection_request_requires_mercado_host_and_bounded_count():
     with pytest.raises(ValueError, match="1-500"):
         validate_collection_request("https://listado.mercadolibre.com.mx/bolsas", 501)
 
-    assert normalize_collection_workers(10) == 10
-    with pytest.raises(ValueError, match="1-10"):
-        normalize_collection_workers(11)
+    assert normalize_collection_workers(5) == 5
+    with pytest.raises(ValueError, match="1-5"):
+        normalize_collection_workers(6)
 
 
 def test_keyword_builds_country_frontend_search_urls():
@@ -745,11 +745,11 @@ def test_bitbrowser_mode_uses_parallel_playwright_connection(monkeypatch):
         5,
         browser_mode="bitbrowser",
         window_id="window-123",
-        max_workers=6,
+        max_workers=5,
     )
 
     assert calls[0]["window_id"] == "window-123"
-    assert calls[0]["max_workers"] == 6
+    assert calls[0]["max_workers"] == 5
 
 
 def test_playwright_plugin_reader_targets_zying_shadow_dom():
@@ -1424,7 +1424,7 @@ def test_playwright_listing_data_is_kept_while_parallel_detail_is_supplemented(m
         playwright_collector._collect_async(
             "https://listado.mercadolibre.com.mx/cosplay",
             1,
-            max_workers=6,
+            max_workers=5,
             plugin_timeout=4,
             on_page=None,
             on_item=None,

@@ -128,3 +128,70 @@ test('redirect to a different seller listing is not uploaded', async () => {
   assert.equal(f.submitted.length, 0);
   assert.deepEqual(f.removed, [7]);
 });
+
+function single1688Setup() {
+  const f = singleSetup([]);
+  f.chrome.tabs.update = async () => { throw new Error('must not activate tabs'); };
+  f.run(`aiWeightPriceWaitTab = async () => {};
+    extractFromTab = async () => ({source_item_id:'123456', source_platform:'1688'});`);
+  return f;
+}
+const collect1688 = f => f.send({type:'COLLECT_1688_URL', product:{source_item_id:'123456', source_platform:'1688'}});
+
+test('1688 list click automatically submits detail and closes inactive tab', async () => {
+  const f = single1688Setup();
+  assert.equal((await collect1688(f)).ok, true);
+  assert.equal(f.created[0].active, false);
+  assert.equal(f.created[0].url, 'https://detail.1688.com/offer/123456.html');
+  assert.equal(f.submitted.length, 1);
+  assert.deepEqual(f.removed, [7]);
+});
+
+test('1688 retries a not-yet-ready detail without a second click', async () => {
+  const f = single1688Setup();
+  f.run(`let reads = 0; extractFromTab = async () => {
+    if (++reads === 1) throw new Error('未识别到商品标题');
+    return {source_item_id:'123456'};
+  };`);
+  assert.equal((await collect1688(f)).ok, true);
+  assert.equal(f.submitted.length, 1);
+  assert.deepEqual(f.removed, [7]);
+});
+
+for (const failure of ['verification', 'redirect', 'upload']) {
+  test('1688 '+failure+' failure closes temporary tab without switching focus', async () => {
+    const f = single1688Setup();
+    let activated = false;
+    f.chrome.tabs.update = async () => { activated = true; };
+    if (failure === 'verification') f.run(`extractFromTab = async () => {throw new Error('请完成验证')}`);
+    if (failure === 'redirect') f.run(`extractFromTab = async () => ({source_item_id:'999999'})`);
+    if (failure === 'upload') f.run(`submitProduct = async () => {throw new Error('上传失败')}`);
+    assert.equal((await collect1688(f)).ok, false);
+    assert.equal(activated, false);
+    assert.deepEqual(f.removed, [7]);
+  });
+}
+
+for (const sourceUrl of [
+  'https://detail.1688.com/offer/123456.html?sk=access-token&from=search',
+  'https://s.1688.com/redirect.html?offerId=123456&key=abc'
+]) test('1688 preserves the working listing URL: '+sourceUrl, async () => {
+  const f = single1688Setup();
+  const result = await f.send({type:'COLLECT_1688_URL', product:{source_item_id:'123456', source_url:sourceUrl}});
+  assert.equal(result.ok, true);
+  assert.equal(f.created[0].url, sourceUrl);
+  assert.equal(f.submitted.length, 1);
+  assert.deepEqual(f.removed, [7]);
+});
+
+for (const sourceUrl of [
+  'https://detail.1688.com/offer/999999.html',
+  'https://1688.com.evil.test/offer/123456.html',
+  'javascript:alert(1)', 'https://user:pass@detail.1688.com/offer/123456.html'
+]) test('1688 rejects mismatched or invalid destinations: '+sourceUrl, async () => {
+  const f = single1688Setup();
+  const result = await f.send({type:'COLLECT_1688_URL', product:{source_item_id:'123456', source_url:sourceUrl}});
+  assert.equal(result.ok, false);
+  assert.equal(f.created.length, 0);
+  assert.equal(f.submitted.length, 0);
+});

@@ -61,7 +61,7 @@ def order_page(count=10, *, wrong_id=None, timeout_id=None, rejected_id=None):
                         "root": [{"order_id": str(wrong_id if wrong_id is not None and internal_id == 100 else internal_id),
                                   "order_no": str(2000000 + internal_id - 100), "order_cost": "18.50",
                                   "customer": "unused private data"}],
-                        "buys": [{"no": "P" + str(internal_id), "trace": "T" + str(internal_id), "other": "x"}],
+                        "buys": [{"no": "P" + str(internal_id), "trace": "T" + str(internal_id), "amount": "18.50", "cur": "CNY", "other": "x"}],
                         "items": [{"large_unused_data": "x" * 10000}]
                     }})
             else:

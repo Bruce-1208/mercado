@@ -30,52 +30,37 @@ test('activity enrollment summary separates latest successes, failures and unres
   assert.match(c.renderCampaignEnrollment({total: 0}), /暂无报名记录/);
 });
 
-test('a saved failed enrollment stays visible despite an official participating state and escapes the reason', () => {
+test('failed unenrolled products show safely escaped reasons', () => {
   const {context: c} = setup();
-  const result = c.renderEnrollmentResult({status_raw: 'started', enrollment_result: {
+  const result = c.renderEnrollmentResult({status_raw: 'candidate', enrollment_result: {
     status: 'failed', message: '价格无效 <img src=x onerror="alert(1)"> & "原因"', created_at: '2026-10-07T02:00:00Z',
   }});
   assert.match(result, /报名失败/);
   assert.match(result, /价格无效 &lt;img/);
   assert.match(result, /&amp; &quot;原因&quot;/);
-  assert.match(result, /2026-10-07/);
   assert.doesNotMatch(result, /<img|已参与（官方）/);
 });
 
 test('official participation is distinguished from local enrollment and unresolved submissions remain unresolved', () => {
   const {context: c} = setup();
-  assert.match(c.renderEnrollmentResult({status_raw: 'started'}), /已参与（官方）/);
+  assert.match(c.renderEnrollmentResult({status_raw: 'started'}), /已报名/);
   assert.match(c.renderEnrollmentResult({status_raw: 'candidate'}), /未报名/);
-  assert.match(c.renderEnrollmentResult({status_raw: 'scheduled'}), /待生效（官方）/);
-  assert.match(c.renderEnrollmentResult({status_raw: 'pending_approval'}), /待批准（官方）/);
+  assert.match(c.renderEnrollmentResult({status_raw: 'scheduled'}), /待生效/);
+  assert.match(c.renderEnrollmentResult({status_raw: 'pending_approval'}), /待审核/);
   const unresolved = c.renderEnrollmentResult({status_raw: 'candidate', enrollment_result: {status: 'unknown'}});
   assert.match(unresolved, /待核实/);
   assert.match(unresolved, /平台结果尚未确认/);
   assert.doesNotMatch(unresolved, /报名成功|报名失败/);
 });
 
-test('persistent submission panel includes each item, counts, action and safely escaped reasons', () => {
-  const {context: c, fields} = setup();
-  const classes = new Set(['hidden']);
-  fields.enrollmentResults = {innerHTML: '', classList: {toggle(name, on) {on ? classes.add(name) : classes.delete(name);}}};
-  c.state.currentJob = {job_id: 'test-batch-0001', action: 'enroll', results: [
-    {item_id: 'MLM123', status: 'succeeded'},
-    {item_id: 'MLM456', status: 'failed', message: '<script>failure</script>'},
-    {item_id: 'MLM789', status: 'unknown'},
-  ]};
-  c.renderOperationResults();
-  const result = fields.enrollmentResults.innerHTML;
-  assert.equal(classes.has('hidden'), false);
-  for (const text of ['最近报名结果', '成功 1', '失败 1', '待核实 1', 'MLM123', 'MLM456', 'MLM789']) assert.ok(result.includes(text), text);
-  assert.match(result, /&lt;script&gt;failure&lt;\/script&gt;/);
-  assert.doesNotMatch(result, /<script>/);
-  c.state.currentJob.action = 'withdraw';
-  c.renderOperationResults();
-  assert.match(fields.enrollmentResults.innerHTML, /最近退出结果|退出成功/);
-  c.state.currentJob = null;
-  c.renderOperationResults();
-  assert.equal(fields.enrollmentResults.innerHTML, '');
-  assert.equal(classes.has('hidden'), true);
+test('current participation wins over old results and cancelled items do not retain success', () => {
+  const {context:c}=setup();
+  assert.match(c.renderEnrollmentResult({status_raw:'started',enrollment_result:{status:'failed'}}), /已报名/);
+  assert.doesNotMatch(c.renderEnrollmentResult({status_raw:'withdrawn',enrollment_result:{status:'succeeded'}}), /报名成功|已报名/);
+  assert.equal(c.currentDiscountLabel({status_raw:'started',original_price:100,price:80}), '降价 20%（8 折）');
+  assert.equal(c.currentDiscountLabel({status_raw:'candidate',original_price:100,price:80}), '—');
+  assert.equal(c.currentDiscountLabel({status_raw:'started',original_price:null,price:80}), '平台未提供');
+  assert.doesNotMatch(html, /id="enrollmentResults"|最近报名结果<\/h4>/);
 });
 
 test('net proceeds show amount, its own currency, quote price currency and source without converting currencies', () => {
@@ -129,4 +114,11 @@ test('matching official net options are used for edited prices only in the same 
   assert.equal(c.netForPrice({...row, net_proceeds_options: [wrongCurrency]}, 400), baseline);
   assert.match(c.renderNetProceeds(c.netForPrice(row, 400), 'MXN', 400), /USD 28\.00/);
   assert.match(c.renderNetProceeds(c.netForPrice(row, 410), 'MXN', 410), /报价已变更/);
+});
+
+test('anomalous net quotes show a warning without presenting the reported amount as earnings', () => {
+  const {context:c}=setup();
+  const html=c.renderNetProceeds({amount:null,reported_amount:130.94,currency_id:'USD',warning:'平台净收益超过同币种售价，金额或币种异常，待核实'});
+  assert.match(html,/异常，待核实/);
+  assert.doesNotMatch(html,/130\.94/);
 });

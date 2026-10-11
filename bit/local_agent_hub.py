@@ -714,13 +714,35 @@ class LocalAgentStore:
         """Finish tasks whose owning Agent has stopped renewing its lease."""
         now = time.time() if now is None else float(now)
         lease_seconds = max(60.0, float(lease_seconds or DEFAULT_JOB_LEASE_SECONDS))
-        params = [now, now]
+        params = []
         agent_clause = ""
         if agent_id:
             agent_clause = " AND j.agent_id = ?"
             params.append(normalize_agent_id(agent_id))
         params.extend((now, now - lease_seconds, now - lease_seconds))
+        predicate = f"""
+            status IN ('running', 'stopping'){agent_clause}
+            AND (
+                (lease_expires_at IS NOT NULL AND lease_expires_at < ?)
+                OR (
+                    lease_expires_at IS NULL AND updated_at < ?
+                    AND NOT EXISTS (
+                        SELECT 1 FROM local_agents AS a
+                        WHERE a.agent_id = j.agent_id AND a.last_seen >= ?
+                    )
+                )
+            )
+        """
         with self._connect() as connection:
+            # Status polls usually have nothing to reap. Avoid acquiring the
+            # single SQLite writer lock for a no-op UPDATE on every poll.
+            if not connection.execute(
+                f"SELECT 1 FROM local_agent_jobs AS j WHERE {predicate} LIMIT 1",
+                params,
+            ).fetchone():
+                return 0
+            # Re-evaluate eligibility in the UPDATE: a heartbeat may have
+            # renewed the lease after the read above.
             cursor = connection.execute(
                 f"""
                 UPDATE local_agent_jobs AS j
@@ -730,19 +752,9 @@ class LocalAgentStore:
                         ELSE 'Agent 任务租约已过期，执行状态已丢失'
                     END,
                     finished_at = ?, updated_at = ?, lease_expires_at = NULL
-                WHERE status IN ('running', 'stopping'){agent_clause}
-                  AND (
-                    (lease_expires_at IS NOT NULL AND lease_expires_at < ?)
-                    OR (
-                        lease_expires_at IS NULL AND updated_at < ?
-                        AND NOT EXISTS (
-                            SELECT 1 FROM local_agents AS a
-                            WHERE a.agent_id = j.agent_id AND a.last_seen >= ?
-                        )
-                    )
-                  )
+                WHERE {predicate}
                 """,
-                params,
+                [now, now, *params],
             )
         return int(cursor.rowcount or 0)
 

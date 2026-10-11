@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import math
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -77,9 +78,18 @@ def _no_product_ads_permission_error(message: Any) -> bool:
     )
 
 
+_snapshot_read_cache = {}
+_snapshot_read_lock = threading.Lock()
+
+
 def _load_snapshot(state_path=None) -> dict[str, Any]:
     path = Path(state_path or AD_ANALYSIS_STATE_PATH)
     try:
+        stat = path.stat()
+        signature = (str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+        with _snapshot_read_lock:
+            if signature in _snapshot_read_cache:
+                return _snapshot_read_cache[signature]
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
         return _empty_snapshot()
@@ -114,6 +124,9 @@ def _load_snapshot(state_path=None) -> dict[str, Any]:
     result["skipped"].extend(legacy_skipped)
     result["snapshot_available"] = bool(result.get("generated_at"))
     result["cached"] = True
+    with _snapshot_read_lock:
+        _snapshot_read_cache.clear()
+        _snapshot_read_cache[signature] = result
     return result
 
 
@@ -169,7 +182,8 @@ def _normalize_ad_group_status(value: Any) -> str:
 
 def _float(value: Any) -> float:
     try:
-        return float(value or 0)
+        number = float(value or 0)
+        return number if math.isfinite(number) else 0.0
     except (TypeError, ValueError):
         return 0.0
 
@@ -201,16 +215,12 @@ def _derived_metrics(metrics: dict[str, Any]) -> dict[str, int | float]:
     clicks = _integer(result["clicks"])
     prints = _integer(result["prints"])
     units = _integer(result["units_quantity"])
-    if not _float(result["roas"]):
-        result["roas"] = revenue / cost if cost else 0.0
-    if not _float(result["acos"]):
-        result["acos"] = cost / revenue * 100 if revenue else 0.0
-    if not _float(result["ctr"]):
-        result["ctr"] = clicks / prints * 100 if prints else 0.0
-    if not _float(result["cvr"]):
-        result["cvr"] = units / clicks * 100 if clicks else 0.0
-    if not _float(result["cpc"]):
-        result["cpc"] = cost / clicks if clicks else 0.0
+    # Ratios are never additive, including ratios in legacy saved snapshots.
+    result["roas"] = revenue / cost if cost else 0.0
+    result["acos"] = cost / revenue * 100 if revenue else 0.0
+    result["ctr"] = clicks / prints * 100 if prints else 0.0
+    result["cvr"] = units / clicks * 100 if clicks else 0.0
+    result["cpc"] = cost / clicks if clicks else 0.0
     return result
 
 
@@ -219,6 +229,8 @@ def _sum_metrics(rows: Iterable[dict[str, Any]]) -> dict[str, int | float]:
     for row in rows:
         metrics = row.get("metrics") if "metrics" in row else row
         for name in AD_METRICS:
+            if name in {"roas", "acos", "ctr", "cpc", "cvr", "tacos", "sov"}:
+                continue
             totals[name] += _float((metrics or {}).get(name))
     return _derived_metrics(totals)
 
@@ -517,7 +529,7 @@ def _advertiser_analysis(client, token: dict, advertiser: dict, date_from: str, 
                 "campaign_name": str(campaign.get("name") or ""),
                 "campaign_status": str(campaign.get("status") or "").upper(),
                 "campaign_budget": _float(campaign.get("budget")),
-                "currency_id": str(campaign.get("currency_id") or ""),
+                "currency_id": str(campaign.get("currency_id") or advertiser.get("currency_id") or "").strip().upper(),
                 "ad_group_id": group_id,
                 "ad_group_type": str(group.get("ad_group_type") or "ITEM").upper(),
                 "ad_group_status": str(group.get("status") or "").upper(),
@@ -526,10 +538,13 @@ def _advertiser_analysis(client, token: dict, advertiser: dict, date_from: str, 
 
     _enrich_images(client, links)
 
-    currency_id = next(
-        (str(row.get("currency_id") or "") for row in campaigns.values() if row.get("currency_id")),
-        "",
-    )
+    # Billing currency must come from the advertising account/campaign, never
+    # the marketplace site or a product's listing-price currency.
+    billing_currencies = {str(row.get("currency_id") or advertiser.get("currency_id") or "").strip().upper()
+                          for row in campaigns.values()}
+    if not campaigns:
+        billing_currencies = {str(advertiser.get("currency_id") or "").strip().upper()}
+    currency_id = next(iter(billing_currencies)) if len(billing_currencies) == 1 else ""
     account_metrics = _derived_metrics(summary) if summary else _sum_metrics(groups)
     active_campaigns = sum(
         1 for row in campaigns.values() if str(row.get("status") or "").lower() == "active"
@@ -558,13 +573,22 @@ def _summary(
     skipped: list[dict] | None = None,
 ) -> dict:
     currencies: dict[str, list[dict]] = {}
+    unknown = []
     for account in accounts:
-        currencies.setdefault(str(account.get("currency_id") or "未标明币种"), []).append(account)
+        currency = str(account.get("currency_id") or "").strip().upper()
+        if not currency:
+            unknown.append(account)
+        else:
+            currencies.setdefault(currency, []).append(account)
     money = []
     for currency_id, rows in sorted(currencies.items()):
         metrics = _sum_metrics(rows)
         money.append({"currency_id": currency_id, "metrics": metrics})
     additive = _sum_metrics(accounts)
+    # There is no valid cross-currency total without an explicit conversion.
+    if len(currencies) != 1 or unknown:
+        for field in ("cost", "direct_amount", "indirect_amount", "total_amount", "cpc", "roas", "acos"):
+            additive[field] = None
     additive.update({
         "account_count": len(accounts),
         "link_count": len(links),
@@ -572,42 +596,53 @@ def _summary(
         "error_count": len(errors),
         "skipped_count": len(skipped or []),
         "currencies": money,
+        "unknown_currency_count": len(unknown),
     })
     return additive
 
 
-def _filtered_snapshot(
-    snapshot: dict[str, Any], token_ids: Iterable[int] | None
-) -> dict[str, Any]:
+def _filtered_snapshot(snapshot, token_ids, *, page=None, page_size=100, account="", site="", status="", search="", salesperson="", group_name="", summary_only=False):
     from bit.ad_profit import enrich
-
-    result = copy.deepcopy(snapshot)
     from bit.ad_images import enrich as enrich_images
 
-    if token_ids is not None:
-        selected_images = {int(value) for value in token_ids or () if int(value or 0) > 0}
-        enrich_images([row for row in result.get("links") or []
-                       if _integer(row.get("token_id")) in selected_images])
-    else:
-        enrich_images(result.get("links") or [])
-    if token_ids is None:
-        result["summary"] = _summary(
-            result.get("accounts") or [],
-            result.get("links") or [],
-            result.get("errors") or [],
-            result.get("skipped") or [],
-        )
-        return enrich(result)
-    selected = {int(value) for value in token_ids or () if int(value or 0) > 0}
+    selected = None if token_ids is None else {int(value) for value in token_ids}
+    result = {key: value for key, value in snapshot.items() if key not in {"accounts", "links", "errors", "skipped"}}
     for name in ("accounts", "links", "errors", "skipped"):
-        result[name] = [
-            row for row in (result.get(name) or [])
-            if _integer(row.get("token_id")) in selected
-        ]
-    result["summary"] = _summary(
-        result["accounts"], result["links"], result["errors"], result["skipped"]
-    )
-    return enrich(result)
+        result[name] = [row for row in snapshot.get(name, []) if selected is None or _integer(row.get("token_id")) in selected]
+    # Repair ratios on read, so old snapshots do not keep displaying summed ratios.
+    for name in ("accounts", "links"):
+        result[name] = [{**row, "metrics": _derived_metrics(row.get("metrics") or {})}
+                        for row in result[name]]
+    account_currencies = {(row.get("token_id"), row.get("advertiser_id"), row.get("site_id")): row.get("currency_id")
+                          for row in result['accounts']}
+    for row in result['links']:
+        if not row.get('currency_id'):
+            row['currency_id'] = account_currencies.get((row.get('token_id'), row.get('advertiser_id'), row.get('site_id'))) or ''
+    def matches(row):
+        identity = f"{_integer(row.get('token_id'))}:{_integer(row.get('advertiser_id'))}:{row.get('site_id', '')}"
+        return (not account or identity == account) and (not site or row.get('site_id') == site) and (not salesperson or row.get('salesperson') == salesperson) and (not group_name or row.get('group_name') == group_name)
+    accounts = [row for row in result['accounts'] if matches(row)]
+    links = [row for row in result['links'] if matches(row)
+             and (not status or str(row.get('ad_group_status') or row.get('status') or '').upper() == status.upper())
+             and (not search or any(search.casefold() in str(row.get(field) or '').casefold() for field in ('item_id', 'title', 'store_name', 'campaign_name', 'account_name')))]
+    result['accounts'] = accounts
+    result['summary'] = _summary(accounts, links, result['errors'], result['skipped'])
+    if page is not None:
+        # Summary covers every filtered link, never just the current page.
+        result['summary'] = _summary(links, links, result['errors'], result['skipped'])
+        result['summary']['account_count'] = len({(row.get('token_id'), row.get('advertiser_id'), row.get('site_id')) for row in links})
+    if page is not None:
+        size = max(1, min(200, int(page_size)))
+        pages = max(1, (len(links) + size - 1) // size)
+        page = max(1, min(int(page), pages))
+        result.update(total=len(links), page=page, page_size=size, pages=pages, server_paged=True)
+        links = links[(page - 1) * size:page * size]
+    result['links'] = [] if summary_only else links
+    result = copy.deepcopy(result)
+    if not summary_only:
+        enrich_images(result['links'])
+        enrich(result)
+    return result
 
 
 def _merge_snapshot(
@@ -789,17 +824,20 @@ def update_product_ads_ad_groups(
 def collect_ad_analysis(
     *, date_from: str = "", date_to: str = "", token_ids: Iterable[int] | None = None,
     refresh_token_ids: Iterable[int] | None = None, force: bool = False,
+    page=None, page_size=100, account="", site="", status="", search="", salesperson="", group_name="", summary_only=False,
 ) -> dict[str, Any]:
     """Return the last snapshot, optionally refreshing all or selected stores."""
     from bit import bit_mysql
     from bit.bit_store_link_sync import _client_and_token
 
+    view = dict(page=page, page_size=page_size, account=account, site=site, status=status,
+                search=search, salesperson=salesperson, group_name=group_name, summary_only=summary_only)
     visible = (
         None if token_ids is None else
         tuple(sorted({int(value) for value in token_ids or () if int(value or 0) > 0}))
     )
     if not force:
-        return _filtered_snapshot(_load_snapshot(), visible)
+        return _filtered_snapshot(_load_snapshot(), visible, **view)
 
     start, end = _date_range(date_from, date_to)
     refresh_scope = (
@@ -810,7 +848,7 @@ def collect_ad_analysis(
         else visible
     )
     if refresh_scope is not None and not refresh_scope:
-        return _filtered_snapshot(_load_snapshot(), visible)
+        return _filtered_snapshot(_load_snapshot(), visible, **view)
     cache_key = (start, end, refresh_scope)
     now = datetime.now()
 
@@ -932,7 +970,7 @@ def collect_ad_analysis(
             _persist_snapshot(result)
     with _cache_lock:
         _cache[cache_key] = (now, result)
-    return _filtered_snapshot(result, visible)
+    return _filtered_snapshot(result, visible, **view)
 
 
 __all__ = [

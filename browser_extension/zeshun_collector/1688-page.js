@@ -39,6 +39,11 @@ function zeshunRead1688PageData() {
   };
   return {
     offer_id: offerId,
+    sku_image_sets: arrays("#skuSelection[data-module='od_sku_selection'], [data-module='od_sku_selection']",
+      item => item && typeof item === "object"
+        && ["imageUrl", "imgUrl", "image", "pictureUrl", "image_url"].some(key => typeof item[key] === "string" && item[key])
+        && ["skuId", "specAttrs", "name", "value", "valueName"].some(key => item[key]),
+      ["skuId", "specAttrs", "name", "value", "valueName", "imageUrl", "imgUrl", "image", "pictureUrl", "image_url"], true),
     sku_sets: arrays("#skuSelection[data-module='od_sku_selection'], [data-module='od_sku_selection']",
       item => item && typeof item === "object" && item.skuId && item.specAttrs,
       ["skuId", "specAttrs", "discountPrice", "currentPrice", "priceNum", "price", "salePrice", "priceAmount", "priceValue", "skuCode", "sku", "sellerSku",

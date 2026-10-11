@@ -348,7 +348,12 @@ def connect_bit_browser(window_id):
                 driver.set_page_load_timeout(60)
                 driver.set_script_timeout(30)
             except BaseException:
-                chrome_service.stop()
+                # Selenium 4.41 does not create ``Service.process`` until the
+                # driver subprocess has started.  Calling stop() after an
+                # earlier startup failure masks the useful original exception
+                # with ``'Service' object has no attribute 'process'``.
+                if getattr(chrome_service, "process", None) is not None:
+                    chrome_service.stop()
                 raise
             return driver, res
 
@@ -2017,16 +2022,9 @@ def send_ai_chat_message(driver, message):
     before_send = read_snapshot(driver)
     _check_appeal_control(driver)
     try:
-        if click_send_button(driver, mode=mode):
-            return {
-                "acknowledged": True,
-                "reply_baseline": ChatMessages(before_send),
-                "message_id": "",
-                "conversation_id": before_send.get("conversation_id", ""),
-                "chat_snapshot": before_send,
-                "send_method": "button_click",
-            }
-        input_box.send_keys(Keys.ENTER)
+        clicked = click_send_button(driver, mode=mode)
+        if not clicked:
+            input_box.send_keys(Keys.ENTER)
         deadline = time.monotonic() + AI_SEND_CONFIRM_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
             _check_appeal_control(driver)
@@ -2047,7 +2045,7 @@ def send_ai_chat_message(driver, message):
             except Exception:
                 pass
             _appeal_pause(driver, 0.5)
-        raise AppealExecutionError("已按回车发送，但未确认消息气泡和输入框状态", "sent_unknown", sent=True)
+        raise AppealExecutionError("已触发发送，但未确认新消息气泡和输入框状态；请核实后再操作", "sent_unknown", sent=True)
     except AppealExecutionError as exc:
         # Stop/deadline after the click must still preserve possible submission.
         exc.sent = True
@@ -2342,7 +2340,7 @@ def send_infraction_message_with_retry(
     driver, huashu, infraction_ids, name, site, group_index, total_groups,
     appeal_kind="侵权",
 ):
-    """发送按钮点击确认即视为话术发送成功；客服回复只作为附加记录。
+    """新消息回显确认发送；客服回复与申诉业务结果单独记录。
 
     只重试发送前失败。点击发送成功后仍等待并记录回复，但回复超时、
     站点追问或后续读取失败不再把已发送的申诉改判为失败。
@@ -2430,6 +2428,11 @@ def send_infraction_message_with_retry(
                 )
                 break
             result.update(response=response, reply_received=True, reply_status="replied")
+            from bit.bit_appeal_state import business_outcome
+            result["business_status"] = business_outcome(result, response)
+            if result["business_status"] == "needs_human" and not is_site_option_question(response):
+                result.update(reply_status="needs_human", needs_human=True)
+                break
             if not is_site_option_question(response):
                 break
             if site_answers >= 2:
@@ -3711,7 +3714,9 @@ def handle_infraction(
                     else f"{infraction_ids}{appeal_suffix}"
                 )
             print(f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组侵权申诉：{huashu}<br>")
-            send_infraction_message_with_retry(driver, huashu, infraction_ids, name, site, index, len(groups))
+            group_outcome = send_infraction_message_with_retry(driver, huashu, infraction_ids, name, site, index, len(groups))
+            if isinstance(group_outcome, dict) and group_outcome.get("needs_human"):
+                break  # Preserve the sent result and stop this site's remaining groups.
         except Exception as e:
             group_error = str(e)
             raise
@@ -3815,7 +3820,7 @@ def handle_prohibited(
                 f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组"
                 f"禁限售申诉：{huashu}<br>"
             )
-            send_infraction_message_with_retry(
+            group_outcome = send_infraction_message_with_retry(
                 driver,
                 huashu,
                 group_ids,
@@ -3825,6 +3830,8 @@ def handle_prohibited(
                 len(groups),
                 appeal_kind="禁限售",
             )
+            if isinstance(group_outcome, dict) and group_outcome.get("needs_human"):
+                break  # Preserve the sent result and stop this site's remaining groups.
         except Exception as exc:
             group_error = str(exc)
             raise
@@ -3880,9 +3887,11 @@ def handle_delay(
         group_started = len(get_appeal_log_records())
         error = ""
         try:
-            send_infraction_message_with_retry(
+            group_outcome = send_infraction_message_with_retry(
                 driver, text, ids, name, site, index, len(groups), appeal_kind="延误",
             )
+            if isinstance(group_outcome, dict) and group_outcome.get("needs_human"):
+                break  # Preserve the sent result and stop this site's remaining groups.
         except Exception as exc:
             error = str(exc)
             raise
@@ -3956,7 +3965,7 @@ def handle_cancellation(
         group_log_start = len(get_appeal_log_records())
         group_error = ""
         try:
-            send_infraction_message_with_retry(
+            group_outcome = send_infraction_message_with_retry(
                 driver,
                 huashu,
                 cancellation_ids,
@@ -3966,6 +3975,8 @@ def handle_cancellation(
                 len(groups),
                 appeal_kind="取消率",
             )
+            if isinstance(group_outcome, dict) and group_outcome.get("needs_human"):
+                break  # Preserve the sent result and stop this site's remaining groups.
         except Exception as exc:
             group_error = str(exc)
             raise
@@ -4054,7 +4065,7 @@ def handle_complaint(
         group_log_start = len(get_appeal_log_records())
         group_error = ""
         try:
-            send_infraction_message_with_retry(
+            group_outcome = send_infraction_message_with_retry(
                 driver,
                 huashu,
                 complaint_ids,
@@ -4064,6 +4075,8 @@ def handle_complaint(
                 len(groups),
                 appeal_kind="投诉",
             )
+            if isinstance(group_outcome, dict) and group_outcome.get("needs_human"):
+                break  # Preserve the sent result and stop this site's remaining groups.
         except Exception as exc:
             group_error = str(exc)
             raise

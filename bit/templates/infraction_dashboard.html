@@ -507,12 +507,14 @@
             .back-link { padding: 7px 9px; }
         }
     </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261007-date-filters">
+    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261010-clean">
 <script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261007"></script>
     <script src="{{ url_for('static', filename='console-performance.js') }}?v=20261007-json-fix"></script>
     <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261007-date-filters"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='date-filter-controls.css') }}?v=20261008">
 <script defer src="{{ url_for('static', filename='date-filter-controls.js') }}?v=20261008"></script>
+    <script src="{{ url_for('static', filename='data-freshness.js') }}?v=20261011-audit"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261011-compact">
 </head>
 <body class="zs-standalone{% if embedded %} embedded{% endif %}{% if ip_rights_mode %} ip-rights{% endif %}">
     <header class="topbar">
@@ -801,6 +803,10 @@
             document.getElementById("metric-problems").textContent = problems ? `${problems} 个账户需重试` : "同步状态正常";
         }
 
+        function riskCount(store, key) {
+            return !store.last_synced_at && !Number(store[key]) ? "—" : number(store[key]);
+        }
+
         function syncCell(store) {
             const status = String(store.last_status || "");
             const readAt = escapeHtml(store.last_read_at || "尚未读取");
@@ -810,7 +816,7 @@
             } else if (status === "limited") {
                 badge = '<span class="pill problem">读取不完整</span>';
             } else {
-                badge = `<span class="pill ok">${escapeHtml(store.last_read_at ? "已读取" : "待读取")}</span>`;
+                badge = `<span class="pill ${store.last_synced_at ? "ok" : "problem"}">${escapeHtml(store.last_synced_at ? "已读取" : "待读取 / 风险未知")}</span>`;
             }
             return `${badge}<div class="muted">${readAt}</div>`;
         }
@@ -836,11 +842,12 @@
                 const detection = Number(site?.detection_count || 0);
                 const rights = Number(site?.rights_holder_count || 0);
                 const total = Number(site?.total ?? detection + rights);
+                const known = Boolean(site.last_synced_at || store.last_synced_at) || total > 0;
                 const label = siteId && siteName !== siteId ? `${siteName} · ${siteId}` : (siteName || siteId);
                 return `<span class="site-count-chip" title="${escapeHtml(`${label}：${total} 条`)}">
                     <span>${escapeHtml(label)}</span>
-                    <strong>${number(total)}</strong><small>条</small>
-                    <em>平台 ${number(detection)} · 权利人 ${number(rights)}</em>
+                    <strong>${known ? number(total) : "—"}</strong><small>${known ? "条" : "未知"}</small>
+                    <em>平台 ${known ? number(detection) : "—"} · 权利人 ${known ? number(rights) : "—"}</em>
                 </span>`;
             }).join("")}</div>`;
         }
@@ -862,9 +869,9 @@
                         <tr>
                             <td><span class="store-name">${escapeHtml(store.store_name)}</span></td>
                             <td class="site-list"><strong>${number(store.site_count)} 个站点</strong>${renderSiteCounts(store)}</td>
-                            <td class="count">${number(store.detection_count)}</td>
-                            <td class="count">${number(store.rights_holder_count)}</td>
-                            <td class="count">${number(store.total)}</td>
+                            <td class="count">${riskCount(store, "detection_count")}</td>
+                            <td class="count">${riskCount(store, "rights_holder_count")}</td>
+                            <td class="count">${riskCount(store, "total")}</td>
                             <td class="muted">${escapeHtml(store.latest_infraction_at || "—")}</td>
                             <td>${syncCell(store)}</td>
                             <td>${storeActions(store)}</td>
@@ -907,9 +914,9 @@
                     <td class="count">${number(store.rank)}</td>
                     <td><span class="store-name">${escapeHtml(store.store_name)}</span><div class="muted">${escapeHtml(store.salesperson || "未分配")}</div></td>
                     <td class="site-list"><strong>${number(store.site_count)} 个站点</strong>${renderSiteCounts(store)}</td>
-                    <td class="count">${number(store.detection_count)}</td>
-                    <td class="count">${number(store.rights_holder_count)}</td>
-                    <td class="count">${number(store.total)}</td>
+                    <td class="count">${riskCount(store, "detection_count")}</td>
+                    <td class="count">${riskCount(store, "rights_holder_count")}</td>
+                    <td class="count">${riskCount(store, "total")}</td>
                     <td class="muted">${escapeHtml(store.latest_infraction_at || "—")}</td>
                     <td>${syncCell(store)}</td>
                     <td>${storeActions(store)}</td>
@@ -1070,6 +1077,11 @@
                     elements.syncTitle.textContent = "最近读取时间：尚未读取";
                 }
                 dashboardLastLoadedAt = Date.now();
+                const stores = data.store_rankings || (data.account_groups || []).flatMap(group => (group.salespeople || []).flatMap(person => person.stores || []));
+                const unique = [...new Map(stores.map(store => [store.token_id, store])).values()];
+                const known = unique.filter(store => store.last_synced_at).length;
+                document.getElementById("metric-problems").textContent += ` · 已成功读取 ${known}/${unique.length} 店 · 数量仅含已知记录，未知不代表零风险`;
+                DataFreshness.render(elements.syncTitle, unique.map(store => store.last_synced_at), {hours: 12, scope: "当前筛选店铺", action: "请重试未读取或过期店铺"});
                 showStatus("");
             } catch (error) {
                 if (sequence !== dashboardLoadSequence) return;

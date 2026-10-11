@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync('browser_extension/zeshun_collector/product-batch.js', 'utf8');
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-function harness({read, upload, timeout=120} = {}) {
+function harness({read, upload, timeout=120, connectTimeout=80, listings} = {}) {
   const tabs = new Map();
   const starts = [], uploads = [];
   let seq = 0;
@@ -16,6 +16,7 @@ function harness({read, upload, timeout=120} = {}) {
       update:async id=>tabs.get(id), get:async id=>tabs.get(id), remove:async id=>tabs.delete(id)
     }},
     sendTabMessage: async(id,{type})=>{
+      if(type==='READ_PRODUCT_LIST' && listings) return listings(tabs.get(id).url);
       if(type==='READ_PRODUCT_LIST') return {ok:true,page:1,items:Array.from({length:8},(_,i)=>({url:`https://articulo.mercadolibre.com.mx/MLM-${i+1}`,key:i+1}))};
       const key=Number(tabs.get(id).url.match(/MLM-(\d+)/)[1]); starts.push({key,time:Date.now()});
       if(read) return read(key);
@@ -24,7 +25,7 @@ function harness({read, upload, timeout=120} = {}) {
     uploadProduct:async product=>{if(upload) await upload(product); uploads.push({key:product.source_item_id,time:Date.now()});}
   });
   vm.runInContext(source.replace('const PRODUCT_DETAIL_TIMEOUT_MS = 90000;',`const PRODUCT_DETAIL_TIMEOUT_MS = ${timeout};`)
-    .replace('setTimeout(resolve, 180)','setTimeout(resolve, 1)'),context);
+    .replace('const PRODUCT_CONNECT_TIMEOUT_MS = 15000;', `const PRODUCT_CONNECT_TIMEOUT_MS = ${connectTimeout};`),context);
   const run={tabs:new Set(),stop:false,reserved:0,windowId:1,state:{running:true,params:{max_items:8,concurrency:2,success_rest_seconds:0,min_sales:null,max_sales:null},source_url:'https://listado.mercadolibre.com.mx/toy',completed_count:0,failed_count:0,skipped:0,candidate_count:0}};
   context.run=run;
   return {context,run,tabs,starts,uploads,start:()=>vm.runInContext('runProductBatch(run)',context)};
@@ -33,7 +34,7 @@ function product(key) {return {ok:true,product:{source_item_id:String(key),plugi
 
 test('default delay and validation',()=>{
   const {context}=harness();
-  assert.equal(vm.runInContext('productBatchParams({max_items:20}).success_rest_seconds',context),3);
+  assert.equal(vm.runInContext('productBatchParams({max_items:20}).success_rest_seconds',context),0);
   for(const value of ['NaN','Infinity','-1','3601']) assert.throws(()=>vm.runInContext(`productBatchParams({max_items:20,success_rest_seconds:${value}})`,context));
   assert.equal(vm.runInContext('productBatchParams({max_items:20,success_rest_seconds:0}).success_rest_seconds',context),0);
 });
@@ -59,7 +60,8 @@ test('429 stops all lanes without retry, preserving successes',async()=>{
   assert.match(h.run.state.message,/限频.*自动停止/);
   assert.equal(h.run.state.retry_at,null);
   assert(h.run.state.completed_count>0);
-  assert(!h.starts.some(x=>x.key>3));
+  // The other lane may already have started item 4 before item 3 reports 429.
+  assert(!h.starts.some(x=>x.key>4));
   assert.equal(h.tabs.size,0);
 });
 test('upload rate limit also stops the batch',async()=>{
@@ -146,4 +148,80 @@ test('a rejected progress write does not poison all subsequent saves',async()=>{
   assert.equal(h.run.state.completed_count,8);
   assert.equal(h.run.state.running,false);
   assert(writes>1);
+});
+
+test('a hung last detail on page 1 does not hold up page 2', async()=>{
+  let release;
+  const h=harness({timeout:2000,
+    read:key=>key===1?new Promise(resolve=>{release=resolve;}):product(key),
+    listings:url=>({ok:true,page:url.includes('page2')?2:1,
+      next_url:url.includes('page2')?'':'https://listado.mercadolibre.com.mx/page2',
+      items:(url.includes('page2')?[3,4]:[1,2]).map(key=>({key,url:`https://articulo.mercadolibre.com.mx/MLM-${key}`}))})});
+  const done=h.start();
+  try {
+    const deadline=Date.now()+1000;
+    while(!h.uploads.some(x=>x.key==='4') && Date.now()<deadline) await pause(5);
+    assert(h.uploads.some(x=>x.key==='4'), 'page 2 finishes before page 1 is released');
+    assert(h.run.state.active_items.some(x=>x.url.endsWith('MLM-1') && x.stage==='读取详情'));
+  } finally {release(product(1)); await done;}
+  assert.equal(h.run.state.completed_count,4);
+  assert.equal(h.run.state.active_items.length,0);
+});
+
+test('missing receiver is repaired in the committed main frame', async()=>{
+  const repaired=new Set(); const injections=[];
+  const h=harness({timeout:1000,connectTimeout:800,read:key=>{
+    if(!repaired.has(key)) throw Error('Could not establish connection. Receiving end does not exist.');
+    return product(key);
+  }});
+  h.context.chrome.scripting={executeScript:async options=>{
+    injections.push(options);
+    const key=Number(h.tabs.get(options.target.tabId).url.match(/MLM-(\d+)/)[1]);
+    repaired.add(key);
+  }};
+  await h.start();
+  assert.equal(h.run.state.completed_count,8);
+  assert.equal(injections.length,8);
+  assert(injections.every(x=>x.injectImmediately && x.target.frameIds[0]===0 && x.files.includes('content.js')));
+});
+
+test('all disconnected lanes release slots before the detail data deadline', async()=>{
+  const h=harness({timeout:2000,read:key=>{
+    if(key<=2) throw Error('Could not establish connection. Receiving end does not exist.');
+    return product(key);
+  }});
+  await h.start();
+  assert.equal(h.run.state.failed_count,2);
+  assert.equal(h.run.state.completed_count,6);
+  assert.match(h.run.state.last_error,/连接超时.*释放此通道/);
+  assert(h.uploads.find(x=>x.key==='3').time-h.starts[0].time<1000);
+});
+
+test('pending navigation never injects collector into about:blank', async()=>{
+  const h=harness({timeout:1000,read:key=>{
+    if(key===1) throw Error('Receiving end does not exist');
+    return product(key);
+  }});
+  const get=h.context.chrome.tabs.get;
+  h.context.chrome.tabs.get=async id=>{
+    const tab=await get(id);
+    return tab.url.endsWith('MLM-1')?{...tab,url:'about:blank',pendingUrl:tab.url}:tab;
+  };
+  let injections=0;
+  h.context.chrome.scripting={executeScript:async()=>{injections++;}};
+  await h.start();
+  assert.equal(injections,0);
+  assert.equal(h.run.state.completed_count,7);
+  assert.equal(h.run.state.failed_count,1);
+});
+
+test('failed reserved uploads allow waiting lanes to finish the target', async()=>{
+  const h=harness({timeout:1000,upload:async p=>{
+    await pause(30);
+    if(p.source_item_id==='1') throw Error('upload failed');
+  }});
+  h.run.state.params.max_items=2;
+  await h.start();
+  assert.equal(h.run.state.completed_count,2);
+  assert.equal(h.run.state.failed_count,1);
 });

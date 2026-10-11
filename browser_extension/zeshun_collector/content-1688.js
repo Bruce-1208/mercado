@@ -5,7 +5,7 @@
   // extension is reloaded.  Expose a version marker so the background worker
   // can reload that tab before starting a new search instead of silently
   // running stale search logic alongside this copy.
-  const CONTENT_VERSION = "1.8.47";
+  const CONTENT_VERSION = "1.8.69";
   const previousListener = globalThis.__zeshun1688ContentListener;
   if (globalThis.__zeshun1688ContentVersion === CONTENT_VERSION && previousListener &&
       chrome.runtime.onMessage.hasListener?.(previousListener)) return;
@@ -373,6 +373,7 @@
         const stockIndex = headers.findIndex(value => /库存|可售数量/.test(value));
         const stock = stockIndex >= 0 && /^\d+$/.test(cells[stockIndex] || "") ? Number(cells[stockIndex]) : null;
         rows.push({id: row.getAttribute("data-sku-id") || "", sku_id: row.getAttribute("data-sku-id") || "",
+          image_url: absoluteImage(row.querySelector("img")?.getAttribute("data-src") || row.querySelector("img")?.getAttribute("src")),
           label: attributes.map(item => `${item.name}:${item.value_name}`).join(" / "),
           attribute_combinations: attributes, price: price > 0 ? price : null,
           available_quantity: stock, price_text: price !== null ? cells[index] : "", raw_text: cells.join(" "), raw_weight: "",
@@ -532,7 +533,32 @@
       return {...row, price: matches[0].price, price_text: matches[0].price_text};
     }) : domRows;
     const pack = aiWeightPricePackMetrics(pageData, sourceRows);
-    const merged = sourceRows.map(row => aiWeightPriceMergeMetrics(row, pack.byId.get(String(row.id)), pack.common));
+    const imageClaims = (pageData.sku_image_sets || []).flat();
+    const selection = document.querySelector("#skuSelection, [data-module='od_sku_selection']");
+    for (const img of selection?.querySelectorAll("img") || []) {
+      const name = img.getAttribute("alt") || img.getAttribute("title") || "";
+      const image = img.getAttribute("data-src") || img.currentSrc || img.getAttribute("src");
+      if (name && image) imageClaims.push({name, image});
+    }
+    const merged = sourceRows.map(row => {
+      const result = aiWeightPriceMergeMetrics(row, pack.byId.get(String(row.id)), pack.common);
+      if (result.image_url) return result;
+      const exactRows = domRows.filter(candidate => row.sku_id && candidate.sku_id === row.sku_id && candidate.image_url);
+      const urls = exactRows.map(candidate => candidate.image_url);
+      const values = new Set((row.attribute_combinations || []).map(attr => attr.value_name));
+      for (const claim of imageClaims) {
+        const matches = claim.skuId ? String(claim.skuId) === String(row.sku_id)
+          : claim.specAttrs ? aiWeightPriceDecode(claim.specAttrs) === row.label
+          : [claim.name, claim.value, claim.valueName].some(value => typeof value === "string" && values.has(value.trim()));
+        if (!matches) continue;
+        const url = [claim.imageUrl, claim.imgUrl, claim.image, claim.pictureUrl, claim.image_url]
+          .filter(value => typeof value === "string").map(absoluteImage).find(Boolean);
+        if (url) urls.push(url);
+      }
+      const unique = [...new Set(urls)];
+      if (unique.length === 1) result.image_url = unique[0];
+      return result;
+    });
     const commonMetric = key => {
       if (!merged.length) return pack.common?.[key] ?? null;
       const values = merged.map(row => row[key]);
@@ -570,27 +596,38 @@
   }
 
   function listCardCandidate(card) {
-    const link = card.matches("a[href]")
-      ? card
-      : card.querySelector([
-        "a[href*='/offer/']",
-        "a[href*='offerId=']",
-        "a[data-key-value*='offer_']",
-        "a[href]"
-      ].join(","));
-    const rawUrl = card.getAttribute("href") || link?.getAttribute("href") || "";
+    const titleNode = card.querySelector(".title-text div, .title-text, [class*='title']");
+    const titleLink = titleNode?.closest("a[href]") || titleNode?.querySelector("a[href]");
+    const links = [...new Set([
+      titleLink && card.contains(titleLink) ? titleLink : null,
+      card.matches("a[href]") ? card : null,
+      ...card.querySelectorAll("a[href]")
+    ].filter(Boolean))];
+    const validLink = node => {
+      try {
+        const url = new URL(node.getAttribute("href"), location.href);
+        return /^https?:$/.test(url.protocol) && /(^|\.)1688\.com$/i.test(url.hostname) &&
+          !url.username && !url.password;
+      } catch (_) { return false; }
+    };
+    // Prefer the actual title destination over image/ad links and stale card metadata.
+    const link = links.find(node => node === titleLink && validLink(node) &&
+      !/^(?:#|javascript:)/i.test(node.getAttribute("href") || "#"))
+      || links.find(node => validLink(node) && itemIdFromValue(node.getAttribute("href")));
+    const metadataLink = link || card.querySelector("a[data-key-value*='offer_']");
+    const rawUrl = link ? absoluteUrl(link.getAttribute("href")) : "";
     const dataValues = [
       rawUrl,
       card.getAttribute("data-renderkey"),
-      card.getAttribute("data-offer-id"),
-      link?.getAttribute("data-aplus-report"),
-      link?.getAttribute("data-key-value")
+      card.getAttribute("data-offer-id")?.match(/^\d{5,}$/)?.[0] ? `offer_${card.getAttribute("data-offer-id")}` : "",
+      card.getAttribute("data-key-value"),
+      metadataLink?.getAttribute("data-aplus-report"),
+      metadataLink?.getAttribute("data-key-value")
     ];
     const sourceItemId = dataValues.map(itemIdFromValue).find(Boolean) || "";
     if (!sourceItemId) return null;
 
-    const sourceUrl = absoluteUrl(rawUrl) || `https://detail.1688.com/offer/${sourceItemId}.html`;
-    const titleNode = card.querySelector(".title-text div, .title-text, [class*='title']");
+    const sourceUrl = rawUrl || `https://detail.1688.com/offer/${sourceItemId}.html`;
     const imageNode = card.querySelector("img.main-img, .main-img, img[src*='alicdn'], img[data-src*='alicdn'], img");
     const title = String(
       titleNode?.textContent
@@ -599,7 +636,7 @@
       || imageNode?.getAttribute("alt")
       || ""
     ).replace(/\s+/g, " ").trim();
-    if (!title) return null;
+    // List titles may be lazy-loaded; the detail page supplies the final title.
 
     const priceText = String(
       card.querySelector(".price-item, [class*='price']")?.textContent || ""
@@ -1267,7 +1304,7 @@
     const original = button.textContent;
     button.textContent = "采集中…";
     try {
-      const response = await sendRuntimeMessage({type: "SUBMIT_PRODUCT", product});
+      const response = await sendRuntimeMessage({type: "COLLECT_1688_URL", product});
       if (!response?.ok) throw new Error(response?.error || "采集失败");
       showToast(
         response.queued ? "控制台暂不可用，商品已加入待传队列" : "商品已采集到 AI 原创产品",
@@ -1300,7 +1337,13 @@
 
   function mountListButtons() {
     if (location.hostname !== "s.1688.com") return;
-    document.querySelectorAll(".search-offer-wrapper").forEach(card => {
+    const cardSelector = ".search-offer-wrapper, .offer-item, .offer-list-row-offer, [data-offer-id], [data-renderkey]";
+    const cards = new Set(document.querySelectorAll(cardSelector));
+    document.querySelectorAll("a[href*='/offer/'], a[href*='offerId='], a[data-key-value*='offer_']").forEach(link => {
+      cards.add(link.closest(cardSelector) || link.closest("li, [class*='card'], [class*='Card']") || link);
+    });
+    // Prefer the innermost product card, never a whole results container.
+    [...cards].filter(card => ![...cards].some(other => other !== card && card.contains(other))).forEach(card => {
       if (card.querySelector(".zeshun-card-collect")) return;
       const product = listCardCandidate(card);
       if (!product) return;
@@ -1309,7 +1352,7 @@
       button.type = "button";
       button.className = "zeshun-card-collect";
       button.textContent = "采集";
-      button.title = "快速采集到泽顺 AI 原创产品";
+      button.title = "后台自动采集详情，完成后关闭详情页，当前页面保持不变";
       button.addEventListener("click", event => {
         event.preventDefault();
         event.stopPropagation();

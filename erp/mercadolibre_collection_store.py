@@ -9,6 +9,7 @@ import re
 import threading
 import time
 from bit import product_access
+from erp.mercadolibre_page_facts import repair_source_facts
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Callable, Iterable, Mapping
@@ -61,7 +62,7 @@ SOURCE_1688_NUMERIC_FIELDS = {
     "net_proceeds_usd", "price",
 }
 PRODUCT_REVIEW_STATUSES = {
-    "unreviewed", "approved", "suspected", "infringing", "risk",
+    "unreviewed", "approved", "failed", "suspected", "infringing", "risk",
 }
 PRODUCT_PUBLISH_RECORD_STATUSES = {"pending", "publishing", "published", "failed", "pending_review"}
 PRODUCT_PUBLISH_RETRYABLE_STATUSES = {"pending", "publishing", "failed"}
@@ -254,10 +255,24 @@ def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
     result["added_to_products"] = bool(result.get("added_to_products"))
     result["actual_weight_complete"] = has_valid_actual_weight(result)
     result["weight_dimensions_complete"] = has_complete_weight_dimensions(result)
+    if "task_id" in result:
+        from erp.mercadolibre_collection_quality import collection_quality_issues
+        result["collection_quality_issues"] = collection_quality_issues(result)
     user = product_access.actor()
     if user:
         result["can_manage_visibility"] = product_access.is_admin(user) or product_access.owns(result, user)
     return result
+
+
+def _collection_personnel_predicate(name_expression, organization_expression):
+    """Task creator strings are not a personnel directory."""
+    return (
+        "EXISTS (SELECT 1 FROM `workbench_users` AS collection_person "
+        "WHERE collection_person.`is_active` = 1 "
+        f"AND collection_person.`organization_key` = {organization_expression} "
+        f"AND ({name_expression} = TRIM(collection_person.`username`) "
+        f"OR {name_expression} = TRIM(collection_person.`display_name`)))"
+    )
 
 
 def _mirror_zying_snapshot_fields(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -270,6 +285,8 @@ def _mirror_zying_snapshot_fields(row: Mapping[str, Any]) -> dict[str, Any]:
             snapshot = {}
         original = snapshot.get("original_1688") if isinstance(snapshot, dict) else {}
         prepared = snapshot.get("ai_original") if isinstance(snapshot, dict) else {}
+        from erp.ai_original_state import category_failure_state
+        prepared = category_failure_state(result, prepared if isinstance(prepared, dict) else {})
         result["original_1688"] = original if isinstance(original, dict) else {}
         result["ai_original"] = prepared if isinstance(prepared, dict) else {}
         drafts = snapshot.get("marketplace_listings")
@@ -1521,7 +1538,7 @@ def upsert_collection_items(
                     *(row.get(column) for column in PROFITABILITY_COLUMNS),
                     str(row.get("scrape_status") or "partial")[:32],
                     str(row.get("error_message") or "")[:4000],
-                    _dumps(row.get("source") or {}),
+                    _dumps(repair_source_facts(row.get("source") or {})),
                     _dumps(row.get("description") or {}),
                     _dumps(row.get("page_snapshot") or {}),
                     _dumps(row.get("plugin_snapshot") or {}),
@@ -1668,6 +1685,40 @@ def _product_token_scope(
     return authorized_ids_sql, predicate, scoped_token_ids * 3
 
 
+
+def _product_salesperson_expression() -> str:
+    """Zeshun staff ownership is persisted; never rescan source JSON per product."""
+    return f"COALESCE(NULLIF(`{PRODUCT_TABLE}`.`owner_name`, ''), '未分配')"
+
+
+def _read_product_salespeople(cursor, token_ids=None):
+    if product_access.actor():
+        token_ids = None
+    access, access_params = product_access.predicate(PRODUCT_TABLE)
+    _, scope, scope_params = _product_token_scope(token_ids)
+    where = " AND ".join(filter(None, (access, scope))) or "1 = 1"
+    # The covering index contains ownership and visibility. A hard server-side
+    # deadline also protects older clients still requesting options with rows.
+    cursor.execute(
+        f"SELECT /*+ MAX_EXECUTION_TIME(2000) INDEX(`{PRODUCT_TABLE}` `idx_product_salesperson`) */ "
+        f"`owner_name` AS salesperson "
+        f"FROM `{PRODUCT_TABLE}` WHERE {where} "
+        "GROUP BY `organization_key`, `owner_name` ORDER BY salesperson",
+        tuple(access_params + scope_params),
+    )
+    return sorted({row["salesperson"] or "未分配" for row in cursor.fetchall()})
+
+
+def list_product_salespeople(*, token_ids=None, connection_factory=None):
+    connection = (connection_factory or _connect_list)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            return {"salespeople": _read_product_salespeople(cursor, token_ids)}
+    finally:
+        connection.close()
+
+
 def _list_rows(
     table: str,
     *,
@@ -1740,12 +1791,28 @@ def _list_rows(
         "'未分配'), '浏览器插件：', ''))"
     )
     if table == COLLECTION_TABLE and str(salesperson or "").strip():
-        where.append(
-            f"EXISTS (SELECT 1 FROM `{TASK_TABLE}` AS collection_task "
-            f"WHERE collection_task.`id` = `{COLLECTION_TABLE}`.`task_id` "
-            f"AND {salesperson_expression} = %s)"
-        )
-        params.append(str(salesperson).strip())
+        if str(salesperson).strip() == "未分配":
+            personnel_predicate = _collection_personnel_predicate(
+                salesperson_expression, f"`{COLLECTION_TABLE}`.`organization_key`",
+            )
+            where.append(
+                f"NOT EXISTS (SELECT 1 FROM `{TASK_TABLE}` AS collection_task "
+                f"WHERE collection_task.`id` = `{COLLECTION_TABLE}`.`task_id` "
+                f"AND {personnel_predicate})"
+            )
+        else:
+            where.append(
+                f"EXISTS (SELECT 1 FROM `{TASK_TABLE}` AS collection_task "
+                f"WHERE collection_task.`id` = `{COLLECTION_TABLE}`.`task_id` "
+                f"AND {salesperson_expression} = %s)"
+            )
+            params.append(str(salesperson).strip())
+    if table == PRODUCT_TABLE and str(salesperson or "").strip():
+        if str(salesperson).strip() == "未分配":
+            where.append("(`owner_name` IS NULL OR `owner_name` = '')")
+        else:
+            where.append("`owner_name` = %s")
+            params.append(str(salesperson).strip())
     category_filter = str(management_category_id or "").strip().lower()
     if category_filter in {"uncategorized", "unclassified", "none"}:
         where.append("`management_category_id` IS NULL")
@@ -1758,8 +1825,14 @@ def _list_rows(
             raise ValueError("运营分类编号无效")
         where.append("`management_category_id` = %s")
         params.append(normalized_category_id)
-    mercado_category = str(mercado_category or "").strip()[:255]
-    if mercado_category:
+    mercado_category = str(mercado_category or "").strip()
+    if mercado_category.startswith("tree:"):
+        from erp.mercadolibre_category_tree import category_filter_ids
+        category_ids = category_filter_ids(mercado_category)
+        where.append("`category_id` IN (" + ", ".join(["%s"] * len(category_ids)) + ")")
+        params.extend(category_ids)
+    elif mercado_category:
+        mercado_category = mercado_category[:255]
         where.append("(`category_id` = %s OR `category_name` LIKE %s)")
         params.extend((mercado_category, f"%{mercado_category}%"))
     if table == PRODUCT_TABLE:
@@ -1785,6 +1858,19 @@ def _list_rows(
                 "JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`), "
                 f"`source_snapshot_json`, '{{}}'), '{listing_path}.status'))"
             )
+            if target_platform == "mercadolibre":
+                workflow_expr = (
+                    "JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`), "
+                    "`source_snapshot_json`, '{}'), '$.ai_original.workflow_status'))"
+                )
+                ai_status_expr = (
+                    f"CASE WHEN {ai_status_expr} IN ('processing', 'waiting_off_peak', 'failed') "
+                    f"THEN {ai_status_expr} WHEN {ai_status_expr} = 'needs_category' "
+                    f"OR {workflow_expr} = 'needs_category' OR ({ai_status_expr} = 'completed' "
+                    "AND NOT (COALESCE(`category_id`, '') REGEXP '^CBT[0-9]+$' "
+                    "AND BINARY LEFT(COALESCE(`category_id`, ''), 3) = BINARY 'CBT')) "
+                    f"THEN 'failed' ELSE {ai_status_expr} END"
+                )
             where.append(f"COALESCE(NULLIF({ai_status_expr}, ''), 'pending') = %s")
             params.append(ai_status)
         zying_category = str(zying_category or "").strip()[:255]
@@ -1867,6 +1953,17 @@ def _list_rows(
         if minimum is not None and maximum is not None and minimum > maximum:
             raise ValueError(f"最低{label}不能大于最高{label}")
         expression = f"`{column}`"
+        if table == PRODUCT_TABLE and source_type == "ai_original" and column == "weight_g":
+            snapshot_sql = "IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{}')"
+            override_sql = f"JSON_UNQUOTE(JSON_EXTRACT({snapshot_sql}, '$.source_1688_overrides.weight_g'))"
+            original_sql = f"JSON_UNQUOTE(JSON_EXTRACT({snapshot_sql}, '$.original_1688.weight_g'))"
+            expression = (
+                f"(CASE WHEN JSON_CONTAINS_PATH({snapshot_sql}, 'one', "
+                "'$.source_1688_overrides.weight_g') THEN "
+                f"CAST(NULLIF({override_sql}, 'null') AS DECIMAL(20,4)) "
+                f"ELSE COALESCE(CAST(NULLIF(NULLIF({original_sql}, 'null'), '') "
+                "AS DECIMAL(20,4)), `weight_g`) END)"
+            )
         if table == PRODUCT_TABLE and source_type == "ai_original" and column == "price":
             snapshot_sql = "IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{}')"
             override_sql = f"JSON_UNQUOTE(JSON_EXTRACT({snapshot_sql}, '$.source_1688_overrides.price'))"
@@ -1957,14 +2054,25 @@ def _list_rows(
                 options_access, options_params = product_access.predicate("item")
                 if options_access:
                     added_predicate += " AND " + options_access
+                personnel_predicate = _collection_personnel_predicate(
+                    salesperson_expression, "item.`organization_key`",
+                )
                 cursor.execute(
-                    f"SELECT DISTINCT {salesperson_expression} AS salesperson "
-                    f"FROM `{TASK_TABLE}` AS collection_task WHERE EXISTS ("
-                    f"SELECT 1 FROM `{COLLECTION_TABLE}` AS item "
-                    f"WHERE item.`task_id` = collection_task.`id`{added_predicate}) "
+                    f"SELECT DISTINCT CASE WHEN {personnel_predicate} "
+                    f"THEN {salesperson_expression} ELSE '未分配' END AS salesperson "
+                    f"FROM `{COLLECTION_TABLE}` AS item "
+                    f"LEFT JOIN `{TASK_TABLE}` AS collection_task "
+                    f"ON item.`task_id` = collection_task.`id` WHERE 1 = 1{added_predicate} "
                     "ORDER BY salesperson", tuple(options_params) if options_params else None
                 )
                 salesperson_options = [row["salesperson"] for row in cursor.fetchall()]
+            if include_salesperson_options and table == PRODUCT_TABLE:
+                try:
+                    salesperson_options = _read_product_salespeople(cursor, token_ids)
+                except Exception as exc:
+                    if not exc.args or exc.args[0] != 3024:
+                        raise
+                    logging.warning("Product salesperson directory timed out; returning product rows")
             generator_options = None
             if include_generator_options and table == PRODUCT_TABLE:
                 options_where = " AND ".join(generator_options_where) or "1 = 1"
@@ -2016,8 +2124,19 @@ def _list_rows(
                 elif keyword_from:
                     count_from = keyword_from + keyword_where
                 count_hint = f" INDEX(`{table}` `{keyword_index}`)" if keyword_only else ""
-                cursor.execute(f"SELECT /*+ MAX_EXECUTION_TIME(8000){count_hint} */ COUNT(*) AS total FROM {count_from}", tuple(params))
-                count_result = cursor.fetchone() or {}
+                try:
+                    cursor.execute(f"SELECT /*+ MAX_EXECUTION_TIME(8000){count_hint} */ COUNT(*) AS total FROM {count_from}", tuple(params))
+                    count_result = cursor.fetchone() or {}
+                except Exception as exc:
+                    # A statement deadline leaves the connection usable. Keep
+                    # all filters and fetch one extra row to determine whether
+                    # another page exists, without repeating the expensive count.
+                    # Connection/authentication failures must still propagate.
+                    if table != PRODUCT_TABLE or not exc.args or exc.args[0] != 3024:
+                        raise
+                    include_total = False
+                    count_result = {}
+                    logging.warning("mercado_list_count_timeout: returning product page without exact total")
                 total = int(count_result.get("total") or 0)
                 if search and count_result.get("total") == 0:
                     # An absent keyword must not scan the catalog a second time
@@ -2095,23 +2214,19 @@ def _list_rows(
                 f"ON category.`id` = `{table}`.`management_category_id`"
             )
             if table == COLLECTION_TABLE:
+                personnel_predicate = _collection_personnel_predicate(
+                    salesperson_expression, f"`{table}`.`organization_key`",
+                )
                 selected_fields += (
-                    ", TRIM(REPLACE(COALESCE(NULLIF(collection_task.`created_by`, ''), "
-                    "'未分配'), '浏览器插件：', '')) AS `salesperson`"
+                    f", CASE WHEN {personnel_predicate} THEN {salesperson_expression} "
+                    "ELSE '未分配' END AS `salesperson`"
                 )
                 from_sql += (
                     f" LEFT JOIN `{TASK_TABLE}` AS collection_task "
                     f"ON collection_task.`id` = `{table}`.`task_id`"
                 )
             else:
-                selected_fields += (
-                    ", TRIM(REPLACE(COALESCE((SELECT collection_task.`created_by` "
-                    f"FROM `{COLLECTION_TABLE}` AS product_collection_item "
-                    f"INNER JOIN `{TASK_TABLE}` AS collection_task "
-                    "ON collection_task.`id` = product_collection_item.`task_id` "
-                    f"WHERE product_collection_item.`id` = `{table}`.`collection_item_id` "
-                    "LIMIT 1), ''), '浏览器插件：', '')) AS `salesperson`"
-                )
+                selected_fields += f", {_product_salesperson_expression()} AS `salesperson`"
             cursor.execute(
                 query_prefix + f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ {selected_fields} FROM {from_sql} "
                 f"ORDER BY `{table}`.`id` DESC",
@@ -2365,6 +2480,38 @@ def save_collection_item_ai_copy(
 def list_product_items(**kwargs: Any) -> dict[str, Any]:
     kwargs.pop("task_id", None)
     return _list_rows(PRODUCT_TABLE, **kwargs)
+
+
+def list_product_mercado_categories(
+    *, token_ids: Iterable[int] | None = None,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Category options from the entire visible library, independent of pagination."""
+    if product_access.actor():
+        token_ids = None
+    _, scope, scope_params = _product_token_scope(token_ids)
+    if scope == "1 = 0":
+        return {"rows": []}
+    access, access_params = product_access.predicate(PRODUCT_TABLE)
+    where = ["TRIM(COALESCE(`category_id`, '')) <> ''"]
+    params = []
+    for predicate, values in ((scope, scope_params), (access, access_params)):
+        if predicate:
+            where.append(predicate)
+            params.extend(values)
+    connection = (connection_factory or _connect_list)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                "SELECT /*+ MAX_EXECUTION_TIME(8000) */ `category_id`, "
+                "MAX(`category_name`) AS category_name, COUNT(*) AS product_count "
+                f"FROM `{PRODUCT_TABLE}` WHERE {' AND '.join(where)} "
+                "GROUP BY `category_id` ORDER BY `category_id`", tuple(params),
+            )
+            return {"rows": list(cursor.fetchall())}
+    finally:
+        connection.close()
 
 
 def list_product_developers(
@@ -2957,6 +3104,7 @@ def list_product_publish_records(
     store_name: str = "",
     site_id: str = "",
     group_name: str = "",
+    salesperson: str = "",
     start_date: str = "",
     end_date: str = "",
     limit: int = 500,
@@ -3015,6 +3163,15 @@ def list_product_publish_records(
     elif group_name:
         base_where.append("settings.`group_name` = %s")
         base_params.append(group_name)
+
+    salesperson = str(salesperson or "").strip()
+    if len(salesperson) > 100:
+        raise ValueError("业务员名称不能超过 100 个字符")
+    if salesperson == "__unassigned__":
+        base_where.append("COALESCE(TRIM(settings.`salesperson`), '') = ''")
+    elif salesperson:
+        base_where.append("TRIM(settings.`salesperson`) = %s")
+        base_params.append(salesperson)
 
     def parsed_datetime(value: Any, name: str) -> tuple[datetime | None, str]:
         text = str(value or "").strip()
@@ -3799,37 +3956,67 @@ def update_1688_product(
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
-            cursor.execute(
-                f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
-                "AND `source_type` = 'ai_original' FOR UPDATE", (row_id,),
-            )
-            current = cursor.fetchone()
-            if not current:
-                raise KeyError("1688 产品不存在")
-            snapshot = _loads(current.get("source_snapshot_json"), {})
-            snapshot = dict(snapshot) if isinstance(snapshot, Mapping) else {}
-            overrides = snapshot.get("source_1688_overrides")
-            overrides = dict(overrides) if isinstance(overrides, Mapping) else {}
-            overrides.update({
-                field: float(value) if value is not None else None
-                for field, value in normalized.items()
-            })
-            snapshot["source_1688_overrides"] = overrides
-            # A changed purchase price also changes the source's calculated
-            # net proceeds. Persist that same value for AI listing/publishing.
-            if "price" in normalized and "net_proceeds_usd" not in overrides:
-                normalized["net_proceeds_usd"] = _default_ai_original_net_proceeds(snapshot)
-            assignments, values = _1688_override_table_assignments(current, normalized)
-            assignments.append("`source_snapshot_json` = %s")
-            values.append(_dumps(snapshot))
-            cursor.execute(
-                f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} "
-                "WHERE `id` = %s AND `source_type` = 'ai_original'", tuple(values + [row_id]),
-            )
-            cursor.execute(f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s", (row_id,))
-            row = cursor.fetchone()
+            row = _save_1688_product(cursor, row_id, normalized)
         connection.commit()
         return _mirror_zying_snapshot_fields(_json_safe_row(row))
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def _save_1688_product(cursor, row_id, normalized):
+    cursor.execute(
+        f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
+        "AND `source_type` = 'ai_original' FOR UPDATE", (row_id,),
+    )
+    current = cursor.fetchone()
+    if not current:
+        raise KeyError("1688 产品不存在")
+    snapshot = _loads(current.get("source_snapshot_json"), {})
+    snapshot = dict(snapshot) if isinstance(snapshot, Mapping) else {}
+    overrides = snapshot.get("source_1688_overrides")
+    overrides = dict(overrides) if isinstance(overrides, Mapping) else {}
+    overrides.update({
+        field: float(value) if value is not None else None
+        for field, value in normalized.items()
+    })
+    snapshot["source_1688_overrides"] = overrides
+    # A changed purchase price also changes the source's calculated
+    # net proceeds. Persist that same value for AI listing/publishing.
+    if "price" in normalized and "net_proceeds_usd" not in overrides:
+        normalized["net_proceeds_usd"] = _default_ai_original_net_proceeds(snapshot)
+    assignments, values = _1688_override_table_assignments(current, normalized)
+    assignments.append("`source_snapshot_json` = %s")
+    values.append(_dumps(snapshot))
+    cursor.execute(
+        f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} "
+        "WHERE `id` = %s AND `source_type` = 'ai_original'", tuple(values + [row_id]),
+    )
+    cursor.execute(f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s", (row_id,))
+    row = cursor.fetchone()
+    return row
+
+
+def update_1688_product_items(
+    product_item_ids: Iterable[int], changes: Mapping[str, Any],
+    *, connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Save source measurements for the entire selection in one transaction."""
+    ids = sorted(_normalize_row_ids(product_item_ids, empty_message="请至少勾选一个 1688 产品"))
+    allowed = {"weight_g", "package_length_cm", "package_width_cm", "package_height_cm"}
+    if not isinstance(changes, Mapping) or set(changes).difference(allowed):
+        raise ValueError("1688 产品批量修改只支持重量和包装长、宽、高")
+    normalized = normalize_1688_product_changes(changes)
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            for row_id in ids:
+                _save_1688_product(cursor, row_id, normalized)
+        connection.commit()
+        return {"requested": len(ids), "changed": len(ids), "updated_fields": list(normalized)}
     except BaseException:
         connection.rollback()
         raise
@@ -3983,6 +4170,14 @@ def upsert_ai_original_product(
                     weight_g, dimensions[0], dimensions[1], dimensions[2],
                     "1688_source" if weight_g else "", _dumps(source_snapshot), now, default_net,
                 ))
+            if isinstance(existing_prepared, Mapping) and existing_prepared.get("status") == "completed":
+                from erp.ai_original_images import merge_recollected_sku_images
+                supplemented = merge_recollected_sku_images(existing_snapshot, product)
+                if supplemented != existing_snapshot:
+                    supplemented['ai_original']['edit_revision'] = _ai_original_edit_revision(existing_prepared) + 1
+                    _execute_source_scoped(cursor, f"UPDATE `{PRODUCT_TABLE}` SET `source_snapshot_json` = %s "
+                        "WHERE `source_item_id` = %s AND `source_type` = 'ai_original'",
+                        (_dumps(supplemented), product['source_item_id']))
             if category_id is not None:
                 _execute_source_scoped(cursor, f"UPDATE `{PRODUCT_TABLE}` SET `management_category_id` = %s "
                     "WHERE `source_item_id` = %s AND `source_type` = 'ai_original'", (category_id, product["source_item_id"]))
@@ -4210,15 +4405,86 @@ def update_ai_original_product(
         connection.close()
 
 
+def _update_ai_original_net_proceeds(ids, changes, *, connection_factory=None):
+    """Persist fixed amounts or multiply each locked row's current amount."""
+    fields = {"net_proceeds_usd", "net_proceeds_ratio"}
+    if len(changes) != 1 or not set(changes).issubset(fields):
+        raise ValueError("请选择统一金额或按比例修改净收益，不能同时设置")
+    field, raw = next(iter(changes.items()))
+    try:
+        value = Decimal(str(raw))
+    except Exception as exc:
+        raise ValueError("净收益金额或比例必须是大于 0 的有效数字") from exc
+    if not value.is_finite() or value <= 0:
+        raise ValueError("净收益金额或比例必须是大于 0 的有效数字")
+    if field == "net_proceeds_ratio" and value > 10000:
+        raise ValueError("净收益比例不能超过 10000%")
+    if field == "net_proceeds_usd" and value >= Decimal("10000000000000000"):
+        raise ValueError("净收益金额超出可保存范围")
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT `id`, `net_proceeds_usd`, `organization_key`, `owner_user_id`, "
+                f"`owner_name`, `visibility` FROM `{PRODUCT_TABLE}` "
+                f"WHERE `source_type` = 'ai_original' AND `id` IN ({', '.join(['%s'] * len(ids))}) FOR UPDATE",
+                tuple(ids),
+            )
+            rows = cursor.fetchall()
+            if {int(row["id"]) for row in rows} != set(ids):
+                raise KeyError("部分 AI 原创产品不存在或已移除")
+            user = product_access.actor()
+            if user and any(not product_access.can_view(row, user) for row in rows):
+                raise PermissionError("当前账号无权访问所选产品")
+            updates, skipped = [], 0
+            for row in rows:
+                amount = value
+                if field == "net_proceeds_ratio":
+                    current = _decimal_from_text(row.get("net_proceeds_usd"))
+                    if current is None or current <= 0:
+                        skipped += 1
+                        continue
+                    amount = current * value / Decimal("100")
+                if amount >= Decimal("10000000000000000"):
+                    raise ValueError("修改后的净收益金额超出可保存范围")
+                amount = amount.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                if amount <= 0:
+                    raise ValueError("修改后的净收益金额不能小于 0.0001 USD")
+                updates.append((amount, int(row["id"])))
+            # Validate the entire selection before writing any amount.
+            for amount, row_id in updates:
+                cursor.execute(
+                    f"UPDATE `{PRODUCT_TABLE}` SET `net_proceeds_usd` = %s "
+                    "WHERE `id` = %s AND `source_type` = 'ai_original'", (amount, row_id),
+                )
+                cursor.execute(
+                    f"SELECT `net_proceeds_usd` FROM `{PRODUCT_TABLE}` WHERE `id` = %s", (row_id,),
+                )
+                saved = cursor.fetchone()
+                if not saved or _decimal_from_text(saved.get("net_proceeds_usd")) != amount:
+                    raise ValueError("净收益保存后回读不一致，请刷新后重试")
+        connection.commit()
+        return {"requested": len(ids), "changed": len(updates), "skipped": skipped,
+                "updated_fields": ["net_proceeds_usd"]}
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def update_ai_original_product_items(
     product_item_ids: Iterable[int],
     changes: Mapping[str, Any],
     *,
     connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
-    """Fill dimensions only on selected AI-original products missing all three."""
+    """Batch-edit net proceeds, or fill products missing all dimensions."""
 
     ids = _normalize_row_ids(product_item_ids, empty_message="请至少勾选一个 AI 原创产品")
+    if set(changes or {}).intersection({"net_proceeds_usd", "net_proceeds_ratio"}):
+        return _update_ai_original_net_proceeds(ids, changes, connection_factory=connection_factory)
     allowed = {
         "package_length_cm", "package_width_cm", "package_height_cm",
     }
@@ -4987,8 +5253,24 @@ def upsert_pulled_store_links_to_products(
 
     from erp.mercadolibre_store_link_store import listing_record
 
+    # Secret token records used by the sync worker do not include site settings.
+    # Read this small indexed directory explicitly instead of inferring an owner
+    # from the authorization holder or the user who triggered synchronization.
+    token = dict(token)
+    if "site_settings" not in token:
+        settings_connection = (connection_factory or _connect)()
+        try:
+            with settings_connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT `site_id`, `salesperson` FROM `mercado_store_site_settings` WHERE `token_id` = %s",
+                    (int(token["id"]),),
+                )
+                token["site_settings"] = cursor.fetchall()
+        finally:
+            settings_connection.close()
+
     now = _now()
-    values = []
+    values_by_salesperson = {}
     skipped = 0
     for item in items or []:
         source = dict(item or {})
@@ -5032,7 +5314,8 @@ def upsert_pulled_store_links_to_products(
             if str(record.get("currency_id") or "").upper() == "USD"
             else None
         )
-        values.append((
+        salesperson = str(site_setting.get("salesperson") or "").strip()
+        values_by_salesperson.setdefault(salesperson, []).append((
             0, "pulled", "unreviewed", record["item_id"], record["permalink"],
             record["thumbnail_url"], record["title"], record.get("price"),
             record.get("currency_id"), record.get("weight_g"),
@@ -5042,7 +5325,7 @@ def upsert_pulled_store_links_to_products(
             sale_price_usd, record.get("category_id"), record.get("listing_type_id"),
             net_amount, _dumps(snapshot), now,
         ))
-    if not values:
+    if not values_by_salesperson:
         return {"count": 0, "skipped": skipped}
 
     pulled_fields = (
@@ -5069,7 +5352,10 @@ def upsert_pulled_store_links_to_products(
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
-            _execute_access_insert(cursor, f"""
+            for salesperson, values in values_by_salesperson.items():
+                # Store ownership is per site, never the user who started sync.
+                inherited = dict(token, owner_name=salesperson, owner_user_id=None)
+                _execute_access_insert(cursor, f"""
                 INSERT INTO `{PRODUCT_TABLE}` (
                     `collection_item_id`, `source_type`, `review_status`, `source_item_id`,
                     `source_url`, `main_image_url`, `title`, `price`, `currency_id`,
@@ -5080,10 +5366,12 @@ def upsert_pulled_store_links_to_products(
                 ) VALUES ({", ".join(["%s"] * 21)})
                 ON DUPLICATE KEY UPDATE
                     {updates},
+                    `owner_name` = IF(`source_type` = 'pulled', VALUES(`owner_name`), `owner_name`),
+                    `owner_user_id` = IF(`source_type` = 'pulled', VALUES(`owner_user_id`), `owner_user_id`),
                     `updated_at` = CURRENT_TIMESTAMP
-                """, values, many=True, inherited=token)
+                """, values, many=True, inherited=inherited)
         connection.commit()
-        return {"count": len(values), "skipped": skipped}
+        return {"count": sum(map(len, values_by_salesperson.values())), "skipped": skipped}
     except BaseException:
         connection.rollback()
         raise

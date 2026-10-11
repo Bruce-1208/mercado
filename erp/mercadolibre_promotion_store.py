@@ -17,6 +17,21 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
+APPLIED_STATUSES = ("pending_approval", "pending", "programmed", "scheduled", "started", "active", "approved")
+CURRENT_CAMPAIGN_SQL = """LOWER(p.status_raw) NOT IN ('finished','ended','cancelled','canceled','deleted')
+    AND (p.finish_date='' OR julianday(p.finish_date) IS NULL OR julianday(p.finish_date)>julianday('now'))"""
+
+
+def discount_percent(price, original_price):
+    try:
+        price, original = float(price), float(original_price)
+        if math.isfinite(price) and math.isfinite(original) and 0 < price <= original:
+            return round((1 - price / original) * 100, 2)
+    except (ValueError, TypeError):
+        pass
+    return None
+
+
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / ".data" / "promotions.sqlite3"
 
 
@@ -186,7 +201,7 @@ class PromotionStore:
             ).fetchone()
             return int(result["id"])
 
-    def replace_items(self, promotion_fk: int, rows: Iterable[dict[str, Any]]) -> int:
+    def replace_items(self, promotion_fk: int, rows: Iterable[dict[str, Any]], *, item_id: str | None = None) -> int:
         prepared_by_key = {}
         now = _now()
         for raw in rows:
@@ -207,7 +222,13 @@ class PromotionStore:
             prepared_by_key[(prepared[1], prepared[2], prepared[3])] = prepared
         prepared = list(prepared_by_key.values())
         with self._connect() as db:
-            db.execute("DELETE FROM promotion_items WHERE promotion_fk=?", (int(promotion_fk),))
+            if item_id is None:
+                db.execute("DELETE FROM promotion_items WHERE promotion_fk=?", (int(promotion_fk),))
+            else:
+                if any(row[1] != item_id for row in prepared):
+                    raise ValueError("单商品活动同步不能写入其他商品")
+                db.execute("DELETE FROM promotion_items WHERE promotion_fk=? AND item_id=?",
+                           (int(promotion_fk), item_id))
             db.executemany(
                 """INSERT INTO promotion_items (
                     promotion_fk, item_id, offer_id, candidate_id, status_raw,
@@ -232,10 +253,26 @@ class PromotionStore:
     def list_promotions(
         self, *, token_ids: Iterable[int] | None = None, search: str = "",
         status: str = "", promotion_type: str = "", salesperson: str = "",
-        group_name: str = "", site_id: str = "",
+        group_name: str = "", site_id: str = "", participated: str = "",
         scope_pairs: Iterable[tuple[int, str]] | None = None,
     ) -> list[dict[str, Any]]:
+        participated = str(participated or "").strip()
+        if participated not in {"", "1", "0"}:
+            raise ValueError("活动参与状态无效")
+        # Keep successful participation visible after withdrawal or campaign expiry.
+        participation_statuses = ",".join(f"'{value}'" for value in (*APPLIED_STATUSES, "finished", "withdrawn"))
+        participation_sql = f"""(
+            EXISTS (SELECT 1 FROM promotion_items pi WHERE pi.promotion_fk=p.id
+                AND LOWER(pi.status_raw) IN ({participation_statuses}))
+            OR EXISTS (SELECT 1 FROM promotion_previews pv
+                JOIN promotion_jobs pj ON pj.preview_id=pv.preview_id
+                JOIN json_each(pj.results_json) entry
+                WHERE pv.promotion_fk=p.id AND pj.action='enroll' AND entry.type='object'
+                AND json_extract(entry.value, '$.status')='succeeded')
+        )"""
         clauses, params = [], []
+        if participated:
+            clauses.append(("NOT " if participated == "0" else "") + participation_sql)
         ids = [int(value) for value in token_ids or () if int(value or 0) > 0]
         if ids:
             clauses.append(f"token_id IN ({','.join('?' for _ in ids)})")
@@ -288,10 +325,10 @@ class PromotionStore:
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self._connect() as db:
             rows = db.execute(
-                f"""SELECT p.*,
+                f"""SELECT p.*, {participation_sql} AS participated,
                     COUNT(i.id) AS item_count,
                     SUM(CASE WHEN i.status_raw='candidate' THEN 1 ELSE 0 END) AS candidate_count,
-                    SUM(CASE WHEN i.status_raw IN ('started','active','pending','programmed') THEN 1 ELSE 0 END) AS active_item_count
+                    SUM(CASE WHEN LOWER(i.status_raw) IN ({','.join(repr(value) for value in APPLIED_STATUSES)}) THEN 1 ELSE 0 END) AS active_item_count
                     FROM promotions p LEFT JOIN promotion_items i ON i.promotion_fk=p.id
                     {where} GROUP BY p.id
                     ORDER BY CASE p.status_raw WHEN 'started' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,
@@ -336,16 +373,34 @@ class PromotionStore:
 
     def list_items_page(
         self, promotion_fk: int, *, page: int = 1, page_size: int = 50,
-        target_item_id: str = "",
+        target_item_id: str = "", enrolled: str = "", product: str = "", item_id: str = "",
     ) -> dict[str, Any]:
         """Fetch only the requested product page before attaching enrollment results."""
         page_size = self._page_number(page_size, 50, 100)
         page = self._page_number(page, 1)
         promotion_fk = int(promotion_fk)
+        enrolled = str(enrolled or "").strip()
+        if enrolled not in {"", "1", "0"}:
+            raise ValueError("报名筛选无效")
+        status_sql = ",".join(f"'{value}'" for value in APPLIED_STATUSES)
+        current_sql = (
+            f"LOWER(status_raw) IN ({status_sql}) AND EXISTS ("
+            "SELECT 1 FROM promotions p WHERE p.id=promotion_fk AND "
+            + CURRENT_CAMPAIGN_SQL + ")"
+        )
+        condition = "promotion_fk=?"
+        if enrolled:
+            condition += f" AND {'NOT ' if enrolled == '0' else ''}({current_sql})"
+        params = [promotion_fk]
+        for column, value in (("title", product), ("item_id", item_id)):
+            value = str(value or "").strip()
+            if value:
+                condition += f" AND INSTR(LOWER({column}), LOWER(?)) > 0"
+                params.append(value)
         with self._connect() as db:
             total = int(db.execute(
-                "SELECT COUNT(*) FROM promotion_items WHERE promotion_fk=?",
-                (promotion_fk,),
+                "SELECT COUNT(*) FROM promotion_items WHERE " + condition,
+                params,
             ).fetchone()[0])
             pages = max(1, (total + page_size - 1) // page_size)
             target = str(target_item_id or "").strip()
@@ -353,24 +408,24 @@ class PromotionStore:
                 # Prefer an enrollable candidate, then the first ordinary row.
                 # The local ID breaks ties for repeated offer/candidate identities.
                 selected = db.execute(
-                    """SELECT status_raw, item_id, id FROM promotion_items
-                    WHERE promotion_fk=? AND item_id=? COLLATE NOCASE
+                    f"""SELECT status_raw, item_id, id FROM promotion_items
+                    WHERE {condition} AND item_id=? COLLATE NOCASE
                     ORDER BY CASE WHEN LOWER(status_raw)='candidate' THEN 0 ELSE 1 END,
                         status_raw, item_id, id LIMIT 1""",
-                    (promotion_fk, target),
+                    (*params, target),
                 ).fetchone()
                 if selected:
                     preceding = int(db.execute(
-                        """SELECT COUNT(*) FROM promotion_items WHERE promotion_fk=?
+                        f"""SELECT COUNT(*) FROM promotion_items WHERE {condition}
                         AND (status_raw, item_id, id) < (?, ?, ?)""",
-                        (promotion_fk, selected["status_raw"], selected["item_id"], selected["id"]),
+                        (*params, selected["status_raw"], selected["item_id"], selected["id"]),
                     ).fetchone()[0])
                     page = preceding // page_size + 1
             page = min(page, pages)
             rows = db.execute(
-                """SELECT * FROM promotion_items WHERE promotion_fk=?
+                f"""SELECT *, ({current_sql}) AS enrolled FROM promotion_items WHERE {condition}
                 ORDER BY status_raw, item_id, id LIMIT ? OFFSET ?""",
-                (promotion_fk, page_size, (page - 1) * page_size),
+                (*params, page_size, (page - 1) * page_size),
             ).fetchall()
         result = [self._row(row) for row in rows]
         outcomes = {
@@ -379,6 +434,8 @@ class PromotionStore:
         }
         for row in result:
             row["enrollment_result"] = outcomes.get(row["item_id"])
+            row["enrolled"] = bool(row["enrolled"])
+            row["current_discount_percent"] = discount_percent(row.get("price"), row.get("original_price")) if row["enrolled"] else None
         return {"rows": result, "page": page, "page_size": page_size, "total": total, "pages": pages}
 
     @staticmethod
@@ -479,6 +536,65 @@ class PromotionStore:
             created_at=row["created_at"], finished_at=row["finished_at"],
         ) for row in rows]
 
+    def reconcile_completed_jobs(self, promotion_fk: int, official_items: list[dict[str, Any]], *, snapshot_started_at: str = "") -> int:
+        """Resolve latest ambiguous results only from a complete fresh API snapshot."""
+        by_item = {}
+        for raw in official_items:
+            by_item.setdefault(str(raw.get("id") or raw.get("item_id") or ""), []).append(raw)
+        resolved = 0
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            jobs = db.execute("""SELECT j.* FROM promotion_jobs j
+                JOIN promotion_previews p ON p.preview_id=j.preview_id
+                WHERE p.promotion_fk=? ORDER BY j.created_at DESC, j.rowid DESC""", (int(promotion_fk),)).fetchall()
+            seen = set()
+            for job in jobs:
+                results = json.loads(job["results_json"] or "[]")
+                changed = False
+                for result in reversed(results):
+                    item_id = str(result.get("item_id") or "")
+                    if item_id in seen:
+                        continue
+                    seen.add(item_id)
+                    if job["status"] == "running" or result.get("status") != "unknown" or (snapshot_started_at and str(job["finished_at"]) >= snapshot_started_at):
+                        continue
+                    items = by_item.get(item_id, [])
+                    def status(item):
+                        value = item.get("status")
+                        return str(value.get("id") if isinstance(value, dict) else value or "").lower()
+                    confirmed = False
+                    if job["action"] == "withdraw":
+                        offer = str(result.get("offer_id") or "")
+                        relevant = [item for item in items if not offer or not item.get("offer_id") or str(item["offer_id"]) == offer]
+                        confirmed = not relevant or all(status(item) in {"candidate", "finished", "withdrawn", "cancelled", "canceled"} for item in relevant)
+                    else:
+                        for item in items:
+                            if status(item) not in APPLIED_STATUSES:
+                                continue
+                            price = result.get("deal_price")
+                            if price is not None:
+                                try:
+                                    if abs(float(item.get("price")) - float(price)) >= .005:
+                                        continue
+                                except (TypeError, ValueError):
+                                    continue
+                            if item.get("currency_id") and result.get("currency_id") and item["currency_id"] != result["currency_id"]:
+                                continue
+                            confirmed = True
+                            break
+                    if confirmed:
+                        result.update(status="succeeded", message="已依据最新官方同步核实成功")
+                        resolved += 1
+                        changed = True
+                if changed:
+                    success = sum(row.get("status") == "succeeded" for row in results)
+                    unknown = sum(row.get("status") == "unknown" for row in results)
+                    failed = len(results) - success - unknown
+                    status_value = "succeeded" if success == len(results) else ("failed" if not success and not unknown else "partial")
+                    db.execute("UPDATE promotion_jobs SET results_json=?, success_count=?, failed_count=?, unknown_count=?, status=? WHERE job_id=?",
+                               (_json(results), success, failed, unknown, status_value, job["job_id"]))
+        return resolved
+
     def latest_job(self, promotion_fk: int, *, result_limit: int | None = None) -> dict[str, Any] | None:
         rows = self.list_jobs(limit=1, promotion_fk=promotion_fk, result_limit=result_limit)
         return rows[0] if rows else None
@@ -527,7 +643,7 @@ class PromotionStore:
                 rows = db.execute(
                     f"""SELECT p.token_id, p.site_id, i.item_id,
                         p.id AS promotion_fk, p.promotion_id, p.name, p.promotion_type,
-                        i.status_raw, i.price, i.currency_id, i.last_synced_at
+                        i.id AS item_local_id, i.offer_id, i.status_raw, i.price, i.original_price, i.currency_id, i.last_synced_at
                     FROM promotions p JOIN promotion_items i ON i.promotion_fk=p.id
                     WHERE ({clauses}) AND LOWER(i.status_raw) IN ({status_sql})
                         AND LOWER(p.status_raw) NOT IN ('finished','ended','cancelled','canceled','deleted')
@@ -538,6 +654,7 @@ class PromotionStore:
                 ).fetchall()
                 for row in rows:
                     detail = dict(row)
+                    detail["current_discount_percent"] = discount_percent(detail.get("price"), detail.get("original_price"))
                     identity = (detail.pop("token_id"), detail.pop("site_id"), detail.pop("item_id"))
                     result.setdefault(identity, []).append(detail)
         return result
@@ -594,7 +711,7 @@ class PromotionStore:
             "pending_approval", "pending", "programmed", "scheduled",
             "started", "active", "approved",
         )
-        clauses = [f"LOWER(i.status_raw) IN ({','.join('?' for _ in applied_statuses)})"]
+        clauses = [f"LOWER(i.status_raw) IN ({','.join('?' for _ in applied_statuses)})", CURRENT_CAMPAIGN_SQL]
         params: list[Any] = list(applied_statuses)
         ids = sorted({int(value) for value in token_ids or () if int(value or 0) > 0})
         if ids:
@@ -618,7 +735,13 @@ class PromotionStore:
             for row in rows
         }
 
-    def set_item_status(self, promotion_fk: int, item_id: str, status: str) -> int:
+    def item_rows(self, promotion_fk: int, item_id: str) -> list[dict[str, Any]]:
+        with self._connect() as db:
+            rows = db.execute("SELECT * FROM promotion_items WHERE promotion_fk=? AND item_id=?",
+                              (int(promotion_fk), str(item_id))).fetchall()
+        return [self._row(row) for row in rows]
+
+    def set_item_status(self, promotion_fk: int, item_id: str, status: str, *, offer_id: str | None = None) -> int:
         """Keep the local marker responsive immediately after a mutation."""
         with self._connect() as db:
             result = db.execute(
@@ -626,8 +749,9 @@ class PromotionStore:
                 UPDATE promotion_items
                 SET status_raw=?, last_synced_at=?
                 WHERE promotion_fk=? AND item_id=?
-                """,
-                (str(status or "unknown"), _now(), int(promotion_fk), str(item_id or "")),
+                """ + (" AND offer_id=?" if offer_id is not None else ""),
+                (str(status or "unknown"), _now(), int(promotion_fk), str(item_id or ""))
+                + ((offer_id,) if offer_id is not None else ()),
             )
             return int(result.rowcount or 0)
 
@@ -752,6 +876,8 @@ class PromotionStore:
     def list_jobs(
         self, limit: int = 100, *, token_ids: Iterable[int] | None = None,
         promotion_fk: int | None = None, result_limit: int | None = None,
+        job_ids: Iterable[str] | None = None, summary_only: bool = False,
+        action: str = "", status: str = "",
     ) -> list[dict[str, Any]]:
         clauses, params = [], []
         if token_ids is not None:
@@ -763,6 +889,18 @@ class PromotionStore:
         if promotion_fk is not None:
             clauses.append("v.promotion_fk=?")
             params.append(int(promotion_fk))
+        if job_ids is not None:
+            selected_ids = list(dict.fromkeys(str(value) for value in job_ids))
+            if not selected_ids:
+                return []
+            clauses.append("j.job_id IN (" + ",".join("?" for _ in selected_ids) + ")")
+            params.extend(selected_ids)
+        if action:
+            clauses.append("j.action=?")
+            params.append(action)
+        if status:
+            clauses.append("j.status=?")
+            params.append(status)
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         params.append(max(1, min(int(limit), 500)))
         job_columns = "j.*"
@@ -778,6 +916,11 @@ class PromotionStore:
                         THEN j.results_json ELSE '[]' END) ORDER BY CAST(key AS INTEGER) LIMIT ?
                 )) AS results_json"""
             params.insert(0, result_limit)
+        if summary_only:
+            if result_limit is not None:
+                params.pop(0)
+            job_columns = """j.job_id, j.action, j.status, j.total_count,
+                j.success_count, j.failed_count, j.unknown_count, j.created_at, j.finished_at"""
         with self._connect() as db:
             rows = db.execute(
                 "SELECT " + job_columns + """, v.promotion_fk, p.name AS promotion_name,
@@ -789,7 +932,7 @@ class PromotionStore:
                 params,
             ).fetchall()
         result = [self._row(row) for row in rows]
-        if result_limit is not None:
+        if result_limit is not None and not summary_only:
             for row in result:
                 row["results_truncated"] = row["results_total"] > len(row.get("results") or [])
         return result

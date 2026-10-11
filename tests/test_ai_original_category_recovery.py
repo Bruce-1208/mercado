@@ -306,3 +306,38 @@ def test_explicitly_deleted_optional_attr_is_not_resurrected_by_cached_or_genera
             chat=lambda *a, **k: json.dumps({"attributes": attrs}),
         )
         assert [item["id"] for item in result["attributes"]] == ["MODEL"]
+
+
+def test_budget_mode_fills_schema_attributes_before_sku_failure(monkeypatch):
+    schema = [{'id': 'MATERIAL'}, {'id': 'BRAND'}]
+    client = DiscoveryClient(schema=schema)
+    calls = []
+    def chat(messages, **kwargs):
+        calls.append(messages)
+        return '{"attributes":[{"id":"MATERIAL","value_name":"Steel"}]}'
+    chat.cost_control = True
+    def fail(*args, **kwargs):
+        raise ValueError('SKU mapping needs correction')
+    monkeypatch.setattr(products, 'normalize_marketplace_variations', fail)
+    with pytest.raises(products.OriginalPreparationError) as error:
+        products.complete_marketplace_category(
+            {'title':'不锈钢配件'}, {'attributes':[{'id':'BRAND','value_name':'Generic'}]}, client,
+            category_override={'category_id':'CBT105'}, chat=chat,
+            cached_result={'category_id':'CBT105', 'schema_fingerprint':products._preparation_fingerprint(schema),
+                           'attributes_ready':True,'attributes':[{'id':'BRAND','value_name':'Generic'}]})
+    assert error.value.step == 'variations'
+    assert any(a['id'] == 'MATERIAL' for a in error.value.state['attributes'])
+    assert len(calls) == 1
+
+
+def test_part_number_cannot_be_a_generated_product_name(monkeypatch):
+    schema = [{'id':'PART_NUMBER','name':'Part number','tags':{'required':True}}]
+    monkeypatch.setattr(products, 'normalize_marketplace_variations', lambda *a, **k: [])
+    monkeypatch.setattr(products, 'complete_required_attributes', lambda *a, **k:
+        ([{'id':'PART_NUMBER','value_name':'Silicone Wiper Blade'}], []))
+    result = products.complete_marketplace_category(
+        {'title':'硅胶雨刮胶条'}, {}, DiscoveryClient(schema=schema),
+        category_override={'category_id':'CBT105'}, chat=lambda *a, **k:'{"attributes":[]}')
+    assert result['attributes'] == []
+    assert result['missing_required_attributes'][0]['id'] == 'PART_NUMBER'
+    assert products._source_supports_part_number({'properties':[{'name':'零件号','value':'AB-123'}]}, 'AB-123')

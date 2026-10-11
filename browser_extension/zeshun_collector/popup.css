@@ -262,3 +262,10 @@ button:disabled { cursor: not-allowed; }
 }
 
 .collection-mode-field { grid-column: 1 / -1; grid-row: 1; }
+
+.zying-task-status.error { background: #fdecea; color: #a52b23; }
+
+.update-notice { padding: 12px; margin-bottom: 12px; border: 1px solid #efbd60; border-radius: 10px; background: #fff7e6; color: #754700; }
+.update-notice[hidden] { display: none; }
+.update-notice a { display: inline-block; margin: 8px 0; color: #805000; font-weight: 700; }
+.update-notice p { margin: 0; font-size: 12px; line-height: 1.5; }

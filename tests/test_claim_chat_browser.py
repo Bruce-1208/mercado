@@ -48,7 +48,7 @@ def test_chat_and_composer_available_before_extras_preserve_draft_and_cache(cons
     directory.mkdir(parents=True, exist_ok=True)
     page.locator('#customer-service-detail-dialog').screenshot(path=str(directory / f'claim-{width}.png'))
     page.evaluate("closeCustomerServiceDetail(); openCustomerServiceDetail('订单索赔 #100'); loadClaimDetail('100',7)")
-    assert page.evaluate("claimCalls.filter(call=>call.data.section === 'core').length") == 1
+    assert page.evaluate("claimCalls.filter(call=>call.data.section === 'metadata').length") == 1
     assert '您好，我需要帮助。' in page.locator('.customer-service-chat').inner_text()
 
 
@@ -58,7 +58,7 @@ def test_old_claim_response_does_not_overwrite_new_claim(console_page):
     page.evaluate("""() => {
         window.oldCore = new Promise(resolve => window.resolveOldCore = resolve);
         const original = customerServiceRequest;
-        customerServiceRequest = (action, options) => options.data.claim_id === '101' && options.data.section === 'core' ? oldCore : original(action,options);
+        customerServiceRequest = (action, options) => options.data.claim_id === '101' && options.data.section === 'metadata' ? oldCore : original(action,options);
         loadClaimDetail('101',7);
         loadClaimDetail('102',7);
     }""")
@@ -78,7 +78,7 @@ def test_sending_chinese_sets_auto_translation_and_prevents_duplicate_clicks(con
     assert len(calls) == 1
     assert calls[0]['data'] == {'claim_id':'100', 'receiver_role':'complainant', 'message':'我们会帮助您。', 'auto_translate':True}
     page.evaluate('resolveSend({})')
-    page.wait_for_function("claimCalls.filter(call=>call.data.section === 'core').length === 2 && !document.getElementById('customer-service-claim-send').disabled")
+    page.wait_for_function("claimCalls.filter(call=>call.data.section === 'metadata').length === 2 && !document.getElementById('customer-service-claim-send').disabled")
 
 
 def test_translation_failure_keeps_original_and_retry_preserves_reply(console_page):
@@ -188,3 +188,69 @@ def test_translation_http_timeout_is_reported(console_page):
         finally { window.fetch = original; }
     }""")
     assert result == '读取超时，请重试'
+
+
+def test_long_chat_translation_uses_bounded_batches(console_page):
+    page = console_page
+    setup_claim(page)
+    page.evaluate('resolveTranslation({translations:[]})')
+    page.wait_for_function("!customerServiceClaimBundle._translation_request")
+    page.evaluate("""() => {
+        window.translationBatches = [];
+        customerServiceClaimBundle.messages = Array.from({length:23}, (_, i) => ({message:'Message ' + i}));
+        const original = customerServiceRequest;
+        customerServiceRequest = async (action, options) => {
+            if (action !== 'claims-translate') return original(action, options);
+            translationBatches.push(options.data.texts);
+            return {translations:options.data.texts.map(text => '中文 ' + text)};
+        };
+        return retryClaimTranslation();
+    }""")
+    assert page.evaluate('translationBatches.map(batch => batch.length)') == [10, 10, 3]
+    assert page.evaluate('customerServiceClaimBundle.messages.every(message => message._text_zh === "中文 " + message.message)')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_messages_and_images_arrive_before_slow_metadata(console_page, width):
+    import base64
+    page = console_page
+    page.set_viewport_size({'width': width, 'height': 1000})
+    page.route('**/claims-attachment?*', lambda route: route.fulfill(
+        content_type='image/png', body=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1sAAAAASUVORK5CYII=')))
+    setup_claim(page)
+    page.evaluate("""() => {
+        const original = customerServiceRequest;
+        window.slowMetadata = new Promise(resolve => window.finishMetadata = resolve);
+        customerServiceRequest = (action, options) => {
+            if (options.data.section === 'metadata') return slowMetadata;
+            if (options.data.section === 'messages') return Promise.resolve({messages:[
+                {message:'图片已收到', attachments:[{id:'opaque-photo', original_filename:'买家照片.png'}, {id:'opaque-mime', content_type:'image/png'}]}
+            ]});
+            return original(action, options);
+        };
+        loadClaimDetail('103', 7);
+    }""")
+    page.wait_for_function("document.querySelectorAll('.customer-service-chat img').length === 2 && [...document.querySelectorAll('.customer-service-chat img')].every(img => img.naturalWidth > 0)")
+    assert '图片已收到' in page.locator('.customer-service-chat').inner_text()
+    assert page.locator('.customer-service-chat img').first.get_attribute('loading') == 'eager'
+    page.evaluate("window.firstImage = document.querySelector('.customer-service-chat img'); finishMetadata({claim:{id:'103',site_id:'MLB'}})")
+    page.wait_for_function("!customerServiceClaimBundle.metadata_pending")
+    assert page.evaluate("firstImage === document.querySelector('.customer-service-chat img')")
+
+
+def test_translation_starts_second_batch_before_first_finishes(console_page):
+    page = console_page
+    setup_claim(page)
+    page.evaluate('resolveTranslation({translations:[]})')
+    page.wait_for_function("!customerServiceClaimBundle._translation_request")
+    page.evaluate("""() => {
+        customerServiceClaimBundle.messages = Array.from({length:11}, (_,i) => ({message:'Message ' + i}));
+        window.batchResolvers = [];
+        customerServiceRequest = () => new Promise(resolve => batchResolvers.push(resolve));
+        retryClaimTranslation();
+    }""")
+    assert page.evaluate('batchResolvers.length') == 2
+    page.evaluate("batchResolvers[1]({translations:['第二批已完成']})")
+    page.wait_for_function("document.querySelector('.customer-service-chat').textContent.includes('第二批已完成')")
+    page.evaluate("batchResolvers[0]({translations:Array(10).fill('第一批已完成')})")
+    page.wait_for_function("!customerServiceClaimBundle._translation_request")

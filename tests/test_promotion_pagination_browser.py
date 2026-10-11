@@ -287,3 +287,33 @@ def test_enrollment_deep_link_opens_target_on_later_page(pagination_page):
     assert pagination_page.locator("#enrollBtn").inner_text() == "报名此商品"
     assert not mock.previews
     assert not mock.errors
+
+
+def test_product_images_expand_outside_table_and_hide_on_page_change(pagination_page):
+    page = pagination_page
+    mock = PromotionPaginationMock(page)
+    mock.open()
+    page.evaluate("""() => {
+        state.items.forEach(row => row.thumbnail = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="300" height="300" fill="blue"/></svg>'));
+        state.items[0].net_proceeds_after = {amount:null, warning:'平台净收益超过同币种售价，金额或币种异常，待核实'};
+        renderItems();
+    }""")
+    assert '异常，待核实' in page.locator('#net-after-1').inner_text()
+    image = page.locator('#itemRows .product img').first
+    image.hover()
+    preview = page.locator('#productImagePreview')
+    assert preview.is_visible()
+    box = preview.bounding_box()
+    assert box['width'] == 320
+    assert box['x'] >= 0 and box['x'] + box['width'] <= 1440
+    assert preview.locator('img').get_attribute('src') == image.get_attribute('src')
+    page.mouse.move(5, 5)
+    assert not preview.is_visible()
+    image.focus()
+    assert preview.is_visible()
+    page.keyboard.press('Escape')
+    assert not preview.is_visible()
+    page.locator('#itemPageNext').click()
+    mock.wait_page(2)
+    assert not preview.is_visible()
+    assert not mock.errors

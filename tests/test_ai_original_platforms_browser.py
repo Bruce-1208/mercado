@@ -69,10 +69,10 @@ def test_platform_drafts_generate_edit_export_without_mercado_mutations(console_
         await loadAiOriginalProfiles();
     }""")
     page.locator("#ai-original-platform").select_option("amazon")
-    page.wait_for_function("aiOriginalRows.length === 2 && document.getElementById('ai-original-count-approved').textContent === '1'")
+    page.wait_for_function("aiOriginalRows.length === 2 && aiOriginalRows.filter(row => aiOriginalProductStatus(row) === 'approved').length === 1")
     assert not page.locator(".ai-original-publish-panel").is_visible()
     assert not page.locator("#ai-original-review-submit").is_visible()
-    assert page.locator("#ai-original-count-approved").inner_text() == "1"
+    assert page.evaluate("aiOriginalRows.filter(row => aiOriginalProductStatus(row) === 'approved').length") == 1
     assert "SOLO_MERCADO" not in page.locator("#ai-original-grid").inner_text()
     assert "/mercado-only.jpg" not in page.locator("#ai-original-grid").inner_html()
     assert "俄语" not in page.locator("#ai-original-platform-rules").inner_text()
@@ -138,9 +138,9 @@ def test_mercado_unified_status_and_manual_fields(console_page, width):
         renderAiOriginalProducts(); decorateAiOriginalWorkbench();
     }''')
     assert page.locator('.ai-original-badge').all_text_contents() == ['通过', '待审核', '失败', '待补充', '疑似侵权']
-    assert page.locator('#ai-original-status-filter option').all_text_contents() == ['全部', '通过', '待审核', '失败', '待补充', '疑似侵权']
+    assert page.locator('#ai-original-status-filter option').all_text_contents() == ['全部', '通过', '待审核', '失败', '待补充', '待修复队列', '疑似侵权']
     for status in ['approved', 'unreviewed', 'failed', 'incomplete', 'suspected']:
-        assert page.locator(f'#ai-original-count-{status}').inner_text() == '1'
+        assert page.evaluate("status => aiOriginalRows.filter(row => aiOriginalProductStatus(row) === status).length", status) == 1
     page.locator('#ai-original-status-filter').select_option('incomplete')
     assert page.locator('.ai-original-card').count() == 1
     # Offscreen cards defer rendering with content-visibility: auto.

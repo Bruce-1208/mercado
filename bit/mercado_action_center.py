@@ -368,6 +368,19 @@ def _task_key(*parts: Any) -> str:
     return hashlib.sha256("\0".join(str(value or "") for value in parts).encode("utf-8")).hexdigest()
 
 
+def order_task_entry_url(task):
+    from urllib.parse import urlencode
+    entry = str(task.get("entry_url") or "")
+    topic = str(task.get("topic") or "")
+    if entry != "/?tab=orders" and topic not in {"orders", "marketplace_orders", "marketplace_orders_on_site"}:
+        return entry
+    resource = str(task.get("resource") or "").strip()
+    order_id = resource.rstrip("/").rsplit("/", 1)[-1]
+    if not order_id:
+        return entry
+    return "/?" + urlencode({"tab": "orders", "order_id": order_id, "store_id": task.get("token_id") or ""})
+
+
 def _upsert_watch_task(storage, *, organization_key, token_id, topic, resource, title, details, due_at, priority="high", entry_url="/?tab=orders", source="order_watch"):
     storage.upsert_mercado_operator_task({
         "task_key": _task_key(source, organization_key, token_id, topic, resource),
@@ -378,7 +391,7 @@ def _upsert_watch_task(storage, *, organization_key, token_id, topic, resource, 
         "resource": resource,
         "title": title,
         "details": details,
-        "entry_url": entry_url,
+        "entry_url": order_task_entry_url(dict(entry_url=entry_url, topic=topic, resource=resource, token_id=token_id)),
         "priority": priority,
         "due_at": due_at,
     })
@@ -609,7 +622,7 @@ def _action_center_tasks(storage, *, token_ids, organization_key, include_closed
             include_closed=include_closed, limit=1000, offset=offset,
         )
         batch = data.get("rows") or []
-        rows.extend(batch)
+        rows.extend({**row, "entry_url": order_task_entry_url(row)} for row in batch)
         if len(batch) < 1000:
             return rows
         offset += len(batch)
@@ -705,11 +718,130 @@ def _store_page(rows):
     }
 
 
+def _today_selected_filters():
+    return {key: {value.strip() for value in request.args.getlist(key) if value.strip()}
+            for key in ("salesperson", "group_name")}
+
+
+def _today_store_matches(row, selected):
+    # Closed stores remain available through the explicit history scope.
+    if request.args.get("include_inactive") != "1" and row.get("enabled") in (False, 0, "0"):
+        return False
+    # Match any chosen value within a field, and both fields on the same site setting.
+    return any(all(not values or str(setting.get(key) or "").strip() in values
+                   for key, values in selected.items())
+               for setting in (row.get("site_settings") or [row]))
+
+
+def _claim_message_text(value):
+    """Normalize platform rich text before display and Chinese translation."""
+    from html import unescape
+    from html.parser import HTMLParser
+    class PlainText(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.parts, self.hidden = [], 0
+        def handle_starttag(self, tag, attrs):
+            if tag in {'script', 'style'}:
+                self.hidden += 1
+            if not self.hidden and tag in {'br', 'p', 'div', 'li'}:
+                self.parts.append('\n')
+        def handle_endtag(self, tag):
+            if tag in {'script', 'style'}:
+                self.hidden = max(0, self.hidden - 1)
+            if not self.hidden and tag in {'p', 'div', 'li'}:
+                self.parts.append('\n')
+        def handle_data(self, data):
+            if not self.hidden:
+                self.parts.append(data)
+    parser = PlainText()
+    parser.feed(unescape(str(value or '')))
+    return '\n'.join(line.strip() for line in ''.join(parser.parts).splitlines() if line.strip())
+
+
+def _unanswered_claims(storage, tokens):
+    from bit.mercado_communications import communication_timestamp
+    rows, errors = [], []
+    for token in tokens:
+        token_id, name = int(token["id"]), token.get("display_name") or str(token["id"])
+        candidates, offset = {}, 0
+        try:
+            while True:
+                page = storage.execute_mercado_store_communication(token_id, "claims-list", {
+                    "status": "opened", "offset": offset, "limit": 100,
+                }) or {}
+                for error in page.get("marketplace_errors") or []:
+                    errors.append(f"店铺 {name} / {error.get('site_id') or '站点'}：{error.get('message')}")
+                batch = page.get("data") or []
+                for claim in batch:
+                    if claim.get("id"):
+                        candidates[str(claim["id"])] = claim
+                offset += len(batch)
+                if offset >= int((page.get("paging") or {}).get("total") or offset):
+                    break
+                if not batch:
+                    raise ValueError("索赔分页不完整")
+        except Exception as exc:
+            errors.append(f"店铺 {name}：{exc}")
+
+        def read_claim(candidate):
+            claim_id = str(candidate["id"])
+            try:
+                bundle = storage.execute_mercado_store_communication(token_id, "claims-detail", {
+                    "claim_id": claim_id, "section": "core",
+                }) or {}
+                claim = {**candidate, **(bundle.get("claim") or {})}
+                if claim.get("status") != "opened" or str(claim.get("resource") or "").lower() not in {"order", "orders"}:
+                    return None, None
+                if (bundle.get("resource_errors") or {}).get("messages"):
+                    raise ValueError(bundle["resource_errors"]["messages"])
+                player = next((p for p in claim.get("players") or [] if p.get("type") == "seller"), None)
+                if not player or not player.get("role"):
+                    raise ValueError("索赔缺少卖家角色，无法核实回复状态")
+                role = player["role"]
+                if "available_actions" in player:
+                    actions = {a if isinstance(a, str) else a.get("action") for a in player["available_actions"] or []}
+                    if not actions.intersection({"send_message_to_complainant", "send_message_to_mediator"}):
+                        return None, None
+                messages = bundle.get("messages") or []
+                if not messages:
+                    return None, None
+                def date(message):
+                    value = message.get("message_date") or message.get("date_created")
+                    return value.get("created") or value.get("received") if isinstance(value, dict) else value
+                if any(communication_timestamp(date(m)) is None for m in messages):
+                    raise ValueError("索赔消息时间缺失，无法核实最新回复")
+                latest = max(enumerate(messages), key=lambda pair: (communication_timestamp(date(pair[1])), pair[0]))[1]
+                if not latest.get("sender_role") or not latest.get("receiver_role"):
+                    raise ValueError("索赔消息缺少发送者或接收者角色")
+                if latest["sender_role"] == role or latest["receiver_role"] != role:
+                    return None, None
+                if latest["sender_role"] not in {"complainant", "respondent", "mediator"}:
+                    return None, None
+                text = _claim_message_text(latest.get("message") or latest.get("translated_message"))
+                return {"token_id": token_id, "store_name": name, "claim_id": claim_id,
+                        "order_id": (claim.get("order_context") or {}).get("order_id") or claim.get("resource_id"),
+                        "site_id": claim.get("site_id") or token.get("site_id"),
+                        "latest_at": date(latest), "sender_role": latest["sender_role"],
+                        "text": text or "（附件消息）", "has_text": bool(text)}, None
+            except Exception as exc:
+                return None, f"店铺 {name} / 索赔 {claim_id}：{exc}"
+        with ThreadPoolExecutor(max_workers=6, thread_name_prefix="today-claims") as executor:
+            for row, error in executor.map(read_claim, candidates.values()):
+                if row is not None:
+                    rows.append(row)
+                if error is not None:
+                    errors.append(error)
+    rows.sort(key=lambda row: communication_timestamp(row["latest_at"]) or 0, reverse=True)
+    return {"rows": rows, "errors": errors}
+
+
 def create_action_center_blueprint(*, login_required, current_user, authorized_token_ids, storage=None, has_permission=None):
     store = storage or bit_db_api
     blueprint = Blueprint("mercado_action_center", __name__)
     order_snapshots = SnapshotCache(ttl=300, workers=4)
     post_sale_snapshots = SnapshotCache(ttl=300)
+    claim_snapshots = SnapshotCache(ttl=300)
 
     data_reads = ThreadPoolExecutor(max_workers=4, thread_name_prefix="today-read")
     signing_key = secrets.token_hex(32)
@@ -725,16 +857,16 @@ def create_action_center_blueprint(*, login_required, current_user, authorized_t
         for original in rows:
             row = dict(original)
             token_id = int(row.get('token_id') or 0)
-            resource = str(row.get({'post-sale': 'pack_id', 'rights': 'infraction_id', 'events': 'id'}[kind]) or '')
+            resource = str(row.get({'post-sale': 'pack_id', 'claims': 'claim_id', 'rights': 'infraction_id', 'events': 'id'}[kind]) or '')
             if token_id in organizations and resource:
                 # A new buyer message creates a new handling item.
-                version = str(row.get('latest_at') or '') if kind == 'post-sale' else ''
+                version = str(row.get('latest_at') or '') if kind in {'post-sale', 'claims'} else ''
                 organization = organizations[token_id]
                 key = _task_key('today_work_status', organization, token_id, kind, resource + ':' + version)
                 row['work_status'] = states.get(key, {}).get('status', 'open')
                 row['work_ref'] = signer().dumps({'task_key': key, 'organization_key': organization,
                     'token_id': token_id, 'source': 'today_work_status', 'topic': kind,
-                    'resource': resource, 'title': {'post-sale': '售后消息处理', 'rights': '权利人案件处理', 'events': '通知人工处理'}[kind],
+                    'resource': resource, 'title': {'post-sale': '售后消息处理', 'claims': '订单索赔待回复', 'rights': '权利人案件处理', 'events': '通知人工处理'}[kind],
                     'due_at': datetime.now(_WORKBENCH_TZ).strftime('%Y-%m-%d %H:%M:%S')})
             result.append(row)
         return result
@@ -765,19 +897,22 @@ def create_action_center_blueprint(*, login_required, current_user, authorized_t
             can_execute=permission("tasks.execute"),
         )
 
+    @blueprint.route("/api/mercado/today/claims", methods=["GET"])
     @blueprint.route("/api/mercado/today/post-sale", methods=["GET"])
     @login_required
     def unanswered_post_sale():
         if not permission("tasks.view"):
             return jsonify(status="error", message="无待办查看权限"), 403
         user, allowed, organization = scope()
+        selected = _today_selected_filters()
         tokens = [row for row in store.list_mercado_store_tokens().get("rows", [])
                   if (allowed is None or int(row.get("id") or 0) in allowed)
                   and (not organization or str(row.get("organization_key") or "") == organization)
-                  and any(all(not request.args.get(key) or str(setting.get(key) or "") == request.args[key]
-                              for key in ("salesperson", "group_name"))
-                          for setting in (row.get("site_settings") or [row]))]
+                  and _today_store_matches(row, selected)]
         tokens, pagination = _store_page(tokens)
+        claims = request.path.endswith('/claims')
+        snapshots = claim_snapshots if claims else post_sale_snapshots
+        loader = _unanswered_claims if claims else _unanswered_post_sale
         background = request.args.get("background") == "1"
         force = request.args.get("refresh") == "1"
         data = {"rows": [], "errors": [], "refreshing": False, "pending": False, "store_pagination": pagination}
@@ -786,24 +921,44 @@ def create_action_center_blueprint(*, login_required, current_user, authorized_t
             key = (str(token.get("organization_key") or ""), int(token["id"]),
                    str(token.get("meli_user_id") or ""))
             try:
-                snapshot, refreshing = post_sale_snapshots.read(
+                snapshot, refreshing = snapshots.read(
                     key, lambda token=dict(token): {
-                        **_unanswered_post_sale(store, [token]),
+                        **loader(store, [token]),
                         "checked_at": datetime.now(_WORKBENCH_TZ).isoformat(),
                     }, background=background, force=force,
                 )
                 data["refreshing"] |= refreshing
                 data["pending"] |= snapshot is None
                 if snapshot is not None:
-                    data["rows"].extend(snapshot["rows"])
+                    data["rows"].extend(dict(row) for row in snapshot["rows"])
                     data["errors"].extend(snapshot["errors"])
                     stamp = snapshot["checked_at"]
                     data["checked_at"] = min(data.get("checked_at", stamp), stamp)
             except Exception as exc:
                 data["errors"].append(f"店铺 {token.get('display_name') or token['id']}：{exc}")
+        if claims:
+            from bit.mercado_communications import communication_timestamp
+            data['rows'].sort(key=lambda row: communication_timestamp(row.get('latest_at')) or 0, reverse=True)
+            for row in data['rows']:
+                if not row.get('has_text'):
+                    row['text_zh'] = row['text']
+                    continue
+                try:
+                    translated = store.execute_mercado_store_communication(row['token_id'], 'claims-translate', {
+                        'claim_id': row['claim_id'], 'site_id': row.get('site_id'),
+                        'texts': [row['text']], 'background': True, 'retry': force,
+                    }) or {}
+                    row['translation_pending'] = bool(translated.get('pending'))
+                    data['refreshing'] |= row['translation_pending']
+                    if not row['translation_pending']:
+                        row['text_zh'] = _claim_message_text((translated.get('translations') or [''])[0])
+                        if not row['text_zh']:
+                            raise ValueError('中文翻译为空')
+                except Exception as exc:
+                    row['translation_error'] = str(exc)
         if data['rows'] and hasattr(store, 'list_mercado_operator_tasks'):
             saved = _today_work_states(store, [int(t['id']) for t in tokens], organization)
-            data['rows'] = annotate(data['rows'], 'post-sale', tokens, saved)
+            data['rows'] = annotate(data['rows'], 'claims' if claims else 'post-sale', tokens, saved)
         response = jsonify(status="success", data=data)
         response.headers["Cache-Control"] = "no-store"
         return response
@@ -823,11 +978,8 @@ def create_action_center_blueprint(*, login_required, current_user, authorized_t
             ]
             dimensions = [setting for row in token_rows for setting in (row.get("site_settings") or [row])]
             filter_options = {key: sorted({str(item.get(key) or "").strip() for item in dimensions if str(item.get(key) or "").strip()}) for key in ("salesperson", "group_name")}
-            selected = {key: str(request.args.get(key) or "").strip() for key in filter_options}
-            token_rows = [row for row in token_rows if any(
-                all(not value or str(setting.get(key) or "").strip() == value for key, value in selected.items())
-                for setting in (row.get("site_settings") or [row])
-            )]
+            selected = _today_selected_filters()
+            token_rows = [row for row in token_rows if _today_store_matches(row, selected)]
             token_rows, pagination = _store_page(token_rows)
             errors = []
             token_ids = sorted(int(row["id"]) for row in token_rows if int(row.get("id") or 0) > 0)
@@ -881,7 +1033,7 @@ def create_action_center_blueprint(*, login_required, current_user, authorized_t
                 row for row in (data.get("rows") or [])
                 if row.get("source") != "today_work_status"
                 and (request.args.get("include_closed") == "1" or row.get("status") != "resolved")
-                and str(row.get("topic") or "").replace(" ", "_") not in {"promotion_deadline", "promotion_result_unknown", "messages", "marketplace_messages"}
+                and str(row.get("topic") or "").replace(" ", "_") not in {"promotion_deadline", "promotion_result_unknown", "messages", "marketplace_messages", "claims", "marketplace_claims"}
                 and _is_recent_order_task(row, recent_order_keys, watch_order_keys)
             ]
             data["errors"] = errors

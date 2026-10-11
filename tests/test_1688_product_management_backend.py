@@ -379,3 +379,80 @@ def test_list_omits_duplicate_ai_payloads_but_preserves_supplier_detail():
     assert row['ai_status'] == 'completed'
     assert row['net_proceeds_usd'] is None
     assert not {'source_snapshot_json', 'ai_original', 'marketplace_listings'} & row.keys()
+
+
+def test_bulk_source_edit_keeps_raw_snapshot_and_ai_draft(row):
+    connection = ProductConnection(row)
+    result = store.update_1688_product_items([7, 7], {"weight_g": 650, "package_width_cm": 14},
+                                              connection_factory=lambda: connection)
+    snapshot = json.loads(connection.cursor_object.row["source_snapshot_json"])
+    original = json.loads(row["source_snapshot_json"])
+    assert snapshot["original_1688"] == original["original_1688"]
+    assert snapshot["ai_original"] == original["ai_original"]
+    assert snapshot["source_1688_overrides"] == {"weight_g": 650, "package_width_cm": 14}
+    assert connection.cursor_object.row["package_length_cm"] == 20
+    assert result == {"requested": 1, "changed": 1, "updated_fields": ["weight_g", "package_width_cm"]}
+    assert connection.committed and connection.closed
+
+
+def test_bulk_source_edit_rolls_back_if_later_product_missing(row):
+    connection = ProductConnection(row)
+    old_fetch = connection.cursor_object.fetchone
+    connection.cursor_object.fetchone = lambda: None if connection.cursor_object.queries[-1][1] == (8,) else old_fetch()
+    with pytest.raises(KeyError):
+        store.update_1688_product_items([7, 8], {"weight_g": 650}, connection_factory=lambda: connection)
+    assert connection.rolled_back and not connection.committed and connection.closed
+
+
+@pytest.mark.parametrize("changes", [{}, {"price": 25}, {"weight_g": 0}, {"weight_g": "NaN"}])
+def test_invalid_bulk_changes_never_open_connection(changes):
+    with pytest.raises(ValueError):
+        store.update_1688_product_items([7], changes, connection_factory=lambda: pytest.fail("connected"))
+
+
+@pytest.mark.parametrize("name", ["api_update_1688_product_items", "api_db_update_1688_product_items"])
+def test_bulk_source_routes_forward_selection_and_handle_missing(name):
+    calls = []
+    route = load_route(name, db_update_1688_product_items=lambda ids, changes: calls.append((ids, changes)) or {"changed": 2},
+                       reject_db_api_client_mode=lambda: None)
+    with Flask(__name__).test_request_context('/', method='PATCH', json={"product_item_ids": [7, 8], "changes": {"weight_g": 600}}):
+        assert route().get_json()["data"]["changed"] == 2
+    assert calls == [([7, 8], {"weight_g": 600})]
+    with Flask(__name__).test_request_context('/', method='PATCH', json={"product_item_ids": "7", "changes": {"weight_g": 600}}):
+        assert route()[1] == 422
+
+
+def test_weight_filter_uses_source_override_and_snapshot_before_listing_weight(row):
+    connection = ProductConnection(row)
+    store.list_product_items(source_type="ai_original", weight_min="100", weight_max="500",
+                             connection_factory=lambda: connection)
+    count_sql, params = next((sql, params) for sql, params in connection.cursor_object.queries if "COUNT(*)" in sql)
+    assert "source_1688_overrides.weight_g" in count_sql
+    assert "original_1688.weight_g" in count_sql
+    assert Decimal("100") in params and Decimal("500") in params
+    with pytest.raises(ValueError, match="最低重量"):
+        store.list_product_items(source_type="ai_original", weight_min="500", weight_max="100",
+                                 connection_factory=lambda: pytest.fail("connected"))
+
+
+def test_source_list_route_passes_weight_range():
+    calls = []
+    route = load_route("api_1688_products", db_list_mercado_product_items=lambda **kwargs: calls.append(kwargs) or {"rows": []})
+    with Flask(__name__).test_request_context('/?weight_min=200&weight_max=800'):
+        assert route().get_json()["status"] == "success"
+    assert calls[0]["weight_min"] == "200" and calls[0]["weight_max"] == "800"
+
+
+@pytest.mark.parametrize("mode", ["api", "mysql"])
+def test_bulk_database_adapter_preserves_source_edit_payload(monkeypatch, mode):
+    from bit import bit_db_api
+    calls = []
+    monkeypatch.setattr(bit_db_api, "DB_MODE", mode)
+    monkeypatch.setattr(bit_db_api, "_request", lambda method, path, **kwargs: calls.append((method, path, kwargs)) or {})
+    monkeypatch.setattr(bit_db_api, "_collection_store_call", lambda *args: calls.append(args) or {})
+    bit_db_api.update_1688_product_items([7, 8], {"weight_g": 450, "package_width_cm": 12})
+    if mode == "api":
+        assert calls == [("PATCH", "/api/db/1688-products/bulk-dimensions", {"timeout": 120, "json": {
+            "product_item_ids": [7, 8], "changes": {"weight_g": 450, "package_width_cm": 12}}})]
+    else:
+        assert calls == [("update_1688_product_items", [7, 8], {"weight_g": 450, "package_width_cm": 12})]

@@ -208,3 +208,53 @@ def test_generic_recovery_failure_is_paced_and_releases_singleton_lease(queue, m
         update._remote_update_recovery_loop()
     assert delays == [30]
     assert not bit_runtime_lock.get_lock_owner(update.REMOTE_UPDATE_RECOVERY_LOCK_KEY)
+
+
+def test_remote_edit_does_not_wait_for_whole_store_sync(queue, monkeypatch):
+    from bit.bit_store_link_sync import STORE_LINK_SYNC_LOCK_KEY
+    lease = bit_runtime_lock.InterProcessLock(STORE_LINK_SYNC_LOCK_KEY, owner="full-sync")
+    assert lease.acquire()
+    monkeypatch.setattr(update, "_update_one_link", lambda row, *_args: result(row))
+    try:
+        accepted, _ = update.start_store_link_remote_update([18], {"price": "12.5"})
+        assert accepted
+        assert update.resume_pending_store_link_remote_updates()
+        assert update.store_link_remote_update_status()["status"] == "completed"
+    finally:
+        lease.release()
+
+
+def test_same_item_waits_until_snapshot_is_written_but_other_items_continue(queue, monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    from bit.store_link_item_lock import store_link_item_locks
+
+    entered = threading.Event()
+    release = threading.Event()
+    writes = []
+
+    def sync_snapshot():
+        with store_link_item_locks(74, [link(18)["item_id"]], owner="sync"):
+            entered.set()
+            assert release.wait(5)
+            writes.append("old snapshot")
+
+    def edit(row, *_args):
+        writes.append(row["id"])
+        return result(row)
+
+    monkeypatch.setattr(update, "_update_one_link", edit)
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        sync = pool.submit(sync_snapshot)
+        assert entered.wait(2)
+        same = pool.submit(update._update_one_link_locked, link(18), {}, {})
+        other = pool.submit(update._update_one_link_locked, link(19), {}, {})
+        try:
+            assert other.result(timeout=2)["status"] == "success"
+            assert not same.done()
+        finally:
+            release.set()
+        sync.result(timeout=2)
+        same.result(timeout=2)
+    assert writes.index("old snapshot") < writes.index(18)
+    assert not list((queue.parent / "locks").glob("mercado_listing_*.lockdir"))

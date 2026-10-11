@@ -17,6 +17,7 @@ from typing import Any, Callable, Iterable, Mapping
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from erp.mercadolibre_follow_sell import extract_item_id
+from erp.mercadolibre_page_facts import page_facts
 
 from erp.mercadolibre_batch_collector import (
     MAX_LISTING_PAGES,
@@ -205,7 +206,7 @@ DETAIL_DOM_SCRIPT = r"""() => {
     '.andes-table__row, .ui-pdp-specs__table tr, .ui-vpp-striped-specs__row'
   ).forEach(row => {
     const cells = Array.from(row.querySelectorAll(
-      'th, td, .andes-table__header, .andes-table__column'
+      'th, td, .andes-table__header, .andes-table__column, .ui-vpp-striped-specs__row__column'
     )).map(node => clean(node.textContent)).filter(Boolean);
     if (cells.length >= 2) specs.push({name: cells[0], value: cells.slice(1).join(' ')});
   });
@@ -245,6 +246,7 @@ DETAIL_DOM_SCRIPT = r"""() => {
     currency_id: (currency && currency.content) || offer.priceCurrency || 'MXN',
     pictures,
     specs,
+    structured_scripts: Array.from(document.querySelectorAll("script")).map(s => s.textContent || "").filter(s => s.length <= 5000000),
     free_shipping: freeShipping,
     body: pageText.slice(0, 1800),
     page_title: document.title
@@ -2505,8 +2507,7 @@ async def _collect_detail(
             "available_quantity": 1,
             "permalink": str(details.get("final_url") or page.url),
             "pictures": [{"source": url} for url in pictures],
-            "attributes": _attribute_rows(details.get("specs") or []),
-            "variations": [],
+            **page_facts(details),
             "sale_terms": [],
         }
         if isinstance(free_shipping, bool):

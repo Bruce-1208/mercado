@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 
 import pytest
 
@@ -43,6 +45,79 @@ def service(tmp_path, monkeypatch):
 def params(**extra):
     return {"seller_id": "100", "forms": ["侵权"], "sites": ["MLM"], "mode": "AI客服",
             "appeal_copy_mode": "普通模式", "loop_count": 10, **extra}
+
+
+def test_async_preparation_returns_before_slow_reads_and_deduplicates(service):
+    from bit import browser_extension_appeal_jobs as jobs
+    entered, release = threading.Event(), threading.Event()
+    original = service.identifiers_loader
+    def slow(*args):
+        entered.set()
+        assert release.wait(5)
+        return original(*args)
+    service.identifiers_loader = slow
+    payload = params(request_id="request-one")
+    try:
+        first = jobs.start(service, service.user, payload)
+        assert first["state"] == "preparing"
+        assert entered.wait(2)
+        assert jobs.start(service, service.user, payload)["state"] == "preparing"
+        assert jobs.status(service, service.user, payload)["state"] == "preparing"
+        with pytest.raises(appeal.AppealError, match="参数已改变"):
+            jobs.start(service, service.user, {**payload, "sites": ["MLB"]})
+        with pytest.raises(appeal.AppealError, match="不存在"):
+            jobs.status(service, {**service.user, "id": 8}, payload)
+    finally:
+        release.set()
+    for _ in range(200):
+        result = jobs.status(service, service.user, payload)
+        if result["state"] == "ready":
+            break
+        time.sleep(.01)
+    assert result["state"] == "ready"
+    assert len(service.identifier_calls) == 1
+    assert jobs.start(service, service.user, payload)["plan"]["task_id"] == result["plan"]["task_id"]
+    service.rows[0]["enabled"] = False
+    with pytest.raises(appeal.AppealError, match="权限已变更"):
+        jobs.status(service, service.user, payload)
+
+
+def test_async_preparation_failure_is_readable_without_replaying(service):
+    from bit import browser_extension_appeal_jobs as jobs
+    calls = []
+    def failing(*args):
+        calls.append(1)
+        raise appeal.AppealError("上游限频", 429)
+    service.identifiers_loader = failing
+    payload = params(request_id="request-failed")
+    jobs.start(service, service.user, payload)
+    for _ in range(200):
+        try:
+            jobs.status(service, service.user, payload)
+        except appeal.AppealError as exc:
+            assert exc.status == 429
+            break
+        time.sleep(.01)
+    else:
+        pytest.fail("preparation did not fail")
+    with pytest.raises(appeal.AppealError, match="上游限频"):
+        jobs.start(service, service.user, payload)
+    assert len(calls) == 1
+
+
+def test_preparation_timeout_and_restart_do_not_launch_again(service, monkeypatch):
+    from bit import browser_extension_appeal_jobs as jobs
+    payload = params(request_id="interrupted")
+    path = jobs._path(service, service.user, payload["request_id"])
+    value = {"state": "preparing", "pid": 123, "created_at": time.time() - 601}
+    jobs._write(path, value)
+    monkeypatch.setattr(jobs, "_pid_is_running", lambda pid: True)
+    with pytest.raises(appeal.AppealError, match="准备超时"):
+        jobs.status(service, service.user, payload)
+    monkeypatch.setattr(jobs, "_pid_is_running", lambda pid: False)
+    with pytest.raises(appeal.AppealError, match="重启"):
+        jobs.status(service, service.user, payload)
+    assert service.identifier_calls == []
 
 
 def test_context_binds_root_or_verified_child_to_scoped_store(service):
@@ -276,6 +351,25 @@ def test_extension_routes_require_permission_and_use_bearer_identity(service, mo
     assert response.headers["Cache-Control"] == "no-store"
     task_id = response.get_json()["data"]["task_id"]
     assert client.get("/api/browser-extension/appeal/status?task_id=" + task_id, headers=headers).status_code == 200
+    from flask import request
+    original_loader = service.identifiers_loader
+    def contextual_loader(*args):
+        assert request.path == "/api/browser-extension/appeal/plan-async"
+        return original_loader(*args)
+    service.identifiers_loader = contextual_loader
+    receipt = client.post("/api/browser-extension/appeal/plan-async", headers=headers,
+                          json=params(request_id="route-preparation"))
+    assert receipt.status_code == 200
+    assert receipt.get_json()["data"]["state"] == "preparing"
+    for _ in range(200):
+        progress = client.post("/api/browser-extension/appeal/plan-status", headers=headers,
+                               json={"request_id": "route-preparation"})
+        assert progress.status_code == 200
+        if progress.get_json()["data"]["state"] == "ready":
+            break
+        time.sleep(.01)
+    else:
+        pytest.fail("async route did not complete")
     service.user["access_version"] = 0
     assert client.post("/api/browser-extension/appeal/context", headers=headers, json={"seller_id": "100"}).status_code == 401
     assert client.get("/api/browser-extension/appeal/status?task_id=" + task_id, headers=headers).status_code == 401

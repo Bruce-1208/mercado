@@ -515,4 +515,4 @@ def test_collection_risk_filters_keep_salesperson_scope(harness):
     state['calls'].clear()
     service.read('products', {'salesperson': '业务乙'})
     reads = [params for name, params in state['calls'] if name == 'list']
-    assert reads and all('salesperson' not in params for params in reads)
+    assert reads and all(params['salesperson'] == '业务乙' for params in reads)

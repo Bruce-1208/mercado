@@ -262,7 +262,7 @@ def test_generation_never_completes_with_required_omissions(monkeypatch, field):
     monkeypatch.setattr(module, 'create_white_background_image', lambda *a, **k: ('path', '/image.jpg'))
     monkeypatch.setattr(module, 'generate_marketplace_copy', lambda *a, **k: {'attributes': []})
     monkeypatch.setattr(module, 'complete_marketplace_category', lambda *a, **k: {
-        'attributes': [], 'missing_required_attributes': [{'id': field}]})
+        'category_id': 'CBT123', 'attributes': [], 'missing_required_attributes': [{'id': field}]})
     with pytest.raises(ValueError, match=field):
         module.prepare_ai_original_product({'source_snapshot_json': {
             'original_1688': {'main_image_url': 'https://example.com/image.jpg'}}}, category_client=object())

@@ -25,7 +25,7 @@ function setup(status, rows, failIds = []) {
     aiOriginalStatus = record; renderAiOriginalFailureLog = record;`);
   return {run, requests, messages};
 }
-const row = (id, changes = {}) => ({id, ai_status: 'completed', weight_g: 100, net_proceeds_usd: 5, ...changes});
+const row = (id, changes = {}) => ({id, category_id: 'CBT123', ai_status: 'completed', weight_g: 100, net_proceeds_usd: 5, ...changes});
 
 test('invalid product and server failure do not block other approvals', async () => {
   const {run, requests, messages} = setup('approved', [row(1), row(2, {weight_g: 0}), row(3), row(4)], [3]);

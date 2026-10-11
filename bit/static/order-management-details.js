@@ -188,6 +188,7 @@ async function fetchOrderProductDetail(state, translated = false, refresh = fals
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; controller.abort(); }, translated ? 40000 : 35000);
     const params = new URLSearchParams({product_id: state.productId, translate: translated ? '1' : '0'});
+    if (!translated) params.set('description', '0');
     state.ids.forEach(id => params.append('order_id', id));
     if (refresh && !translated) params.set('refresh', '1');
     try {
@@ -244,13 +245,13 @@ async function openOrderProductDetail(productId, options = {}) {
         const item = data.item || {};
         const translations = data.translations_zh || {};
         const description = data.description || {};
-        const descriptionText = description.plain_text || (description.text ? new DOMParser().parseFromString(description.text, 'text/html').body.textContent : '') || '平台未提供商品描述';
+        const descriptionText = description.plain_text || (description.text ? new DOMParser().parseFromString(description.text, 'text/html').body.textContent : '') || (data.description_pending ? '商品描述加载中…' : '平台未提供商品描述');
         const pictures = Array.isArray(item.pictures) ? item.pictures : [];
         const picturesById = new Map(pictures.map(picture => [String(picture.id), picture]));
         const variants = Array.isArray(item.variations) && item.variations.length ? item.variations : [{...item, id:item.id, attribute_combinations:[]}];
         const pictureMarkup = picture => {
             const url = mercadoSafeUrl(picture?.secure_url || picture?.url || '');
-            return url ? `<img src="${escapeHtml(url)}" loading="lazy" alt="商品图片">` : '';
+            return url ? `<a class="order-picture-zoom" href="${escapeHtml(url)}" title="点击放大图片"><img src="${escapeHtml(url)}" loading="lazy" alt="商品图片"></a>` : '';
         };
         const scalar = value => value == null ? '—' : escapeHtml(String(value));
         const permalink = mercadoSafeUrl(item.permalink || '');
@@ -281,17 +282,25 @@ async function openOrderProductDetail(productId, options = {}) {
             try {
                 const translated = await fetchOrderProductDetail(state, true);
                 if (!isCurrent()) return;
+                if (data.description_pending) {
+                    const full = translated.description || {};
+                    const text = full.plain_text || (full.text ? new DOMParser().parseFromString(full.text, 'text/html').body.textContent : '') || (translated.warnings?.length ? '商品描述暂时读取失败，请刷新重试' : '平台未提供商品描述');
+                    body.querySelector('.order-product-description').innerHTML = orderProductTranslatedText(text, translated.translations_zh || {});
+                    data.description_pending = false;
+                }
                 if (translated.translation_error) throw new Error(translated.translation_error);
                 applyOrderProductTranslations(body, translated.translations_zh || {});
                 translationPanel.hidden = true;
             } catch (error) {
                 if (!isCurrent()) return;
+                if (data.description_pending) body.querySelector('.order-product-description').textContent = '商品描述暂时读取失败，可点击重试翻译重新加载';
                 translationStatus.textContent = error.message || '中文翻译暂时不可用，可先查看商品原文';
                 translationRetry.hidden = false;
             } finally { state.translationRunning = false; }
         };
         translationRetry.onclick = loadTranslations;
-        void loadTranslations();
+        if (data.translations_ready) translationPanel.hidden = true;
+        else void loadTranslations();
     } catch (error) {
         if (!isCurrent()) return;
         body.innerHTML = `<p role="alert">${escapeHtml(error.message || String(error))}</p><button class="secondary" type="button">重试</button>`;

@@ -159,7 +159,7 @@ def test_ai_billing_real_store_salesperson_filters_and_summary(width, tmp_path, 
 
     app.register_blueprint(create_blueprint(
         login_required=lambda function: function,
-        current_user=lambda: {"id": 1, "role_key": "enterprise_admin", "organization_key": "company-a"},
+        current_user=lambda: {"id": 1, "role_key": "super_admin", "organization_key": "company-a"},
         selected_organization=lambda user: "", storage=storage,
     ))
     client = app.test_client()

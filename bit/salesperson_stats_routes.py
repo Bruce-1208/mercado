@@ -1,6 +1,7 @@
 """Workbench and central database endpoints for salesperson activity."""
 from flask import jsonify, request
 from bit import bit_db_api
+from bit.analysis_jobs import background_analysis
 
 
 def register_routes(app, *, login_required, internal_api_required, authorized_token_ids,
@@ -21,6 +22,7 @@ def register_routes(app, *, login_required, internal_api_required, authorized_to
 
     @app.get('/api/salesperson-stats')
     @login_required
+    @background_analysis
     def salesperson_stats():
         if not has_permission(current_user() or {}, 'salesperson_stats.view'):
             return jsonify(status='error', message='无权查看业务员量统计'), 403

@@ -16,15 +16,39 @@ def execute(action, payload, session, translator=None, **kwargs):
         refresh_token=lambda _: None, http=session, translator=translator, **kwargs)
 
 
-def test_core_reads_only_claim_and_chat():
-    session = Session([Response(payload={'id': 100, 'reason_id': 'PDD1'}),
-                       Response(payload=[{'message': 'Hola'}])])
-    bundle = execute('claims-detail', {'claim_id': '100', 'section': 'core'}, session)
-    assert len(session.calls) == 2
-    assert session.calls[-1][1].endswith('/100/messages')
-    assert bundle['messages'][0]['message'] == 'Hola'
+@pytest.mark.parametrize('failure', [False, True])
+def test_core_reads_claim_and_chat_concurrently_with_one_refresh(monkeypatch, failure):
+    barrier = threading.Barrier(2)
+    sessions, refreshes = [], []
+    class WorkerSession:
+        trust_env = False
+        def __init__(self):
+            sessions.append(self)
+            self.calls = []
+            self.closed = False
+        def request(self, method, url, **kwargs):
+            self.calls.append((method, url, kwargs))
+            if len(self.calls) == 1:
+                barrier.wait(timeout=2)
+                return Response(401, {'message': 'expired'})
+            assert kwargs['headers']['Authorization'] == 'Bearer refreshed'
+            if url.endswith('/messages'):
+                if failure:
+                    return Response(403, {'message': 'unavailable'})
+                return Response(payload=[{'message': 'Hola'}])
+            return Response(payload={'id': 100, 'reason_id': 'PDD1'})
+        def close(self): self.closed = True
+    monkeypatch.setattr('mercado_api.communications.requests.Session', WorkerSession)
+    client = MercadoCommunicationsClient('secret', session=Session([]), timeout=8,
+        refresh_access_token=lambda: refreshes.append(True) or 'refreshed')
+    bundle = client.get_claim_bundle('100', section='core')
+    assert len(sessions) == 2 and all(session.closed for session in sessions)
+    assert refreshes == [True]
+    assert bundle['claim']['id'] == 100
+    assert bundle['messages'] == ([] if failure else [{'message': 'Hola'}])
+    assert bool(bundle['resource_errors'].get('messages')) is failure
     assert bundle['extras_pending'] is True
-    assert all(call[2]['timeout'] == 8 for call in session.calls)
+    assert all(call[2]['timeout'] == 8 for session in sessions for call in session.calls)
 
 
 def test_extras_read_concurrently_with_independent_sessions_and_one_refresh(monkeypatch):
@@ -179,17 +203,19 @@ def test_attachment_rejects_paths_and_urls(filename):
     assert not session.calls
 
 
-def test_attachment_view_route_returns_private_image(monkeypatch):
+@pytest.mark.parametrize("mime", ["image/jpeg", "image/jpeg; charset=binary", "image/avif", "image/bmp"])
+def test_attachment_view_route_returns_private_image(monkeypatch, mime):
     import base64
     monkeypatch.setattr(bit_interface, 'get_current_workbench_user', lambda: _workbench_user('customer_service.view'))
     calls = []
     def attachment(token, action, payload):
         calls.append((token, action, payload))
-        return {'filename': 'buyer.jpg', 'content_type': 'image/jpeg', 'content_base64': base64.b64encode(b'photo').decode()}
+        return {'filename': 'buyer.jpg', 'content_type': mime, 'content_base64': base64.b64encode(b'photo').decode()}
     monkeypatch.setattr(bit_interface.bit_db_api, 'execute_mercado_store_communication', attachment)
     response = bit_interface.app.test_client().get('/api/mercado-communications/7/claims-attachment?claim_id=100&attachment_id=buyer.jpg')
     assert response.status_code == 200
-    assert response.data == b'photo' and response.mimetype == 'image/jpeg'
+    assert response.data == b'photo' and response.mimetype == mime.split(';')[0]
+    assert response.headers['Content-Disposition'].startswith('inline;')
     assert response.headers['Cache-Control'] == 'private, no-store'
     assert response.headers['X-Content-Type-Options'] == 'nosniff'
     assert calls == [(7, 'claims-attachment', {'claim_id': '100', 'attachment_id': 'buyer.jpg'})]
@@ -202,3 +228,58 @@ def test_post_sale_attachment_resolves_cbt_order_site():
     execute('post-sale-attachment', {'pack_id': '200', 'site_id': 'CBT', 'attachment_id': 'buyer.png'}, session,
             get_order_contexts=lambda token, ids: [{'site_id': 'MLB'}])
     assert session.calls[0][2]['params'] == {'tag': 'post_sale', 'site_id': 'MLB'}
+
+
+def test_translation_batches_languages_and_preserves_message_order(monkeypatch):
+    from bit import mercado_communications
+    monkeypatch.setattr(mercado_communications, '_claim_language', lambda *args: ('MLB', 'pt-BR'))
+    monkeypatch.setattr('erp.mercadolibre_translation.detect_text_language',
+                        lambda text, fallback: 'en' if text == 'Hello' else 'pt-BR')
+    calls = []
+    def translator(texts, source, target):
+        calls.append((texts, source))
+        return ['中文' + text for text in texts]
+    result = execute('claims-translate', {'claim_id': '100', 'texts': ['Olá', 'Hello', 'Obrigado']},
+                     Session([]), translator)
+    assert calls == [(['Olá', 'Obrigado'], 'pt-BR'), (['Hello'], 'en')]
+    assert result['translations'] == ['中文Olá', '中文Hello', '中文Obrigado']
+
+
+def test_parallel_core_preserves_legacy_claim_and_message_fallback(monkeypatch):
+    sessions = []
+    class WorkerSession:
+        trust_env = False
+        def __init__(self):
+            sessions.append(self)
+            self.closed = False
+        def request(self, method, url, **kwargs):
+            if '/marketplace/v2/' in url:
+                return Response(400, {'message': 'Available only for claims 1.0'})
+            return Response(payload=[{'message': 'Hola'}] if url.endswith('/messages') else {'id': 100})
+        def close(self): self.closed = True
+    monkeypatch.setattr('mercado_api.communications.requests.Session', WorkerSession)
+    bundle = execute('claims-detail', {'claim_id': '100', 'section': 'core'}, Session([]))
+    assert bundle['api_version'] == 'claims_1'
+    assert bundle['messages'] == [{'message': 'Hola'}]
+    assert not bundle['resource_errors']
+    assert len(sessions) == 2 and all(session.closed for session in sessions)
+
+
+@pytest.mark.parametrize('section,path,payload', [
+    ('messages', '/messages', [{'message': 'Hola'}]),
+    ('metadata', '/100', {'id': 100}),
+])
+def test_chat_resources_can_be_read_independently(section, path, payload):
+    session = Session([Response(payload=payload)])
+    result = execute('claims-detail', {'claim_id': '100', 'section': section}, session)
+    assert result['messages' if section == 'messages' else 'claim'] == payload
+    assert len(session.calls) == 1
+    assert session.calls[0][1].endswith(path)
+
+
+def test_incoming_translation_reuses_known_site_without_network():
+    session = Session([])
+    result = execute('claims-translate', {'claim_id': '100', 'site_id': 'MLB', 'texts': ['Olá, preciso de ajuda.']},
+                     session, lambda texts, source, target: ['您好'])
+    assert result == {'translations': ['您好']}
+    assert not session.calls

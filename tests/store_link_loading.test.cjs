@@ -33,11 +33,12 @@ function harness({honorAbort = true} = {}) {
     const input = value => ({value});
     const context = {
         URLSearchParams, AbortController, Boolean, Number, Math, Set,
+        currentWorkbenchUser: {role_key: "member"},
         storeLinkDateTime: value => value || "-",
         storeLinkBody: {dataset: {}, innerHTML: ''},
         storeLinkLoadRequestId: 0, storeLinkLoadController: null,
         storeLinkRefreshButton: {}, storeLinkSalesSort: input('sold_quantity:desc'),
-        storeLinkSearch: input(''), storeLinkSiteFilter: input(''), storeLinkGroupFilter: input(''),
+        storeLinkSalespersonFilter: input(''), storeLinkSearch: input(''), storeLinkSiteFilter: input(''), storeLinkGroupFilter: input(''),
         storeLinkStatusFilter: input(''), storeLinkPromotionFilter: input(''),
         storeLinkAdvertisingFilter: input(''), storeLinkVideoFilter: input(''),
         storeLinkProductCategoryFilter: input(''), storeLinkMercadoCategoryFilter: input(''),
@@ -58,7 +59,7 @@ function harness({honorAbort = true} = {}) {
             context.storeLinkBody.innerHTML = rows.map(row => `row:${row.id}`).join(',');
         },
         renderStoreLinkStores: () => {}, renderStoreLinkSites: () => {},
-        renderStoreLinkGroups: () => {}, renderStoreLinkPagination: () => {},
+        renderStoreLinkSalespeople: () => {}, renderStoreLinkGroups: () => {}, renderStoreLinkPagination: () => {},
         loadMercadoManagementCategories: () => {}, syncWorkspaceTabs: () => {},
         escapeHtml: value => String(value),
         WorkbenchUI: {
@@ -83,9 +84,12 @@ function harness({honorAbort = true} = {}) {
     context.fetch = (url, options) => new Promise((resolve, reject) => {
         const call = {
             url, signal: options?.signal,
-            respond: (data, {status = 'success', code = 200} = {}) => resolve({
+            respond: (data, {status = 'success', code = 200, html = false} = {}) => resolve({
                 ok: code >= 200 && code < 300, status: code,
-                json: async () => ({status, data, message: 'test response'}),
+                json: async () => {
+                    if (html) throw new SyntaxError('HTML gateway body must not be parsed');
+                    return {status, data, message: 'test response'};
+                },
             }),
             fail: message => reject(new Error(message)),
         };
@@ -283,4 +287,73 @@ test('failed status requests release their lock and cannot restart hidden-page r
     await retry;
     assert.equal(h.timers.size, 0);
     assert.equal(h.context.storeLinkSyncStatusLoading, false);
+});
+
+
+test('changing salesperson scopes pagination and clears the previous selection', async () => {
+    const h = harness();
+    h.context.storeLinkSalespersonFilter.value = '张三';
+    const first = h.context.loadStoreLinks(2);
+    let query = new URL(h.lists()[0].url, 'http://localhost').searchParams;
+    assert.equal(query.get('salesperson'), '张三');
+    assert.equal(query.get('page'), '2');
+    h.lists()[0].respond({rows: [{id: 1}], total: 5});
+    await first;
+    h.context.selectedStoreLinkIds.add(1);
+    h.context.storeLinkSalespersonFilter.value = '李四';
+    const second = h.context.loadStoreLinks(1);
+    assert.equal(h.context.selectedStoreLinkIds.size, 0);
+    query = new URL(h.lists()[1].url, 'http://localhost').searchParams;
+    assert.equal(query.get('salesperson'), '李四');
+    assert.equal(query.get('page'), '1');
+    h.lists()[1].respond({rows: [], total: 0});
+    await second;
+});
+
+async function fireGatewayRetry(h) {
+    await flush();
+    const entry = [...h.timers].find(([, timer]) => [1500, 3000].includes(timer.delay));
+    assert.ok(entry, 'gateway retry scheduled');
+    h.timers.delete(entry[0]);
+    entry[1].callback();
+    await flush();
+}
+
+test('transient gateway failure retries the same list then renders recovered data', async () => {
+    const h = harness();
+    const loading = h.context.loadStoreLinks(2);
+    h.lists()[0].respond({}, {code: 502, html: true});
+    await fireGatewayRetry(h);
+    assert.equal(h.lists()[1].url, h.lists()[0].url);
+    h.lists()[1].respond({rows: [{id: 42}], page: 2});
+    await loading;
+    assert.equal(h.context.storeLinkBody.innerHTML, 'row:42');
+    assert.equal(h.context.storeLinkRefreshButton.disabled, false);
+});
+
+test('persistent gateway failure stops after three attempts with actionable feedback', async () => {
+    const h = harness();
+    const loading = h.context.loadStoreLinks();
+    for (let i = 0; i < 3; i++) {
+        h.lists()[i].respond({}, {code: 502, html: true});
+        if (i < 2) await fireGatewayRetry(h);
+    }
+    await loading;
+    assert.equal(h.lists().length, 3);
+    assert.match(h.context.storeLinkMessage.textContent, /自动重试后仍未恢复/);
+    assert.equal(h.context.storeLinkRefreshButton.disabled, false);
+});
+
+test('changing filters cancels the gateway retry delay', async () => {
+    const h = harness();
+    const old = h.context.loadStoreLinks();
+    h.lists()[0].respond({}, {code: 503});
+    await flush();
+    h.context.storeLinkSearch.value = 'new';
+    const current = h.context.loadStoreLinks();
+    h.lists()[1].respond({rows: [{id: 9}]});
+    await Promise.all([old, current]);
+    assert.equal(h.timers.size, 0);
+    assert.equal(h.lists().length, 2);
+    assert.equal(h.context.storeLinkBody.innerHTML, 'row:9');
 });

@@ -356,7 +356,7 @@ def test_filter_layout_and_popup_fit_viewport(console_page, width):
         [...el.querySelectorAll('input:not([type=checkbox]), select:not([multiple]), .market-multi-trigger')]
         .map(e => e.getBoundingClientRect().height).filter(Boolean)
     """)
-    assert set(heights) == {44 if width <= 760 else 38}
+    assert set(heights) == {32}
     page.locator("#order-store-filter-trigger").click()
     box = page.locator("#order-store-filter-picker .market-multi-panel").bounding_box()
     assert box and box["x"] >= 0 and box["x"] + box["width"] <= width

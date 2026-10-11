@@ -8,7 +8,7 @@ from bit.zying_order_extension import ExtensionOrderSync
 
 def detail(order_id="2001", cost="18.50", buys=None):
     return {"root": [{"order_id": "101", "order_no": order_id, "order_cost": cost}],
-            "buys": buys if buys is not None else [{"no": "P1", "trace": "T1"}]}
+            "buys": buys if buys is not None else [{"no": "P1", "trace": "T1", "amount": cost, "cur": "CNY"}]}
 
 
 @pytest.fixture
@@ -46,13 +46,30 @@ def test_sync_reuses_agent_rules_and_deduplicates_committed_results(manager):
                {"order_id": "2002", "detail": None}]
     manager.action(7, request_id, "results", {"rows": entries}, write)
     manager.action(7, request_id, "results", {"rows": entries}, write)
-    assert writes == [("2001", {"purchase_cost": "18.50"}, 7)]
+    assert writes == [("2001", {"purchase_order": "", "purchase_tracking": "", "purchase_cost": "0.00"}, 7)]
     # Pack-only match is a failed result, with no cost assigned to its child.
     state = manager.action(7, request_id, "results", {"rows": [{"order_id": "2003", "detail": detail()}]}, write)
     assert (state["updated"], state["skipped"], state["failed"], state["completed"]) == (1, 1, 1, 3)
     assert state["phase"] == "completed" and not state["running"]
     assert "子订单" in state["results"][-1]["message"]
     assert ExtensionOrderSync(manager.path).status(7) == state
+
+
+def test_extension_clears_cost_without_purchase_records(manager):
+    request_id = start(manager)["request_id"]
+    manager.action(7, request_id, "confirm")
+    writes = []
+
+    def write(order_id, changes, job):
+        writes.append((order_id, changes))
+        return {"matched": 1}
+
+    state = manager.action(7, request_id, "results", {"rows": [
+        {"order_id": "2001", "detail": detail(cost="28.75", buys=[])}
+    ]}, write)
+    assert writes == [("2001", {"purchase_order": "", "purchase_tracking": "", "purchase_cost": "0.00"})]
+    assert state["updated"] == 1 and state["skipped"] == 0
+    assert state["phase"] == "completed"
 
 
 def test_out_of_scope_and_invalid_batches_never_write(manager):
@@ -232,3 +249,38 @@ def test_routes_fail_closed_without_accessible_stores(route_client, monkeypatch)
     response = client.post("/api/browser-extension/zying-order-sync/start", json={"date_start": "2026-10-01", "date_end": "2026-10-08"}, headers={"Authorization": "Bearer test-token"})
     assert response.status_code == 400
     assert "没有可访问" in response.json["message"]
+
+
+def test_order_sync_passes_selected_workflow_status_and_persists_it(route_client, monkeypatch, manager):
+    client, web, _ = route_client
+    calls = []
+    monkeypatch.setattr(web, 'db_list_orders', lambda **params: calls.append(params) or {'rows':[{'id':'2001'}], 'total':1})
+    response = client.post('/api/browser-extension/zying-order-sync/start', headers={'Authorization':'Bearer test-token'}, json={
+        'date_start':'2026-10-01','date_end':'2026-10-08','order_status':'@转运'})
+    assert response.status_code == 202
+    assert ready(manager)['order_status'] == '@转运'
+    assert calls[0]['status'] == '@转运'
+
+
+def test_purchase_tracking_passes_workflow_and_access_scope(route_client, monkeypatch):
+    from unittest.mock import Mock
+    client, web, _ = route_client
+    read = Mock(return_value=[{'order_id':'2001','purchase_order':'P1'}])
+    monkeypatch.setattr(web.bit_db_api, 'get_purchase_tracking_orders', read)
+    create = Mock(return_value={'phase':'waiting_plugin'})
+    monkeypatch.setattr(web.plugin_purchase_tracking_manager, 'create', create)
+    response = client.post('/api/browser-extension/purchase-tracking/start', headers={'Authorization':'Bearer test-token'}, json={
+        'platform':'1688','date_start':'2026-10-01','date_end':'2026-10-08','order_status':'找货-已采购'})
+    assert response.status_code == 202
+    assert read.call_args.kwargs['status'] == '找货-已采购'
+    assert read.call_args.kwargs['allowed_token_ids'] == [10,20]
+    assert create.call_args.kwargs['order_status'] == '找货-已采购'
+
+
+def test_plugin_rejects_invalid_workflow_before_reading(route_client, monkeypatch):
+    client, web, _ = route_client
+    monkeypatch.setattr(web.bit_db_api,'get_purchase_tracking_orders',lambda *a,**kw:pytest.fail('invalid status must not query'))
+    for path in ('purchase-tracking/start','zying-order-sync/start'):
+        response = client.post('/api/browser-extension/'+path,headers={'Authorization':'Bearer test-token'},json={
+            'platform':'1688','date_start':'2026-10-01','date_end':'2026-10-08','order_status':'bad-status'})
+        assert response.status_code == 400

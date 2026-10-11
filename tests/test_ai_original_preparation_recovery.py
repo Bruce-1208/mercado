@@ -53,9 +53,9 @@ def preparation(monkeypatch, tmp_path):
             "description_pt": "Uma fantasia.", "product_type_en": "Children costume", "attributes": []}
     def make_image(*args, **kwargs):
         counts["image"] += 1
-        path = tmp_path / "image.jpg"
+        path = tmp_path / f"{args[1]}-ai-white.jpg"
         path.write_bytes(b"image")
-        return path, "/api/ai-original-products/images/1688-123-ai-white.jpg"
+        return path, f"/api/ai-original-products/images/1688-{args[1]}-ai-white.jpg"
     def make_copy(*args, **kwargs):
         counts["copy"] += 1
         return deepcopy(copy)
@@ -93,6 +93,48 @@ def retry_row(row, state):
     return retry
 
 
+def test_missing_category_client_fails_then_resumes_without_regenerating_copy(preparation):
+    row, client, counts, _, chat = preparation
+    with pytest.raises(products.OriginalPreparationError, match='缺少分类客户端') as failure:
+        products.prepare_ai_original_product(row, chat=chat)
+    state = failure.value.state
+    assert state['status'] == 'failed'
+    assert state['failed_step'] == 'category'
+    assert state['preparation']['category_ready'] is False
+    result = products.prepare_ai_original_product(retry_row(row, state), category_client=client, chat=chat)
+    assert result['ai_original']['status'] == 'completed'
+    assert counts['image'] == 3  # product cover and two SKU covers, with no retry duplicates
+    assert counts['copy'] == 1
+
+
+@pytest.mark.parametrize('category_id', ['', 'MLM123', 'CBT_WRONG'])
+def test_legacy_completed_invalid_category_is_retryable(preparation, category_id):
+    row, client, counts, _, chat = preparation
+    initial = products.prepare_ai_original_product(row, category_client=client, chat=chat)
+    retry = retry_row(row, initial['ai_original'])
+    retry['category_id'] = category_id
+    assert products.original_generation_skip_reason(retry) == ''
+    result = products.prepare_ai_original_product(retry, category_client=client, chat=chat)
+    assert result['category_id'] == 'CBT123'
+    assert result['ai_original']['status'] == 'completed'
+    assert counts['image'] == 3  # product cover and two SKU covers, with no retry duplicates
+    assert counts['copy'] == 1
+
+
+def test_category_failure_does_not_lock_retry_to_old_automatic_checkpoint(preparation):
+    row, client, counts, _, chat = preparation
+    initial = products.prepare_ai_original_product(row, category_client=client, chat=chat)
+    state = initial['ai_original']
+    state.update(status='failed', failed_step='category', workflow_status='needs_category')
+    state['category_checkpoint']['category_id'] = 'CBT999'
+    before = len(client.calls)
+    result = products.prepare_ai_original_product(retry_row(row, state), category_client=client, chat=chat)
+    assert 'domain_discovery' in client.calls[before][0]
+    assert result['category_id'] == 'CBT123'
+    assert counts['image'] == 3  # product cover and two SKU covers, with no retry duplicates
+    assert counts['copy'] == 1
+
+
 def test_category_failure_saves_copy_and_retries_without_new_image_or_copy(preparation):
     row, client, counts, _, chat = preparation
     client.discover = False
@@ -109,7 +151,8 @@ def test_category_failure_saves_copy_and_retries_without_new_image_or_copy(prepa
     client.discover = True
     result = products.prepare_ai_original_product(retry_row(row, error.state), category_client=client, chat=chat)
     assert result["ai_original"]["status"] == "completed"
-    assert counts["image"] == counts["copy"] == 1
+    assert counts["image"] == 3  # product cover and two SKU covers
+    assert counts["copy"] == 1
     assert "ai_original" not in row["source_snapshot_json"]
     assert json.loads(result["source_snapshot_json"])["marketplace_listings"]["amazon"] == {"title": "Other draft"}
 
@@ -127,13 +170,15 @@ def test_variation_failure_reuses_category_attributes_but_fetches_live_schema(pr
     assert counts["variations"] == 3
     control["bad_variations"] = False
     result = products.prepare_ai_original_product(retry_row(row, error.state), category_client=client, chat=chat)
-    assert counts == dict(image=1, copy=1, attributes=1, variations=4, required=0)
+    assert counts == dict(image=3, copy=1, attributes=1, variations=4, required=0)
     assert sum("domain_discovery" in path for path, _ in client.calls) == 1
     assert sum("/attributes" in path for path, _ in client.calls) == 2
     source = row["source_snapshot_json"]["original_1688"]["variations"]
     for actual, original in zip(result["ai_original"]["variations"], source):
-        assert {key: actual[key] for key in ("id", "seller_sku", "price", "available_quantity", "image_url")} == {
-            key: original[key] for key in ("id", "seller_sku", "price", "available_quantity", "image_url")}
+        assert {key: actual[key] for key in ("id", "seller_sku", "price", "available_quantity")} == {
+            key: original[key] for key in ("id", "seller_sku", "price", "available_quantity")}
+        assert actual["source_image_url"] == original["image_url"]
+        assert actual["image_url"] == actual["white_image_url"]
 
 
 def test_malformed_attributes_keep_selected_category_and_resume_at_attribute_generation(preparation):
@@ -147,7 +192,8 @@ def test_malformed_attributes_keep_selected_category_and_resume_at_attribute_gen
     control["bad_attributes"] = False
     result = products.prepare_ai_original_product(retry_row(row, failure.value.state), category_client=client, chat=chat)
     assert result["ai_original"]["status"] == "completed"
-    assert counts["image"] == counts["copy"] == 1
+    assert counts["image"] == 3  # product cover and two SKU covers
+    assert counts["copy"] == 1
     assert counts["attributes"] == 2
     assert sum("domain_discovery" in path for path, _ in client.calls) == 1
 
@@ -166,7 +212,8 @@ def test_new_manual_lock_retains_corrected_copy_and_manual_attributes(preparatio
     result = products.prepare_ai_original_product(retry_row(row, state), category_client=client, chat=chat)
     assert result["title"] == "Disfraz corregido"
     assert next(a for a in result["ai_original"]["attributes"] if a["id"] == "MATERIAL")["value_name"] == "Polyester"
-    assert counts["image"] == counts["copy"] == 1
+    assert counts["image"] == 3  # product cover and two SKU covers
+    assert counts["copy"] == 1
 
 
 def test_manual_required_attribute_resumes_without_remapping_skus(preparation):
@@ -180,7 +227,7 @@ def test_manual_required_attribute_resumes_without_remapping_skus(preparation):
     state["attributes"].append({"id": "MATERIAL", "value_name": "Synthetic"})
     result = products.prepare_ai_original_product(retry_row(row, state), category_client=client, chat=chat)
     assert result["ai_original"]["missing_required_attributes"] == []
-    assert counts == dict(image=1, copy=1, attributes=1, variations=1, required=2)
+    assert counts == dict(image=3, copy=1, attributes=1, variations=1, required=2)
 
 
 def test_schema_drift_invalidates_cached_mapping(preparation):
@@ -191,7 +238,8 @@ def test_schema_drift_invalidates_cached_mapping(preparation):
     client.schema.append({"id": "NEW_FIELD"})
     control["bad_variations"] = False
     products.prepare_ai_original_product(retry_row(row, failure.value.state), category_client=client, chat=chat)
-    assert counts["image"] == counts["copy"] == 1
+    assert counts["image"] == 3  # product cover and two SKU covers
+    assert counts["copy"] == 1
     assert counts["attributes"] == 2
     assert counts["variations"] == 4
 
@@ -250,3 +298,33 @@ def test_worker_persists_partial_copy_and_actionable_failure(monkeypatch):
     assert failure["workflow_status"] == "needs_variations"
     assert state["results"][0]["failed_step"] == "variations"
     assert state["failed_count"] == 1
+
+
+def test_category_and_attributes_saved_before_image_failure(preparation, monkeypatch):
+    row, client, counts, _, chat = preparation
+    def unavailable(*args, **kwargs):
+        raise ValueError('supplier image unavailable')
+    monkeypatch.setattr(products, '_prepare_original_image', unavailable)
+    with pytest.raises(products.OriginalPreparationError) as failed:
+        products.prepare_ai_original_product(row, category_client=client, chat=chat)
+    state = failed.value.state
+    assert failed.value.step == 'image'
+    assert state['category_id'] == 'CBT123'
+    assert state['attributes']
+    assert state['preparation']['required_ready']
+    assert state['preparation']['copy_ready']
+
+
+def test_metadata_repair_never_calls_image_processing(preparation, monkeypatch):
+    row, client, counts, _, chat = preparation
+    def forbidden(*args, **kwargs):
+        pytest.fail('metadata repair must not call image processing')
+    monkeypatch.setattr(products, '_prepare_original_image', forbidden)
+    result = products.prepare_ai_original_product(row, category_client=client, chat=chat, metadata_only=True)
+    state = result['ai_original']
+    assert state['status'] == 'pending'
+    assert state['current_step'] == 'metadata_ready'
+    assert result['category_id'] == 'CBT123'
+    assert state['attributes'] and state['preparation']['required_ready']
+    assert not state['preparation'].get('image_ready')
+    assert counts['image'] == 0

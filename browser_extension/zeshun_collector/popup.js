@@ -74,8 +74,10 @@ const weightPriceTaskStatus = document.getElementById("weight-price-task-status"
 const weightPriceCurrentMeta = document.getElementById("weight-price-current-meta");
 const weightPriceSummary = document.getElementById("weight-price-summary");
 const weightPriceLog = document.getElementById("weight-price-log");
+const purchaseResetDatesButton = document.getElementById("purchase-reset-dates");
 const purchaseDateStart = document.getElementById("purchase-date-start");
 const purchaseDateEnd = document.getElementById("purchase-date-end");
+const purchaseOrderStatus = document.getElementById("purchase-order-status");
 const purchasePlatform = document.getElementById("purchase-platform");
 const purchasePageStatus = document.getElementById("purchase-page-status");
 const purchaseTaskMeta = document.getElementById("purchase-task-meta");
@@ -110,7 +112,7 @@ let weightDimensionsPollTimer = null;
 let purchaseTrackingState = null;
 let purchaseTrackingPollTimer = null;
 const productBatchFields = Object.fromEntries([
-  "country", "keyword", "tab", "max-items", "concurrency-mode", "success-rest-seconds", "min-sales", "max-sales"
+  "country", "keyword", "tab", "price-mode", "max-items", "concurrency", "success-rest-seconds", "min-sales", "max-sales"
 ].map(name => [name, document.getElementById(`product-${name}`)]));
 const productBatchStart = document.getElementById("product-batch-start");
 const productBatchStop = document.getElementById("product-batch-stop");
@@ -289,7 +291,7 @@ async function initializeYandexOptions() {
 }
 
 function productBatchSelection() {
-  const params = {};
+  const params = {price_mode: productBatchFields["price-mode"].value === "discount" ? "discount" : "original"};
   for (const [field, key, label, max] of [
     ["max-items", "max_items", "采集数量", 500]
   ]) {
@@ -297,15 +299,16 @@ function productBatchSelection() {
     if (!Number.isInteger(value) || value < 1 || value > max) throw new Error(`${label}须为 1–${max} 的整数`);
     params[key] = value;
   }
-  const restSeconds = Number(productBatchFields["success-rest-seconds"].value || 3);
+  const restSeconds = Number(productBatchFields["success-rest-seconds"].value || 0);
   if (!Number.isFinite(restSeconds) || restSeconds < 0 || restSeconds > 3600) {
     throw new Error("成功后休息时间须为 0–3600 秒");
   }
   params.success_rest_seconds = restSeconds;
-  const concurrencyMode = productBatchFields["concurrency-mode"].value;
+  const concurrency = Number(productBatchFields["concurrency"].value);
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 5) throw new Error("采集进程数须为 1–5 的整数");
   params.management_category_id = managementCategorySelection("product");
-  params.concurrency_mode = concurrencyMode;
-  params.concurrency = concurrencyMode === "gentle" ? 1 : 5;
+  params.concurrency_mode = concurrency === 1 ? "gentle" : "normal";
+  params.concurrency = concurrency;
   for (const [field, key, label] of [
     ["min-sales", "min_sales", "最低销量"], ["max-sales", "max_sales", "最高销量"]
   ]) {
@@ -344,18 +347,21 @@ function renderProductBatch(state = {}) {
   const failed = Number(state.failed_count || 0);
   document.getElementById("product-batch-summary").textContent =
     `页数 ${state.current_page || 0} · 候选 ${candidates} · 已处理 ${processed} · 成功 ${success} · 失败 ${failed} · 跳过 ${state.skipped || 0}` +
+    (state.last_success_ms != null ? `\n单件最近 ${(state.last_success_ms / 1000).toFixed(1)} 秒 · 平均 ${(Number(state.total_success_ms || 0) / Math.max(success, 1) / 1000).toFixed(1)} 秒 · ≥10 秒 ${state.over_target_count || 0} 件` : "") +
+    (state.running ? (state.active_items || []).map(item => {
+      const itemId = String(item.url || "").match(/(?:ML[A-Z]|MCO|CBT)U?-?\d+/i)?.[0] || item.url;
+      return `\n通道 ${item.lane} · ${item.stage} · ${Math.max(0, Math.floor((Date.now() - item.started_at) / 1000))} 秒 · ${itemId}`;
+    }).join("") : "") +
     (state.last_error ? `\n最近失败：${state.last_error}` : "") +
     (state.last_skip ? `\n最近跳过：${state.last_skip}` : "");
   const elapsed = Math.max(0, Math.floor(((state.finished_at || Date.now()) - Number(state.started_at || Date.now())) / 1000));
   const clock = [Math.floor(elapsed / 3600), Math.floor((elapsed % 3600) / 60), elapsed % 60]
     .map(value => String(value).padStart(2, "0")).join(":");
-  const selectedMode = productBatchFields["concurrency-mode"].value || "normal";
-  const displayMode = state.running ? (state.params?.concurrency_mode || "normal") : selectedMode;
   const displayConcurrency = state.running
-    ? Number(state.params?.concurrency || (displayMode === "gentle" ? 1 : 5))
-    : (displayMode === "gentle" ? 1 : 5);
+    ? Number(state.params?.concurrency || (state.params?.concurrency_mode === "gentle" ? 1 : 3))
+    : Number(productBatchFields["concurrency"].value || 3);
   document.getElementById("product-batch-current").textContent =
-    `当前商品 ${state.current_item_id || "-"} · ${displayMode === "gentle" ? "缓和模式" : "普通模式"} · ${displayConcurrency} 个采集进程 · 耗时 ${clock}`;
+    `当前商品 ${state.current_item_id || "-"} · ${displayConcurrency} 个采集进程 · 耗时 ${clock}`;
   document.getElementById("product-batch-progress").style.width =
     `${Math.min(100, Math.round(processed * 100 / Math.max(requested, candidates, 1)))}%`;
   syncProductBatchControls();
@@ -421,6 +427,8 @@ async function initializeProductBatch() {
   const saved = chrome.storage?.local ? (await chrome.storage.local.get("productBatchOptions")).productBatchOptions : null;
   if (saved) {
     for (const [key, value] of Object.entries(saved)) {
+      if (key === "price-mode" && !["original", "discount"].includes(value)) continue;
+      if (key === "concurrency" && !/^[1-5]$/.test(String(value))) continue;
       if (key !== "tab" && productBatchFields[key]) productBatchFields[key].value = value;
     }
   }
@@ -687,8 +695,12 @@ function renderPurchaseTrackingStatus(state = {}) {
   `).join("");
   purchaseOpenLoginButton.disabled = !authenticated || phase === "syncing";
   purchasePlatform.disabled = hasTask && !["completed", "error", "idle"].includes(phase);
+  purchaseResetDatesButton.hidden = !hasTask || !["waiting_login", "waiting_plugin"].includes(phase);
+  purchaseResetDatesButton.disabled = !authenticated;
   purchaseDateStart.disabled = purchasePlatform.disabled;
   purchaseDateEnd.disabled = purchasePlatform.disabled;
+  purchaseOrderStatus.disabled = purchasePlatform.disabled;
+  if (purchasePlatform.disabled) purchaseOrderStatus.value = state.order_status || "";
   if (purchasePlatform.disabled) purchasePlatform.value = state.platform;
   purchaseConfirmLoginButton.disabled = !authenticated || !hasTask || !["waiting_login", "waiting_plugin"].includes(phase);
   purchaseOpenLoginButton.textContent = phase === "waiting_login" ? "重新打开采购平台" : "启动并打开采购平台";
@@ -708,6 +720,19 @@ async function loadPurchaseTrackingStatus() {
   }
 }
 
+purchaseResetDatesButton.addEventListener("click", async () => {
+  purchaseResetDatesButton.disabled = true;
+  try {
+    const response = await runtimeMessage({type: "RESET_PURCHASE_TRACKING_DATES", request_id: purchaseTrackingState?.request_id});
+    if (!response.ok) throw new Error(response.error || "重新选择日期失败");
+    renderPurchaseTrackingStatus(response);
+    purchaseDateStart.focus();
+  } catch (error) {
+    await loadPurchaseTrackingStatus();
+    purchasePageStatus.textContent = error.message || String(error);
+  }
+});
+
 purchaseOpenLoginButton.addEventListener("click", async () => {
   purchaseOpenLoginButton.disabled = true;
   purchasePageStatus.textContent = "正在打开采购平台…";
@@ -720,7 +745,8 @@ purchaseOpenLoginButton.addEventListener("click", async () => {
       request: purchaseTrackingState,
       platform: purchasePlatform.value,
       date_start: purchaseDateStart.value,
-      date_end: purchaseDateEnd.value
+      date_end: purchaseDateEnd.value,
+      order_status: purchaseOrderStatus.value
     });
     if (!response.ok) throw new Error(response.error || "打开采购平台失败");
     purchaseTaskStatus.textContent = response.message || "请手动登录采购平台后点击确定登录";
@@ -1167,7 +1193,7 @@ collectButton.addEventListener("click", async () => {
   try {
     const managementCategoryId = managementCategorySelection(pagePlatform === "1688" ? "1688" : "product");
     await saveZeshunCategoryOptions();
-    const extracted = await tabMessage(activeTab.id, {type: "EXTRACT_PRODUCT"});
+    const extracted = await tabMessage(activeTab.id, {type: "EXTRACT_PRODUCT", price_mode: productBatchFields["price-mode"].value});
     if (!extracted.ok) throw new Error(extracted.error || "无法读取商品详情");
     if (["mercado", "1688"].includes(pagePlatform)) {
       extracted.product.management_category_id = managementCategoryId;
@@ -1532,7 +1558,7 @@ for (const {select, refresh} of Object.values(zeshunCategoryPickers)) {
 for (const field of Object.values(productBatchFields)) {
   field.addEventListener("change", () => {
     saveProductBatchOptions().catch(error => showResult(error.message, "error"));
-    if (field === productBatchFields["concurrency-mode"] && !productBatchState.running) {
+    if (field === productBatchFields["concurrency"] && !productBatchState.running) {
       renderProductBatch(productBatchState);
     }
     if (field === productBatchFields.tab) checkProductDataStatus();
@@ -1595,3 +1621,30 @@ initializeYandexOptions().catch(error => showResult(error.message || String(erro
 window.addEventListener("focus", () => {
   refreshState().catch(error => showResult(error.message || String(error), "error"));
 });
+
+async function checkExtensionUpdate() {
+  const notice = document.getElementById("update-notice");
+  if (!notice) return;
+  try {
+    const current = chrome.runtime.getManifest().version;
+    const badge = document.querySelector(".version");
+    if (badge) badge.textContent = `v${current}`;
+    const result = await runtimeMessage({type: "CHECK_EXTENSION_UPDATE"});
+    if (!result.ok || !/^\d+(?:\.\d+){0,3}$/.test(result.version || "")) return;
+    const installed = current.split(".").map(Number);
+    const latest = result.version.split(".").map(Number);
+    let newer = false;
+    for (let i = 0; i < Math.max(installed.length, latest.length); i++) {
+      if ((latest[i] || 0) === (installed[i] || 0)) continue;
+      newer = (latest[i] || 0) > (installed[i] || 0);
+      break;
+    }
+    notice.hidden = !newer;
+    if (newer) {
+      document.getElementById("update-notice-text").textContent = `插件有新版本：v${current} → v${result.version}`;
+      document.getElementById("update-download").href = result.downloadUrl;
+    }
+  } catch (_) { /* A version check must never block collection. */ }
+}
+void checkExtensionUpdate();
+setInterval(checkExtensionUpdate, 5 * 60 * 1000);

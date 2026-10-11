@@ -1,6 +1,7 @@
 """Saved developer choices preserve product visibility without live ZYing access."""
 
 import ast
+import json
 import logging
 import sqlite3
 from pathlib import Path
@@ -43,6 +44,8 @@ class Connection:
     def __init__(self):
         self.db = sqlite3.connect(":memory:")
         self.db.row_factory = sqlite3.Row
+        self.db.create_function("IF", 3, lambda condition, yes, no: yes if condition else no)
+        self.db.create_function("JSON_UNQUOTE", 1, lambda value: value)
         self.queries = []
         self.closed = False
         self.db.executescript("""
@@ -50,7 +53,8 @@ class Connection:
                 id INTEGER PRIMARY KEY, source_item_id TEXT,
                 last_publish_token_id INTEGER, source_type TEXT,
                 product_developer_id TEXT, product_developer_name TEXT,
-                collection_item_id INTEGER, management_category_id INTEGER);
+                collection_item_id INTEGER, management_category_id INTEGER, source_snapshot_json TEXT,
+                owner_name TEXT, organization_key TEXT DEFAULT 'wuhan-zeshun');
             CREATE TABLE erp_mercadolibre_publish_records (product_item_id INTEGER, token_id INTEGER);
             CREATE TABLE erp_mercadolibre_store_links (item_id TEXT, token_id INTEGER);
             CREATE TABLE erp_mercadolibre_management_categories (id INTEGER, name TEXT, listing_ratio_percent INTEGER);
@@ -321,3 +325,26 @@ def test_new_directory_routes_retain_the_existing_authentication_decorators():
     }
     assert decorators["api_mercado_product_developers"] == ["login_required"]
     assert decorators["api_db_mercado_product_developers"] == ["internal_api_required"]
+
+
+def test_salesperson_filters_saved_owners_across_sources_before_paging():
+    connection = Connection()
+    connection.products([(i, f'P{i}', None, source, '', '') for i, source in enumerate(
+        ['collected', 'zying', 'ai_original', 'pulled', 'zying'], 1)])
+    snapshots = [
+        {'plugin_snapshot': {'created_by': '浏览器插件：业务甲'}},
+        {'salesperson': '业务乙'},
+        {'plugin_snapshot': {'created_by': '浏览器插件：业务乙'}, 'ai_original': {'generated_by': '生成员'}},
+        {},
+        {'plugin_snapshot': {'salesperson': '业务甲'}},
+    ]
+    connection.db.executemany('UPDATE erp_mercadolibre_products SET source_snapshot_json=? WHERE id=?',
+                             [(json.dumps(row), i) for i, row in enumerate(snapshots, 1)])
+    connection.db.executemany('UPDATE erp_mercadolibre_products SET owner_name=? WHERE id=?',
+                             [(name, i) for i, name in enumerate(['业务甲', '业务乙', '业务乙', None, '业务甲'], 1)])
+    result = store.list_product_items(salesperson='业务甲', include_salesperson_options=True,
+                                      limit=1, offset=1, connection_factory=lambda: connection)
+    assert result['total'] == 2
+    assert [row['id'] for row in result['rows']] == [1]
+    assert result['rows'][0]['salesperson'] == '业务甲'
+    assert set(result['salespeople']) == {'业务甲', '业务乙', '未分配'}

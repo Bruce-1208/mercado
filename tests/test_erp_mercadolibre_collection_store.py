@@ -855,6 +855,7 @@ def test_bulk_collection_measurement_update_mirrors_products_atomically():
         )
 
 
+@patch.object(store, "ensure_collection_tables", lambda cursor: None)
 def test_pulled_store_link_is_mirrored_as_publish_ready_unreviewed_product():
     connection = _FakeConnection()
     item = {
@@ -1549,6 +1550,38 @@ def test_publish_record_list_supports_time_and_store_group_filters():
     assert rows_params == count_params + (500, 0)
 
 
+@pytest.mark.parametrize("salesperson", ["张三", "__unassigned__"])
+def test_publish_record_salesperson_filters_counts_and_rows_with_store_scope(salesperson):
+    connection = _FakeConnection()
+    with patch.object(store, "ensure_collection_tables"):
+        store.list_product_publish_records(
+            salesperson=salesperson, token_ids=[7, 9], filter_token_ids=[9],
+            group_name="精品组", site_id="MLM", status="failed",
+            connection_factory=lambda: connection,
+        )
+    count, total, rows = connection.fake_cursor.queries[-3:]
+    expected = (7, 9, 9, "MLM", "精品组")
+    for sql, params in (count, total, rows):
+        assert "records.`token_id` IN (%s, %s)" in sql
+        assert "records.`token_id` IN (%s)" in sql
+        assert "settings.`site_id` = records.`site_id`" in sql
+        if salesperson == "__unassigned__":
+            assert "COALESCE(TRIM(settings.`salesperson`), '') = ''" in sql
+        else:
+            assert "TRIM(settings.`salesperson`) = %s" in sql
+            assert salesperson not in sql
+    if salesperson != "__unassigned__":
+        expected += (salesperson,)
+    assert count[1] == expected
+    assert total[1] == expected + ("failed",)
+    assert rows[1] == expected + ("failed", 500, 0)
+
+
+def test_publish_record_salesperson_rejects_oversized_name_before_querying():
+    with pytest.raises(ValueError, match="业务员名称"):
+        store.list_product_publish_records(salesperson="a" * 101, connection_factory=lambda: None)
+
+
 def test_1688_recollection_clears_unverified_old_weight_and_package():
     connection = _FakeConnection()
     with patch.object(store, 'ensure_collection_tables'):
@@ -1733,3 +1766,207 @@ def test_collection_salesperson_filter_is_exact_and_applies_before_pagination():
     assert "item.`added_to_products` = 0" in directory_sql
     assert "LIMIT" not in directory_sql and "= %s" not in directory_sql
     assert directory_params is None
+    assert "`workbench_users` AS collection_person" in directory_sql
+    assert "collection_person.`is_active` = 1" in directory_sql
+    assert "collection_person.`organization_key` = item.`organization_key`" in directory_sql
+    assert "TRIM(collection_person.`username`)" in directory_sql
+    assert "TRIM(collection_person.`display_name`)" in directory_sql
+    assert "ELSE '未分配' END AS `salesperson`" in row_sql
+
+
+def test_collection_unassigned_filter_includes_non_personnel_creators():
+    connection = _FakeConnection()
+    with patch.object(store, 'ensure_collection_tables'):
+        store.list_collection_items(salesperson='未分配', include_salesperson_options=True,
+                                    connection_factory=lambda: connection)
+    directory_sql = next(sql for sql, _ in connection.fake_cursor.queries if sql.startswith('SELECT DISTINCT'))
+    assert "ELSE '未分配' END AS salesperson" in directory_sql
+    count_sql = next(sql for sql, _ in connection.fake_cursor.queries if 'COUNT(*) AS total' in sql)
+    assert 'NOT EXISTS' in count_sql
+    assert 'collection_person.`is_active` = 1' in count_sql
+
+
+def test_collection_personnel_directory_and_unassigned_rows_with_saved_creators():
+    import sqlite3
+    database = sqlite3.connect(':memory:')
+    database.row_factory = sqlite3.Row
+    database.execute('CREATE TABLE workbench_users (username TEXT, display_name TEXT, organization_key TEXT, is_active INTEGER)')
+    database.execute(f'CREATE TABLE {store.TASK_TABLE} (id INTEGER, created_by TEXT)')
+    database.execute(f'CREATE TABLE {store.COLLECTION_TABLE} (id INTEGER, task_id INTEGER, organization_key TEXT, added_to_products INTEGER, management_category_id INTEGER)')
+    database.execute(f'CREATE TABLE {store.MANAGEMENT_CATEGORY_TABLE} (id INTEGER, name TEXT, listing_ratio_percent REAL)')
+    database.executemany('INSERT INTO workbench_users VALUES (?, ?, ?, ?)', [
+        ('sales-a', '业务甲', 'a', 1), ('inactive', '停用人员', 'a', 0),
+    ])
+    database.executemany(f'INSERT INTO {store.TASK_TABLE} VALUES (?, ?)', [
+        (1, '浏览器插件：业务甲'), (2, 'script-test'), (3, '停用人员'), (4, '业务甲'), (5, 'sales-a'),
+    ])
+    database.executemany(f'INSERT INTO {store.COLLECTION_TABLE} VALUES (?, ?, ?, 0, NULL)', [
+        (1, 1, 'a'), (2, 2, 'a'), (3, 3, 'a'), (4, 4, 'b'), (5, 5, 'a'),
+    ])
+    connection = _FakeConnection()
+    with patch.object(store, 'ensure_collection_tables'):
+        store.list_collection_items(include_salesperson_options=True, connection_factory=lambda: connection)
+    directory_sql, directory_params = next((sql, params) for sql, params in connection.fake_cursor.queries if sql.startswith('SELECT DISTINCT'))
+    names = [row['salesperson'] for row in database.execute(directory_sql, directory_params or ())]
+    assert set(names) == {'业务甲', 'sales-a', '未分配'}
+    page_sql, page_params = connection.fake_cursor.queries[-1]
+    people = {row['id']: row['salesperson'] for row in database.execute(page_sql.replace('%s', '?'), page_params)}
+    assert people == {1: '业务甲', 2: '未分配', 3: '未分配', 4: '未分配', 5: 'sales-a'}
+    connection = _FakeConnection()
+    with patch.object(store, 'ensure_collection_tables'):
+        store.list_collection_items(salesperson='未分配', connection_factory=lambda: connection)
+    page_sql, page_params = connection.fake_cursor.queries[-1]
+    assert {row['id'] for row in database.execute(page_sql.replace('%s', '?'), page_params)} == {2, 3, 4}
+    database.close()
+
+
+@pytest.mark.parametrize('row_ids,has_more', [([5, 4, 3], True), ([5], False), ([], False)])
+def test_product_count_deadline_still_returns_filtered_page(monkeypatch, row_ids, has_more):
+    import pymysql
+    connection = _FakeConnection()
+    cursor = connection.fake_cursor
+    original_execute = cursor.execute
+    def execute(sql, params=None):
+        original_execute(sql, params)
+        if 'COUNT(*) AS total' in sql:
+            raise pymysql.err.OperationalError(3024, 'maximum statement execution time exceeded')
+    cursor.execute = execute
+    cursor.fetchall = lambda: [{'id': value} for value in row_ids]
+    monkeypatch.setattr(store, 'ensure_collection_tables', lambda cursor: None)
+    with store.product_access.scope({'access_version': 1, 'role_key': 'super_admin',
+                                     'organization_key': 'test-enterprise'}):
+        result = store.list_product_items(source_type='zying', limit=2, offset=4,
+                                          connection_factory=lambda: connection)
+    assert result['total'] is None
+    assert result['total_exact'] is False
+    assert result['has_more'] is has_more
+    assert [row['id'] for row in result['rows']] == row_ids[:2]
+    assert len(cursor.queries) == 2
+    page_sql, page_params = cursor.queries[-1]
+    assert '`organization_key` = %s' in page_sql and '`source_type` = %s' in page_sql
+    assert page_params == ('test-enterprise', 'zying', 3, 4)
+    assert connection.closed and connection.committed
+
+
+def test_product_count_connection_loss_is_not_hidden(monkeypatch):
+    import pymysql
+    connection = _FakeConnection()
+    def execute(sql, params=None):
+        raise pymysql.err.OperationalError(2013, 'Lost connection')
+    connection.fake_cursor.execute = execute
+    monkeypatch.setattr(store, 'ensure_collection_tables', lambda cursor: None)
+    with pytest.raises(pymysql.err.OperationalError):
+        store.list_product_items(connection_factory=lambda: connection)
+    assert connection.closed
+
+
+def test_product_category_options_are_permission_scoped_and_not_paginated(monkeypatch):
+    connection = _FakeConnection()
+    monkeypatch.setattr(store.product_access, 'actor', lambda: None)
+    monkeypatch.setattr(store.product_access, 'predicate', lambda table: ('`organization_key` = %s', ['enterprise-a']))
+    monkeypatch.setattr(store, '_product_token_scope', lambda ids: ('', '`token_id` = %s', [7]))
+    store.list_product_mercado_categories(token_ids=[7], connection_factory=lambda: connection)
+    sql, params = next((sql, params) for sql, params in connection.fake_cursor.queries if 'AS product_count' in sql)
+    assert 'GROUP BY `category_id`' in sql and 'LIMIT' not in sql
+    assert '`organization_key` = %s' in sql and '`token_id` = %s' in sql
+    assert params == (7, 'enterprise-a')
+    assert connection.closed
+
+
+def test_product_category_options_empty_scope_never_reads_database(monkeypatch):
+    monkeypatch.setattr(store.product_access, 'actor', lambda: None)
+    assert store.list_product_mercado_categories(token_ids=[], connection_factory=lambda: pytest.fail('empty scope')) == {'rows': []}
+
+
+def test_product_parent_category_filter_uses_complete_exact_ids(monkeypatch):
+    from erp import mercadolibre_category_tree as tree
+    ids = [f'CBT{i}' for i in range(1, 160)]
+    monkeypatch.setattr(tree, 'category_filter_ids', lambda value: ids)
+    connection = _FakeConnection()
+    store.list_product_items(mercado_category='tree:CBT1', connection_factory=lambda: connection)
+    sql, params = next((sql, params) for sql, params in connection.fake_cursor.queries if 'COUNT(*) AS total' in sql and store.PRODUCT_TABLE in sql)
+    assert '`category_id` IN (' in sql and '`category_name` LIKE' not in sql
+    assert list(params) == ids
+
+
+def test_product_salesperson_filter_matches_display_and_directory_respects_scope():
+    connection = _FakeConnection()
+    result = store.list_product_items(
+        salesperson="  业务甲_%'  ", include_salesperson_options=True,
+        source_type='zying', token_ids=[7], limit=20, offset=40,
+        connection_factory=lambda: connection,
+    )
+    count_sql, count_params = next((sql, params) for sql, params in connection.fake_cursor.queries
+                                 if 'COUNT(*) AS total' in sql)
+    expression = store._product_salesperson_expression()
+    assert '`owner_name` = %s' in count_sql
+    assert count_params == ("业务甲_%'", 7, 7, 7, 'zying')
+    assert 'source_snapshot_json' not in expression
+    assert 'collection_task' not in expression
+    directory_sql, directory_params = next((sql, params) for sql, params in connection.fake_cursor.queries
+                                          if 'GROUP BY `organization_key`, `owner_name`' in sql)
+    assert "MAX_EXECUTION_TIME(2000)" in directory_sql
+    assert "idx_product_salesperson" in directory_sql
+    assert 'authorized_products' in directory_sql
+    assert directory_params == (7, 7, 7)
+    assert "`source_type` = %s" not in directory_sql
+    assert result['salespeople'] == []
+
+
+def test_slow_legacy_salesperson_directory_does_not_block_product_rows(monkeypatch):
+    import pymysql
+    connection = _FakeConnection()
+    cursor = connection.fake_cursor
+    original = cursor.execute
+    def execute(sql, params=None):
+        original(sql, params)
+        if 'GROUP BY `organization_key`, `owner_name`' in sql:
+            raise pymysql.err.OperationalError(3024, 'directory exceeded deadline')
+    cursor.execute = execute
+    monkeypatch.setattr(store, 'ensure_collection_tables', lambda cursor: None)
+    result = store.list_product_items(include_salesperson_options=True, connection_factory=lambda: connection)
+    assert result['rows'] == [] and result['total'] == 0
+    assert 'salespeople' not in result
+    assert any('ORDER BY' in sql and 'page_ids' in sql for sql, _ in cursor.queries)
+    assert connection.closed
+
+
+@patch.object(store, "ensure_collection_tables", lambda cursor: None)
+def test_pulled_products_use_each_site_salesperson_instead_of_sync_operator():
+    connection = _FakeConnection()
+    token = {'id': 7, 'display_name': 'Store', 'organization_key': 'company-a',
+             'owner_name': '授权人', 'owner_user_id': 42,
+             'site_settings': [{'site_id': 'MLM', 'salesperson': ' 甲 '},
+                               {'site_id': 'MLB', 'salesperson': '乙'}]}
+    items = [dict(id=site + '123', site_id=site, title='Product',
+                  permalink='https://example.com/' + site, thumbnail='https://example.com/p.jpg',
+                  price=10, currency_id='USD', category_id=site + '1')
+             for site in ['MLM', 'MLB', 'MLC']]
+    result = store.upsert_pulled_store_links_to_products(token, items, connection_factory=lambda: connection)
+    batches = [(sql, rows) for sql, rows in connection.fake_cursor.queries
+               if sql.startswith('INSERT INTO') and 'ON DUPLICATE KEY UPDATE' in sql]
+    assert result == {'count': 3, 'skipped': 0}
+    assert [rows[0][-4:] for _, rows in batches] == [
+        ('company-a', None, '甲', 'enterprise'),
+        ('company-a', None, '乙', 'enterprise'),
+        ('company-a', None, '', 'enterprise')]
+    for sql, rows in batches:
+        assert "`owner_name` = IF(`source_type` = 'pulled', VALUES(`owner_name`), `owner_name`)" in sql
+        assert "`owner_user_id` = IF(`source_type` = 'pulled', VALUES(`owner_user_id`), `owner_user_id`)" in sql
+        assert json.loads(rows[0][-6])['plugin_snapshot']['salesperson'] == rows[0][-2]
+
+
+@patch.object(store, 'ensure_collection_tables', lambda cursor: None)
+def test_pulled_sync_loads_site_settings_for_secret_token_records():
+    connection = _FakeConnection()
+    connection.fake_cursor.fetchall = lambda: [{'site_id': 'MLM', 'salesperson': '店铺负责人'}]
+    store.upsert_pulled_store_links_to_products(
+        {'id': 7, 'organization_key': 'company-a'},
+        [dict(id='MLM123', site_id='MLM', title='Product', permalink='https://example.com/p',
+              thumbnail='https://example.com/p.jpg', price=10, currency_id='USD', category_id='MLM1')],
+        connection_factory=lambda: connection)
+    queries = connection.fake_cursor.queries
+    assert queries[0][1] == (7,)
+    assert 'mercado_store_site_settings' in queries[0][0]
+    rows = next(rows for sql, rows in queries if sql.startswith('INSERT INTO'))
+    assert rows[0][-2] == '店铺负责人'

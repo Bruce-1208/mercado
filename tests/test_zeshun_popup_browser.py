@@ -522,10 +522,10 @@ def test_product_batch_inputs_search_and_start(browser):
     search = popup.evaluate("messages.find(m => m.type === 'OPEN_PRODUCT_SEARCH')")
     assert search == {"type": "OPEN_PRODUCT_SEARCH", "country": "MLB", "keyword": "brinquedo infantil"}
     popup.locator("#product-max-items").fill("17")
-    assert popup.locator("#product-success-rest-seconds").input_value() == "3"
+    assert popup.locator("#product-success-rest-seconds").input_value() == "0"
     popup.locator("#product-success-rest-seconds").fill("1.5")
-    assert popup.locator("#product-concurrency-mode").input_value() == "normal"
-    popup.locator("#product-concurrency-mode").select_option("gentle")
+    assert popup.locator("#product-concurrency").input_value() == "3"
+    popup.locator("#product-concurrency").select_option("1")
     popup.locator("#product-batch-start").click()
     gentle_message = popup.evaluate("messages.find(m => m.type === 'START_PRODUCT_BATCH')")
     assert gentle_message["params"]["concurrency_mode"] == "gentle"
@@ -533,10 +533,10 @@ def test_product_batch_inputs_search_and_start(browser):
     assert gentle_message["params"]["success_rest_seconds"] == 1.5
     assert popup.locator("#product-success-rest-seconds").is_disabled()
     assert popup.locator("#product-batch-start").is_disabled()
-    assert popup.locator("#product-concurrency-mode").is_disabled()
+    assert popup.locator("#product-concurrency").is_disabled()
     popup.locator("#product-batch-stop").click()
     assert popup.locator("#product-batch-start").is_enabled()
-    popup.locator("#product-concurrency-mode").select_option("normal")
+    popup.locator("#product-concurrency").select_option("5")
     popup.locator("#product-min-sales").fill("20")
     popup.locator("#product-max-sales").fill("200")
     popup.locator("#product-batch-start").click()
@@ -546,7 +546,7 @@ def test_product_batch_inputs_search_and_start(browser):
         "success_rest_seconds": 1.5, "management_category_id": None,
         "min_sales": 20, "max_sales": 200}}
     assert popup.locator("#product-batch-start").is_disabled()
-    assert popup.locator("#product-concurrency-mode").is_disabled()
+    assert popup.locator("#product-concurrency").is_disabled()
     popup.locator("#product-batch-stop").click()
     assert popup.locator("#product-batch-start").is_enabled()
     assert popup.locator("#product-batch-status").inner_text() == "已停止采集"
@@ -2057,14 +2057,26 @@ def test_purchase_tracking_direct_start_and_waiting_login_controls(browser):
     assert popup.evaluate("messages.filter(m => m.type === 'OPEN_PURCHASE_TRACKING_LOGIN').length") == 0
     popup.locator('#purchase-date-start').fill('2026-10-01')
     popup.locator('#purchase-date-end').fill('2026-10-03')
+    popup.locator('#purchase-order-status').select_option('找货-已采购')
     popup.locator('#purchase-open-login').click()
-    popup.wait_for_function("messages.some(m => m.type === 'OPEN_PURCHASE_TRACKING_LOGIN' && m.platform === 'taobao' && m.date_start === '2026-10-01' && m.date_end === '2026-10-03')")
+    popup.wait_for_function("messages.some(m => m.type === 'OPEN_PURCHASE_TRACKING_LOGIN' && m.platform === 'taobao' && m.date_start === '2026-10-01' && m.date_end === '2026-10-03' && m.order_status === '找货-已采购')")
     popup.evaluate("renderPurchaseTrackingStatus({request_id:'run-1', platform:'taobao', phase:'waiting_login', running:true, total:2})")
     assert popup.locator('#purchase-confirm-login').is_enabled()
     assert popup.locator('#purchase-platform').is_disabled()
+    assert popup.locator('#purchase-date-start').is_disabled()
+    assert popup.locator('#purchase-reset-dates').is_visible()
+    popup.locator('#purchase-reset-dates').click()
+    popup.wait_for_function("messages.some(m => m.type === 'RESET_PURCHASE_TRACKING_DATES' && m.request_id === 'run-1')")
+    assert popup.locator('#purchase-date-start').is_enabled()
+    assert popup.locator('#purchase-date-end').is_enabled()
+    popup.locator('#purchase-date-start').fill('2026-09-01')
+    popup.locator('#purchase-date-end').fill('2026-09-30')
+    popup.locator('#purchase-open-login').click()
+    popup.wait_for_function("messages.some(m => m.type === 'OPEN_PURCHASE_TRACKING_LOGIN' && m.date_start === '2026-09-01' && m.date_end === '2026-09-30')")
     popup.evaluate("renderPurchaseTrackingStatus({request_id:'run-1', platform:'taobao', phase:'syncing', running:true, total:2})")
     assert popup.locator('#purchase-confirm-login').is_disabled()
     assert popup.locator('#purchase-open-login').is_disabled()
+    assert popup.locator('#purchase-reset-dates').is_hidden()
     popup.evaluate("""renderPurchaseTrackingStatus({request_id:'run-1', platform:'1688', phase:'completed',
         total:1, processed:1, pending:1, skipped:0,
         results:[{purchase_order:'5127480146121008319', status:'pending', message:'未发货'}]})""")
@@ -2075,7 +2087,7 @@ def test_purchase_tracking_direct_start_and_waiting_login_controls(browser):
 
 def test_purchase_tracking_does_not_read_another_orders_number(browser):
     page = browser.new_page()
-    page.set_content('''<div><div><p>订单号：PO-1</p><button>查看物流</button></div>
+    page.set_content('''<div><div><p>订单号：PO-1</p><p>待发货</p><button>查看物流</button></div>
         <div><p>订单号：PO-2</p><p>运单号：SF99999999</p><button>查看物流</button></div></div>''')
     page.evaluate("window.chrome={runtime:{onMessage:{addListener:fn=>window.purchaseListener=fn}}}")
     page.add_script_tag(path=str(EXTENSION / 'purchase-tracking-content.js'))
@@ -2088,14 +2100,14 @@ def test_purchase_tracking_does_not_read_another_orders_number(browser):
     assert result['tracking_number'] == 'SF99999999'
     result = page.evaluate("""async () => await new Promise(resolve => purchaseListener(
         {type:'FETCH_PURCHASE_TRACKING', purchaseOrder:'PO'}, null, resolve))""")
-    assert result['status'] == 'not_found'
+    assert result['status'] == 'failed'
     page.close()
 
 
 @pytest.mark.parametrize('order_html', [
     '<p>订单号：5127480146121008319</p><p>等待卖家发货</p>',
     '<header><span>订单编号：</span><span>5127480146121008319</span></header><p>待发货</p>',
-    '<p>订单号码：5127480146121008319</p>',
+    '<p>订单号码：5127480146121008319</p><p>待发货</p>',
 ])
 def test_purchase_tracking_recognizes_unshipped_1688_order_without_logistics_controls(browser, order_html):
     page = browser.new_page()
@@ -2122,5 +2134,6 @@ def test_purchase_tracking_search_input_alone_does_not_prove_order_exists(browse
     page.add_script_tag(path=str(EXTENSION / 'purchase-tracking-content.js'))
     result = page.evaluate("""async () => await new Promise(resolve => purchaseListener(
         {type:'FETCH_PURCHASE_TRACKING', purchaseOrder:'5127480146121008319'}, null, resolve))""")
-    assert result == {'ok': True, 'status': 'not_found', 'message': '平台未找到该采购订单'}
+    assert result['status'] == 'failed'
+    assert '查询超时' in result['message']
     page.close()

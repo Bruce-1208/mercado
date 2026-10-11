@@ -202,13 +202,13 @@ def test_metadata_aggregates_real_rows_without_cross_scope_data(monkeypatch, sco
     db = sqlite3.connect(':memory:')
     db.row_factory = sqlite3.Row
     db.executescript('''
-        CREATE TABLE mercado_store_site_settings(token_id INT, site_id TEXT, group_name TEXT);
-        CREATE TABLE mercado_store_tokens(id INT, display_name TEXT);
+        CREATE TABLE mercado_store_site_settings(token_id INT, site_id TEXT, group_name TEXT, salesperson TEXT);
+        CREATE TABLE mercado_store_tokens(id INT, display_name TEXT, organization_key TEXT DEFAULT 'wuhan-zeshun');
         CREATE TABLE erp_mercadolibre_store_links(id INT, token_id INT, is_current INT,
             site_id TEXT, last_synced_at TEXT, category_id TEXT, item_id TEXT);
-        CREATE TABLE erp_mercadolibre_products(source_item_id TEXT, category_name TEXT);
-        INSERT INTO mercado_store_tokens VALUES(1,'A'),(2,'B'),(3,'C');
-        INSERT INTO mercado_store_site_settings VALUES(1,'MLM','A'),(2,'MLB','B'),(3,'MLC','C');
+        CREATE TABLE erp_mercadolibre_products(source_item_id TEXT, category_name TEXT, organization_key TEXT DEFAULT 'wuhan-zeshun');
+        INSERT INTO mercado_store_tokens(id,display_name) VALUES(1,'A'),(2,'B'),(3,'C');
+        INSERT INTO mercado_store_site_settings VALUES(1,'MLM','A','张三'),(2,'MLB','B','李四'),(3,'MLC','C','张三');
     ''')
     rows = [
         (1, 1, 1, 'MLM', '2026-10-01', 'C1', 'MLM1'),
@@ -234,6 +234,8 @@ def test_metadata_aggregates_real_rows_without_cross_scope_data(monkeypatch, sco
         actual = store._query_store_link_metadata(SQLCursor(), token_ids=scope)
     finally:
         db.close()
+    expected_salespeople = {name for token, name in [(1, '张三'), (2, '李四'), (3, '张三')] if scope is None or token in scope}
+    assert set(actual['salespeople']) == expected_salespeople
     permitted = [row for row in rows if scope is None or row[1] in scope]
     current = [row for row in permitted if row[2]]
     assert actual['summary']['all_count'] == len(permitted)

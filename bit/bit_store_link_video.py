@@ -23,14 +23,49 @@ def validate_video(upload):
 
 
 @audited
-def upload_store_link_video(link_id, upload):
+def upload_store_link_video(link_id, upload, *, actor='', video_metadata=None):
     from bit import bit_mysql
-    from bit.bit_store_link_sync import _client_and_token
     from erp.mercadolibre_store_link_store import get_store_links_by_ids
+    from erp.store_link_audit import current_actor
+    from bit.video_upload_logs import begin_attempt, save_attempt, snapshot
+    from bit.video_reviews import _now
 
-    filename = validate_video(upload)
     row = get_store_links_by_ids([link_id])[0]
     token = dict(bit_mysql.get_mercado_store_token(int(row["token_id"])) or {})
+    metadata_token = token
+    if 'site_settings' not in token and not row.get('group_name'):
+        try:
+            metadata_token = bit_mysql.get_mercado_store_token_summary(int(row['token_id'])) or token
+        except Exception:
+            import logging
+            logging.exception('读取视频上传店铺组失败：%s', row['token_id'])
+    identity = current_actor()
+    details = {**snapshot(row, metadata_token), **(video_metadata or {}),
+               'salesperson': actor or identity.get('display_name') or identity.get('username') or '',
+               'video_name': (video_metadata or {}).get('video_name') or getattr(upload, 'filename', '')}
+    attempt = begin_attempt(details)
+    try:
+        result = _submit_store_link_video(row, token, upload, attempt)
+    except Exception as exc:
+        attempt.update(status='failed', finished_at=_now(),
+                       message=str(exc)[:1000])
+        save_attempt(attempt)
+        raise
+    attempt.update(result, status='accepted', finished_at=_now())
+    try:
+        save_attempt(attempt)
+    except Exception:
+        # The successful upload already has a durable moderation record.
+        import logging
+        logging.exception('视频已受理，更新上传尝试日志失败')
+    return result
+
+
+def _submit_store_link_video(row, token, upload, details):
+    from bit.bit_store_link_sync import _client_and_token
+    from bit.video_upload_logs import snapshot
+
+    filename = validate_video(upload)
     if not token:
         raise ValueError("店铺授权不存在，请重新授权")
     client, _ = _client_and_token(token)
@@ -68,9 +103,13 @@ def upload_store_link_video(link_id, upload):
         [{"site_id": site_id, "logistic_type": logistic_type}],
     )
     from bit.video_reviews import record_upload
-    details = record_upload({**row, "permalink": item.get("permalink", ""),
-                             "title": item.get("title", ""), "seller_id": item.get("seller_id")},
-                            result, cbt_item_id, logistic_type)
+    item_details = snapshot(row, token, item)
+    details = record_upload({**row, **item_details, **details,
+                             'title': item.get('title') or details.get('title'),
+                             'permalink': item.get('permalink') or details.get('permalink'),
+                             'thumbnail_url': item_details['thumbnail_url'],
+                             "seller_id": item.get("seller_id")},
+                            result, cbt_item_id, logistic_type, details.get('uploaded_at'))
     result.update(details)
     try:
         from erp.mercadolibre_store_link_marker_store import mark_video_uploaded
@@ -80,4 +119,4 @@ def upload_store_link_video(link_id, upload):
         # The remote upload has already been accepted; a local UI marker is
         # best-effort and must not make the result look like a failed upload.
         pass
-    return {"link_id": int(link_id), "item_id": row["item_id"], **result}
+    return {"link_id": int(row['id']), "item_id": row["item_id"], **result}

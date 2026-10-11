@@ -18,9 +18,8 @@ TRACKING_CACHE_MINUTES = 30
 
 
 def external_tracking_url(tracking_number, company=""):
-    number = quote(str(tracking_number or "").strip(), safe="")
-    courier = quote(str(company or "").strip().lower(), safe="")
-    return f"https://www.kuaidi100.com/chaxun?com={courier}&nu={number}"
+    query = f"{str(tracking_number or '').strip()} 物流查询".strip()
+    return f"https://www.baidu.com/s?wd={quote(query, safe='')}"
 
 
 def _parsed_datetime(value):
@@ -73,6 +72,7 @@ def query_order_tracking(order_id):
 
     cached = _cached_payload(order)
     if cached:
+        cached["external_url"] = external_tracking_url(tracking_number, company)
         return cached
 
     base = {
@@ -90,7 +90,7 @@ def query_order_tracking(order_id):
             **base,
             "configured": False,
             "status": "unconfigured",
-            "message": "尚未配置快递100企业接口，可点击“打开快递100”直接查询",
+            "message": "暂无可直接显示的轨迹，可点击“百度查询物流”继续查询",
             "events": [],
         }
 

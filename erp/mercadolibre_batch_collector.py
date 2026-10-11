@@ -19,6 +19,7 @@ from urllib.parse import quote, unquote, urljoin, urlparse
 
 from erp.mercadolibre_attribute_rules import canonical_attribute_id
 from erp.mercadolibre_follow_sell import extract_item_id
+from erp.mercadolibre_page_facts import page_facts
 
 
 DEFAULT_ZYING_WINDOW_ID = os.environ.get(
@@ -34,8 +35,8 @@ DEFAULT_BROWSER_MODE = os.environ.get(
     "bitbrowser",
 ).strip().lower()
 MAX_COLLECTION_COUNT = 500
-DEFAULT_COLLECTION_WORKERS = 4
-MAX_COLLECTION_WORKERS = 10
+DEFAULT_COLLECTION_WORKERS = 3
+MAX_COLLECTION_WORKERS = 5
 MAX_LISTING_PAGES = 100
 MARKETPLACE_SEARCH_HOSTS = {
     "MLM": "listado.mercadolibre.com.mx",
@@ -469,7 +470,7 @@ structuredImages.forEach(addPicture);
 document.querySelectorAll('.ui-pdp-gallery img, figure img, img.ui-pdp-image').forEach(img => addPicture(img.currentSrc || img.getAttribute('data-src') || img.src));
 const specs = [];
 document.querySelectorAll('.andes-table__row, .ui-pdp-specs__table tr, .ui-vpp-striped-specs__row').forEach(row => {
-  const cells = Array.from(row.querySelectorAll('th, td, .andes-table__header, .andes-table__column')).map(node => clean(node.textContent)).filter(Boolean);
+  const cells = Array.from(row.querySelectorAll('th, td, .andes-table__header, .andes-table__column, .ui-vpp-striped-specs__row__column')).map(node => clean(node.textContent)).filter(Boolean);
   if (cells.length >= 2) specs.push({name: cells[0], value: cells.slice(1).join(' ')});
 });
 const offer = Array.isArray(product.offers) ? product.offers[0] : (product.offers || {});
@@ -492,6 +493,7 @@ return {
   currency_id: (currency && currency.content) || offer.priceCurrency || 'MXN',
   pictures,
   specs,
+  structured_scripts: Array.from(document.querySelectorAll("script")).map(s => s.textContent || "").filter(s => s.length <= 5000000),
   body: clean(document.body.innerText).slice(0, 1600),
   page_title: document.title
 };
@@ -747,8 +749,7 @@ def _collect_detail(
         "available_quantity": 1,
         "permalink": str(page.get("final_url") or driver.current_url),
         "pictures": [{"source": url} for url in pictures],
-        "attributes": _attribute_rows(page.get("specs") or []),
-        "variations": [],
+        **page_facts(page),
         "sale_terms": [],
     }
     return {
@@ -1072,7 +1073,7 @@ def parse_detail_html(html_text: str, page_url: str) -> dict[str, Any]:
             pictures.append(image_url)
     specs: list[dict[str, str]] = []
     for row in soup.select(".andes-table__row, .ui-pdp-specs__table tr, .ui-vpp-striped-specs__row"):
-        cells = [node.get_text(" ", strip=True) for node in row.select("th, td, .andes-table__header, .andes-table__column")]
+        cells = [node.get_text(" ", strip=True) for node in row.select("th, td, .andes-table__header, .andes-table__column, .ui-vpp-striped-specs__row__column")]
         cells = [value for value in cells if value]
         if len(cells) >= 2:
             specs.append({"name": cells[0], "value": " ".join(cells[1:])})
@@ -1102,6 +1103,7 @@ def parse_detail_html(html_text: str, page_url: str) -> dict[str, Any]:
         "currency_id": meta('meta[itemprop="priceCurrency"]', 'meta[property="product:price:currency"]') or offer.get("priceCurrency") or "MXN",
         "pictures": pictures,
         "specs": specs,
+        "structured_scripts": [node.get_text() for node in soup.select("script") if len(node.get_text()) <= 5_000_000],
         "body": soup.get_text(" ", strip=True)[:1600],
         "page_title": soup.title.get_text(" ", strip=True) if soup.title else title,
     }
@@ -1410,8 +1412,7 @@ def _edge_detail_row(
         "available_quantity": 1,
         "permalink": str(page.get("final_url") or candidate.get("source_url")),
         "pictures": [{"source": url} for url in pictures],
-        "attributes": _attribute_rows(page.get("specs") or []),
-        "variations": [],
+        **page_facts(page),
         "sale_terms": [],
     }
     return {

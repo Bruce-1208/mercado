@@ -106,6 +106,11 @@ def validate_platform_listing(draft: Mapping[str, Any], platform_id="mercadolibr
         errors.append("卖点必须为文本数组")
         bullets = []
     if platform == "mercadolibre":
+        from erp.mercadolibre_translation import title_language_issue
+        for field, language, label in (("title_es", "es", "西语"), ("title_pt", "pt-BR", "葡语")):
+            issue = title_language_issue(draft.get(field), language)
+            if issue:
+                errors.append(label + issue)
         return {"errors": errors, "warnings": warnings}
     highlights = str(draft.get("item_highlights") or "").strip()
     combined = "\n".join([title, description, highlights, *bullets])

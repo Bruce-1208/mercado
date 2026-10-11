@@ -183,7 +183,7 @@ async function zeshunReadZyingOrderBatch(rows) {
       }
       const pick = (row, fields) => Object.fromEntries(fields.filter(key => key in row).map(key => [key, row[key]]));
       return {detail: {root: detail.root.map(row => pick(row, ["order_id", "order_no", "order_key", "order_cost"])),
-        buys: Array.isArray(detail.buys) ? detail.buys.map(row => pick(row, ["no", "trace"])) : detail.buys}};
+        buys: Array.isArray(detail.buys) ? detail.buys.map(row => pick(row, ["no", "trace", "amount", "cur"])) : detail.buys}};
     } catch (error) {
       if (error.lookupTimeout || ["ECONNABORTED", "ETIMEDOUT"].includes(error.code)) return {skip_reason: error.message};
       throw error;

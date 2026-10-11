@@ -296,6 +296,31 @@ class ProductDataService:
     def put(db, key, value, ttl):
         db.execute("INSERT OR REPLACE INTO cache VALUES (?,?,?)", (key, time.time()+ttl, json.dumps(value)))
 
+    def _metadata(self, db, action):
+        value = self.get(db, "meta:" + action)
+        if value is None or not value.get("fetched_at"):
+            data, error = self._authenticated_call(db, {"action": action})
+            value = {"data": data if not error else None, "fetched_at": time.time()}
+            self.put(db, "meta:" + action, value, 1800 if not error else 60)
+        return value
+
+    def exchange_rates(self):
+        """Latest upstream reference snapshot, shared with price estimates for 30 minutes."""
+        if not self.configured():
+            raise DataError("管理员尚未配置商品数据服务")
+        with self.database() as db:
+            snapshot = self._metadata(db, "exchange")
+        raw = snapshot.get("data")
+        usd = number(raw.get("USD"), True) if isinstance(raw, dict) else None
+        if not usd:
+            raise DataError("美元参考汇率暂不可用，请稍后重试")
+        rates = {currency: value / usd for currency in CURRENCIES.values()
+                 if (value := number(raw.get(currency), True)) is not None}
+        return {"base": "USD", "rates_to_usd": {**rates, "USD": 1.0},
+                "fetched_at": snapshot["fetched_at"],
+                "expires_at": snapshot["fetched_at"] + 1800,
+                "source": "泽顺商品数据服务（智赢参考汇率）"}
+
     def query(self, items):
         if not isinstance(items, list) or not 1 <= len(items) <= 50:
             raise DataError("每次查询须包含1–50个商品", 400)
@@ -335,11 +360,7 @@ class ProductDataService:
             metadata = {}
             warnings = []
             for action in ("freight", "exchange"):
-                value = self.get(db, "meta:"+action)
-                if value is None:
-                    data, error = self._authenticated_call(db, {"action":action})
-                    value = {"data":data if not error else None}
-                    self.put(db, "meta:"+action, value, 1800 if not error else 60)
+                value = self._metadata(db, action)
                 metadata[action] = value["data"]
                 if value["data"] is None:
                     warnings.append("运费表暂不可用" if action == "freight" else "汇率暂不可用")

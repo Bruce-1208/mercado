@@ -40,6 +40,7 @@ function setup({api, loadStores, loadPromotions} = {}) {
     showView: name => views.push(name), previewDialog: field('previewDialog'),
     api: async (url, options = {}) => {calls.push({url, options}); return api ? api(url, options) : {promotion: campaign, rows: []};},
     loadStores: loadStores || (async () => {}), loadPromotions: loadPromotions || (async () => {}),
+    window: {addEventListener(){},parent: {postMessage(){}}, location: {origin:'http://test'}},
     document: {querySelectorAll() {
       return [...field('itemRows').innerHTML.matchAll(/<input type="checkbox" value="(\d+)" ([^>]*)>/g)]
         .map(match => ({value: match[1], checked: /\bchecked\b/.test(match[2])}));
@@ -258,4 +259,145 @@ test('platform-priced selections keep null deal prices on every page', async () 
   assert.deepEqual(Array.from(s.context.previewRequestRows(), row => row.deal_price), [null, null]);
   s.context.selectAllItems(false);
   assert.deepEqual([...s.state.selectedItems], [1]);
+});
+
+test('select all pages includes offscreen candidates and preserves their edited prices in preview', async () => {
+  const s = setup({api: async url => {
+    const page = Number(new URL(url, 'http://test').searchParams.get('page'));
+    return {promotion: campaign, rows: page === 1 ? [item(1, 'MLM1'), item(2, 'MLM2', 'started')] : [item(3, 'MLM3')], total: 3, pages: 2, page, page_size: 100};
+  }});
+  await s.context.openCampaign(12);
+  s.field('price-1').value = '75';
+  await s.context.selectAllCampaignItems();
+  assert.deepEqual([...s.state.selectedItems], [1, 3]);
+  assert.equal(s.state.itemPage, 1);
+  s.field('batchDiscountValue').value = '25';
+  s.context.applyBatchDiscount();
+  const rows = s.context.previewRequestRows();
+  assert.deepEqual(Array.from(rows, row => row.item_local_id), [1, 3]);
+  assert.equal(rows[1].deal_price, '75.00');
+  assert.equal(s.state.allPagesLoading, false);
+});
+
+test('all pages read failure keeps existing selection without partially selecting pages', async () => {
+  const s = setup({api: async url => {
+    if (url.includes('page=2')) throw new Error('offline');
+    return {promotion: campaign, rows: [item(1, 'MLM1')], total: 2, pages: 2, page: 1};
+  }});
+  await s.context.openCampaign(12);
+  await s.context.selectAllCampaignItems();
+  assert.equal(s.state.selectedItems.size, 0);
+  assert.match(s.messages.at(-1).message, /全选所有页失败/);
+  assert.equal(s.state.allPagesLoading, false);
+});
+
+test('late all-pages response cannot select products in another campaign', async () => {
+  const pending = deferred();
+  const s = setup();
+  await s.context.openCampaign(12);
+  s.context.api = () => pending.promise;
+  const selection = s.context.selectAllCampaignItems();
+  s.state.campaignRequest++;
+  s.context.clearCampaignItems();
+  pending.resolve({rows: [item(1, 'MLM1')], total: 1, pages: 1});
+  await selection;
+  assert.equal(s.state.selectedItems.size, 0);
+  assert.equal(s.state.allPagesLoading, false);
+});
+
+test('product and item filters reset selection, persist across pages, and reset for another campaign', async () => {
+  const s = setup({api: async () => ({promotion: campaign, rows: [item(1, 'MLM123')], total: 80, pages: 2, page: 1})});
+  await s.context.openCampaign(12);
+  s.state.selectedItems.add(1);
+  s.field('itemProductFilter').value = ' 蓝色 Cup ';
+  s.field('itemIdFilter').value = ' mlm12 ';
+  s.field('itemEnrollmentFilter').value = '0';
+  await s.context.applyItemFilters();
+  const query = new URL(s.calls.at(-1).url, 'http://test').searchParams;
+  assert.equal(query.get('product'), '蓝色 Cup');
+  assert.equal(query.get('item_id'), 'mlm12');
+  assert.equal(query.get('enrolled'), '0');
+  assert.equal(query.get('page'), '1');
+  assert.equal(s.state.selectedItems.size, 0);
+  await s.context.loadCampaignPage(2);
+  assert.equal(new URL(s.calls.at(-1).url, 'http://test').searchParams.get('product'), '蓝色 Cup');
+  await s.context.applyItemFilters(true);
+  assert.equal(s.calls.at(-1).url, '/api/promotions/12/items?page=1&page_size=50');
+  s.state.itemProductFilter = 'old';
+  s.state.itemIdFilter = 'old';
+  await s.context.openCampaign(13);
+  assert.equal(s.calls.at(-1).url, '/api/promotions/13/items?page=1&page_size=50');
+});
+
+test('batch discount excludes products below official minimum from enrollment, including offscreen products', async () => {
+  const rows = [
+    {...item(1, 'MLM1'), max_price: 80},
+    {...item(2, 'MLM2'), max_price: 75},
+    {...item(3, 'MLM3'), max_price: 70},
+  ];
+  const s = setup({api: async () => ({promotion: campaign, rows: rows.slice(0, 2)})});
+  await s.context.openCampaign(12);
+  s.state.selectedItems = new Set([1, 2, 3]);
+  s.state.selectedRows = new Map(rows.map(row => [row.id, row]));
+  s.field('price-1').value = '80';
+  s.field('price-2').value = '75';
+  s.field('batchDiscountValue').value = '20';
+  s.context.applyBatchDiscount();
+  assert.deepEqual([...s.state.selectedItems], [1]);
+  assert.deepEqual([...s.state.selectedRows.keys()], [1]);
+  assert.equal(s.field('selectAll').checked, false);
+  assert.match(s.messages.at(-1).message, /2 件低于官方最低折扣要求/);
+  await s.context.previewAction('enroll');
+  const sent = JSON.parse(s.calls.at(-1).options.body);
+  assert.deepEqual(sent.rows.map(row => row.item_local_id), [1]);
+  assert.equal(sent.rows[0].deal_price, '80.00');
+});
+
+test('all products below minimum leave no selection and never request enrollment preview', async () => {
+  const s = setup({api: async () => ({promotion: campaign, rows: [{...item(1, 'MLM1'), max_price: 75}]})});
+  await s.context.openCampaign(12);
+  s.context.toggleItem(1, true);
+  s.field('batchDiscountValue').value = '20';
+  s.context.applyBatchDiscount();
+  assert.equal(s.state.selectedItems.size, 0);
+  assert.equal(s.field('enrollBtn').disabled, true);
+  assert.match(s.messages.at(-1).message, /不会提交报名/);
+  const count = s.calls.length;
+  await s.context.previewAction('enroll');
+  assert.equal(s.calls.length, count);
+});
+
+test('running enrollment refreshes store links as each new success arrives', async () => {
+  const jobs = [
+    {status: 'running', success_count: 1},
+    {status: 'running', success_count: 1},
+    {status: 'running', success_count: 2},
+    {status: 'succeeded', success_count: 2},
+  ];
+  const timers = [], notifications = [];
+  const s = setup({api: async () => ({rows: [{job_id: 'batch', ...jobs.shift()}]})});
+  s.context.window.setTimeout = fn => timers.push(fn);
+  s.context.window.parent.postMessage = message => notifications.push(message.type);
+  s.context.watchPromotionJob('batch', 12);
+  await timers.shift()();
+  assert.deepEqual(notifications, ['promotions-changed']);
+  await timers.shift()();
+  assert.equal(notifications.length, 1);
+  await timers.shift()();
+  assert.equal(notifications.length, 2);
+  await timers.shift()();
+  assert.equal(notifications.length, 3);
+  assert.equal(timers.length, 0);
+});
+
+test('withdrawn products can be selected across pages and receive a new batch price', async () => {
+  const withdrawn={...item(1,'MLM1','withdrawn'),original_price:100,max_price:80};
+  const s=setup({api:async()=>({promotion:campaign,rows:[withdrawn],page:1,pages:1,total:1,page_size:100})});
+  await s.context.openCampaign(12);
+  await s.context.selectAllCampaignItems();
+  assert.deepEqual([...s.state.selectedItems],[1]);
+  s.field('batchDiscountValue').value='25';
+  s.context.applyBatchDiscount();
+  assert.equal(s.field('price-1').value,'75.00');
+  assert.deepEqual([...s.state.selectedItems],[1]);
 });

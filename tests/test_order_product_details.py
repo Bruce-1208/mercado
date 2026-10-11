@@ -257,9 +257,36 @@ def test_api_client_forwards_stage_and_refresh_with_interactive_timeouts():
         assert request.call_args.kwargs['timeout'] == (3, 35)
         assert request.call_args.kwargs['json'] == {
             'order_ids': ['10'], 'product_id': 'MLB123', 'allowed_token_ids': [1],
-            'include_translation': False, 'force_refresh': True,
+            'include_translation': False, 'force_refresh': True, 'include_description': True,
         }
         bit_db_api.get_order_product_detail(['10'], 'MLB123', {1}, include_translation=True)
         assert request.call_args.kwargs['timeout'] == (3, 45)
         assert request.call_args.kwargs['json']['include_translation'] is True
         assert request.call_args.kwargs['max_attempts'] == 1
+
+
+def test_fast_stage_returns_item_without_waiting_for_description(order_context, listing_client):
+    first = details.get_order_product_detail(['10'], 'MLB123', {1}, include_description=False)
+    assert first['description_pending'] is True
+    assert first['item']['title'] == 'Camisa'
+    assert listing_client[0].request.call_count == 1
+    with patch.object(details, 'translate_product_detail', return_value={'Camisa': '衬衫'}):
+        complete = details.get_order_product_detail(['10'], 'MLB123', {1}, include_translation=True)
+    assert complete['description_pending'] is False
+    assert complete['description']['plain_text'] == 'Algodão'
+    assert listing_client[0].request.call_count == 2
+    assert listing_client[0].request.call_args.args[1].endswith('/description')
+
+
+def test_reopen_reuses_translation_and_refresh_invalidates_it(order_context, listing_client):
+    with patch.object(details, 'translate_product_detail', return_value={'Camisa': '衬衫'}) as translate:
+        details.get_order_product_detail(['10'], 'MLB123', {1}, include_translation=True)
+        reopened = details.get_order_product_detail(['10'], 'MLB123', {1}, include_description=False)
+        assert reopened['translations_ready'] is True
+        assert reopened['translations_zh']['Camisa'] == '衬衫'
+        details.get_order_product_detail(['10'], 'MLB123', {1}, include_translation=True)
+        translate.assert_called_once()
+        refreshed = details.get_order_product_detail(['10'], 'MLB123', {1}, include_description=False, force_refresh=True)
+        assert not refreshed.get('translations_ready')
+        assert refreshed['description_pending'] is True
+    assert order_context[0].execute.call_count == 4

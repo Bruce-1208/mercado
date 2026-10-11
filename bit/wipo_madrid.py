@@ -295,7 +295,9 @@ def fetch_madrid_updates(settings, token="", session=None):
         if not available:
             raise ValueError("WIPO 官方 Madrid 目录没有可用日期包")
         if first_date < min(available):
-            raise ValueError("Madrid 起始日期早于官方保留范围，请先导入历史授权数据或调整起始日期")
+            error = ValueError(f"Madrid 起始日期早于官方保留范围（最早 {min(available).isoformat()}），请先导入历史授权数据或调整起始日期；不会自动跳过缺失历史")
+            error.available_from = min(available).isoformat()
+            raise error
         cache = _download_cache(settings, directory, first_date)
         pending = sorted(d for d in available if d >= first_date)
         pending_count = len(pending)

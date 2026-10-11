@@ -37,7 +37,7 @@ async function createPopup({saved = {}, authenticated = true, platform = 'mercad
     return nodes.get(id);
   };
   for (const [id, value] of Object.entries({
-    'product-country': 'MLM', 'product-max-items': '20', 'product-concurrency-mode': 'normal',
+    'product-country': 'MLM', 'product-max-items': '20', 'product-concurrency': '3',
     'zying-max-items': '100', 'yandex-count': '200', 'weight-price-limit': '10'
   })) node(id).value = value;
   const storage = {zeshunCollectionCategoryOptions: {...saved}};

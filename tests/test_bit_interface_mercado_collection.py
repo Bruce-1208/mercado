@@ -14,6 +14,8 @@ def offline_console(monkeypatch, tmp_path, isolated_legacy_console_user, subscri
     monkeypatch.setattr(workbench, "_authorized_token_ids_for_user", lambda *args: None)
     monkeypatch.setattr(workbench, "workbench_selected_organization", lambda *args: "")
     monkeypatch.setattr(workbench.bit_db_api, "publish_workers", lambda *args: 16)
+    # The catalog middleware must use this offline identity too, never real rows.
+    monkeypatch.setattr(workbench.bit_db_api, "check_catalog_access", lambda kind, ids: None)
     monkeypatch.setenv("MERCADO_INFRINGEMENT_TASK_PATH", str(tmp_path / "infringement.sqlite3"))
     monkeypatch.setattr(workbench, "_mercado_infringement_service", None)
     monkeypatch.setattr(workbench, "LOCAL_AGENT_HUB_PATH", tmp_path / "agents.sqlite3")
@@ -991,7 +993,8 @@ def test_management_category_endpoints_support_crud_assignment_and_filtering():
     assert list_products.call_args.kwargs["management_category_id"] == "uncategorized"
 
 
-def test_product_publish_record_list_endpoint_supports_filters():
+@pytest.mark.parametrize("scope", [None, {7, 9}])
+def test_product_publish_record_list_endpoint_supports_filters(scope):
     _reset_publish_state()
     client = _client()
     records = {
@@ -1008,7 +1011,7 @@ def test_product_publish_record_list_endpoint_supports_filters():
         ],
     }
     with patch.object(
-        workbench, "_authorized_token_ids_for_user", return_value=None
+        workbench, "_authorized_token_ids_for_user", return_value=scope
     ), patch.object(
         workbench, "db_list_mercado_product_publish_records", return_value=records
     ) as list_records:
@@ -1016,7 +1019,7 @@ def test_product_publish_record_list_endpoint_supports_filters():
             "/api/mercado-publish-records"
             "?search=MLM301&status=failed&store_name=泽顺&site_id=MLB"
             "&group_name=精品组&start_date=2026-09-12T00:00"
-            "&end_date=2026-09-12T23:59&limit=100"
+            "&end_date=2026-09-12T23:59&limit=100&salesperson=张三&token_id=9"
         )
 
     assert response.status_code == 200
@@ -1028,10 +1031,13 @@ def test_product_publish_record_list_endpoint_supports_filters():
         store_name="泽顺",
         site_id="MLB",
         group_name="精品组",
+        salesperson="张三",
         start_date="2026-09-12T00:00",
         end_date="2026-09-12T23:59",
         limit=100,
         offset=0,
+        filter_token_ids=[9],
+        **({"token_ids": sorted(scope)} if scope is not None else {}),
     )
 
 
@@ -1888,6 +1894,56 @@ def test_batch_publish_endpoint_moves_unapproved_product_to_collection():
     _reset_publish_state()
 
 
+@pytest.mark.parametrize("source", ["zying", "collected", "pulled"])
+def test_manual_approval_admits_imports_without_moving_them_to_collection(source):
+    _reset_publish_state()
+    rows = [{"id": 9, "source_item_id": "MLM123", "source_type": source,
+             "review_status": "unreviewed", "weight_g": None, "net_proceeds_usd": None}]
+    tokens = {"rows": [{"id": 5, "display_name": "测试", "site_settings": [{"site_id": "MLM", "discount_rate": 100}]}]}
+    def approve(ids, status):
+        assert ids == [9]
+        rows[0]["review_status"] = status
+        return {"requested": 1, "changed": 1}
+    with (
+        patch.object(workbench, "db_get_mercado_product_items_by_ids", return_value=rows),
+        patch.object(workbench, "db_update_mercado_product_review_status", side_effect=approve),
+        patch.object(workbench, "db_move_mercado_product_items_to_collection") as move,
+        patch.object(workbench.bit_db_api, "list_mercado_store_tokens", return_value=tokens),
+        patch.object(workbench.threading.Thread, "start") as start,
+    ):
+        client = _client()
+        request = {"product_item_ids": [9], "token_id": 5, "site_id": "MLM"}
+        before = client.post("/api/mercado-products/publish", json=request)
+        assert before.status_code == 200
+        assert "保留在产品列表" in before.get_json()["data"]["message"]
+        start.assert_not_called()
+        review = client.post("/api/mercado-products/review-status", json={"product_item_ids": [9], "review_status": "approved"})
+        assert review.status_code == 200
+        after = client.post("/api/mercado-products/publish", json=request)
+        assert after.status_code == 200, after.get_json()
+        assert after.get_json()["data"]["running"] is True
+        assert after.get_json()["data"]["requested_count"] == 1
+        assert after.get_json()["data"]["moved_to_collection_count"] == 0
+        move.assert_not_called()
+        start.assert_called_once()
+    _reset_publish_state()
+
+
+def test_scheduled_import_uses_the_same_approval_and_risk_screening_flow():
+    _reset_publish_state()
+    row = {"id": 9, "source_type": "collected", "review_status": "approved",
+           "weight_g": None, "net_proceeds_usd": 8, "infringement_check_json": None}
+    with (
+        patch.object(workbench, "db_get_mercado_product_items_by_ids", return_value=[row]),
+        patch.object(workbench, "_run_mercado_product_publish_targets") as run,
+        patch.object(workbench.bit_db_api, "update_mercado_product_publish_schedule") as update,
+    ):
+        workbench._run_mercado_product_publish_schedule({"id": 1, "payload": {"product_item_ids": [9], "targets": []}})
+        run.assert_called_once()
+        assert update.call_args.kwargs["status"] != "error"
+    _reset_publish_state()
+
+
 def test_batch_publish_endpoint_moves_missing_weight_back_to_collection():
     _reset_publish_state()
     rows = [{
@@ -2082,3 +2138,12 @@ def test_collection_list_passes_salesperson_and_directory_options():
     assert read.call_args.kwargs['salesperson'] == '业务乙'
     assert read.call_args.kwargs['include_salesperson_options'] is True
     assert read.call_args.kwargs['exclude_added'] is True
+
+
+def test_mercado_category_options_route(monkeypatch):
+    rows = [{'category_id': 'CBT2', 'category_name': 'Refrigerators', 'product_count': 3}]
+    monkeypatch.setattr(workbench, 'db_list_mercado_product_mercado_categories', lambda: {'rows': rows})
+    response = _client().get('/api/mercado-products/mercado-categories')
+    assert response.status_code == 200
+    assert response.get_json()['data']['rows'] == rows
+    assert response.headers['Cache-Control'] == 'no-store'

@@ -13,7 +13,7 @@ def no_schema_ddl(monkeypatch):
     monkeypatch.setattr(store, "ensure_collection_tables", lambda cursor: None)
 
 
-@pytest.mark.parametrize("previous", ["unreviewed", "suspected", "infringing", "risk", "rejected"])
+@pytest.mark.parametrize("previous", ["unreviewed", "failed", "suspected", "infringing", "risk", "rejected"])
 def test_review_can_be_approved_again_with_saved_net_and_missing_dimensions(previous):
     db = ProductDB(existing_product(status="completed", net=Decimal("5"), review_status=previous))
     saved = store.update_ai_original_product(7, {
@@ -25,7 +25,7 @@ def test_review_can_be_approved_again_with_saved_net_and_missing_dimensions(prev
     assert "FOR UPDATE" in db.queries[0][0]
 
 
-@pytest.mark.parametrize("status", ["unreviewed", "suspected", "infringing", "risk"])
+@pytest.mark.parametrize("status", ["unreviewed", "failed", "suspected", "infringing", "risk"])
 def test_nonapproval_reviews_do_not_require_successful_generation(status):
     db = ProductDB(existing_product(status="failed", review_status="approved"))
     saved = store.update_ai_original_product(7, {"review_status": status}, connection_factory=lambda: db)

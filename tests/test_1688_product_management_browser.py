@@ -23,7 +23,8 @@ def _product_section_html():
     links = "\n".join(
         f'<link rel="stylesheet" href="/static/{name}">'
         for name in ("console-ui.css", "ai-original-products.css",
-                     "1688-products.css", "zeshun-theme.css", "console-workflow.css")
+                     "1688-products.css", "zeshun-theme.css", "console-workflow.css",
+                     "date-filter-controls.css", "console-layout.css")
     )
     return (f'<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
             f'<style>{styles}</style>{links}'
@@ -123,6 +124,15 @@ def products_page(products_browser):
             (!url.searchParams.get('management_category_id') ||
               String(row.management_category_id) === url.searchParams.get('management_category_id')));
           return reply({status:'success',data:{rows:structuredClone(rows),total:rows.length}});
+        }
+        if (url.pathname === '/api/1688-products/bulk-dimensions' && method === 'PATCH') {
+          if (mock.failPatch) return reply({status:'error',message:'模拟保存失败'},500);
+          const selected = mock.rows.filter(row => body.product_item_ids.includes(row.id));
+          selected.forEach(row => Object.entries(body.changes).forEach(([field,value]) => {
+            row.source_1688_overrides[field] = value;
+            row[`source_${field}`] = value;
+          }));
+          return reply({status:'success',data:{changed:selected.length}});
         }
         if (/^\/api\/1688-products\/\d+$/.test(url.pathname) && method === 'PATCH') {
           if (mock.failPatch) return reply({status:'error',message:'模拟保存失败'},500);
@@ -285,3 +295,55 @@ def test_desktop_list_and_edit_dialog_layout(products_page, tmp_path):
     assert bounds and bounds["x"] >= 0 and bounds["x"] + bounds["width"] <= 1920
     assert bounds["y"] >= 0 and bounds["y"] + bounds["height"] <= 1080
     page.screenshot(path=str(destination / "edit-dialog.png"), full_page=True)
+
+
+def test_bulk_measurements_apply_to_selection_and_keep_source_details(products_page):
+    page = products_page
+    before = page.evaluate("mock.rows.map(row => row.original_1688)")
+    page.locator("#products-1688-select-all").check()
+    page.locator("#products-1688-bulk-edit").click()
+    page.locator("#products-1688-bulk-weight_g").fill("480")
+    page.locator("#products-1688-bulk-package_height_cm").fill("15")
+    page.locator("#products-1688-bulk-save").click()
+    page.wait_for_function("!document.getElementById('products-1688-bulk-dialog').open")
+    page.wait_for_function("document.querySelectorAll('#products-1688-body tr td:nth-child(6)')[0].textContent.includes('480')")
+    assert page.evaluate("mock.rows.map(row => row.original_1688)") == before
+    patch = _patches(page)[0]
+    assert patch["body"] == {"product_item_ids": [41, 42], "changes": {"weight_g": 480, "package_height_cm": 15}}
+    assert page.evaluate("mock.rows.map(row => row.source_weight_g)") == [480, 480]
+
+
+@pytest.mark.parametrize("width", [1440, 1024, 390])
+def test_compact_primary_filters_and_advanced_weight_layout(products_page, tmp_path, width):
+    page = products_page
+    page.set_viewport_size({"width": width, "height": 1100})
+    page.evaluate("document.body.classList.add('zs-console')")
+    page.add_script_tag(path=str(ROOT / 'bit/static/console-workflow.js'))
+    page.add_script_tag(path=str(ROOT / 'bit/static/date-filter-controls.js'))
+    page.add_style_tag(content='body{padding:16px}.p1688-toolbar{width:100%;box-sizing:border-box}')
+    destination = Path(os.environ.get("PRODUCTS_1688_SCREENSHOT_DIR", str(tmp_path)))
+    destination.mkdir(parents=True, exist_ok=True)
+    search = page.locator('#products-1688-search').bounding_box()
+    collector = page.locator('#products-1688-salesperson').bounding_box()
+    assert search and collector
+    if width > 1100:
+        assert abs(search['y'] - collector['y']) < 1
+        assert search['width'] < collector['width'] * 1.6
+    primary = page.locator('.p1688-toolbar-row').first
+    assert primary.evaluate('(node) => node.scrollWidth <= node.clientWidth + 1')
+    advanced = page.locator('.p1688-toolbar .zs-advanced-filters')
+    assert advanced.count() == 1
+    assert not page.locator('#products-1688-weight-min').is_visible()
+    advanced.locator('summary').click()
+    page.locator('#products-1688-weight-min').fill('200')
+    page.locator('#products-1688-weight-max').fill('800')
+    page.get_by_role('button', name='查询', exact=True).click()
+    page.wait_for_function("mock.requests.some(r => r.query.weight_min === '200' && r.query.weight_max === '800')")
+    assert advanced.evaluate('(node) => node.scrollWidth <= node.clientWidth + 1')
+    page.locator('.p1688-toolbar').screenshot(path=str(destination / f'filters-{width}.png'))
+    page.locator('#products-1688-select-all').check()
+    page.locator('#products-1688-bulk-edit').click()
+    dialog = page.locator('#products-1688-bulk-dialog')
+    bounds = dialog.bounding_box()
+    assert bounds and bounds['x'] >= 0 and bounds['x'] + bounds['width'] <= width + 1
+    page.screenshot(path=str(destination / f'bulk-{width}.png'), full_page=True)

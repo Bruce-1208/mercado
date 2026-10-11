@@ -247,3 +247,60 @@ def test_workers_identify_targets_active_stores_and_failed_results(monkeypatch, 
     visible = scope_sync_state(state, TOKENS, {7})
     assert visible["status"] == "completed"
     assert "other member failed" not in str(visible)
+
+
+@pytest.mark.parametrize("payload", [{"sync_all": True}, {"sync_all": True, "token_ids": [7]}])
+def test_member_sync_all_only_submits_owned_stores(member_client, monkeypatch, payload):
+    web, client, _ = member_client
+    submitted = []
+    monkeypatch.setattr(web.bit_db_api, "start_store_link_sync", lambda ids: (
+        submitted.append(ids) or {"started": True, "state": {}}
+    ))
+    assert client.post("/api/store-links/sync/start", json=payload).status_code == 202
+    assert submitted == [[7]]
+
+
+def test_member_without_stores_cannot_start_global_sync(member_client, monkeypatch):
+    web, client, user = member_client
+    user.update(display_name="无店铺成员", username="no-stores")
+    monkeypatch.setattr(web.bit_db_api, "start_store_link_sync", lambda ids: pytest.fail("must not start"))
+    assert client.post("/api/store-links/sync/start", json={"sync_all": True}).status_code == 400
+
+
+def test_member_authorization_submits_priority_sync(member_client, monkeypatch):
+    web, client, _ = member_client
+    def exchange(*args, **kwargs):
+        assert kwargs["salesperson"] == "徐家强"
+        return {"id": 7, "display_name": "新授权店铺", "enabled": True}
+    monkeypatch.setattr(web.bit_db_api, "exchange_mercado_store_token", exchange)
+    submitted = []
+    monkeypatch.setattr(web.bit_db_api, "start_store_link_sync", lambda ids, **kwargs: (
+        submitted.append((ids, kwargs)) or {"started": False, "state": {}}
+    ))
+    response = client.post("/api/mercado-tokens/exchange", json={"display_name": "新授权店铺", "code": "test-code"})
+    assert response.status_code == 200
+    assert submitted == [([7], {"priority": True})]
+    assert response.get_json()["data"]["auto_link_sync"]["queued"] is True
+
+
+def test_member_sync_all_still_rejects_foreign_ids(member_client, monkeypatch):
+    web, client, _ = member_client
+    monkeypatch.setattr(web.bit_db_api, "start_store_link_sync", lambda ids: pytest.fail("must not start"))
+    assert client.post("/api/store-links/sync/start", json={"sync_all": True, "token_ids": [9]}).status_code == 403
+
+
+@pytest.mark.parametrize("mode", ["mysql", "api"])
+def test_authorization_priority_reaches_sync_backend(monkeypatch, mode):
+    from bit import bit_db_api, bit_store_link_sync
+    monkeypatch.setattr(bit_db_api, "DB_MODE", mode)
+    calls = []
+    monkeypatch.setattr(bit_store_link_sync, "start_store_link_sync", lambda ids, **kwargs: (
+        calls.append((ids, kwargs)) or (True, {})
+    ))
+    monkeypatch.setattr(bit_db_api, "_request", lambda method, path, **kwargs: (
+        calls.append((path, kwargs["json"])) or {"started": True}
+    ))
+    bit_db_api.start_store_link_sync([7], priority=True)
+    assert calls == ([([7], {"priority": True})] if mode == "mysql" else [
+        ("/api/db/store-links/sync/start", {"token_ids": [7], "priority": True})
+    ])

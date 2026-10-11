@@ -546,3 +546,47 @@ def test_gateway_error_does_not_retry_mutation():
     with pytest.raises(MercadoAPIError, match="结果未知"):
         adapter._mutation_once("POST", "/test", params={}, payload={})
     assert len(session.calls) == 1
+
+
+def test_mislabeled_promotion_net_is_flagged_instead_of_displayed_as_usd():
+    from bit.mercado_promotions import _normalise_item_proceeds
+    row = _normalise_item_proceeds({'promotion_type': 'DEAL'}, {
+        'price': 0, 'original_price': 13.87, 'currency_id': 'USD',
+        'raw': {'suggested_discounted_price': 12.48,
+                '_listing_snapshot': {'price': 13.87, 'currency_id': 'USD',
+                                      'net_proceeds': {'amount': 7.87, 'currency_id': 'USD'}}},
+        'net_proceeds': {'suggested_discounted_price': {'amount': 130.94, 'currency': 'USD'}},
+    })
+    assert row['net_proceeds_before']['amount'] == 7.87
+    assert row['net_proceeds_after']['amount'] is None
+    assert row['net_proceeds_after']['reported_amount'] == 130.94
+    assert '异常' in row['net_proceeds_after']['warning']
+    assert row['net_proceeds_options'][0]['amount'] is None
+
+
+def test_higher_net_below_sale_price_and_different_currency_are_not_arbitrarily_reduced():
+    from bit.mercado_promotions import _normalise_item_proceeds
+    for currency, amount in [('USD', 9), ('MXN', 130)]:
+        row = _normalise_item_proceeds({'promotion_type':'DEAL'}, {
+            'price':12.48, 'original_price':13.87, 'currency_id':'USD',
+            'net_proceeds':{'amount':amount,'currency':currency},
+            'raw':{'_listing_snapshot':{'price':13.87,'currency_id':'USD',
+                                        'net_proceeds':{'amount':7.87,'currency_id':'USD'}}},
+        })
+        assert row['net_proceeds_after']['amount'] == amount
+        assert row['net_proceeds_after']['currency_id'] == currency
+
+
+@pytest.mark.parametrize('payload', [[{'id':'P-1','status':'started'}], {'results':[{'id':'P-1','status':'started'}]}])
+def test_item_promotions_accepts_official_array_response(payload):
+    from types import SimpleNamespace
+    client = SimpleNamespace(request=lambda *a, **kw: payload)
+    assert MercadoPromotionsClient(client).get_item_promotions('child','MLM1') == [{'id':'P-1','status':'started'}]
+
+
+@pytest.mark.parametrize('payload', [None, {}, {'error':'unavailable'}, 'bad response'])
+def test_item_promotions_rejects_unknown_payload_instead_of_empty_activities(payload):
+    from types import SimpleNamespace
+    client = SimpleNamespace(request=lambda *a, **kw: payload)
+    with pytest.raises(MercadoAPIError, match='响应格式无效'):
+        MercadoPromotionsClient(client).get_item_promotions('child','MLM1')

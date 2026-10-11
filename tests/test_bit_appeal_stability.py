@@ -588,7 +588,7 @@ def test_ai_appeal_summary_persists_complete_chat_json(monkeypatch):
     db.insert_ai_appeal_record({"event_id": "b" * 32, "chat_history": chat_history})
 
     _, params = connection.cur.calls[0]
-    assert json.loads(params[10]) == chat_history
+    assert json.loads(params[11]) == chat_history
 
 
 def test_schema_failure_is_not_cached_and_releases_server_lock(monkeypatch):

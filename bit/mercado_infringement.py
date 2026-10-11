@@ -88,7 +88,6 @@ class MercadoInfringementService:
             params["exclude_added"] = True
         else:
             params.pop("task_id", None)
-            params.pop("salesperson", None)
             if allowed_tokens is not None:
                 params["token_ids"] = sorted(allowed_tokens)
         return self.deps["list_" + mode](**params)

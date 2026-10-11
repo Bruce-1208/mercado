@@ -78,6 +78,7 @@ def test_all_extension_javascript_has_valid_syntax():
         "1688-page.js",
         "1688-verification.js",
         "purchase-tracking-content.js",
+        "purchase-tracking-page.js",
     ):
         subprocess.run(
             [shutil.which("node"), "--check", str(EXTENSION / filename)],
@@ -142,8 +143,10 @@ def test_1688_search_results_expose_per_card_collection_buttons():
     assert 'sendRuntimeMessage({type: "SUBMIT_PRODUCT", product})' in content
 
 
-def test_console_downloads_complete_zeshun_extension_package(tmp_path):
+def test_console_downloads_complete_zeshun_extension_package(tmp_path, monkeypatch):
     import bit.bit_interface as workbench
+    monkeypatch.setattr(workbench, "get_current_workbench_user", _browser_extension_user)
+    monkeypatch.setattr(workbench.bit_db_api, "account_billing", lambda _: {"status": "active"})
 
     workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
     workbench.app.secret_key = "extension-test-secret"
@@ -162,6 +165,7 @@ def test_console_downloads_complete_zeshun_extension_package(tmp_path):
         assert "manifest.json" in names
         assert "launcher.js" in names
         assert "product-batch.js" in names
+        assert "purchase-tracking-page.js" in names
         assert "content-1688.js" in names
         assert "content-zying.js" in names
         assert "zying-page.js" in names

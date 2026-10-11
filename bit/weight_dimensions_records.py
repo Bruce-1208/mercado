@@ -1500,6 +1500,9 @@ def _log_execution(row: dict[str, Any], stage: str, status: str, message: str) -
         )
     if stage == "净收益" and context.get("current_net_proceeds_usd") is not None:
         entry["net_proceeds_usd"] = str(context["current_net_proceeds_usd"])
+    if context.get("_automation_run_id"):
+        from bit.automation_center import journal
+        journal(context["_automation_run_id"], entry)
     row.setdefault("execution_logs", []).append(entry)
     updates = {
         "execution_status": row.get("execution_status", ""),
@@ -1731,9 +1734,17 @@ def _run_execute(
                     item, "美客多链接", "进行中",
                     f"正在更新 Global 商品 {global_id}；采用最新成功订单 {chosen_order}（{chosen_time}）的提交重量 {submitted_weight}g" + (f"、尺寸 {row['actual_dimensions_cm']}cm" if row.get("actual_dimensions_cm") else "；官方未提供尺寸，仅更新重量"),
                 )
+            if row.get("_automation_run_id"):
+                from bit.automation_center import require_enabled
+                require_enabled(row["_automation_organization"], "freight")
             _package_attributes(
                 api_client(token_id), global_id, submitted_weight, row["actual_dimensions_cm"]
             )
+            if row.get("_automation_run_id"):
+                from bit.automation_center import backfill_local_package, journal
+                for item in eligible:
+                    result = backfill_local_package({**item, "actual_dimensions_cm": row.get("actual_dimensions_cm")}, submitted_weight)
+                    journal(item["_automation_run_id"], {"stage": "泽顺同名产品回填", **result})
             for item in eligible:
                 item["_package_status"] = "成功"
                 item["_zeshun_status"] = "重量尺寸已更新" if row.get("actual_dimensions_cm") else "重量已更新"
@@ -1814,6 +1825,9 @@ def _run_execute(
                 row["current_net_proceeds_usd"] = str(target)
                 row["_net_proceeds_usd"] = target
                 _log_execution(row, "净收益", "进行中", f"读取当前净收益 USD {target}，正在重新提交")
+            if row.get("_automation_run_id"):
+                from bit.automation_center import require_enabled
+                require_enabled(row["_automation_organization"], "freight")
             client.update_global_item(marketplace_id, {"net_proceeds": float(target)})
             for row in eligible:
                 row["_net_status"] = "成功"

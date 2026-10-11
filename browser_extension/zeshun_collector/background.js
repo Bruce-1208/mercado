@@ -284,6 +284,79 @@ async function checkPurchaseTrackingLogin(tabId, platform) {
   return response;
 }
 
+function purchaseTrackingUrlAllowed(value, platform) {
+  try {
+    const url = new URL(value);
+    const domains = {pdd: ["yangkeduo.com", "pinduoduo.com"], "1688": ["1688.com"],
+      taobao: ["taobao.com", "tmall.com"], xianyu: ["goofish.com", "xianyu.com"]}[platform] || [];
+    return url.protocol === "https:" && domains.some(host => url.hostname === host || url.hostname.endsWith("." + host));
+  } catch (_) { return false; }
+}
+
+async function queryPurchaseTrackingOrder(tabId, platform, order) {
+  // Confirmed public buyer-detail route used by PDD's own orders page. The
+  // browser performs normal authenticated page loading; no private API replay.
+  const url = platform === "pdd"
+    ? `https://mobile.yangkeduo.com/order.html?order_sn=${encodeURIComponent(order)}`
+    : PURCHASE_TRACKING_PLATFORMS[platform].ordersUrl;
+  await chrome.tabs.update(Number(tabId), {url});
+  await aiWeightPriceWaitTab(Number(tabId));
+  let boundOrder = "";
+  let querySubmitted = false;
+  for (let hop = 0; hop < 4; hop += 1) {
+    const current = await chrome.tabs.get(Number(tabId));
+    if (!purchaseTrackingUrlAllowed(current.url, platform)) throw new Error("采购平台跳转到登录页或其他网站，请重新登录后重试");
+    // Also supports already-open tabs after an extension upgrade. The guard in
+    // the content script prevents duplicate listeners.
+    await chrome.scripting.executeScript({target: {tabId: Number(tabId)}, files: ["purchase-tracking-content.js"]});
+    let result;
+    try {
+      result = await sendTabMessage(Number(tabId), {type: "FETCH_PURCHASE_TRACKING", purchaseOrder: order, boundOrder, querySubmitted});
+    } catch (error) {
+      // Traditional search forms replace the document and close its message
+      // port. Resume in the loaded result page, still requiring exact order ID.
+      await aiWeightPriceWaitTab(Number(tabId));
+      const next = await chrome.tabs.get(Number(tabId));
+      if (next.url === current.url || !purchaseTrackingUrlAllowed(next.url, platform)) throw error;
+      querySubmitted = true;
+      continue;
+    }
+    if (!result?.ok) throw new Error(result?.error || "采购平台未返回物流信息");
+    if (result.status !== "navigate") return result;
+    if (result.bound_order !== order || !purchaseTrackingUrlAllowed(result.url, platform)) {
+      throw new Error("物流详情链接不属于当前采购平台，已停止同步");
+    }
+    boundOrder = order;
+    await chrome.tabs.update(Number(tabId), {url: result.url});
+    await aiWeightPriceWaitTab(Number(tabId));
+  }
+  return {ok: true, status: "failed", message: "物流详情跳转次数过多，未读取到物流号"};
+}
+
+async function queryPurchaseTrackingRow(tabId, platform, row) {
+  if (row.other_purchase_orders?.length) {
+    return {status: "failed", message: "该订单包含多个采购平台的单号，请拆分采购记录后同步，避免只回填部分物流号"};
+  }
+  const orders = row.purchase_orders || String(row.purchase_order || "").split(/[\s,，;；]+/).filter(Boolean);
+  const pattern = platform === "pdd" ? /^\d{6}-\d{15}$/ : platform === "1688" ? /^5\d{18}$/ : /^3\d{18}$/;
+  if (!orders.length || orders.some(order => !pattern.test(order))) {
+    return {status: "failed", message: "采购单号与所选平台不匹配，请重新创建同步任务"};
+  }
+  const results = [];
+  for (const order of [...new Set(orders)]) {
+    const result = await queryPurchaseTrackingOrder(tabId, platform, order);
+    if (result.status === "not_logged_in" || result.fatal) throw new Error(result.message || "采购平台查询失败，请重试");
+    results.push(result);
+  }
+  if (results.length === 1) return results[0];
+  if (results.every(result => result.status === "synced")) {
+    return {status: "synced", tracking_number: [...new Set(results.flatMap(result => result.tracking_number.split(/[;；,，]+/)))].join(";"),
+      logistics_company: [...new Set(results.map(result => result.logistics_company).filter(Boolean))].join(";")};
+  }
+  if (results.every(result => result.status === "pending")) return {status: "pending", message: "未发货"};
+  return {status: "failed", message: "多个采购单未全部取得物流号，暂不回填：" + results.map((result, i) => `${orders[i]} ${result.message || result.status}`).join("；")};
+}
+
 async function runPurchaseTracking(request, tabId) {
   const requestId = String(request.request_id || "");
   const completedOrderIds = new Set(
@@ -294,11 +367,7 @@ async function runPurchaseTracking(request, tabId) {
   try {
     for (const row of Array.isArray(request.orders) ? request.orders : []) {
       if (completedOrderIds.has(String(row.order_id || ""))) continue;
-      const result = await sendTabMessage(Number(tabId), {
-        type: "FETCH_PURCHASE_TRACKING",
-        purchaseOrder: row.purchase_order
-      });
-      if (!result?.ok) throw new Error(result?.error || "采购平台未返回物流信息");
+      const result = await queryPurchaseTrackingRow(Number(tabId), request.platform, row);
       if (result.status === "not_logged_in") {
         throw new Error("采购平台登录已失效，请重新手动登录后再同步");
       }
@@ -328,6 +397,7 @@ async function runPurchaseTracking(request, tabId) {
 }
 
 function startPurchaseTrackingRun(request, tabId) {
+  if (purchaseTrackingRunPromise) return purchaseTrackingRunPromise;
   purchaseTrackingRunPromise = runPurchaseTracking(request, tabId).finally(() => {
     purchaseTrackingRunPromise = null;
   });
@@ -369,7 +439,7 @@ async function confirmPurchaseTrackingLogin() {
   await checkPurchaseTrackingLogin(session.tabId, request.platform);
   const claimed = await apiRequest("/api/browser-extension/purchase-tracking/claim", {
     method: "POST",
-    body: JSON.stringify({request_id: request.request_id})
+    body: JSON.stringify({request_id: request.request_id, query_version: 2})
   });
   startPurchaseTrackingRun(claimed, session.tabId);
   return {ok: true, state: claimed, message: "已确认登录，正在自动同步物流号"};
@@ -432,6 +502,9 @@ async function apiRequest(path, options = {}, {requireAuth = true, retryAuth = t
       cache: "no-store"
     });
   } catch (error) {
+    if (error.name === "TimeoutError" || /signal timed out/i.test(error.message || "")) {
+      throw new ApiError(`泽顺控制台请求超时（${path}），请检查网络或稍后重试`);
+    }
     throw new ApiError(`无法连接泽顺控制台 ${base}：${error.message || error}`);
   }
   let payload = {};
@@ -466,6 +539,93 @@ async function mercadoDataRequest(path, options = {}) {
       if (error.status !== 503 || error.authRequired || attempt || requestOptions.signal.aborted) throw error;
       await new Promise(resolve => setTimeout(resolve, 1500));
     }
+  }
+}
+
+// Share data-card and collection reads across tabs. Scope short-lived entries to
+// the console and login; never reuse another account's results or cache failures.
+const mercadoProductReads = new Map();
+let mercadoProductBatch = [];
+let mercadoProductBatchTimer = null;
+
+async function queryMercadoProducts(items) {
+  if (!Array.isArray(items) || !items.length || items.length > 50) throw new Error("每次查询须包含1–50个商品");
+  const [config, auth] = await Promise.all([settings(), authSession()]);
+  if (!auth) throw new ApiError("请先登录泽顺控制台账号", {authRequired: true, status: 401});
+  const scope = JSON.stringify([normalizeConsoleUrl(config.consoleUrl), auth.token, auth.user?.username]);
+  const normalized = items.map(item => {
+    const sku = String(item?.sku || "").replace("-", "").toUpperCase();
+    if (!/^(?:MLM|MLB|MLC|MCO|MLA|MLU)\d{5,}$/.test(sku)) throw new Error("需要商品刊登编号");
+    return {sku, price: Number(item.price) > 0 ? Number(item.price) : null};
+  });
+  const results = await Promise.all(normalized.map(({sku, price}) => {
+    const key = JSON.stringify([scope, sku, price]);
+    const existing = mercadoProductReads.get(key);
+    if (existing && existing.until > Date.now()) return existing.promise;
+    let resolve, reject;
+    const promise = new Promise((a, b) => { resolve = a; reject = b; });
+    const entry = {key, scope, item: {sku, price}, promise, resolve, reject, until: Infinity};
+    mercadoProductReads.set(key, entry);
+    mercadoProductBatch.push(entry);
+    if (!mercadoProductBatchTimer) mercadoProductBatchTimer = setTimeout(flushMercadoProductReads, 20);
+    return promise;
+  }));
+  return {items: results.map(result => result.record),
+    warnings: [...new Set(results.flatMap(result => result.warnings))], source: "zeshun_server"};
+}
+
+function flushMercadoProductReads() {
+  mercadoProductBatchTimer = null;
+  const queued = mercadoProductBatch;
+  mercadoProductBatch = [];
+  const groups = new Map();
+  for (const entry of queued) {
+    if (!groups.has(entry.scope)) groups.set(entry.scope, []);
+    groups.get(entry.scope).push(entry);
+  }
+  for (const group of groups.values()) {
+    for (let offset = 0; offset < group.length; offset += 50) {
+      const batch = group.slice(offset, offset + 50);
+      void mercadoDataRequest("/api/browser-extension/mercado-data/query", {
+        method: "POST", body: JSON.stringify({items: batch.map(entry => entry.item)})
+      }).then(data => {
+        for (const entry of batch) {
+          const record = data.items?.find(row => row.sku === entry.item.sku &&
+            (row.requested_price ?? null) === entry.item.price);
+          if (!record) {
+            mercadoProductReads.delete(entry.key);
+            entry.reject(new Error("商品数据响应不完整"));
+            continue;
+          }
+          if (record.product) entry.until = Date.now() + 60000;
+          else mercadoProductReads.delete(entry.key);
+          entry.resolve({record, warnings: data.warnings || []});
+        }
+      }).catch(error => {
+        for (const entry of batch) {
+          mercadoProductReads.delete(entry.key);
+          entry.reject(error);
+        }
+      }).finally(() => {
+        for (const [key, entry] of mercadoProductReads) {
+          if (entry.until !== Infinity && (entry.until <= Date.now() || mercadoProductReads.size > 500)) {
+            mercadoProductReads.delete(key);
+          }
+        }
+      });
+    }
+  }
+}
+
+function prefetchMercadoProduct(url) {
+  const target = new URL(url);
+  const selected = target.searchParams.get("wid") || target.searchParams.get("item_id") || target.searchParams.get("itemId");
+  const sku = String(selected || (!/\/(?:p|up)\//i.test(target.pathname) &&
+    target.pathname.match(/\b(?:MLM|MLB|MLC|MCO|MLA|MLU)-?\d{5,}\b/i)?.[0]) || "").replace("-", "").toUpperCase();
+  // Warm the server cache while navigation is in progress. Catalog IDs must
+  // first resolve to a seller listing in the page; prefetch never uploads.
+  if (/^(?:MLM|MLB|MLC|MCO|MLA|MLU)\d{5,}$/.test(sku)) {
+    void queryMercadoProducts([{sku}]).catch(() => {});
   }
 }
 
@@ -801,6 +961,7 @@ async function collectMercadoUrl(value) {
   const expectedId = (selected.match(/^(?:ML[A-Z]|MCO|CBT)-?\d{5,}$/i)?.[0] ||
     target.pathname.match(/^\/((?:ML[A-Z]|MCO|CBT)-\d{5,})(?:-|$)/i)?.[1] || "").replace("-", "").toUpperCase();
   if (!await authSession()) return {ok: false, authRequired: true, error: "请先在插件设置中登录泽顺控制台账号"};
+  prefetchMercadoProduct(url);
   const tabs = new Set();
   let abandoned = false;
   let tab;
@@ -840,7 +1001,7 @@ async function collectMercadoUrl(value) {
         }
         if (response?.error) lastError = response.error;
       }
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
     throw new Error(`采集超时：${lastError}`);
   } finally {
@@ -850,26 +1011,46 @@ async function collectMercadoUrl(value) {
 }
 
 async function collect1688ListProduct(candidate) {
-  const sourceUrl = String(candidate?.source_url || candidate?.final_url || "").trim();
-  if (!sourceUrl) throw new Error("1688 列表商品缺少详情链接");
+  const sourceItemId = String(candidate?.source_item_id || "");
+  if (!/^\d{5,}$/.test(sourceItemId)) throw new Error("1688 列表商品缺少有效商品编号");
+  if (!await authSession()) return {ok: false, authRequired: true, error: "请先在插件设置中登录泽顺控制台账号"};
+  // Keep the listing's working destination, including routing/access parameters.
+  const sourceUrl = candidate.source_url || `https://detail.1688.com/offer/${sourceItemId}.html`;
+  let destination;
+  try { destination = new URL(sourceUrl); } catch (_) {}
+  if (!destination || !/^https?:$/.test(destination.protocol) ||
+      !/(^|\.)1688\.com$/i.test(destination.hostname) || destination.username || destination.password) {
+    throw new Error("1688 商品链接无效，请刷新列表后重试");
+  }
+  const linkedId = destination.pathname.match(/\/offer\/(\d{5,})(?:\.html)?/i)?.[1]
+    || destination.search.match(/[?&](?:offerId|offer_id|itemId)=(\d{5,})/i)?.[1];
+  if (linkedId && linkedId !== sourceItemId) throw new Error("1688 商品链接与编号不一致，请刷新列表后重试");
   const tab = await chrome.tabs.create({url: sourceUrl, active: false});
-  let extracted = false;
   try {
     await aiWeightPriceWaitTab(tab.id);
-    const product = await extractFromTab(tab.id);
-    if (String(product.source_item_id) !== String(candidate.source_item_id)) {
-      throw new Error("1688详情跳转到了其他商品，已停止采集");
+    const deadline = Date.now() + PRODUCT_DETAIL_TIMEOUT_MS;
+    let lastError;
+    while (Date.now() < deadline) {
+      // Retry only detail readiness; uploading must happen exactly once.
+      await chrome.tabs.get(tab.id);
+      let product;
+      try {
+        product = await productBatchReadWithin(() => extractFromTab(tab.id), deadline, null, "读取1688商品详情");
+      } catch (error) {
+        lastError = error;
+        if (!/尚未加载|未识别到|Receiving end does not exist|Could not establish connection/i.test(error.message || "")) throw error;
+        await new Promise(resolve => setTimeout(resolve, 500));
+        continue;
+      }
+      if (String(product.source_item_id) !== sourceItemId) {
+        throw new Error("1688详情跳转到了其他商品，已停止采集");
+      }
+      return await submitProduct(product);
     }
-    extracted = true;
-    return await submitProduct(product);
-  } catch (error) {
-    // Keep failed detail tabs available for login, slider or captcha handling.
-    try { await chrome.tabs.update(tab.id, {active: true}); } catch (_) {}
-    throw error;
+    throw lastError || new Error("1688 商品详情加载超时，请重试");
   } finally {
-    if (extracted) {
-      try { await chrome.tabs.remove(tab.id); } catch (_) {}
-    }
+    // Only close the temporary tab we created; never activate another tab.
+    try { await chrome.tabs.remove(tab.id); } catch (_) {}
   }
 }
 
@@ -1226,7 +1407,7 @@ async function aiWeightPriceSendContentMessage(tabId, message, files, timeoutMs 
   }
 }
 
-const AI_WEIGHT_PRICE_CONTENT_VERSION = "1.8.47";
+const AI_WEIGHT_PRICE_CONTENT_VERSION = "1.8.69";
 
 async function aiWeightPriceFrameIds(tabId) {
   const ids = [0];
@@ -1781,9 +1962,27 @@ chrome.windows.onRemoved?.addListener(async windowId => {
   }
 });
 
+// Coalesce exchange reads from all open Mercado pages without storing customer data.
+let mercadoExchangeRead = null;
+let mercadoExchangeSnapshot = null;
+async function getMercadoExchangeRates() {
+  if (mercadoExchangeSnapshot?.expires_at * 1000 > Date.now()) return mercadoExchangeSnapshot;
+  if (!mercadoExchangeRead) {
+    mercadoExchangeRead = mercadoDataRequest("/api/browser-extension/mercado-data/exchange-rates")
+      .then(value => { mercadoExchangeSnapshot = value; return value; })
+      .finally(() => { mercadoExchangeRead = null; });
+  }
+  return mercadoExchangeRead;
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const run = async () => {
     switch (message && message.type) {
+      case "CHECK_EXTENSION_UPDATE": {
+        const data = await apiRequest("/api/browser-extension/version", {method: "GET", signal: AbortSignal.timeout(10000)}, {requireAuth: false});
+        const config = await settings();
+        return {ok: true, version: data.version, downloadUrl: `${normalizeConsoleUrl(config.consoleUrl)}/api/browser-extension/download`};
+      }
       case "OPEN_FLOATING_WINDOW":
         await openFloatingWindow();
         return {ok: true};
@@ -1797,10 +1996,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       case "GET_MERCADO_DATA_STATUS":
         return {ok: true, ...(await mercadoDataRequest("/api/browser-extension/mercado-data/status"))};
+      case "GET_MERCADO_EXCHANGE_RATES":
+        return {ok: true, ...(await getMercadoExchangeRates())};
       case "GET_MERCADO_PRODUCT_INFO":
-        return {ok: true, ...(await mercadoDataRequest("/api/browser-extension/mercado-data/query", {
-          method: "POST", body: JSON.stringify({items: message.items})
-        }))};
+        return {ok: true, ...(await queryMercadoProducts(message.items))};
       case "GET_PRODUCT_BATCH_STATUS": return {ok: true, state: await getProductBatchStatus()};
       case "GET_APPEAL_CONTEXT":
         return {ok: true, context: await ZeshunAppealRunner.getAppealContext(Number(message.tabId))};
@@ -1827,6 +2026,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         return {ok: true, data: result?.[0]?.result};
       }
+      case "COLLECT_1688_URL": return collect1688ListProduct(message.product);
       case "COLLECT_MERCADO_URL": return collectMercadoUrl(message.url);
       case "SUBMIT_PRODUCT": {
         const senderHost = String(sender?.tab?.url || "").match(/^https?:\/\/([^/]+)/i)?.[1]?.toLowerCase() || "";
@@ -1841,7 +2041,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       case "OPEN_ZYING_LOGIN": return {ok: true, ...(await openZyingLoginPage())};
       case "GET_ZYING_ORDER_STATUS": return {ok: true, state: await ZeshunOrderSync.status()};
-      case "START_ZYING_ORDER_SYNC": return {ok: true, state: await ZeshunOrderSync.start({date_start: message.date_start, date_end: message.date_end})};
+      case "START_ZYING_ORDER_SYNC": return {ok: true, state: await ZeshunOrderSync.start({date_start: message.date_start, date_end: message.date_end, order_status: message.order_status || ""})};
       case "OPEN_ZYING_ORDER_LOGIN": return {ok: true, state: await ZeshunOrderSync.open()};
       case "CONFIRM_ZYING_ORDER_LOGIN": return {ok: true, state: await ZeshunOrderSync.confirm()};
       case "STOP_ZYING_ORDER_SYNC": return {ok: true, state: await ZeshunOrderSync.stop()};
@@ -1921,12 +2121,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         ok: true,
         ...(await purchaseTrackingRequest() || {phase: "idle", message: "暂无物流号同步任务"})
       };
+      case "RESET_PURCHASE_TRACKING_DATES": {
+        if (purchaseTrackingRunPromise) throw new Error("物流号同步正在进行中");
+        const request = await purchaseTrackingRequest();
+        if (!request?.request_id || request.request_id !== message.request_id || !["waiting_plugin", "waiting_login"].includes(request.phase)) {
+          throw new Error("任务状态已变化，请刷新后重试");
+        }
+        const result = await apiRequest("/api/browser-extension/purchase-tracking/fail", {
+          method: "POST", body: JSON.stringify({request_id: request.request_id, pending_only: true, message: "已结束等待，请重新选择日期并启动同步"})
+        });
+        return {ok: true, ...result};
+      }
       case "OPEN_PURCHASE_TRACKING_LOGIN": {
         if (purchaseTrackingRunPromise) throw new Error("物流号同步正在进行中");
         let request = await purchaseTrackingRequest();
         if (!request?.request_id || ["completed", "error", "idle"].includes(request.phase)) {
           request = await apiRequest("/api/browser-extension/purchase-tracking/start", {
-            method: "POST", body: JSON.stringify({platform: message.platform, date_start: message.date_start, date_end: message.date_end})
+            method: "POST", body: JSON.stringify({platform: message.platform, date_start: message.date_start, date_end: message.date_end, order_status: message.order_status || ""})
           });
         }
         return openPurchaseTrackingLogin(request);

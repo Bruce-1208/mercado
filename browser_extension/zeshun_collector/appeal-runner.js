@@ -57,6 +57,30 @@ globalThis.ZeshunAppealRunner = (() => {
     if (run && await accountScope() !== run.owner) throw failure("泽顺账号或控制台地址已改变，申诉已停止", "context_changed");
     return deps.apiRequest(API + name, {method: "POST", body: JSON.stringify(payload)}, {retryAuth: false});
   }
+  async function preparePlan(payload, run) {
+    const requestId = crypto.randomUUID();
+    const deadline = Date.now() + 600000;
+    await log(run, "正在核对店铺授权并读取申诉资料…");
+    let receipt;
+    try { receipt = await post("plan-async", {...payload, request_id: requestId}, run); }
+    catch (error) {
+      if (error.status || error.authRequired) throw error;
+      // A lost response may already have created a plan. Query its receipt;
+      // never repeat the start or fall back to synchronous plan creation.
+      await log(run, "准备请求响应中断，正在查询原请求进度…");
+    }
+    while (true) {
+      check(run);
+      if (receipt?.state === "ready" && receipt.plan?.task_id) return receipt.plan;
+      if (Date.now() >= deadline) throw failure("申诉资料准备超过10分钟，请检查控制台服务后重试");
+      await pause(run, 1500);
+      try { receipt = await post("plan-status", {request_id: requestId}, run); }
+      catch (error) {
+        if (error.status || error.authRequired) throw error;
+        await log(run, "查询申诉准备进度暂时超时，正在重连…");
+      }
+    }
+  }
   function check(run) {
     if (run.stopped) throw failure("已停止当前店铺申诉", "stopped");
     if (run.site_deadline && Date.now() > run.site_deadline) throw failure("本站点超过执行时间预算", "deadline_exceeded");
@@ -88,11 +112,17 @@ globalThis.ZeshunAppealRunner = (() => {
     if (results[0].error) throw failure(results[0].error);
     return results[0];
   }
+  function checkLoginUrl(value) {
+    const url = mercadoUrl(value);
+    if (/^(?:login|auth)\./i.test(url.hostname) || /\/(?:login|lgz|legacy-user)(?:\/|$)/i.test(url.pathname)) {
+      throw failure("当前美客多店铺未登录，申诉任务已停止。请登录后台后重新启动", "logged_out");
+    }
+  }
   async function readContext(tabId) {
     const tab = await chrome.tabs.get(Number(tabId));
-    mercadoUrl(tab.url);
+    checkLoginUrl(tab.pendingUrl || tab.url);
     const state = await page(tab.id, "context");
-    if (state.logged_out) throw failure("当前美客多店铺未登录，请完成登录后重试", "logged_out");
+    if (state.logged_out) throw failure("当前美客多店铺未登录，申诉任务已停止。请登录后台后重新启动", "logged_out");
     if (state.rate_limited) throw failure("美客多页面暂时限频，请稍后在当前店铺重试", "rate_limited");
     if (state.identity_conflict || !state.seller_id) throw failure("未能确认当前店铺登录账号，请打开美客多全球销售后台后重试", "identity_unknown");
     return {...state, tab_id: tab.id, window_id: tab.windowId, incognito: Boolean(tab.incognito)};
@@ -126,7 +156,7 @@ globalThis.ZeshunAppealRunner = (() => {
     while (Date.now() < deadline) {
       check(run);
       const tab = await chrome.tabs.get(run.tab_id);
-      mercadoUrl(tab.url);
+      checkLoginUrl(tab.pendingUrl || tab.url);
       if (tab.status === "complete") { await assertBinding(run); return; }
       await pause(run, 500);
     }
@@ -331,6 +361,9 @@ globalThis.ZeshunAppealRunner = (() => {
     await log(run, `${group.site_name || group.site_id} ${group.form} 第 ${group.group_index}/${group.total_groups} 组：${execution.message || execution.status}`);
     run.reset_before_group = execution.reply_status === "reply_timeout" || execution.reply_status === "needs_human" || Boolean(execution.post_send_status);
     if (!execution.acknowledged) throw failure(execution.error || execution.message || "本组发送未确认", execution.status, execution.sent);
+    if (["logged_out", "login_required", "auth_required"].includes(execution.post_send_status)) {
+      throw failure(execution.post_send_error, execution.post_send_status, true);
+    }
     check(run);
   }
   function parseCsv(text) {
@@ -444,10 +477,10 @@ globalThis.ZeshunAppealRunner = (() => {
       const rounds = loopValue === 0 || loopValue === "0" || loopValue === "永久" || loopValue === "permanent" ? Infinity : Number(loopValue || 1);
       for (let round = 1; round <= rounds; round++) {
         check(run); run.round_number = round; run.status = "running";
-        if (round > 1) plan = await post("plan", {task_id: run.task_id, round_number: round}, run);
+        if (round > 1) plan = await preparePlan({task_id: run.task_id, round_number: round}, run);
         if (plan.browser_collections?.length) {
           const reputation = await collect(run, plan.browser_collections);
-          plan = await post("plan", {task_id: run.task_id, round_number: round, reputation_identifiers: reputation}, run);
+          plan = await preparePlan({task_id: run.task_id, round_number: round, reputation_identifiers: reputation}, run);
         }
         await log(run, `开始第 ${round} 轮，共 ${plan.groups.length} 组申诉`);
         let chat = null, siteGroup = 0, previousSite = "", previousForm = "";
@@ -501,35 +534,51 @@ globalThis.ZeshunAppealRunner = (() => {
     starting = true;
     try {
       const owner = await accountScope();
-      const tab = await chrome.tabs.get(Number(tabId));
-      mercadoUrl(tab.pendingUrl || tab.url);
+      let tab;
+      if (Number.isInteger(Number(tabId)) && Number(tabId) > 0) {
+        try { tab = await chrome.tabs.get(Number(tabId)); } catch (_) { /* Closed tab: open the backend directly. */ }
+      }
+      if (tab) mercadoUrl(tab.pendingUrl || tab.url);
+      else tab = await chrome.tabs.create({url: `${HOST}/reputation`, active: true});
+      const run = {run_id: crypto.randomUUID(), status: "preparing", params,
+        tab_id: tab.id, source_tab_id: tab.id, window_id: tab.windowId, incognito: Boolean(tab.incognito),
+        owner, owner_digest: await scopeDigest(owner), stopped: false, processed: 0, sent: 0, failed: 0,
+        round_number: 1, logs: [], error: "", started_at: new Date().toISOString(), in_flight: null, pending_result: null};
+      active = run;
+      await log(run, "正在打开当前店铺的声誉页面…");
+      run.heartbeat = setInterval(() => { void deps.storageGet("local", [KEY]).catch(() => {}); }, 20000);
+      void prepareAndRun(run, tab, params);
+      return publicStatus(run);
+    } finally { starting = false; }
+  }
+  async function prepareAndRun(run, tab, params) {
+    try {
       // The originating page may not expose shop identity (for example Orders).
       // Open Reputation first; no popup identity preflight is required.
       await chrome.tabs.update(tab.id, {url: `${HOST}/reputation`});
       const deadline = Date.now() + 60000;
       while (true) {
+        check(run);
         const current = await chrome.tabs.get(tab.id);
-        mercadoUrl(current.url);
+        checkLoginUrl(current.pendingUrl || current.url);
         if (current.status === "complete") break;
         if (Date.now() >= deadline) throw failure("美客多声誉页面打开超时");
         await new Promise(resolve => setTimeout(resolve, 500));
       }
       const browser = await readContext(tab.id);
-      const plan = await post("plan", {...params, context: {seller_id: browser.seller_id}});
-      if (await accountScope() !== owner) throw failure("申诉准备期间泽顺账号已改变，请重新开始申诉", "context_changed");
-      const run = {run_id: crypto.randomUUID(), task_id: plan.task_id, status: "preparing", params: plan.params || params,
-        identity: plan.identity, shop: plan.shop, sites: plan.sites, tab_id: browser.tab_id, source_tab_id: browser.tab_id, window_id: browser.window_id,
-        incognito: browser.incognito, owner, owner_digest: await scopeDigest(owner), stopped: false, processed: 0, sent: 0, failed: 0,
-        round_number: 1, logs: [], error: "", started_at: new Date().toISOString(), in_flight: null, pending_result: null};
-      active = run;
-      await persist(run);
-      // Extension API traffic keeps the MV3 worker alive during bounded waits.
-      // On an actual worker/browser restart getStatus reports interruption;
-      // neither plans nor pending clicks are automatically replayed.
-      run.heartbeat = setInterval(() => { void deps.storageGet("local", [KEY]).catch(() => {}); }, 20000);
-      void runTask(run, plan);
-      return publicStatus(run);
-    } finally { starting = false; }
+      const plan = await preparePlan({...params, context: {seller_id: browser.seller_id}}, run);
+      Object.assign(run, {task_id: plan.task_id, params: plan.params || params,
+        identity: plan.identity, shop: plan.shop, sites: plan.sites});
+      check(run);
+      if (await accountScope() !== run.owner) throw failure("申诉准备期间泽顺账号已改变，请重新开始申诉", "context_changed");
+      await runTask(run, plan);
+    } catch (error) {
+      clearInterval(run.heartbeat);
+      run.status = run.stopped ? "stopped" : "failed";
+      run.error = error.message;
+      run.finished_at = new Date().toISOString();
+      await log(run, error.message);
+    }
   }
   async function getAppealStatus() {
     let owner;

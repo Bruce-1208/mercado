@@ -53,3 +53,5 @@ button { font: inherit; }
   .detail-panel { padding: 18px; }
 }
 @media (max-width: 380px) { .detail-metadata { grid-template-columns: minmax(0, 1fr); } }
+.detail-quality { border-color: #f3c76b; background: #fffbeb; color: #92400e; }
+.detail-quality ul { margin: 0; padding-left: 20px; line-height: 1.7; overflow-wrap: anywhere; }

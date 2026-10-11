@@ -27,7 +27,7 @@ function setup(platform = 'amazon') {
     run(fs.readFileSync(path.join(__dirname, '../bit/static', file), 'utf8'));
   }
   run(`document.getElementById('ai-original-platform').value = ${JSON.stringify(platform)};
-    aiOriginalRows = [{id: 1, title: 'Source title', ai_status: 'completed', review_status: 'approved',
+    aiOriginalRows = [{id: 1, category_id: 'CBT123', title: 'Source title', ai_status: 'completed', review_status: 'approved',
       title_es: 'Mercado only text', title_pt: 'Mercado only PT', main_image_url: '/mercado-only.jpg',
       ai_original: {main_image_url: '/mercado-only.jpg'}, marketplace_listings: {}}];
     aiOriginalSelected = new Set([1]);`);
@@ -61,7 +61,7 @@ test('platform status filtering and select all use independent draft statuses', 
   const {run} = setup('yandex');
   run(`aiOriginalRows.push({id: 2, ai_status: 'pending', marketplace_listings: {yandex: {status:'completed',title:'Товар'}}});
     aiOriginalSelected.clear();
-    document.getElementById('ai-original-status-filter').value = 'incomplete';
+    document.getElementById('ai-original-status-filter').value = 'failed';
     toggleAllAiOriginalProducts(true);`);
   assert.deepEqual(Array.from(run('[...aiOriginalSelected]')), [2]);
   assert.equal(run('aiOriginalPlatformStatus(aiOriginalRows[0], "mercadolibre")'), 'completed');

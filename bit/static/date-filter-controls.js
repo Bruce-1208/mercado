@@ -12,6 +12,7 @@
         ['store-analysis-start', 'store-analysis-end'],
         ['after-sale-date-from', 'after-sale-date-to', () => loadHighAfterSaleAlerts()],
         ['profit-date-from', 'profit-date-to', () => loadHighProfitProducts()],
+        ['freight-date-from', 'freight-date-to', () => loadFreightChanges()],
         ['window-anomaly-date-from', 'window-anomaly-date-to', () => applyWindowAnomalyFilters()],
         ['ai-video-date-from', 'ai-video-date-to', () => applyAiVideoFilters()],
         ['store-link-audit-from', 'store-link-audit-to'],

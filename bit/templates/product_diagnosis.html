@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>商品经营诊断 · 泽顺运营中心</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261010-clean">
+  <link rel="stylesheet" href="{{ url_for('static', filename='product-diagnosis.css') }}?v=20261010">
+  <script defer src="{{ url_for('static', filename='product-diagnosis.js') }}?v=20261010"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261011-compact">
+</head>
+<body class="zs-standalone{{ ' pd-embedded' if embedded else '' }}">
+<main class="pd-shell" id="product-diagnosis" data-can-manage="{{ 'true' if can_manage else 'false' }}" data-can-task="{{ 'true' if can_task else 'false' }}">
+  <header class="pd-header">
+    <div><span class="pd-eyebrow">MERCADO LIBRE · 商品经营</span><h1>商品经营诊断</h1><p>从平台依据发现商品问题，明确下一步处理动作。</p></div>
+    <div class="pd-actions">{% if not embedded %}<a class="pd-button" href="/?tab=product-diagnosis">返回工作台</a>{% endif %}<button class="pd-button" id="pd-refresh">刷新结果</button><button class="pd-button primary" id="pd-start" {% if not can_manage %}disabled{% endif %}>诊断当前店铺范围</button></div>
+  </header>
+  <div class="pd-message error" id="pd-error" role="alert" hidden></div>
+  <div class="pd-message" id="pd-progress" role="status" aria-live="polite" hidden></div>
+  <section class="pd-metrics" aria-label="诊断概况">
+    <button class="pd-metric" data-risk="high"><span><i class="pd-dot high"></i>优先处理</span><strong id="pd-high">—</strong><small>库存及购物体验风险</small></button>
+    <button class="pd-metric" data-risk="medium"><span><i class="pd-dot medium"></i>需要关注</span><strong id="pd-medium">—</strong><small>平台警告与状态异常</small></button>
+    <button class="pd-metric" data-risk="low"><span><i class="pd-dot low"></i>改进机会</span><strong id="pd-low">—</strong><small>刊登资料待完善</small></button>
+    <button class="pd-metric" data-risk="pending"><span><i class="pd-dot pending"></i>待核对</span><strong id="pd-pending">—</strong><small>数据不足或结果过期</small></button>
+    <button class="pd-metric" data-risk="healthy"><span><i class="pd-dot healthy"></i>当前正常</span><strong id="pd-healthy">—</strong><small>完整数据未发现问题</small></button>
+  </section>
+  <form class="pd-filters" id="pd-filters">
+    <label>店铺<select id="pd-store"><option value="">全部授权店铺</option></select></label>
+    <label>站点<select id="pd-site"><option value="">全部站点</option><option value="MLM">墨西哥 MLM</option><option value="MLB">巴西 MLB</option><option value="MLC">智利 MLC</option><option value="MCO">哥伦比亚 MCO</option><option value="MLA">阿根廷 MLA</option><option value="MLU">乌拉圭 MLU</option><option value="MPE">秘鲁 MPE</option><option value="MEC">厄瓜多尔 MEC</option></select></label>
+    <label>诊断状态<select id="pd-risk"><option value="">全部状态</option><option value="high">优先处理</option><option value="medium">需要关注</option><option value="low">改进机会</option><option value="pending">待核对</option><option value="healthy">当前正常</option></select></label>
+    <label>问题类型<select id="pd-category"><option value="">全部问题</option><option value="quality">刊登质量</option><option value="experience">购物体验</option><option value="inventory">库存</option><option value="listing">商品状态</option></select></label>
+    <label class="pd-search">搜索商品<input id="pd-search" placeholder="商品标题 / Item ID / SKU" maxlength="200"></label>
+    <button class="pd-button" type="submit">查询</button>
+  </form>
+  <div class="pd-scope"><span id="pd-count">正在读取诊断结果…</span><span>诊断按店铺和站点执行；每份结果有效 24 小时，时间为北京时间。</span></div>
+  <section class="pd-products" aria-label="商品诊断结果"><div class="pd-table-head"><span>商品 / 店铺</span><span>诊断状态</span><span>平台评分</span><span>首要问题与建议</span><span>处理</span></div><div id="pd-results"><div class="pd-empty">正在读取…</div></div></section>
+  <nav class="pd-pagination" aria-label="诊断结果分页"><span id="pd-page-label"></span><div><button class="pd-button" id="pd-prev">上一页</button><button class="pd-button" id="pd-next">下一页</button></div></nav>
+  <details class="pd-explanation"><summary>诊断依据与数据范围</summary><p>刊登质量和购物体验来自美客多官方接口；库存及商品状态提示由本系统根据平台实时字段判断。未知原因保留平台原文。某项读取失败、账号不支持或样本不足时显示“待核对”，仍保留已确认问题。</p><p>评分为平台原始分数；“当前正常”仅表示本次完整读取未发现待处理问题。诊断结果用于辅助运营，处理商品前需核对平台当前状态。“加入今日必办”的 24 小时是内部建议处理时限。</p></details>
+</main>
+<dialog class="pd-dialog" id="pd-dialog" aria-labelledby="pd-detail-title">
+  <header><div><span class="pd-eyebrow">商品诊断详情</span><h2 id="pd-detail-title">正在读取…</h2></div><button class="pd-button" id="pd-close" aria-label="关闭诊断详情">关闭</button></header>
+  <div id="pd-detail"></div><div id="pd-detail-message" role="status" aria-live="polite"></div>
+  <footer><span>处理完成后可重新诊断，核对平台最新结果。</span><button class="pd-button primary" id="pd-today" {% if not can_task %}disabled{% endif %}>加入今日必办</button></footer>
+</dialog>
+</body>
+</html>

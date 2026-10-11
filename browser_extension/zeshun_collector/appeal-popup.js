@@ -30,7 +30,7 @@
     const loggedIn = typeof authenticated !== "undefined" && authenticated;
     tabSelect.disabled = locked;
     refresh.disabled = !loggedIn || locked;
-    start.disabled = !loggedIn || locked || !tabSelect.value ||
+    start.disabled = !loggedIn || locked ||
       !siteInputs().some(input => input.checked) || !formInputs().some(input => input.checked);
     stop.disabled = !loggedIn || !running();
     [...fields, ...siteInputs(), ...formInputs()].forEach(field => { field.disabled = locked; });
@@ -42,7 +42,7 @@
 
   function renderSites() {
     element("sites").replaceChildren();
-    element("shop").textContent = "开始后将直接打开当前店铺的声誉页面";
+    element("shop").textContent = "开始后自动打开当前店铺后台；未登录时停止并提醒";
     element("shop").className = "plugin-login-status";
     for (const [index, site] of defaultSites.entries()) {
       const label = document.createElement("label");
@@ -60,6 +60,7 @@
   function renderTask(state) {
     task = state || null;
     element("status").textContent = state?.message || (running() ? "申诉执行中…" : "等待启动");
+    element("status").classList.toggle("error", Boolean(state?.error));
     element("summary").textContent = `已处理 ${Number(state?.completed_groups ?? state?.processed ?? 0)} · 已发送 ${Number(state?.sent_groups ?? state?.sent ?? 0)} · 失败 ${Number(state?.failed_groups ?? state?.failed ?? 0)}`;
     const logs = state?.logs || state?.log || [];
     element("log").textContent = Array.isArray(logs)
@@ -102,11 +103,10 @@
       const previous = tabSelect.value;
       const tabs = (await chrome.tabs.query({})).filter(supportedTab)
         .sort((left, right) => Number(right.active) - Number(left.active) || Number(right.lastAccessed || 0) - Number(left.lastAccessed || 0));
-      tabSelect.replaceChildren(new Option("请选择当前店铺网页", ""));
+      tabSelect.replaceChildren(new Option("自动打开美客多后台", ""));
       for (const tab of tabs) tabSelect.add(new Option(tab.title || "美客多店铺后台", String(tab.id)));
       tabSelect.value = tabs.some(tab => String(tab.id) === previous) ? previous : String(tabs[0]?.id || "");
-      if (!tabSelect.value) throw new Error("请在此浏览器打开并登录 global-selling.mercadolibre.com 或 sellers.mercadolibre.com 店铺后台");
-      element("shop").textContent = "开始后将直接打开当前店铺的声誉页面";
+      element("shop").textContent = "开始后自动打开当前店铺后台；未登录时停止并提醒";
       element("shop").className = "plugin-login-status";
     } catch (error) {
       element("shop").textContent = error.message || String(error);
@@ -122,7 +122,7 @@
   tabSelect.addEventListener("change", syncControls);
   [...fields, ...formInputs()].forEach(field => field.addEventListener("change", syncControls));
   start.addEventListener("click", async () => {
-    if (busy || running() || !tabSelect.value) return;
+    if (busy || running()) return;
     busy = true;
     syncControls();
     try {

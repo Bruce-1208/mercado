@@ -34,7 +34,7 @@ from urllib.parse import urlsplit
 import requests
 
 
-AGENT_VERSION = "1.2.8"
+AGENT_VERSION = "1.2.9"
 DEFAULT_SERVER_URL = "https://wuhanzeshun.com"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
@@ -413,6 +413,14 @@ class AgentStatusWindow:
             background="#f4f6f8",
         ).pack(side="right")
 
+        self.update_banner = tk.Frame(self.root, background="#fff3cd", padx=18, pady=8)
+        self.update_text = tk.StringVar(value="")
+        tk.Label(self.update_banner, textvariable=self.update_text, background="#fff3cd",
+                 foreground="#754700", wraplength=620, justify="left").pack(side="left")
+        tk.Button(self.update_banner, text="下载新版", command=self._open_update_download).pack(side="right")
+        self.update_banner.pack(fill="x")
+        self.update_banner.pack_forget()
+
         body = tk.Frame(self.root, background="#f4f6f8", padx=18)
         body.pack(fill="both", expand=True)
         self.log_view = ScrolledText(
@@ -531,7 +539,18 @@ class AgentStatusWindow:
         elif "已启动" in content or "业务代码已更新" in content:
             self.status_text.set("在线，等待任务")
 
+    def _open_update_download(self):
+        import webbrowser
+        target = "macos" if sys.platform == "darwin" else "windows"
+        webbrowser.open(f"{self.agent.config.server_url.rstrip('/')}/api/local-agents/download?platform={target}")
+
     def _drain_logs(self):
+        latest = self.agent.latest_agent_version
+        if latest:
+            self.update_text.set(f"Agent 有新版本：{AGENT_VERSION} → {latest}\n请在任务结束后更新，覆盖程序时保留 local-agent.json。")
+            self.update_banner.pack(fill="x", before=self.log_view.master)
+        else:
+            self.update_banner.pack_forget()
         for _index in range(200):
             try:
                 content = self.log_queue.get_nowait()
@@ -943,6 +962,7 @@ class LocalAgent:
         self._current_job_id = ""
         self._current_cancel_file = None
         self.queue_id = ""
+        self.latest_agent_version = ""
 
     def log(self, message):
         self.runtime_log.write(message)
@@ -1172,6 +1192,14 @@ class LocalAgent:
             self.config.save_agent_token(refreshed_token)
             self.session.headers["X-Local-Agent-Token"] = refreshed_token
         self._observe_queue(data)
+        latest = str(data.get("latest_agent_version") or "")
+        def version_parts(value):
+            parts = value.split(".")
+            return tuple(int(part) for part in parts) if len(parts) == 3 and all(part.isdigit() for part in parts) else (0, 0, 0)
+        available = latest if version_parts(latest) > version_parts(AGENT_VERSION) else ""
+        if available and available != self.latest_agent_version:
+            self.log(f"Agent 有新版本：{AGENT_VERSION} → {available}；请在任务结束后下载更新，保留 local-agent.json。")
+        self.latest_agent_version = available
         return data
 
     def _safe_extract(self, archive_path, destination):

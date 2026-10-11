@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "泽顺插件",
-  "version": "1.8.62",
+  "version": "1.8.77",
   "description": "采集 Mercado Libre、Yandex、1688 与智赢商品，自动化申诉，检查侵权风险，按日期同步智赢订单与采购物流号。",
   "permissions": [
     "alarms",
@@ -122,7 +122,7 @@
       "css": [
         "content.css"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_end"
     },
     {
       "matches": [
@@ -161,6 +161,17 @@
         "purchase-tracking-content.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.yangkeduo.com/*",
+        "https://*.pinduoduo.com/*"
+      ],
+      "js": [
+        "purchase-tracking-page.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [

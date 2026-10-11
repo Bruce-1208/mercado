@@ -18,7 +18,7 @@ function setup({mode = 'AI客服', uncertain = false, reply = 'Your request was 
     setTimeout:(fn,ms)=>setImmediate(()=>{clock+=ms;fn();}),clearTimeout:clearImmediate,setInterval:()=>1,clearInterval:()=>{},
     MercadoAppealPage:{action:()=>{}},chrome:{tabs:{
       get:async id=>tabs.get(id),update:async(id,args)=>Object.assign(tabs.get(id),args),
-      create:async args=>{const tab={id:++nextTab,windowId:args.windowId,incognito:false,status:'complete',url:args.url};tabs.set(tab.id,tab);return tab;}
+      create:async args=>{const tab={id:++nextTab,windowId:args.windowId ?? 4,incognito:false,status:'complete',url:args.url};tabs.set(tab.id,tab);return tab;}
     },scripting:{executeScript:async options=>{
       const [command,args] = options.args; calls.push({command,args,tab:options.target.tabId});
       let result;
@@ -41,7 +41,7 @@ function setup({mode = 'AI客服', uncertain = false, reply = 'Your request was 
   runner.configure({storageGet:async(area,keys)=>Object.fromEntries(keys.map(k=>[k,stored[area][k]])),
     storageSet:async(area,value)=>Object.assign(stored[area],structuredClone(value)),
     apiRequest:async(path,options)=>{const body=JSON.parse(options.body);requests.push({path,body});
-      if(path.endsWith('/plan')) return {...plan,round_number:body.round_number || 1};
+      if(path.endsWith('/plan-async')) return {state:'ready',plan:{...plan,round_number:body.round_number || 1}};
       if(path.endsWith('/context')) return {identity:plan.identity,shop:plan.shop,sites:plan.sites};
       return {record_id:1};}
   });
@@ -53,6 +53,73 @@ async function terminal(env) {
   throw new Error('runner did not reach terminal state');
 }
 const params = {expected_seller_id:'123',forms:['侵权'],sites:['MLM'],mode:'AI客服',loop_count:1};
+
+test('start without an open backend tab creates one and executes without preflight',async()=>{
+  const env=setup();env.tabs.clear();
+  await env.runner.startAppealRun({params});
+  assert.equal((await terminal(env)).status,'completed');
+  assert.equal(env.tabs.size,1);assert.equal(env.sendCount,1);
+  assert.equal(env.requests.some(r=>r.path.endsWith('/context')),false);
+});
+
+test('closed selected tab is replaced with a new backend tab',async()=>{
+  const env=setup();env.context.chrome.tabs.get=async id=>{
+    if(!env.tabs.has(id)) throw new Error('No tab');
+    return env.tabs.get(id);
+  };
+  await env.runner.startAppealRun({tabId:99,params});
+  assert.equal((await terminal(env)).status,'completed');
+  assert.equal(env.sendCount,1);
+});
+
+test('login redirect stops before script injection or planning and persists reminder',async()=>{
+  const env=setup();
+  env.context.chrome.tabs.update=async(id,args)=>Object.assign(env.tabs.get(id),args,{
+    url:'https://login.mercadolibre.com/login',status:'loading'
+  });
+  await env.runner.startAppealRun({tabId:1,params});
+  const status=await terminal(env);
+  assert.equal(status.running,false);assert.match(status.message,/未登录.*已停止/);
+  assert.equal(env.calls.length,0);assert.equal(env.requests.length,0);assert.equal(env.sendCount,0);
+  assert.match(env.stored.local.zeshunAppealRun.message,/请登录后台后重新启动/);
+});
+
+test('slow preparation returns a visible running state and polls without recreating a plan',async()=>{
+  const env=setup();let starts=0,polls=0;
+  env.runner.configure({apiRequest:async(path,options)=>{
+    if(path.endsWith('/plan-async')) { starts++; return {state:'preparing'}; }
+    if(path.endsWith('/plan-status')) {
+      polls++; return polls<50 ? {state:'preparing'} : {state:'ready',plan:env.plan};
+    }
+    return {};
+  },storageGet:async(area,keys)=>Object.fromEntries(keys.map(k=>[k,env.stored[area][k]])),
+  storageSet:async(area,value)=>Object.assign(env.stored[area],structuredClone(value))});
+  const started=await env.runner.startAppealRun({tabId:1,params});
+  assert.equal(started.running,true);assert.equal(started.status,'preparing');assert.equal(env.sendCount,0);
+  assert.equal((await terminal(env)).status,'completed');
+  assert.equal(starts,1);assert.equal(polls,50);assert.equal(env.sendCount,1);
+});
+
+test('lost preparation receipt recovers by request id and never resubmits start',async()=>{
+  const env=setup();let starts=0,requestId;
+  env.runner.configure({apiRequest:async(path,options)=>{
+    const body=JSON.parse(options.body);
+    if(path.endsWith('/plan-async')) { starts++;requestId=body.request_id;throw new Error('signal timed out'); }
+    if(path.endsWith('/plan-status')) {assert.equal(body.request_id,requestId);return {state:'ready',plan:env.plan};}
+    return {};
+  },storageGet:async(area,keys)=>Object.fromEntries(keys.map(k=>[k,env.stored[area][k]])),
+  storageSet:async(area,value)=>Object.assign(env.stored[area],structuredClone(value))});
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.equal((await terminal(env)).status,'completed');assert.equal(starts,1);assert.equal(env.sendCount,1);
+});
+
+test('stop during reputation preparation prevents planning and sending',async()=>{
+  const env=setup();env.tabs.get(1).status='loading';
+  await env.runner.startAppealRun({tabId:1,params});
+  await env.runner.stopAppealRun();
+  assert.equal((await terminal(env)).status,'stopped');
+  assert.equal(env.requests.length,0);assert.equal(env.sendCount,0);
+});
 
 test('sellers orders page reads shop context and starts through the global-selling help page',async()=>{
   const env=setup();
@@ -93,15 +160,30 @@ test('stale popup identity no longer blocks start',async()=>{
 
 test('reputation navigation timeout never creates a plan or sends',async()=>{
   const env=setup();env.tabs.get(1).status='loading';
-  await assert.rejects(env.runner.startAppealRun({tabId:1,params}),/声誉页面打开超时/);
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.match((await terminal(env)).error,/声誉页面打开超时/);
   assert.equal(env.requests.length,0);assert.equal(env.sendCount,0);
 });
 
 test('logged out reputation page stops before planning',async()=>{
   const env=setup();
   env.context.chrome.scripting.executeScript=async()=>[{frameId:0,result:{logged_out:true}}];
-  await assert.rejects(env.runner.startAppealRun({tabId:1,params}),/未登录/);
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.match((await terminal(env)).error,/未登录/);
   assert.equal(env.requests.length,0);assert.equal(env.sendCount,0);
+});
+
+test('logout after acknowledged send stops even on the last group and preserves sent result',async()=>{
+  const env=setup();const inject=env.context.chrome.scripting.executeScript;
+  env.context.chrome.scripting.executeScript=async options=>{
+    if(options.args[0]==='context' && env.sendCount) return [{frameId:0,result:{logged_out:true}}];
+    return inject(options);
+  };
+  await env.runner.startAppealRun({tabId:1,params});
+  const status=await terminal(env);
+  assert.equal(status.status,'failed');assert.match(status.message,/未登录.*已停止/);
+  assert.equal(env.sendCount,1);
+  assert.equal(env.requests.find(r=>r.path.endsWith('/result')).body.execution.acknowledged,true);
 });
 
 test('uncertain send is persisted once and never retried',async()=>{
@@ -162,8 +244,8 @@ test('human mode submits once, skips AI reply polling, preserves same-window con
 
 test('backend permanent loop_count 0 continues rounds until stopped',async()=>{
   const env=setup({loopCount:0});await env.runner.startAppealRun({tabId:1,params});
-  for(let i=0;i<100 && !env.requests.some(r=>r.path.endsWith('/plan')&&r.body.round_number===2);i++)await new Promise(setImmediate);
-  assert(env.requests.some(r=>r.path.endsWith('/plan')&&r.body.round_number===2));
+  for(let i=0;i<100 && !env.requests.some(r=>r.path.endsWith('/plan-async')&&r.body.round_number===2);i++)await new Promise(setImmediate);
+  assert(env.requests.some(r=>r.path.endsWith('/plan-async')&&r.body.round_number===2));
   await env.runner.stopAppealRun();assert.equal((await terminal(env)).status,'stopped');
 });
 

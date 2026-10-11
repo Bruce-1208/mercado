@@ -24,23 +24,23 @@ def workbook(rows, extra=None):
 HEADERS = ["平台订单号", "采购成本", "找货订单号", "物流号"]
 
 
-def test_excel_merges_purchase_numbers_and_repeated_order_total():
+def test_excel_sums_distinct_purchase_costs():
     records = read_excel(workbook([
         ["智赢订单导出"], HEADERS,
         ["20000000000000001", "￥18.505", "00123", "0000456"],
         ["20000000000000001", 18.51, "P2", "0000456"],
-    ], [HEADERS, ["20000000000000001", None, "P3", "T2"]]), "订单.xlsx")
+    ], [HEADERS, ["20000000000000001", 3, "P3", "T2"]]), "订单.xlsx")
     assert len(records) == 1
-    assert records[0]["changes"] == {"purchase_cost": "18.51", "purchase_order": "00123,P2,P3", "purchase_tracking": "0000456,T2"}
+    assert records[0]["changes"] == {"purchase_cost": "40.02", "purchase_order": "00123,P2,P3", "purchase_tracking": "0000456,T2"}
     assert records[0]["error"] == ""
     assert records[0]["locations"] == ["Sheet 第 3 行", "Sheet 第 4 行", "其他订单 第 2 行"]
 
 
-def test_excel_preserves_empty_fields_and_accepts_zero():
+def test_excel_replaces_empty_fields_and_accepts_zero():
     records = read_excel(workbook([HEADERS, [123, 0, None, None], [124, None, None, None]]), "订单.XLSX")
     assert records[0]["order_id"] == "123"
-    assert records[0]["changes"] == {"purchase_cost": "0.00"}
-    assert records[1]["changes"] == {}
+    assert records[0]["changes"] == {"purchase_order": "", "purchase_tracking": "", "purchase_cost": "0.00"}
+    assert records[1]["changes"] == records[0]["changes"]
 
 
 @pytest.mark.parametrize("value", [-1, "NaN", "Infinity", "***", "=SUM(A1:A2)", "12,34"])
@@ -51,7 +51,7 @@ def test_invalid_cost_rejects_entire_order(value):
 
 def test_excel_conflicting_cost_and_long_numeric_identifier_fail():
     records = read_excel(workbook([HEADERS,
-        ["123", 5, "P1", "T1"], ["123", 6, "P2", "T2"],
+        ["123", 5, "P1", "T1"], ["123", 6, "P1", "T2"],
         [20000000000000001, 3, "P3", "T3"],
         ["124", 3, "P4", 20000000000000002],
         [None, 3, "P5", "T5"],
@@ -72,8 +72,8 @@ def test_invalid_file_or_missing_headers():
 
 
 def test_currency_header_suffix_and_thousands_amount():
-    record = read_excel(workbook([["平台订单号", "采购成本（元）"], ["123", "CNY 1,234.50"]]), "订单.xlsx")[0]
-    assert record["changes"] == {"purchase_cost": "1234.50"}
+    record = read_excel(workbook([["平台订单号", "采购成本（元）", "采购单号"], ["123", "CNY 1,234.50", "P1"]]), "订单.xlsx")[0]
+    assert record["changes"] == {"purchase_order": "P1", "purchase_tracking": "", "purchase_cost": "1234.50"}
 
 
 def test_upload_file_and_row_limits(monkeypatch):
@@ -111,8 +111,8 @@ def test_background_sync_only_matches_child_ids_and_keeps_partial_results():
     join_import()
     state = manager.status(7)
     assert not state["running"]
-    assert (state["total"], state["completed"], state["updated"], state["skipped"], state["failed"]) == (5, 5, 1, 2, 2)
-    assert [call[0] for call in calls] == ["123", "126"]
+    assert (state["total"], state["completed"], state["updated"], state["skipped"], state["failed"]) == (5, 5, 2, 1, 2)
+    assert [call[0] for call in calls] == ["123", "124", "126"]
     assert manager.status(8)["phase"] == "idle"
 
 
@@ -194,3 +194,45 @@ def test_upload_requires_execution_permission(monkeypatch):
     response = client.post("/api/orders/zying-sync/upload", data={
         "file": (io.BytesIO(workbook([HEADERS, ["123", 2, "P1", "T1"]])), "订单.xlsx")})
     assert response.status_code == 403
+
+
+def test_snapshot_sums_numbered_purchases_and_replaces_prior_snapshot():
+    from bit.zying_order_excel import purchase_snapshot
+    local = {"purchase_order": "OLD", "purchase_tracking": "OLD", "purchase_cost": "999.00"}
+    buys = [{"no": "P1", "trace": "T1", "amount": "12.30", "cur": "CNY"},
+            {"no": "P2", "trace": "T2", "amount": "7.20", "cur": "RMB"},
+            {"no": "P1", "trace": "T3", "amount": "12.30"},
+            {"no": "", "trace": "BAD", "amount": "999"}]
+    for _ in range(2):
+        local.update(purchase_snapshot(buys))
+        assert local == {"purchase_order": "P1,P2", "purchase_tracking": "T1,T2,T3", "purchase_cost": "19.50"}
+    local.update(purchase_snapshot([{"no": "P2", "amount": "5"}]))
+    assert local == {"purchase_order": "P2", "purchase_tracking": "", "purchase_cost": "5.00"}
+    local.update(purchase_snapshot([]))
+    assert local == {"purchase_order": "", "purchase_tracking": "", "purchase_cost": "0.00"}
+
+
+@pytest.mark.parametrize("buy", [
+    {"no": "P1", "amount": "***"}, {"no": "P1"},
+    {"no": "P1", "amount": "2", "cur": "USD"},
+])
+def test_snapshot_rejects_unreadable_or_foreign_purchase_amount(buy):
+    from bit.zying_order_excel import purchase_snapshot
+    with pytest.raises(ValueError):
+        purchase_snapshot([buy])
+
+
+def test_excel_duplicate_purchase_is_counted_once_and_unpurchased_amount_is_ignored():
+    records = read_excel(workbook([HEADERS,
+        ["123", 5, "P1", "T1"], ["123", 5, "P1", "T2"],
+        ["123", 6, "P2", "T3"], ["123", "bad", None, "BAD"],
+        ["124", 999, None, "BAD"],
+    ]), "订单.xlsx")
+    assert not any(row["error"] for row in records)
+    assert records[0]["changes"] == {"purchase_order": "P1,P2", "purchase_tracking": "T1,T2,T3", "purchase_cost": "11.00"}
+    assert records[1]["changes"] == {"purchase_order": "", "purchase_tracking": "", "purchase_cost": "0.00"}
+
+
+def test_excel_requires_purchase_numbers_to_prove_cost_source():
+    record = read_excel(workbook([["平台订单号", "成本"], ["123", 999]]), "订单.xlsx")[0]
+    assert "请同时提供" in record["error"]

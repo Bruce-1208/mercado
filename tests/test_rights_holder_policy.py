@@ -80,12 +80,12 @@ def test_groups_reports_and_continues_after_sibling_failure(monkeypatch):
             raise RuntimeError("remote unavailable")
         return {"status": "retained" if row["id"] == 2 else "success", "item_id": row["item_id"]}
     monkeypatch.setattr(policy, "_delete_one_link", delete)
-    with pytest.raises(RuntimeError, match="部分处理失败"):
-        policy.apply_rights_holder_records({"id": 1, "organization_key": "company-a"}, [
-            {"source_type": "rights_holder", "title": " Product ", "item_id": "MLM1", "source_id": "case1"},
-            {"source_type": "rights_holder", "title": "Product", "item_id": "MLM2", "source_id": "case2"},
-        ])
-    products.assert_called_once_with("Product")
+    result = policy.process_rights_holder_product({"id": 1, "organization_key": "company-a"}, "Product", [
+        {"source_type": "rights_holder", "title": "Product", "item_id": "MLM1", "source_id": "case1"},
+        {"source_type": "rights_holder", "title": "Product", "item_id": "MLM2", "source_id": "case2"},
+    ])
+    assert result["status"] == "partial"
+    products.assert_called_once_with("Product", organization_key="company-a")
     find.assert_called_once_with("Product", "company-a")
     lease.release.assert_called_once()
     history = audit.history(operation_type="rights_holder")
@@ -106,7 +106,7 @@ def test_resolved_and_detection_records_do_not_trigger_deletion(monkeypatch):
     process.assert_not_called()
     policy.apply_rights_holder_records({"id": 1}, [
         {"source_type": "rights_holder", "item_id": "MLM1", "title": "P", "is_current": False, "resolution_status": "appeal_failed"}])
-    process.assert_called_once()
+    process.assert_not_called()  # Only the switch-controlled worker may execute automatic writes.
 
 
 class Connection:
@@ -120,6 +120,7 @@ class Connection:
         self.queries.append((sql, params))
         if self.fail: raise RuntimeError("database unavailable")
     executemany = execute
+    def fetchone(self): return {"lock_timeout": 50}
     def fetchall(self): return self.rows
     def commit(self): self.committed = True
     def rollback(self): self.rolled_back = True
@@ -133,11 +134,15 @@ def test_product_matches_are_exact_include_translations_and_update_every_match(m
     result = persistence.mark_products_infringing("Product", connection_factory=lambda: db)
     assert result["matched"] == 3 and result["changed"] == 2
     assert result["product_ids"] == [1, 2, 3]
-    query, params = db.queries[0]
+    query, params = next((sql, params) for sql, params in db.queries if "SELECT id FROM" in sql)
+    assert "FOR UPDATE" not in query
     assert "LIKE" not in query and "BINARY" in query
     assert "title_es" in query and "title_pt" in query and "JSON_VALID" in query
-    assert params == ("Product",) * 3
-    assert db.queries[1][1] == (1, 3)
+    assert params == ("wuhan-zeshun",) + ("Product",) * 3
+    assert "organization_key" in query
+    assert next(params for sql, params in db.queries if sql.startswith("UPDATE")) == (1, 3)
+    locked = next(sql for sql, _ in db.queries if "FOR UPDATE" in sql)
+    assert "FORCE INDEX (PRIMARY)" in locked and "id IN" in locked
     assert db.committed and db.closed
 
 
@@ -156,7 +161,7 @@ def test_repeated_report_does_not_rehydrate_or_delete_confirmed_deleted_link(mon
     lease = Mock()
     lease.acquire.return_value = True
     monkeypatch.setattr(policy, "InterProcessLock", lambda *args, **kwargs: lease)
-    monkeypatch.setattr(policy, "mark_products_infringing", lambda title: {"changed": 0})
+    monkeypatch.setattr(policy, "mark_products_infringing", lambda title, **kwargs: {"changed": 0})
     monkeypatch.setattr(policy, "same_title_links", lambda *args: [
         {"id": 1, "item_id": "MLM1", "status": "deleted", "is_current": 0},
         {"id": 2, "item_id": "MLM2", "status": "active", "is_current": 0},

@@ -1,27 +1,37 @@
 """Exact-title queries for rights-holder reports, separate from fuzzy search."""
 from erp import mercadolibre_collection_store as products
 from erp import mercadolibre_store_link_store as links
+from erp.short_transaction import run as short_transaction
 
 
-def mark_products_infringing(title, *, connection_factory=None):
+def lock_matching_products(cursor, organization_key, title, fields):
+    """Discover without locks; lock only primary keys and recheck current titles."""
+    snapshot = "IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{}')"
+    predicate = " OR ".join([
+        "BINARY TRIM(`title`) = BINARY %s",
+        *[f"BINARY TRIM(JSON_UNQUOTE(JSON_EXTRACT({snapshot}, '$.ai_original.{field}'))) = BINARY %s"
+          for field in ("title_es", "title_pt")],
+    ])
+    scope = (organization_key, title, title, title)
+    cursor.execute(f"SELECT id FROM `{products.PRODUCT_TABLE}` WHERE organization_key=%s AND ({predicate})", scope)
+    ids = sorted({row['id'] for row in cursor.fetchall() or []})
+    if not ids:
+        return []
+    cursor.execute(
+        f"SELECT {fields} FROM `{products.PRODUCT_TABLE}` FORCE INDEX (PRIMARY) "
+        f"WHERE id IN ({','.join(['%s'] * len(ids))}) AND organization_key=%s "
+        f"AND ({predicate}) ORDER BY id FOR UPDATE", tuple(ids) + scope)
+    return list(cursor.fetchall() or [])
+
+
+def mark_products_infringing(title, *, organization_key="wuhan-zeshun", connection_factory=None):
     title = str(title or "").strip()
     if not title:
         raise ValueError("权利人商品缺少标题")
     connection = (connection_factory or products._connect)()
-    try:
+    def update():
         with connection.cursor() as cursor:
-            products.ensure_collection_tables(cursor)
-            snapshot = "IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{}')"
-            predicate = " OR ".join([
-                "BINARY TRIM(`title`) = BINARY %s",
-                *[f"BINARY TRIM(JSON_UNQUOTE(JSON_EXTRACT({snapshot}, '$.ai_original.{field}'))) = BINARY %s"
-                  for field in ("title_es", "title_pt")],
-            ])
-            cursor.execute(
-                f"SELECT `id`, `title`, `review_status` FROM `{products.PRODUCT_TABLE}` "
-                f"WHERE ({predicate}) FOR UPDATE", (title, title, title),
-            )
-            rows = list(cursor.fetchall() or [])
+            rows = lock_matching_products(cursor, organization_key, title, "id,title,review_status")
             changed = [row for row in rows if row.get("review_status") != "infringing"]
             if changed:
                 ids = [row["id"] for row in changed]
@@ -29,9 +39,13 @@ def mark_products_infringing(title, *, connection_factory=None):
                     f"UPDATE `{products.PRODUCT_TABLE}` SET `review_status` = 'infringing' "
                     f"WHERE `id` IN ({', '.join(['%s'] * len(ids))})", tuple(ids),
                 )
-        connection.commit()
         return {"matched": len(rows), "changed": len(changed), "before": changed,
                 "product_ids": [row["id"] for row in rows], "review_status": "infringing"}
+    try:
+        with connection.cursor() as cursor:
+            products.ensure_collection_tables(cursor)
+        connection.commit()
+        return short_transaction(connection, update)
     except BaseException:
         connection.rollback()
         raise

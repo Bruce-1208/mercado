@@ -104,10 +104,11 @@ def test_high_after_sale_query_rejects_reversed_period():
 def test_high_after_sale_api_passes_filters(monkeypatch):
     calls = []
     monkeypatch.setattr(bit_interface, "get_current_workbench_user", _viewer)
+    monkeypatch.setattr(bit_interface, "_authorized_token_ids_for_user", lambda user=None: None)
     monkeypatch.setattr(
         bit_interface,
-        "db_get_high_after_sale_alerts",
-        lambda **kwargs: calls.append(kwargs) or {"summary": {}, "rows": []},
+        "_analyze_zeshun_orders",
+        lambda kind, kwargs: calls.append(kwargs) or {"summary": {}, "rows": []},
     )
     client = bit_interface.app.test_client()
 

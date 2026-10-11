@@ -31,8 +31,7 @@ def application(user, storage=None):
 
 
 @pytest.mark.parametrize("role,scope,organization", [
-    ("member", [7], "company-a"), ("warehouse", [7], "company-a"),
-    ("enterprise_admin", None, "company-a"), ("super_admin", None, "company-selected"),
+    ("super_admin", None, "company-selected"),
 ])
 def test_bill_scopes_are_resolved_server_side(role, scope, organization):
     app, calls = application({"id": 7, "role_key": role, "organization_key": "company-a"})
@@ -60,19 +59,19 @@ def test_bill_query_requires_an_identity():
 def test_invalid_filters_and_unavailable_storage_are_reported():
     def invalid(payload):
         raise ValueError("日期范围无效")
-    app, _ = application({"id": 7}, invalid)
+    app, _ = application({"id": 7, "role_key": "super_admin"}, invalid)
     response = app.test_client().get("/api/ai-billing")
     assert response.status_code == 400 and response.json["message"] == "日期范围无效"
 
     def failed(payload):
         raise RuntimeError("private database detail")
-    app, _ = application({"id": 7}, failed)
+    app, _ = application({"id": 7, "role_key": "super_admin"}, failed)
     response = app.test_client().get("/api/ai-billing")
     assert response.status_code == 503 and "private" not in response.json["message"]
 
 
 def test_page_renders_without_querying_or_writing_bills():
-    app, calls = application({"id": 7})
+    app, calls = application({"id": 7, "role_key": "super_admin"})
     response = app.test_client().get("/ai-billing")
     assert response.status_code == 200
     assert "AI 账单" in response.get_data(as_text=True)
@@ -169,3 +168,12 @@ def test_scheduled_ai_restores_creator_and_keeps_manual_initiator():
         manual = run(19)
         assert manual["actor_id"] == 7 and manual["organization_key"] == "company-a"
     assert lookups == [19]
+
+
+@pytest.mark.parametrize("role", ["member", "warehouse", "enterprise_admin", "admin", "", None])
+def test_non_super_admin_cannot_read_billing_even_with_legacy_admin_flags(role):
+    app, calls = application({"id": 7, "role_key": role, "is_admin": True,
+                              "is_platform_admin": True, "permissions": ["*"]})
+    for path in ("/ai-billing", "/api/ai-billing?role_key=super_admin"):
+        assert app.test_client().get(path).status_code == 403
+    assert calls == []

@@ -86,7 +86,7 @@
             continue;
           }
           const types = Array.isArray(value["@type"]) ? value["@type"] : [value["@type"]];
-          if (types.includes("Product")) products.push(value);
+          if (types.includes("Product") || types.includes("ProductGroup")) products.push(value);
           if (Array.isArray(value["@graph"])) queue.push(...value["@graph"]);
         }
       } catch (_) {
@@ -105,7 +105,7 @@
         item.combinations || item.variation_attributes || item.specifications;
       return Array.isArray(combinations) && combinations.length ||
         Array.isArray(item.attributes) && item.attributes.length ||
-        item.sku_id || item.skuId || item.seller_sku || item.sellerSku || item.skuCode ||
+        item.sku || item.sku_id || item.skuId || item.seller_sku || item.sellerSku || item.skuCode ||
         ((item.label || item.name || item.sku_name || item.skuName) &&
           (item.price !== undefined || item.available_quantity !== undefined || item.stock !== undefined));
     });
@@ -147,14 +147,7 @@
     return null;
   }
 
-  function extractProductVariations(doc, product) {
-    const candidates = [];
-    const add = value => {
-      const score = variationArrayScore(value);
-      if (score >= 0) candidates.push({value, score});
-    };
-    [product && product.variations, product && product.variants, product && product.hasVariant]
-      .forEach(add);
+  function productStates(doc) {
     const parsedScripts = [];
     if (doc && doc.querySelectorAll) {
       doc.querySelectorAll("script").forEach(script => {
@@ -164,12 +157,71 @@
         if (script.type === "application/ld+json" || script.type === "application/json") {
           try { parsed = JSON.parse(content); } catch (_) {}
         }
-        if (!parsed && /(?:__PRELOADED_STATE__|__INITIAL_STATE__|__NEXT_DATA__|__APOLLO_STATE__|variations|attribute_combinations)/i.test(content)) {
+        if (!parsed && /(?:__PRELOADED_STATE__|__INITIAL_STATE__|__NEXT_DATA__|__APOLLO_STATE__|preloadedState|_n\.ctx\.r|variations|attribute_combinations)/i.test(content)) {
           parsed = assignedJson(content);
         }
         if (parsed) parsedScripts.push(parsed);
       });
     }
+    return parsedScripts;
+  }
+
+  function extractProductAttributes(doc, product, specs, states) {
+    const rows = [];
+    const add = raw => {
+      if (!raw || typeof raw !== "object") return;
+      const name = clean(raw.name || raw.label || raw.key || raw.id);
+      const value = raw.value_name ?? raw.value ?? raw.text;
+      if (!name || (value == null && raw.value_id == null && !raw.values && !raw.value_struct)) return;
+      rows.push({...raw, name, ...(value != null ? {value_name: typeof value === "object" ? clean(value.text || value.name) : String(value)} : {})});
+    };
+    let visited = 0;
+    const walk = (value, depth = 0) => {
+      if (!value || typeof value !== "object" || depth > 22 || ++visited > 120000) return;
+      if (Array.isArray(value)) { value.slice(0, 1000).forEach(v => walk(v, depth + 1)); return; }
+      for (const [key, child] of Object.entries(value)) {
+        if (/recommend|carousel|related|tracking|analytics|variation|variant|sku|picker/i.test(key)) continue;
+        if (["attributes", "additionalProperty"].includes(key) && Array.isArray(child)) child.forEach(add);
+        else if (key === "specs" && Array.isArray(child)) child.filter(v => v && (v.value != null || v.value_name != null)).forEach(add);
+        if (child && typeof child === "object") walk(child, depth + 1);
+      }
+    };
+    [product, ...states].forEach(v => walk(v));
+    if (product.brand) add({id:"BRAND", name:"Marca", value: typeof product.brand === "object" ? product.brand.name : product.brand});
+    specs.forEach(add);
+    const merged = [];
+    for (const row of rows) {
+      const old = merged.find(v => (row.id && v.id === row.id) || v.name.toLowerCase() === row.name.toLowerCase());
+      if (!old) merged.push(row);
+      else if (!old.value_name && !old.value_id && !old.values && !old.value_struct) Object.assign(old, row);
+    }
+    return merged.slice(0, 500);
+  }
+
+  function hasUncollectedVariantOptions(states) {
+    let visited = 0;
+    const walk = (value, depth = 0) => {
+      if (!value || typeof value !== "object" || depth > 22 || ++visited > 120000) return false;
+      if (Array.isArray(value)) return value.slice(0, 1000).some(v => walk(v, depth + 1));
+      return Object.entries(value).some(([key, child]) => {
+        if (/recommend|carousel|related|tracking|analytics/i.test(key)) return false;
+        if (key === "pickers" && Array.isArray(child) && child.some(p => p &&
+          ["products", "options", "values"].some(k => Array.isArray(p[k]) && p[k].length > 1))) return true;
+        return walk(child, depth + 1);
+      });
+    };
+    return states.some(value => walk(value));
+  }
+
+  function extractProductVariations(doc, product, states) {
+    const candidates = [];
+    const add = value => {
+      const score = variationArrayScore(value);
+      if (score >= 0) candidates.push({value, score});
+    };
+    [product && product.variations, product && product.variants, product && product.hasVariant]
+      .forEach(add);
+    const parsedScripts = states;
     let visited = 0;
     const seen = new WeakSet();
     const walk = (value, depth = 0) => {
@@ -177,12 +229,12 @@
       seen.add(value);
       visited += 1;
       if (Array.isArray(value)) {
-        add(value);
         value.slice(0, 1000).forEach(child => walk(child, depth + 1));
         return;
       }
       for (const [key, child] of Object.entries(value)) {
-        const collectionKey = /^(?:variations?|variants?|skus?|sku_list|skuList|item_skus|itemSkus|sku_map|skuMap|sku_info_map|skuInfoMap)$/i.test(key);
+        if (/recommend|carousel|related|tracking|analytics/i.test(key)) continue;
+        const collectionKey = /^(?:variations?|variants?|hasVariant|skus?|sku_list|skuList|item_skus|itemSkus|sku_map|skuMap|sku_info_map|skuInfoMap)$/i.test(key);
         if (Array.isArray(child) && collectionKey) add(child);
         else if (child && typeof child === "object" && !Array.isArray(child) && collectionKey) {
           add(Object.values(child).slice(0, 500));
@@ -654,27 +706,31 @@
     }
   }
 
-  function pagePrice(doc, product) {
+  function pagePrice(doc, product, priceMode = "original") {
     const offer = Array.isArray(product && product.offers) ? product.offers[0] : (product && product.offers) || {};
-    const metaPrice = meta(doc, 'meta[itemprop="price"]') || meta(doc, 'meta[property="product:price:amount"]');
-    const previous = firstNode(doc, [
-      ".ui-pdp-price__original-value .andes-money-amount",
-      ".ui-pdp-price__second-line .andes-money-amount--previous",
-      ".andes-money-amount--previous",
-      "s.andes-money-amount"
-    ]);
-    const amount = previous || firstNode(doc, [
-      ".ui-pdp-price__second-line .andes-money-amount",
-      ".ui-pdp-price .andes-money-amount"
-    ]);
-    let visible = "";
-    if (amount) {
+    const readAmount = amount => {
+      if (!amount) return null;
       const fraction = amount.querySelector(".andes-money-amount__fraction");
       const cents = amount.querySelector(".andes-money-amount__cents");
-      visible = clean(fraction && fraction.textContent).replace(/\D/g, "");
-      if (visible && cents) visible += `.${clean(cents.textContent).replace(/\D/g, "")}`;
-    }
-    return finiteNumber(previous ? visible : (metaPrice || offer.price || visible));
+      let value = clean(fraction && fraction.textContent).replace(/\D/g, "");
+      if (value && cents) value += `.${clean(cents.textContent).replace(/\D/g, "")}`;
+      const number = finiteNumber(value);
+      return number > 0 ? number : null;
+    };
+    const original = readAmount(firstNode(doc, [
+      ".ui-pdp-price__original-value .andes-money-amount",
+      ".ui-pdp-price__second-line .andes-money-amount--previous",
+      ".ui-pdp-price .andes-money-amount--previous",
+      ".ui-pdp-price s.andes-money-amount"
+    ]));
+    // Exclude crossed-out and installment amounts from the current sale price.
+    const current = readAmount(firstNode(doc, [
+      ".ui-pdp-price__second-line .andes-money-amount:not(.andes-money-amount--previous):not(s):not(del)"
+    ])) || finiteNumber(meta(doc, 'meta[itemprop="price"]') || meta(doc, 'meta[property="product:price:amount"]')) ||
+      finiteNumber(offer.price) || readAmount(firstNode(doc, [
+        ".ui-pdp-price > .andes-money-amount:not(.andes-money-amount--previous):not(s):not(del)"
+      ]));
+    return priceMode === "discount" ? (current || original) : (original || current);
   }
 
   function nowSql() {
@@ -693,7 +749,7 @@
     }
   }
 
-  function extractProduct(doc, pageUrl, pluginOverride = null) {
+  function extractProduct(doc, pageUrl, pluginOverride = null, priceMode = "original") {
     if (!isSupportedUrl(pageUrl)) throw new Error("当前页面不是支持的 Mercado Libre 页面");
     const product = structuredProducts(doc)[0] || {};
     const itemId = extractItemId(doc, pageUrl, product);
@@ -707,7 +763,8 @@
     const description = clean((descriptionNode && descriptionNode.textContent) || product.description);
     const pictures = extractImages(doc, product);
     const specs = extractSpecs(doc);
-    const variations = extractProductVariations(doc, product);
+    const states = productStates(doc);
+    const variations = extractProductVariations(doc, product, states);
     // Mercado collection gets measurements from ZeshunMercadoData.apply.
     // Never discover another extension's DOM implicitly, including async callers.
     const plugin = pluginOverride || {metrics: {}, lines: [], text: "", sales: null,
@@ -719,7 +776,7 @@
     ].every(value => Number.isFinite(Number(value)) && Number(value) > 0);
     const weightBasis = actualWeightComplete ? "plugin_actual" : "";
     const profitability = parsePluginProfitability(plugin.text);
-    const price = pagePrice(doc, product);
+    const price = pagePrice(doc, product, priceMode);
     const offer = Array.isArray(product.offers) ? product.offers[0] : (product.offers || {});
     const currencyId = clean(
       meta(doc, 'meta[itemprop="priceCurrency"]') ||
@@ -743,8 +800,9 @@
       available_quantity: 1,
       permalink: finalUrl,
       pictures: pictures.map(url => ({source: url})),
-      attributes: specs.map(row => ({name: row.name, value_name: row.value})),
+      attributes: extractProductAttributes(doc, product, specs, states),
       variations,
+      ...(!variations.length && hasUncollectedVariantOptions(states) ? {variation_collection_status:"incomplete"} : {}),
       sale_terms: []
     };
     return {
@@ -986,6 +1044,7 @@
     parsePluginSales,
     parsePluginProductInfo,
     isSupportedUrl,
+    currencyForUrl,
     extractProduct,
     extractProductAsync,
     cardCandidates,

@@ -167,8 +167,8 @@ async function fetchStoreAnalysis(url, force) {
     const pendingKey = force ? `${url}&refresh=1` : url;
     if (storeAnalysisPending.has(pendingKey)) return storeAnalysisPending.get(pendingKey);
     const pending = (async () => {
-        const requestUrl = pendingKey;
-        const response = await fetch(requestUrl, {cache: "no-store"});
+        const requestUrl = force ? `${pendingKey}&request_id=${Date.now()}` : pendingKey;
+        const response = await fetchAnalysis(requestUrl, {cache: "no-store"});
         const payload = await response.json();
         if (!response.ok || payload.status !== "success") throw new Error(payload.message || "分析失败");
         const data = payload.data || {};
@@ -200,7 +200,7 @@ function renderStoreOrderTrend(trend) {
         ${day.orders == null ? "" : `<circle cx="${x(i)}" cy="${y(day.orders)}" r="4" fill="#2563eb"><title>${storeAnalysisEscape(day.date)}：${day.orders} 单，环比 ${rate(day)}</title></circle>
         <text x="${x(i)}" y="${y(day.orders) - 10}" text-anchor="middle">${day.orders}</text>`}`).join("");
     container.innerHTML = `<article class="store-analysis-card store-analysis-trend"><header><h3>单量变化率</h3><strong>范围内全部订单 ${Number(trend.total_orders).toLocaleString("zh-CN")} 单</strong></header>
-        <p>截至所选结束日期的最近七天 · 北京时间 · 全部订单状态（含取消及无效订单），按订单号去重。每日环比 =（当日单量 − 前日单量）÷ 前日单量。</p>
+        <p><strong>单量变化口径：包含取消及无效订单</strong> · 截至所选结束日期的最近七天 · 北京时间 · 全部订单状态（含取消及无效订单），按订单号去重。每日环比 =（当日单量 − 前日单量）÷ 前日单量。</p>
         <svg viewBox="0 0 692 218" role="img" aria-label="最近七天每日单量折线图"><text x="12" y="20">单量</text>
         <line x1="40" y1="170" x2="660" y2="170" stroke="#cbd5e1"/><polyline points="${points}" fill="none" stroke="#2563eb" stroke-width="3"/>${marks}</svg>
         <div class="store-analysis-trend-table"><table><thead><tr><th>日期</th>${days.map(day => `<th>${storeAnalysisEscape(day.date)}</th>`).join("")}</tr></thead>
@@ -281,7 +281,7 @@ async function loadStoreAnalysis(force = false) {
         const computedAt = data.computed_at ? new Date(data.computed_at).toLocaleString("zh-CN", {timeZone: "Asia/Shanghai", hour12: false}) : "时间不可用";
         document.getElementById("store-analysis-data-time").textContent = `上次数据时间（北京时间）：${computedAt}`;
         const warning = data.category_translation_warning;
-        message.textContent = `${warning ? `${warning} ` : ""}按北京时间统计订单创建日期，排除取消及无效订单；一单含多个分类时，每个分类各计一单，饼图按所选指标显示前十分类占比。GMV 统一折算为 USD。`;
+        message.textContent = `${warning ? `${warning} ` : ""}排名 / 类目口径：排除取消及无效订单。按北京时间统计订单创建日期；一单含多个分类时，每个分类各计一单，饼图按所选指标显示前十分类占比。GMV 统一折算为 USD。`;
     } catch (error) {
         if (requestId !== storeAnalysisRequest) return;
         message.textContent = `店铺分析失败：${error.message || error}`;

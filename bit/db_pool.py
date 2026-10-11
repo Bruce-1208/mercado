@@ -278,7 +278,7 @@ def _warn_if_near_capacity(pool: PooledDB) -> None:
     )
 
 
-def get_db_connection(connection_config: Mapping[str, Any] | None = None):
+def get_db_connection(connection_config: Mapping[str, Any] | None = None, *, priority=False):
     """Return a dedicated logical connection from the current process pool."""
 
     config = _normalized_config(connection_config)
@@ -301,6 +301,12 @@ def get_db_connection(connection_config: Mapping[str, Any] | None = None):
             pool = _pools.get(key)
             physical = sum(int(_pool_numbers(p)["physical"]) for p in _pools.values())
             limit = _connection_limit()
+            # Keep one slot within the existing process budget for short,
+            # live authorization reads. Slow business queries must not starve
+            # Agent heartbeats; no stale authorization cache is needed.
+            reserved = min(limit - 1, _env_int("MYSQL_POOL_AUTH_RESERVED", 1, 0, 10))
+            active = sum(int(_pool_numbers(p)["active"]) for p in _pools.values())
+            admitted = priority or active < limit - reserved
             can_reuse = pool is not None and bool(_pool_numbers(pool)["idle"])
             if physical >= limit and not can_reuse:
                 # A different timeout/cursor/database needs a separate pool,
@@ -312,7 +318,7 @@ def get_db_connection(connection_config: Mapping[str, Any] | None = None):
                             other._idle_cache.pop().close()
                             physical -= 1
                             break
-            if can_reuse or physical < limit:
+            if admitted and (can_reuse or physical < limit):
                 if pool is None:
                     pool = _new_pool(config, limit - physical)
                     _pools[key] = pool

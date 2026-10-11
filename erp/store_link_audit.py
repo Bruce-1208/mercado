@@ -226,6 +226,10 @@ def forwarding_headers():
     return {"X-Store-Link-Audit": base64.urlsafe_b64encode(json.dumps(payload, ensure_ascii=False).encode()).decode()}
 
 
+def current_actor():
+    return dict((_context.get() or {}).get("actor") or {})
+
+
 def trusted_forwarded_context(request):
     secret = os.environ.get("BIT_DB_API_TOKEN", "").strip()
     supplied = request.headers.get("X-Internal-Token", "")

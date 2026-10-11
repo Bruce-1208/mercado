@@ -248,3 +248,51 @@ def test_route_enforces_store_access_before_loading_or_enriching_products(store,
     monkeypatch.setattr(store, "list_items_page", forbid_loading)
     assert client.get(f"/api/promotions/{forbidden_id}/items?page=2").status_code == 403
     assert client.get("/api/promotions/99999/items").status_code == 404
+
+
+def test_product_and_number_filters_apply_before_paging_and_combine_with_enrollment(store, monkeypatch):
+    promotion_id = campaign(store)
+    rows = products(85)
+    for index, row in enumerate(rows):
+        row['title'] = '蓝色 Cup 100%' if index >= 40 else '红色杯子'
+    rows[70]['status'] = 'started'
+    store.replace_items(promotion_id, rows)
+    client = route_client(store, monkeypatch, lambda promotion, rows: rows)
+    data = client.get(f'/api/promotions/{promotion_id}/items', query_string={
+        'product': ' cup ', 'item_id': ' mlm00 ', 'enrolled': '0', 'page_size': 20, 'page': 2,
+    }).get_json()['data']
+    assert (data['total'], data['pages'], data['page']) == (44, 3, 2)
+    assert len(data['rows']) == 20
+    assert all('Cup' in row['title'] and row['item_id'] != 'MLM0070' for row in data['rows'])
+    target = store.list_items_page(promotion_id, product='cup', item_id='mlm00', target_item_id='MLM0084', page_size=20)
+    assert target['page'] == 3
+    assert any(row['item_id'] == 'MLM0084' for row in target['rows'])
+    assert store.list_items_page(promotion_id, product='100%')['total'] == 45
+    assert store.list_items_page(promotion_id, product='_')['total'] == 0
+    assert store.list_items_page(promotion_id, item_id="' OR 1=1 --")['total'] == 0
+    assert store.list_items_page(promotion_id)['total'] == 85
+
+
+def test_campaign_participation_requires_one_product_and_preserves_history(store, monkeypatch):
+    ids = {}
+    for name, status in [('candidate', 'candidate'), ('pending', 'pending_approval'),
+                         ('active', 'started'), ('ended', 'finished'), ('withdrawn', 'withdrawn'),
+                         ('failed', 'candidate'), ('history', 'candidate')]:
+        pk = campaign(store, promotion_id=name)
+        ids[name] = pk
+        store.replace_items(pk, [{'id': 'MLM1', 'status': status}])
+    ids['empty'] = campaign(store, promotion_id='empty')
+    finished_job(store, ids['failed'], [{'item_id': 'MLM1', 'status': 'failed'}])
+    finished_job(store, ids['history'], [{'item_id': 'MLM1', 'status': 'succeeded'}])
+    finished_job(store, ids['history'], [{'item_id': 'MLM1', 'status': 'failed'}])
+    store.replace_items(ids['history'], [])
+    expected = {ids[name] for name in ('pending', 'active', 'ended', 'withdrawn', 'history')}
+    assert {row['id'] for row in store.list_promotions(participated='1')} == expected
+    assert {row['id'] for row in store.list_promotions(participated='0')} == set(ids.values()) - expected
+    pending = next(row for row in store.list_promotions() if row['id'] == ids['pending'])
+    assert pending['active_item_count'] == 1
+    client = route_client(store, monkeypatch, lambda promotion, rows: rows)
+    payload = client.get('/api/promotions?participated=1&type=DEAL').get_json()['data']
+    assert {row['id'] for row in payload['rows']} == expected
+    assert payload['summary']['total'] == len(expected)
+    assert store.list_promotions(participated='1', scope_pairs=[]) == []

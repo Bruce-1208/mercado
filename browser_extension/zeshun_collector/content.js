@@ -2,7 +2,9 @@
   "use strict";
 
   const core = globalThis.ZeshunCollectorCore;
-  if (!core) return;
+  if (!core || !document.documentElement || globalThis.__zeshunCollectorInstalled) return;
+  // Recovery injection can race the manifest's document_end injection.
+  globalThis.__zeshunCollectorInstalled = true;
 
   let lastUrl = location.href;
   let mutationTimer = null;
@@ -226,15 +228,22 @@
     }
   }
 
-  function nativeProduct() {
+  function nativeProduct(priceMode) {
     // Native facts only; measurements come from the same cache as Zeshun cards.
-    const product = core.extractProduct(document, location.href);
+    const product = core.extractProduct(document, location.href, null, priceMode);
     const listing = dataCore.listingId(location.href);
     if (listing) {product.source_item_id = listing; product.source.id = listing;}
     return product;
   }
-  async function extractServerProduct() {
-    const product = nativeProduct();
+  async function extractServerProduct(priceMode) {
+    if (priceMode === undefined) {
+      const saved = chrome.storage?.local ? await chrome.storage.local.get("productBatchOptions") : {};
+      priceMode = saved.productBatchOptions?.["price-mode"];
+    }
+    const product = nativeProduct(priceMode === "discount" ? "discount" : "original");
+    // At document_end the native gallery may still be hydrating. Retry the
+    // page read instead of treating an absent image as a data-service failure.
+    if (!product.main_image_url) throw Error("等待商品主图加载");
     let record;
     try {
       record = await queryProduct(product.source_item_id, currentPrice(document) ?? product.price, true);
@@ -374,8 +383,8 @@
     scheduleAlignment();
   }
 
-  async function extractEligibleProduct() {
-    const product = await extractServerProduct();
+  async function extractEligibleProduct(priceMode) {
+    const product = await extractServerProduct(priceMode);
     if (!product.plugin_snapshot.fulfillment_eligible) {
       throw new Error(`仅采集自发货和半托管；数据源识别为${product.plugin_snapshot.fulfillment_label || "非允许发货方式"}`);
     }
@@ -446,17 +455,71 @@
     }
   }
 
+  const usdPriceSelector = [
+    ".poly-price__current .andes-money-amount",
+    ".ui-search-price__second-line .andes-money-amount",
+    ".ui-pdp-price__second-line .andes-money-amount"
+  ].join(",");
+  let usdRates = null;
+  let usdRatesPending = false;
+  let usdRetryAt = 0;
+
+  function refreshUsdPrices() {
+    const amounts = [...document.querySelectorAll(usdPriceSelector)].filter(amount =>
+      !amount.closest("s, del, .andes-money-amount--previous") &&
+      !amount.closest(".ui-pdp-installments, .poly-price__installments"));
+    if (!amounts.length) return;
+    const fresh = usdRates?.expires_at * 1000 > Date.now();
+    if (!fresh && !usdRatesPending && Date.now() >= usdRetryAt) {
+      usdRatesPending = true;
+      sendMessage({type: "GET_MERCADO_EXCHANGE_RATES"}).then(response => {
+        if (!response.ok || !response.rates_to_usd || !(response.expires_at * 1000 > Date.now())) {
+          throw Error(response.error || "汇率暂不可用");
+        }
+        usdRates = response;
+      }).catch(() => { usdRates = null; usdRetryAt = Date.now() + 60000; })
+        .finally(() => { usdRatesPending = false; refreshUsdPrices(); });
+    }
+    for (const amount of amounts) {
+      let badge = amount.nextElementSibling;
+      if (!badge?.classList.contains("zeshun-usd-price")) {
+        badge = document.createElement("span");
+        badge.className = "zeshun-usd-price";
+        amount.after(badge);
+      }
+      const symbol = amount.querySelector(".andes-money-amount__currency-symbol")?.textContent?.trim() || "";
+      const currency = /^(?:US\$|U\$S|USD)$/i.test(symbol) ? "USD" :
+        symbol === "R$" ? "BRL" : core.currencyForUrl(location.href);
+      const fraction = amount.querySelector(".andes-money-amount__fraction")?.textContent?.replace(/\D/g, "");
+      const cents = amount.querySelector(".andes-money-amount__cents")?.textContent?.replace(/\D/g, "") || "00";
+      const price = fraction ? Number(`${fraction}.${cents}`) : NaN;
+      const rate = currency === "USD" ? 1 : fresh ? Number(usdRates.rates_to_usd[currency]) : NaN;
+      const valid = Number.isFinite(price) && price >= 0 && Number.isFinite(rate) && rate > 0;
+      const label = valid ? `≈ US$ ${(price * rate).toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2})}` :
+        usdRatesPending ? "美元换算中…" : "美元汇率暂不可用";
+      const title = valid ? currency === "USD" ? "原价已为美元" :
+        `1 ${currency} ≈ ${rate.toPrecision(6)} USD · ${usdRates.source} · 读取时间：${new Date(usdRates.fetched_at * 1000).toLocaleString("zh-CN")} · 每30分钟更新，参考换算` :
+        "暂未取得有效的最新汇率，稍后自动重试";
+      // Avoid a MutationObserver loop when our own label changes.
+      if (badge.textContent !== label) badge.textContent = label;
+      if (badge.title !== title) badge.title = title;
+    }
+    scheduleAlignment();
+  }
+  setInterval(refreshUsdPrices, 60000);
+
   function refreshUi() {
     installFloatingButton();
     installCardButtons();
     installDataCards();
+    refreshUsdPrices();
   }
 
   const observer = new MutationObserver(() => {
     clearTimeout(mutationTimer);
     mutationTimer = setTimeout(refreshUi, 180);
   });
-  observer.observe(document.documentElement, {childList: true, subtree: true});
+  observer.observe(document.documentElement, {childList: true, characterData: true, subtree: true});
   setInterval(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
@@ -479,7 +542,7 @@
             sendResponse({ok: false, error: "等待商品详情加载"});
             return false;
           }
-          Promise.resolve(extractServerProduct()).then(
+          Promise.resolve(extractServerProduct(message.price_mode)).then(
             product => sendResponse({ok: true, product}),
             error => sendResponse({ok: false, error: error.message || String(error), retryable: error.retryable, status: error.status,
               authRequired: error.authRequired, errorSource: error.errorSource})
@@ -496,7 +559,7 @@
       return false;
     }
     if (message && message.type === "EXTRACT_PRODUCT") {
-      Promise.resolve().then(() => extractEligibleProduct()).then(
+      Promise.resolve().then(() => extractEligibleProduct(message.price_mode)).then(
         product => sendResponse({ok: true, product}),
         error => sendResponse({ok: false, error: error.message || String(error), retryable: error.retryable, status: error.status,
           authRequired: error.authRequired, errorSource: error.errorSource})

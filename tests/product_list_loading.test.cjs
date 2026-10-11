@@ -14,6 +14,8 @@ function setup(riskStatus = '') {
         document: {getElementById: id => id === 'mercado-infringement-filter' ? riskFilter
             : id === 'mercado-salesperson-filter' ? salespersonFilter : null},
         mercadoListLoadSequence: 0, mercadoListLoadController: null,
+        mercadoSalespeopleDirectoryKey: '', mercadoSalespeopleDirectoryAt: 0,
+        loadMercadoProductSalespeople() {},
         mercadoListBody: {}, mercadoListSummary: {}, mercadoSelectAll: {},
         mercadoListColumnCount: () => 21, mercadoListMode: 'products',
         mercadoListPageSize: 500, mercadoListPage: 1, mercadoProductSource: '',
@@ -140,7 +142,7 @@ function setupMenus() {
     Object.assign(context, {
         console: {error() {}, info() {}},
         mercadoListMode: 'collection',
-        mercadoListModule: {classList},
+        mercadoListModule: {classList, querySelectorAll: () => []},
         mercadoProductFilters: {classList, querySelectorAll: () => []},
         mercadoListBody: {querySelectorAll: selector => selector === '.market-category-select' ? [rowCategory] : []},
         mercadoManagementCategories: [], mercadoManagementCategoriesLoaded: false,

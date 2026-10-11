@@ -4,12 +4,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function setup(platform = 'mercadolibre') {
+function setup(platform = 'mercadolibre', role = 'super_admin') {
   const nodes = new Map();
   const requests = [];
   const timers = [];
   let responseData = {status: 'idle', running: false};
   const context = vm.createContext({
+    currentWorkbenchUser: {role_key: role},
     document: {
       addEventListener() {}, querySelectorAll() { return []; },
       getElementById(id) {
@@ -93,11 +94,11 @@ test('budget displays estimates and unresolved reserves separately without inven
   assert.doesNotMatch(nodes.get('ai-original-grid').innerHTML, /模型计费估算/);
 });
 
-test('blocked budget recovery keeps saved work and advises manual completion instead of blind retries', () => {
+test('uncapped interrupted generation keeps accounting and allows resubmission', () => {
   const {run} = setup();
   const message = run('aiOriginalRecoveryMessage({ai_original: {workflow_status: "needs_budget_review", generation_budget: {status: "blocked"}}})');
   assert.match(message, /已保留生成结果/);
-  assert.match(message, /金额上限已取消/);
+  assert.match(message, /历史费用记录/);
   assert.match(message, /重新提交继续/);
   assert.doesNotMatch(message, /重新生成所选产品/);
 });
@@ -134,3 +135,16 @@ test('overall cost remains separate from visible rows and shows recorded coverag
   assert.match(nodes.get('ai-original-total').textContent, /11\/38/);
   assert.match(nodes.get('ai-original-total').textContent, /金额不限额/);
 });
+
+
+for (const role of ['member', 'warehouse', 'enterprise_admin', 'admin', undefined]) {
+  test(`generation costs stay hidden for ${role}`, async () => {
+    const {run, requests, nodes} = setup('mercadolibre', role || '');
+    assert.equal(run('aiOriginalBudgetSummary({spent_yuan: 0.012, total_tokens: 200})'), '');
+    await run('loadAiOriginalCostSummary(0, null)');
+    assert.equal(requests.length, 0);
+    run('aiOriginalTotalCost = {spent_yuan: 0.012, recorded_products: 1, total_products: 1}; updateAiOriginalTotal()');
+    assert.doesNotMatch(nodes.get('ai-original-total').textContent, /费用|计费|Token|¥/);
+    assert.doesNotMatch(run('aiOriginalRecoveryMessage({ai_original: {workflow_status: "needs_budget_review"}})'), /费用/);
+  });
+}

@@ -226,7 +226,7 @@ body.zs-console .tab-button[data-icon="1688"]::before {
 }
 body.zs-console .tab-button[data-icon="AI"]::before { font-size: 10px; }
 body.zs-console .tab-heading > :first-child { min-width: 0; }
-body.zs-console .tab-heading > :last-child:not(:first-child) { margin-left: auto; }
+body.zs-console .tab-heading > :last-child:not(:first-child):not(p) { margin-left: auto; }
 body.zs-console .zs-filter-panel > :is(button, .order-filter-actions, .market-filter-actions, .inventory-toolbar-actions) {
     align-self: end;
 }

@@ -28,3 +28,16 @@ def test_product_data_uses_web_pool_independent_of_background_jobs():
     assert not is_worker_path('/api/browser-extension/mercado-data/query')
     assert not is_worker_path('/api/browser-extension/mercado-data/status')
     assert is_worker_path('/api/browser-extension/zying/start')
+
+
+def test_exchange_rate_route_auth_and_snapshot(workbench, monkeypatch, subscribed_workbench_account):
+    from bit.mercado_product_data import service
+    client = workbench.app.test_client()
+    remote = {"base_url":"https://zeshun.example.com", "environ_base":{"REMOTE_ADDR":"192.0.2.25"}}
+    url = '/api/browser-extension/mercado-data/exchange-rates'
+    assert client.get(url, **remote).status_code == 401
+    monkeypatch.setattr(service, 'exchange_rates', lambda:{"rates_to_usd":{"MXN":.05},"fetched_at":123})
+    response = client.get(url, headers=HEADERS, **remote)
+    assert response.status_code == 200
+    assert response.json['data']['rates_to_usd']['MXN'] == .05
+    assert response.headers['Cache-Control'] == 'no-store'

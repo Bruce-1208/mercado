@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>今日必办 · 泽顺运营中心</title>
-  <script src="{{ url_for('static', filename='action-center-preload.js') }}?v=20261009-preload-batch" data-account="{{ [current_user.organization_key or '', current_user.id or current_user.username or ''] | tojson | forceescape }}"></script>
+  <script src="{{ url_for('static', filename='action-center-preload.js') }}?v=20261011-multi-filters" data-account="{{ [current_user.organization_key or '', current_user.id or current_user.username or ''] | tojson | forceescape }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='employee-tasks.css') }}">
   <style>
     :root{font-family:Inter,"Microsoft YaHei",system-ui,sans-serif;color:#172033;background:#f3f6fb;font-synthesis:none}
@@ -18,50 +18,57 @@
     .toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.toolbar select,.task input,.task select,.task textarea{font:inherit;border:1px solid #d0d5dd;border-radius:8px;padding:9px;background:#fff;color:#344054}.toolbar select{font-size:13px}
     .error{border:1px solid #fecdca;background:#fef3f2;color:#912018;padding:12px;border-radius:10px;margin-bottom:14px;display:none}.issue{border:1px solid #fedf89;background:#fffaeb;border-radius:10px;padding:12px 14px;margin:8px 0;color:#7a2e0e}.issue strong{display:block;margin-bottom:3px}.issue a,.task a{color:#175cd3;font-weight:700;text-decoration:none}.issue a:hover,.task a:hover{text-decoration:underline}
     .task-list{display:grid;gap:12px}.task{padding:16px;border-left:4px solid #84adff}.task.overdue{border-left-color:#d92d20}.task.urgent{border-left-color:#f79009}.task.resolved{opacity:.78;border-left-color:#12b76a}
+    #claim-tasks .task-details{overflow-wrap:anywhere}
+    .today-filter-field{display:grid;gap:6px;min-width:0;width:240px;max-width:100%;font-size:13px}.today-filter-field>label{font-weight:600}
+    .today-multiselect{position:relative;min-width:0}.today-multiselect summary{border:1px solid #d0d5dd;border-radius:8px;padding:10px 28px 10px 12px;background:#fff;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;list-style:none;position:relative}.today-multiselect summary::-webkit-details-marker{display:none}.today-multiselect summary::after{content:'▾';position:absolute;right:10px}.today-multiselect summary:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+    .today-filter-menu{position:absolute;z-index:30;top:calc(100% + 6px);left:0;width:100%;padding:10px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;box-shadow:0 8px 24px #10182820}.today-filter-menu>input{width:100%;font:inherit;padding:8px;border:1px solid #d0d5dd;border-radius:7px;margin-bottom:8px}.today-filter-menu>.button{width:100%;margin-bottom:6px}.today-filter-options{max-height:260px;overflow:auto;display:grid;gap:3px}.today-filter-options>label{display:flex;align-items:center;gap:9px;padding:9px 5px;cursor:pointer;overflow-wrap:anywhere}.today-filter-options>label:hover{background:#eff6ff;border-radius:6px}.today-filter-options input{flex-shrink:0;width:16px;height:16px;accent-color:#2563eb}
+    @media(max-width:560px){.today-filter-field{width:100%}.today-filter-menu{position:static;margin-top:6px;box-shadow:none}}
     .task-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.task-title{font-size:16px;font-weight:800;line-height:1.45}.task-meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.tag{font-size:11px;background:#f2f4f7;color:#475467;padding:4px 8px;border-radius:999px}.tag.red{background:#fef3f2;color:#b42318}.tag.amber{background:#fffaeb;color:#b54708}.tag.green{background:#ecfdf3;color:#027a48}
     .task-details{font-size:13px;line-height:1.65;color:#475467;white-space:pre-wrap;margin:12px 0}.task-controls{display:grid;grid-template-columns:1fr 190px 150px minmax(180px,2fr) auto;gap:8px;align-items:center}.task-controls textarea{height:39px;resize:vertical;min-height:39px}.history{border-top:1px solid #eaecf0;margin-top:12px;padding-top:10px}.history summary{font-size:12px;color:#667085;cursor:pointer}.history ol{margin:8px 0 0;padding-left:18px;color:#667085;font-size:12px}.history li{margin:4px 0;line-height:1.5}.empty{padding:36px;text-align:center;color:#667085;border:1px dashed #d0d5dd;border-radius:11px;background:#fcfcfd}
     .event{border-top:1px solid #eaecf0;padding:11px 0;display:grid;grid-template-columns:120px 150px minmax(160px,1fr) 2fr auto;gap:12px;align-items:start;font-size:12px}.event:first-of-type{border-top:0}.event code{white-space:normal;word-break:break-all;color:#475467}.event-error{color:#b42318;white-space:pre-wrap;word-break:break-word}.small{font-size:11px;color:#667085}.toast{position:fixed;right:20px;bottom:20px;background:#101828;color:#fff;padding:12px 16px;border-radius:10px;display:none;box-shadow:0 8px 24px #10182833}
     @media(max-width:900px){.metrics{grid-template-columns:repeat(2,1fr)}.task-controls{grid-template-columns:1fr 1fr}.task-controls textarea{grid-column:1/-1}.event{grid-template-columns:1fr 1fr}.event-error{grid-column:1/-1}}
     @media(max-width:560px){.shell{padding:18px 12px 40px}.top{align-items:flex-start;flex-direction:column}h1{font-size:24px}.metrics{gap:8px}.metric{padding:13px}.metric strong{font-size:21px}.panel{padding:13px}.task-head{display:block}.task-controls{grid-template-columns:1fr}.task-controls textarea{grid-column:auto}.event{grid-template-columns:1fr}.event-error{grid-column:auto}}
   </style>
-<link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261007-date-filters">
+<link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261010-clean">
 <script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261007"></script>
     <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261007-date-filters"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261011-compact">
 </head>
 <body class="zs-standalone">
   <main class="shell">
     <header class="top">
-      <div><div class="eyebrow">MERCADO LIBRE · DAILY OPERATIONS</div><h1>今日必须处理</h1><div class="subtitle">集中查看需要跟进的订单、物流、消息、索赔和商品。</div></div>
+      <div><div class="eyebrow">MERCADO LIBRE · DAILY OPERATIONS</div><h1>今日必须处理</h1><div class="subtitle">集中查看需要跟进的订单、物流、未回复索赔和商品。</div></div>
       <div class="toolbar"><span class="user">{{ current_user.display_name or current_user.username }}</span>{% if current_user.role_key in ['super_admin', 'enterprise_admin'] %}<button class="button" type="button" onclick="location.href='/employee-tasks'">管理员工任务</button>{% endif %}<button class="button" type="button" onclick="location.href='/'">返回工作台</button><button class="button primary" type="button" id="refresh">刷新待办</button></div>
     </header>
     <div class="error" id="error"></div>
     <section class="panel toolbar" aria-label="店铺内容筛选">
-      <label>成员（业务员） <select id="salesperson"><option value="">全部业务员</option></select></label>
-      <label>店铺组 <select id="group_name"><option value="">全部店铺组</option></select></label>
-      <span class="hint">筛选采购、运营待办、权利人案件及通知记录。统计仅针对当前店铺页。自动记住本账号的成员和店铺组选择。</span>
+      <div class="today-filter-field"><label for="salesperson">成员（业务员）</label><select id="salesperson" multiple aria-label="成员（业务员）多选"><option value="">全部业务员</option></select></div>
+      <div class="today-filter-field"><label for="group_name">店铺组</label><select id="group_name" multiple aria-label="店铺组多选"><option value="">全部店铺组</option></select></div>
+      <span class="hint">业务员和店铺组均可多选，不选表示全部；同一项匹配任一选择，两项同时筛选。自动记住本账号的选择。</span>
     </section>
+    <section class="panel toolbar"><label><input id="include-inactive-stores" type="checkbox" onchange="storePage=1;document.getElementById('refresh').click()"> 包含已关闭店铺（历史待办）</label><span class="hint">下方计数仅统计当前页店铺；旧订单待办保留，可展开历史采购待办。</span></section>
     <section class="panel toolbar" id="store-pagination" aria-label="店铺分页"></section>
     {% include '_employee_tasks_panel.html' %}
-    <section class="panel">
-      <div class="heading"><h2>采购必办（<span id="purchase-count">—</span>）</h2><span class="hint">按订单创建时间计算：满 48 小时无物流号、满 168 小时未在途、满 30 天未交付告警；处理明细追加到订单备注。</span></div>
-      <div class="task-list" id="purchase-tasks"><div class="empty">正在读取采购必办…</div></div>
-      <div class="toolbar" id="purchase-tasks-pagination" aria-label="内容分页"></div>
-    </section>
-    <section class="panel">
-      <div class="heading"><h2>待回复售后消息（<span id="post-sale-count">—</span>）</h2><span class="hint">不限消息日期；已回复会话不显示，已读未回复仍显示。</span></div>
-      <div class="task-list" id="post-sale-tasks"><div class="empty">正在核对售后回复状态…</div></div>
-      <div class="toolbar" id="post-sale-tasks-pagination" aria-label="内容分页"></div>
-    </section>
-    <section class="metrics">
-      <div class="metric"><span>待处理</span><strong id="count-open">—</strong></div>
-      <div class="metric danger"><span>已逾期</span><strong id="count-overdue">—</strong></div>
-      <div class="metric warning"><span>高优先级 / 紧急</span><strong id="count-urgent">—</strong></div>
-    </section>
     <section class="panel">
       <div class="heading"><h2>待回复权利人（<span id="rights-count">—</span>）</h2><span class="hint">时间均为北京时间（UTC+8）；按回复截止时间排序，每小时自动刷新。</span></div>
       {% if can_execute %}<p class="hint">优先直接回复；需要浏览器处理时，在回复弹窗内选择电脑并打开对应店铺。</p>{% endif %}
       <div class="task-list" id="rights-cases"><div class="empty">正在读取待回复案件…</div></div>
       <div class="toolbar" id="rights-cases-pagination" aria-label="内容分页"></div>
+    </section>
+    <section class="panel">
+      <div class="heading"><h2>待回复订单索赔（<span id="claim-count">—</span>）</h2><span class="hint">仅显示未回复的订单索赔；原文附中文翻译。</span></div>
+      <div class="task-list" id="claim-tasks"><div class="empty">正在核对索赔回复状态…</div></div>
+      <div class="toolbar" id="claim-tasks-pagination" aria-label="内容分页"></div>
+    </section>
+    <section class="panel">
+      <div class="heading"><h2>采购必办（<span id="purchase-count">—</span>）</h2><span class="hint">按订单创建时间计算：满 48 小时无物流号、满 168 小时未在途、满 30 天未交付告警；处理明细追加到订单备注。</span></div>
+      <div class="task-list" id="purchase-tasks"><div class="empty">正在读取采购必办…</div></div>
+      <div class="toolbar" id="purchase-tasks-pagination" aria-label="内容分页"></div><details><summary id="purchase-history-count">历史采购待办</summary><div id="purchase-history-tasks"></div><div class="toolbar" id="purchase-history-tasks-pagination"></div></details>
+    </section>
+    <section class="metrics">
+      <div class="metric"><span>待处理</span><strong id="count-open">—</strong></div>
+      <div class="metric danger"><span>已逾期</span><strong id="count-overdue">—</strong></div>
+      <div class="metric warning"><span>高优先级 / 紧急</span><strong id="count-urgent">—</strong></div>
     </section>
     <section class="panel">
       <div class="heading"><h2>运营待办</h2><div class="toolbar"><select id="filter"><option value="active">未完成</option><option value="all">全部状态</option><option value="overdue">已逾期</option><option value="urgent">高优先级 / 紧急</option></select><span class="hint" id="generated-at"></span></div></div>
@@ -93,11 +100,13 @@
   <script src="{{ url_for('static', filename='rights-holder-reply.js') }}?v=20261003-agent-picker" defer></script>
   {% endif %}
   <script src="{{ url_for('static', filename='employee-tasks.js') }}" defer></script>
-  <script src="{{ url_for('static', filename='action-center-batch.js') }}?v=20261009"></script>
+  <script src="{{ url_for('static', filename='action-center-batch.js') }}?v=20261010-claims"></script>
+  <script src="{{ url_for('static', filename='action-center-filters.js') }}?v=20261011-multi-filters"></script>
   <script>
     const canExecute = {{ can_execute | tojson }};
     const autoRefreshMs = 60 * 60 * 1000;
-    let postSaleRows = [];
+    let claimRows = [];
+    let claimData = {};
     let actionData = {rows: [], events: []};
     let storePage = 1, eventPage = 1;
     const contentPages = {};
@@ -110,7 +119,7 @@
     }
     function changeContentPage(key, delta) {
       contentPages[key]=(contentPages[key]||1)+delta;
-      if(key==='post-sale-tasks') renderPostSaleRows(); else renderTasks();
+      if(key==='claim-tasks') renderClaimsRows(); else renderTasks();
     }
     function changeStorePage(delta) {
       if(typeof window !== 'undefined') window.TodayBatch?.clear();
@@ -123,7 +132,7 @@
       const p=actionData.store_pagination;
       if(p) {
         storePage=p.page;
-        $('store-pagination').innerHTML=`<span>全部授权范围共 ${p.total} 个店铺 · 每页 ${p.page_size} 个 · 第 ${p.page}/${p.pages} 页</span><button class="button" ${p.page===1?'disabled':''} onclick="changeStorePage(-1)">上一页店铺</button><button class="button" ${p.page===p.pages?'disabled':''} onclick="changeStorePage(1)">下一页店铺</button>`;
+        $('store-pagination').innerHTML=`<span>当前筛选共 ${p.total} 个店铺（下方计数仅含本页） · 每页 ${p.page_size} 个 · 第 ${p.page}/${p.pages} 页</span><button class="button" ${p.page===1?'disabled':''} onclick="changeStorePage(-1)">上一页店铺</button><button class="button" ${p.page===p.pages?'disabled':''} onclick="changeStorePage(1)">下一页店铺</button>`;
       }
       const e=actionData.event_pagination;
       if(e) $('events-pagination').innerHTML=`<span class="hint">共 ${e.total} 条 · 第 ${e.page}/${e.pages} 页</span><button class="button" ${e.page===1?'disabled':''} onclick="eventPage--;loadData(false,true)">上一页</button><button class="button" ${e.page>=e.pages?'disabled':''} onclick="eventPage++;loadData(false,true)">下一页</button>`;
@@ -144,7 +153,7 @@
     function localInput(value) { if (!value) return ''; const date=beijingDate(value); return Number.isNaN(date.getTime())?'':new Date(date.getTime()+8*3600000).toISOString().slice(0,16); }
     function dateLabel(value) { if(!value) return '未设置'; const date=beijingDate(value); return Number.isNaN(date.getTime())?String(value):date.toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})+'（北京时间）'; }
     function statusLabel(status) { return ({open:'待处理',in_progress:'处理中',resolved:'已完成',pending:'排队中',retry:'等待重试',dead:'死信',processing:'处理中',done:'已处理'})[status] || status || '—'; }
-    function taskTopicLabel(topic) { return ({purchase_order_missing_24h:'采购订单号缺失',purchase_tracking_missing_48h:'48 小时无物流号',order_not_in_transit_7d:'168 小时未在途',order_not_delivered_30d:'30 天未交付',procurement_tracking_stalled:'采购物流异常',shipment_deadline_check:'发货时限检查'})[topic] || topic || '业务提醒'; }
+    function taskTopicLabel(topic) { return ({product_diagnosis:'商品经营诊断',purchase_order_missing_24h:'采购订单号缺失',purchase_tracking_missing_48h:'48 小时无物流号',order_not_in_transit_7d:'168 小时未在途',order_not_delivered_30d:'30 天未交付',procurement_tracking_stalled:'采购物流异常',shipment_deadline_check:'发货时限检查'})[topic] || topic || '业务提醒'; }
     function taskCard(task) {
       const overdue=Boolean(task.overdue), resolved=task.status==='resolved', priority=task.priority||'normal';
       const logs=(task.logs||[]).map(log=>`<li><b>${escapeHtml(log.actor||'系统')}</b> · ${escapeHtml(dateLabel(log.created_at))} · ${escapeHtml(log.note||log.action||'')}</li>`).join('');
@@ -170,7 +179,12 @@
       if(filter==='active') rows=rows.filter(row=>row.status!=='resolved');
       if(filter==='overdue') rows=rows.filter(row=>row.overdue&&row.status!=='resolved');
       if(filter==='urgent') rows=rows.filter(row=>['urgent','high'].includes(row.priority)&&row.status!=='resolved');
-      const purchaseRows=rows.filter(row=>purchaseTopics.has(row.topic));
+      const allPurchaseRows=rows.filter(row=>purchaseTopics.has(row.topic));
+      const isHistorical=row=>{const timestamp=Date.parse(row.due_at);return Number.isFinite(timestamp)&&Date.now()-timestamp>90*86400000;};
+      const historyRows=allPurchaseRows.filter(isHistorical);
+      const purchaseRows=allPurchaseRows.filter(row=>!isHistorical(row));
+      $('purchase-history-count').textContent=`历史采购待办 ${historyRows.length} 条（截止超过 90 天，仍需核实）`;
+      $('purchase-history-tasks').innerHTML=pageRows('purchase-history-tasks',historyRows).map(taskCard).join('') || '<div class="empty">没有历史采购待办</div>';
       pageRows('purchase-tasks',purchaseRows);
       $('purchase-count').textContent=actionData.pending?'核对中':purchaseRows.length;
       $('purchase-tasks').innerHTML=purchaseRows.length?pageRows('purchase-tasks',purchaseRows).map(taskCard).join(''):`<div class="empty">${actionData.pending?'正在后台计算采购必办…':'当前筛选下没有采购必办。'}</div>`;
@@ -193,56 +207,90 @@
       if(!rows.length){$('events').innerHTML='<div class="empty">暂无通知记录</div>';return;}
       $('events').innerHTML=rows.map(event=>`<div class="event"><span>${escapeHtml(dateLabel(event.received_at))}</span><span><b>${escapeHtml(statusLabel(event.status))}</b><div class="small">${Number(event.attempts||0)} 次处理</div></span><span>${escapeHtml(event.topic||'')}<div class="small">${escapeHtml(event.store_name||'')}</div></span><code>${escapeHtml(event.resource||'')}</code><span>${event.last_error?`<div class="event-error">${escapeHtml(event.last_error)}</div>`:''}${canExecute&&['retry','dead'].includes(event.status)?`<button class="button" type="button" onclick="replayEvent(${Number(event.id)},this)">重放</button>`:''}</span></div>`).join('');
     }
-    function renderPostSaleRows() {
-      const container=$('post-sale-tasks');
-      container.innerHTML=pageRows('post-sale-tasks',postSaleRows).map(row=>`<article class="task urgent"><div class="task-title">售后消息待回复 · ${escapeHtml(row.store_name)}</div><div class="task-meta">Pack ${escapeHtml(row.pack_id)} · ${escapeHtml(dateLabel(row.latest_at))}</div><div class="task-details">${escapeHtml(row.text)}</div><a href="/?tab=customer-service">打开售后处理 →</a></article>`).join('');
-      if(typeof window !== 'undefined') window.TodayBatch?.render('post-sale-tasks', postSaleRows);
+    function filterValues(key) {
+      const select=$(key);
+      return [...new Set(select.selectedOptions ? Array.from(select.selectedOptions, option=>option.value).filter(Boolean) : [select.value].filter(Boolean))].sort();
     }
-    let postSaleGeneration = 0;
-    const postSaleRequests = new Map();
-    let postSaleTimer = null;
-    let postSaleKey = null;
-    async function loadPostSale(force = false) {
-      if (postSaleTimer !== null) clearTimeout(postSaleTimer);
-      const generation = ++postSaleGeneration;
+    function filterParams(initial={}) {
+      const params=new URLSearchParams(initial);
+      if ($("include-inactive-stores")?.checked) params.set("include_inactive", "1");
+      for(const filterKey of ['salesperson','group_name']) {
+        const values=filterValues(filterKey);
+        for(const value of values.length?values:['']) params.append(filterKey,value);
+      }
+      return params;
+    }
+    function setFilterOptions(key, options, selected=filterValues(key)) {
+      const select=$(key);
+      const values=Array.isArray(selected)?selected:[selected].filter(Boolean);
+      const all=key==='salesperson'?'全部业务员':'全部店铺组';
+      const available=[...new Set(options)];
+      const missing=values.filter(value=>!available.includes(value));
+      select.innerHTML=`<option value="">${all}</option>`+[...available,...missing].map(value=>
+        `<option value="${escapeHtml(value)}" ${values.includes(value)?'selected':''}>${escapeHtml(value)}${missing.includes(value)?'（当前范围不可用）':''}</option>`).join('');
+      if(!select.options) select.value=values[0]||'';
+      if(typeof window !== 'undefined') window.TodayMultiSelect?.render(key);
+    }
+    function claimCard(row) {
+      const translation=row.text_zh?`<div class="task-details"><strong>中文：</strong>${escapeHtml(row.text_zh)}</div>`:
+        `<div class="hint">${row.translation_pending?'正在翻译为中文…':'中文翻译暂不可用，可点击刷新待办重试。'}</div>`;
+      const source=row.sender_role==='mediator'?'平台调解员':'买家';
+      return `<article class="task urgent"><div class="task-head"><div><div class="task-title">订单索赔待回复 · ${source}</div><div class="task-meta"><span class="tag">${escapeHtml(row.store_name)}</span><span class="tag">索赔 ${escapeHtml(row.claim_id)}</span><span class="tag">订单 ${escapeHtml(row.order_id||'—')}</span><span class="tag">${escapeHtml(dateLabel(row.latest_at))}</span></div></div><a href="/?tab=customer-service">打开订单索赔 →</a></div>${translation}<div class="task-details"><strong>原文：</strong>${escapeHtml(row.text)}</div></article>`;
+    }
+    function renderClaimsRows() {
+      const container=$('claim-tasks');
+      const payload=claimData;
+      const errors=payload.errors||[];
+      const freshness=payload.checked_at?`最近核对：${escapeHtml(dateLabel(payload.checked_at))}。`:'';
+      container.innerHTML=`<div class="hint">${freshness}${payload.refreshing?'正在后台核对回复状态及中文翻译…':''}</div>`+
+        (errors.length?`<div class="event-error">部分索赔未能核实，列表可能不完整：${errors.slice(0,5).map(escapeHtml).join('；')}</div>`:'')+
+        (claimRows.length?pageRows('claim-tasks',claimRows).map(claimCard).join(''):
+          errors.length||payload.pending?'':'<div class="empty">当前店铺范围内没有未回复的订单索赔。</div>');
+      if(typeof window !== 'undefined') window.TodayBatch?.render('claim-tasks', claimRows);
+    }
+    let claimGeneration = 0;
+    const claimRequests = new Map();
+    let claimTimer = null;
+    let claimKey = null;
+    async function loadClaims(force = false) {
+      if (claimTimer !== null) clearTimeout(claimTimer);
+      const generation = ++claimGeneration;
 
       try {
-        const params=new URLSearchParams({salesperson:$('salesperson').value,group_name:$('group_name').value});
+        const params=filterParams();
         if(typeof storePage !== 'undefined' && storePage>1) params.set('store_page',storePage);
         const key=params.toString();
-        if (postSaleKey !== key) {
-          $('post-sale-count').textContent='—';
-          $('post-sale-tasks').innerHTML='<div class="empty">正在读取售后消息…</div>';
-          postSaleKey = key;
+        if (claimKey !== key) {
+          claimRows=[]; claimData={pending:true};
+          $('claim-count').textContent='—';
+          $('claim-tasks').innerHTML='<div class="empty">正在读取订单索赔…</div>';
+          claimKey = key;
         }
         params.set('background', '1');
         if (force) params.set('refresh', '1');
-        if(!postSaleRequests.has(key)) {
+        if(!claimRequests.has(key)) {
           const pending=(async () => {
-            const url=`/api/mercado/today/post-sale?${params}`;
+            const url=`/api/mercado/today/claims?${params}`;
             const preloaded=typeof window !== 'undefined' && await window.takeTodayPreload?.(url);
             const response=preloaded || await fetch(url,{credentials:'same-origin'});
             const payload=preloaded ? preloaded.payload : await response.json();
-            if(!response.ok||payload.status!=='success') throw new Error(payload.message||'售后消息读取失败');
+            if(!response.ok||payload.status!=='success') throw new Error(payload.message||'订单索赔读取失败');
             if (typeof window !== 'undefined') window.rememberTodaySnapshot?.(url, {ok:true, payload});
             return payload;
-          })().finally(() => postSaleRequests.delete(key));
-          postSaleRequests.set(key,pending);
+          })().finally(() => claimRequests.delete(key));
+          claimRequests.set(key,pending);
         }
-        const payload=await postSaleRequests.get(key);
-        if(generation!==postSaleGeneration) return;
+        const payload=await claimRequests.get(key);
+        if(generation!==claimGeneration) return;
         const rows=payload.data.rows||[], errors=payload.data.errors||[];
-        if (typeof postSaleRows !== 'undefined') postSaleRows=rows;
-        if(typeof pageRows==='function') pageRows('post-sale-tasks',rows);
-        $('post-sale-count').textContent=payload.data.pending?'核对中':rows.length+(errors.length?'（部分）':'');
+        claimRows=rows;
+        claimData=payload.data;
+        $('claim-count').textContent=payload.data.pending?'核对中':rows.length+(errors.length?'（部分）':'');
         const refreshing=Boolean(payload.data.refreshing);
-        const freshness=payload.data.checked_at?`最近核对：${escapeHtml(dateLabel(payload.data.checked_at))}。`:'';
-        $('post-sale-tasks').innerHTML=`<div class="hint">${freshness}${refreshing?'正在后台核对最新回复状态…':''}</div>`+(errors.length?`<div class="event-error">部分会话未能核实，列表可能不完整：${errors.slice(0,5).map(escapeHtml).join('；')}</div>`:'')+
-          (rows.length?(typeof pageRows==='function'?pageRows('post-sale-tasks',rows):rows).map(row=>`<article class="task urgent"><div class="task-head"><div><div class="task-title">售后消息待回复</div><div class="task-meta"><span class="tag">${escapeHtml(row.store_name)}</span><span class="tag">Pack ${escapeHtml(row.pack_id)}</span><span class="tag">${escapeHtml(dateLabel(row.latest_at))}</span></div></div><a href="/?tab=customer-service">打开售后处理 →</a></div><div class="task-details">${escapeHtml(row.text)}</div></article>`).join(''):errors.length||payload.data.pending?'':'<div class="empty">当前店铺范围内没有未回复的售后消息。</div>');
-        if(typeof window !== 'undefined') window.TodayBatch?.render('post-sale-tasks', rows);
-        if (refreshing && (typeof document === 'undefined' || !document.hidden)) postSaleTimer=setTimeout(() => loadPostSale(), 3000);
+        renderClaimsRows();
+        if (refreshing && (typeof document === 'undefined' || !document.hidden)) claimTimer=setTimeout(() => loadClaims(), 3000);
       } catch(error) {
-        if(generation===postSaleGeneration) $('post-sale-tasks').innerHTML=`<div class="event-error">读取失败：${escapeHtml(error.message||error)}</div>`;
+        if(generation===claimGeneration) $('claim-tasks').innerHTML=`<div class="event-error">读取失败：${escapeHtml(error.message||error)}</div>`;
       }
     }
     async function loadData(force = false, poll = false) {
@@ -250,11 +298,11 @@
       force = force === true;
       if(force && typeof window !== 'undefined') window.clearTodaySnapshots?.();
       const generation = ++loadGeneration;
-      if (!poll) loadPostSale(force);
+      if (!poll) loadClaims(force);
       $('error').style.display='none'; $('refresh').disabled=true;
       try {
         const includeClosed=$('filter').value==='all';
-        const params=new URLSearchParams({include_closed:includeClosed?'1':'0',salesperson:$('salesperson').value,group_name:$('group_name').value});
+        const params=filterParams({include_closed:includeClosed?'1':'0'});
         if(storePage>1) params.set('store_page',storePage);
         if(eventPage>1) params.set('event_page',eventPage);
         params.set('background', '1');
@@ -267,14 +315,7 @@
         if(!response.ok||payload.status!=='success') throw new Error(payload.message||`请求失败 (${response.status})`);
         if (typeof window !== 'undefined') window.rememberTodaySnapshot?.(url, {ok:true, payload});
         actionData=payload.data||{rows:[],events:[]};
-        for(const [key,label] of [['salesperson','全部业务员'],['group_name','全部店铺组']]) {
-          const select=$(key), value=select.value;
-          const options=actionData.filter_options?.[key]||[];
-          // Keep a remembered selection visible even if its store access was removed.
-          select.innerHTML=`<option value="">${label}</option>`+options.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('')+
-            (value && !options.includes(value)?`<option value="${escapeHtml(value)}">${escapeHtml(value)}（当前范围不可用）</option>`:'');
-          select.value=value;
-        }
+        for(const filterKey of ['salesperson','group_name']) setFilterOptions(filterKey,actionData.filter_options?.[filterKey]||[]);
         renderTasks(); renderEvents(); renderPagination();
         if(typeof window !== 'undefined') window.TodayBatch?.render('events', actionData.events||[]);
         if(actionData.errors?.length) { $('error').textContent='部分内容未能核实：'+actionData.errors.join('；'); $('error').style.display='block'; }
@@ -296,13 +337,10 @@
     }
     if(typeof window !== 'undefined' && window.todayFilterPreferences) {
       const saved=window.todayFilterPreferences.read();
-      for(const filterKey of ['salesperson','group_name']) if(saved[filterKey]) {
-        $(filterKey).innerHTML+=`<option value="${escapeHtml(saved[filterKey])}">${escapeHtml(saved[filterKey])}</option>`;
-        $(filterKey).value=saved[filterKey];
-      }
+      for(const filterKey of ['salesperson','group_name']) setFilterOptions(filterKey,[],saved[filterKey]||[]);
     }
     for(const key of ['salesperson','group_name']) $(key).addEventListener('change',()=>{
-      if(typeof window !== 'undefined') window.todayFilterPreferences?.save({salesperson:$('salesperson').value,group_name:$('group_name').value});
+      if(typeof window !== 'undefined') window.todayFilterPreferences?.save({salesperson:filterValues('salesperson'),group_name:filterValues('group_name')});
       if(typeof window !== 'undefined') window.TodayBatch?.clear();
       storePage=1;eventPage=1;for(const key in contentPages) delete contentPages[key];loadData();
     });
@@ -311,7 +349,7 @@
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden && Date.now()-lastLoadedAt>30000) loadData();
       else {
-        if (postSaleTimer !== null) clearTimeout(postSaleTimer);
+        if (claimTimer !== null) clearTimeout(claimTimer);
         if (taskRefreshTimer !== null) clearTimeout(taskRefreshTimer);
       }
     });

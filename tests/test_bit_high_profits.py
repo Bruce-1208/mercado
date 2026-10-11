@@ -105,10 +105,11 @@ def test_high_profit_query_rejects_reversed_period():
 def test_high_profit_api_passes_filters(monkeypatch):
     calls = []
     monkeypatch.setattr(bit_interface, "get_current_workbench_user", _viewer)
+    monkeypatch.setattr(bit_interface, "_authorized_token_ids_for_user", lambda user=None: None)
     monkeypatch.setattr(
         bit_interface,
-        "db_get_high_profit_products",
-        lambda **kwargs: calls.append(kwargs) or {"summary": {}, "rows": []},
+        "_analyze_zeshun_orders",
+        lambda kind, kwargs: calls.append(kwargs) or {"summary": {}, "rows": []},
     )
     client = bit_interface.app.test_client()
 

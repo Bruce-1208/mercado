@@ -418,7 +418,7 @@ def test_automatic_sync_refreshes_recent_72_hours(monkeypatch):
     assert options_seen == {"enrich_images": True}
 
 
-def test_daily_status_sync_uses_incremental_window(monkeypatch):
+def test_daily_status_sync_includes_recent_orders_in_full_window(monkeypatch):
     token = {
         "id": 3,
         "display_name": "泽顺巴西",
@@ -449,9 +449,9 @@ def test_daily_status_sync_uses_incremental_window(monkeypatch):
 
     monkeypatch.setattr(bit_order_sync, "_sync_old_store_statuses", fake_sync)
 
-    before = datetime.now(timezone.utc) - timedelta(hours=72, seconds=1)
+    before = datetime.now(timezone.utc) - timedelta(seconds=1)
     state = bit_order_sync.run_order_sync(mode=bit_order_sync.DAILY_STATUS_MODE)
-    after = datetime.now(timezone.utc) - timedelta(hours=72) + timedelta(seconds=1)
+    after = datetime.now(timezone.utc) + timedelta(seconds=1)
 
     assert state["status"] == "completed"
     assert state["mode"] == bit_order_sync.DAILY_STATUS_MODE
@@ -723,7 +723,7 @@ def test_automatic_print_persists_activation_floor_and_uses_system_operator(monk
     assert print_options["operator_name"] == "系统自动打印"
     assert print_options["include_first_run_backlog"] is False
     assert print_options["candidate_start_by_token"] == {7: expected_start}
-    assert print_options["require_prepaid"] is True
+    assert print_options["require_prepaid"] is False
     assert print_options["released"] is True
 
 
@@ -761,7 +761,7 @@ def test_automatic_background_sync_triggers_auto_print(monkeypatch):
     assert bit_order_sync._sync_state["auto_print"]["printed_order_count"] == 1
 
 
-def test_old_status_sync_uses_last_updated_checkpoint_and_parallel_details(monkeypatch):
+def test_daily_full_sync_uses_creation_checkpoint_and_refreshes_final_order_costs(monkeypatch):
     token = {
         "id": 8,
         "display_name": "泽顺墨西哥",
@@ -843,7 +843,10 @@ def test_old_status_sync_uses_last_updated_checkpoint_and_parallel_details(monke
     monkeypatch.setattr(
         bit_order_sync,
         "_sync_order_financials",
-        lambda *_args, **_kwargs: pytest.fail("状态刷新不应重复计算运费"),
+        lambda _client, _record, orders, _cache, *, force_refresh: (
+            {"failed": 0} if force_refresh and len(orders) == 2
+            else pytest.fail("每日全量必须强制重读运费，包括已完结订单")
+        ),
     )
 
     result = bit_order_sync._sync_old_store_statuses(
@@ -856,9 +859,11 @@ def test_old_status_sync_uses_last_updated_checkpoint_and_parallel_details(monke
 
     assert sorted(requested) == ["101", "102"]
     assert [order["id"] for order in batches[0][1]] == ["101", "102"]
-    assert filters_seen["last_updated.from"].startswith("2026-08-29T00:00:00")
-    assert filters_seen["last_updated.to"].startswith("2026-08-30T00:00:00")
-    assert filters_seen["date_created.to"].startswith("2026-08-24T08:00:00")
+    assert filters_seen == {
+        "sort": "date_asc",
+        "date_created.from": "2026-08-29T00:00:00.000Z",
+        "date_created.to": "2026-08-30T00:00:00.000Z",
+    }
     assert checkpoints[-1][0:2] == (8, 2)
     assert completed == [8]
     assert result == {
@@ -1911,3 +1916,105 @@ def test_daily_status_skips_queued_stores_when_recent_sync_becomes_due(monkeypat
     assert seen == [1]
     assert state["status"] == "paused"
     assert state["processed_stores"] == 0
+
+
+def test_daily_window_is_always_sixty_days_not_previous_success(monkeypatch):
+    monkeypatch.setattr(bit_mysql, 'get_mercado_order_sync_schedule_state',
+                        lambda *_: pytest.fail('Full scan must not use old incremental watermark'))
+    now = datetime(2026, 10, 10, 2, tzinfo=timezone.utc)
+    assert bit_order_sync._daily_status_bootstrap_from(now) == now - timedelta(days=60)
+
+
+@pytest.mark.parametrize('failure', ['order', 'shipment', 'cost'])
+def test_daily_failed_page_retries_without_advancing_and_resumes(monkeypatch, failure):
+    token = {'id': 8, 'meli_user_id': 'seller-8'}
+    checkpoint = dict(run_date='2026-10-10', completed_for_run=0,
+                      window_from=datetime(2026, 8, 11), window_to=datetime(2026, 10, 10),
+                      next_offset=0)
+    completed, offsets, forced = [], [], []
+    fail = [True]
+
+    class Client:
+        def search_order_ids_page(self, seller, *, offset, **kwargs):
+            offsets.append(offset)
+            assert 'last_updated.from' not in kwargs
+            return dict(order_ids=[str(offset + 1)], result_count=1,
+                        next_offset=offset + 1, total=2)
+
+        def get_order(self, order_id):
+            if order_id == '2' and fail[0] and failure == 'order':
+                raise RuntimeError('temporary detail failure')
+            return {'id': order_id, 'status': 'paid', 'shipping': {'id': order_id}}
+
+    def shipment(client, orders, token_id):
+        for order in orders:
+            order['_shipment_status'] = 'delivered'
+        return {'failed': int(fail[0] and failure == 'shipment' and orders[0]['id'] == '2')}
+
+    def costs(client, record, orders, cache, *, force_refresh):
+        forced.append(force_refresh)
+        return {'failed': int(fail[0] and failure == 'cost' and orders[0]['id'] == '2')}
+
+    monkeypatch.setattr(bit_order_sync, '_client_and_token', lambda r: (Client(), r))
+    monkeypatch.setattr(bit_mysql, 'begin_mercado_order_status_window', lambda *a: dict(checkpoint))
+    monkeypatch.setattr(bit_mysql, 'checkpoint_mercado_order_status_window',
+                        lambda token, offset, *a: checkpoint.update(next_offset=offset))
+    monkeypatch.setattr(bit_mysql, 'complete_mercado_order_status_window', lambda token: completed.append(token))
+    monkeypatch.setattr(bit_mysql, 'upsert_mercado_synced_orders',
+                        lambda r, orders: {'updated': len(orders)})
+    monkeypatch.setattr(bit_order_sync, '_enrich_order_shipment_statuses', shipment)
+    monkeypatch.setattr(bit_order_sync, '_sync_order_financials', costs)
+    args = dict(run_date='2026-10-10', default_from=datetime(2026, 8, 11),
+                window_to=datetime(2026, 10, 10))
+    result = bit_order_sync._sync_old_store_statuses(token, args['window_to'], **args)
+    assert result['status'] == 'error'
+    assert checkpoint['next_offset'] == 1
+    assert completed == []
+    fail[0] = False
+    result = bit_order_sync._sync_old_store_statuses(token, args['window_to'], **args)
+    assert result['status'] == 'success'
+    assert offsets == [0, 1, 1]
+    assert forced and all(forced)
+    assert completed == [8]
+
+
+@pytest.mark.parametrize('status,financial_status', [('partial', 'completed'), ('completed', 'partial')])
+def test_partial_daily_run_does_not_save_completion(monkeypatch, status, financial_status):
+    from unittest.mock import MagicMock
+    lock = MagicMock()
+    lock.acquire.return_value = True
+    monkeypatch.setattr(bit_order_sync, 'InterProcessLock', lambda *a, **k: lock)
+    def run(*a, **k):
+        bit_order_sync._state_update(status=status, daily_status_run_date='2026-10-10')
+    monkeypatch.setattr(bit_order_sync, 'run_order_sync', run)
+    monkeypatch.setattr(bit_order_sync, 'refresh_daily_order_financials',
+                        lambda **k: dict(status=financial_status, processed=1, updated_orders=1, failed=1))
+    saved = MagicMock()
+    monkeypatch.setattr(bit_mysql, 'set_mercado_order_sync_schedule_value', saved)
+    bit_order_sync._run_background('', '', None, bit_order_sync.DAILY_STATUS_MODE)
+    saved.assert_not_called()
+    assert bit_order_sync._sync_state['status'] == 'partial'
+    assert bit_order_sync._sync_state['daily_status_last_run_date'] == ''
+
+
+@pytest.mark.parametrize('page', [
+    dict(order_ids=[], result_count=0, next_offset=0, total=10),
+    dict(order_ids=[], result_count=1, next_offset=1, total=1),
+    dict(order_ids=['1'], result_count=1, next_offset=0, total=1),
+])
+def test_daily_incomplete_search_does_not_complete(monkeypatch, page):
+    from unittest.mock import MagicMock
+    client = MagicMock()
+    client.search_order_ids_page.return_value = page
+    monkeypatch.setattr(bit_order_sync, '_client_and_token', lambda r: (client, r))
+    monkeypatch.setattr(bit_mysql, 'begin_mercado_order_status_window', lambda *a: dict(
+        run_date='2026-10-10', window_from=datetime(2026, 8, 11),
+        window_to=datetime(2026, 10, 10), next_offset=0))
+    completed = MagicMock()
+    monkeypatch.setattr(bit_mysql, 'complete_mercado_order_status_window', completed)
+    with pytest.raises(RuntimeError, match='不完整分页'):
+        bit_order_sync._sync_old_store_statuses(
+            {'id': 8, 'meli_user_id': 'seller'}, datetime(2026, 10, 10),
+            run_date='2026-10-10', default_from=datetime(2026, 8, 11),
+            window_to=datetime(2026, 10, 10))
+    completed.assert_not_called()

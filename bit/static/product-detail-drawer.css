@@ -81,6 +81,8 @@ dialog.product-detail-drawer :is(.p1688-detail-section, .ai-original-source, .ai
 .product-drawer-body .detail-panel h2 { font-size: 18px; margin: 0 0 20px; }
 .product-drawer-body .detail-panel h2 span { color: #64748b; font-size: 13px; font-weight: 500; margin-left: 6px; }
 .product-drawer-body .detail-panel h3 { margin: 0 0 14px; font-size: 15px; }
+.product-drawer-body .detail-quality { border-color: #f3c76b; background: #fffbeb; color: #92400e; }
+.product-drawer-body .detail-quality ul { margin: 0; padding-left: 20px; line-height: 1.7; overflow-wrap: anywhere; }
 .product-drawer-body .detail-overview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 20px; align-items: start; }
 .product-drawer-body .detail-main-image { display: flex; align-items: center; justify-content: center; aspect-ratio: 1; border: 1px solid #edf1f5; border-radius: 8px; overflow: hidden; background: #fafbfd; }
 .product-drawer-body .detail-main-image img { width: 100%; height: 100%; object-fit: contain; }

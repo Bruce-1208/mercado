@@ -126,19 +126,33 @@ def test_video_details_page_shows_upload_history(console_browser):
     from jinja2 import Environment, FileSystemLoader
     page = console_browser.new_page()
     env = Environment(loader=FileSystemLoader(Path(__file__).resolve().parents[1] / 'bit' / 'templates'), autoescape=True)
-    html = env.get_template('ai_video_details.html').render(job_id='demo')
-    page.route('**/*', lambda route: route.fulfill(content_type='application/json', body=json.dumps({
-        'status': 'success', 'data': {'id': 'demo', 'published': [{
+    html = env.get_template('ai_video_details.html').render(job_id='demo', url_for=lambda endpoint, filename: '/static/' + filename)
+    row = {
             'item_id': 'MLM123', 'salesperson': '张三', 'store_name': '测试店铺',
             'token_id': 7, 'site_id': 'MLM', 'status': 'UNDER_REVIEW',
-            'permalink': 'https://example.com/item', 'published_at': '2026-09-29T10:00:00Z'
-        }]}
-    })) if '/api/' in route.request.url else route.fulfill(content_type='text/html', body=html))
+            'permalink': 'https://example.com/item', 'uploaded_at': '2026-09-29T10:00:00Z',
+            'status_label': '已提交待审核', 'group_name': '墨西哥组', 'title': '测试链接',
+    }
+    def serve(route):
+        from urllib.parse import urlsplit
+        path = urlsplit(route.request.url).path
+        if path.startswith('/static/'):
+            route.fulfill(path=str(Path(__file__).resolve().parents[1] / 'bit' / path.lstrip('/')))
+        elif 'upload-logs' in path:
+            route.fulfill(content_type='application/json', body=json.dumps({
+                'status': 'success', 'data': {'rows': [row], 'total': 1, 'page': 1, 'total_pages': 1},
+            }))
+        elif '/api/' in path:
+            route.fulfill(content_type='application/json', body=json.dumps({'status': 'success', 'data': {'id': 'demo'}}))
+        else:
+            route.fulfill(content_type='text/html', body=html)
+    page.route('**/*', serve)
     try:
         page.goto('http://console.test/ai-videos/demo/details')
-        page.wait_for_function("document.querySelector('#records').textContent.includes('张三')")
-        assert '已上传待审核' in page.locator('#records').inner_text()
-        assert '测试店铺' in page.locator('#records').inner_text()
-        assert page.locator('#records a').get_attribute('href') == 'https://example.com/item'
+        page.wait_for_function("document.querySelector('#video-upload-log-rows').textContent.includes('张三')")
+        assert '已提交待审核' in page.locator('#video-upload-log-rows').inner_text()
+        assert '测试店铺' in page.locator('#video-upload-log-rows').inner_text()
+        assert '墨西哥组' in page.locator('#video-upload-log-rows').inner_text()
+        assert page.locator('#video-upload-log-rows a').get_attribute('href') == 'https://example.com/item'
     finally:
         page.close()

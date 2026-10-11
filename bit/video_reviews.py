@@ -21,7 +21,11 @@ def schema(db):
 
 
 def record_upload(row, result, cbt_item_id, logistic_type, uploaded_at=None):
-    details = {key: row.get(key) for key in ('id', 'store_name', 'seller_id', 'permalink', 'title', 'token_id', 'site_id')}
+    details = {key: row.get(key) for key in (
+        'store_name', 'seller_id', 'permalink', 'title', 'token_id', 'site_id',
+        'group_name', 'thumbnail_url', 'salesperson', 'job_id', 'video_name', 'attempt_id',
+    ) if row.get(key) is not None}
+    details['link_id'] = row.get('link_id') or row.get('id')
     details.update(cbt_item_id=cbt_item_id, logistic_type=logistic_type)
     with database() as db:
         schema(db)
@@ -41,7 +45,13 @@ def records(clips=None):
             rows = db.execute('SELECT * FROM video_upload_history WHERE clip_uuid IN (' + ','.join('?' for _ in clips) + ') ORDER BY id DESC', clips).fetchall()
         else:
             rows = db.execute('SELECT * FROM video_upload_history ORDER BY id DESC').fetchall()
-    return [{**json.loads(r['details']), **dict(r), 'status_label': LABELS.get(r['status'], r['status'])} for r in rows]
+    result = []
+    for row in rows:
+        details = json.loads(row['details'])
+        result.append({**details, **dict(row),
+                       'link_id': details.get('link_id') or details.get('id'),
+                       'status_label': LABELS.get(row['status'], row['status'])})
+    return result
 
 
 def backfill_history():

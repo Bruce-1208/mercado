@@ -1,9 +1,72 @@
 """Read-only AI usage bills with server-resolved account and enterprise scopes."""
 import logging
 import inspect
+import json
 from functools import wraps
 
-from flask import Blueprint, g, has_request_context, jsonify, render_template, request
+from flask import Blueprint, abort, g, has_request_context, jsonify, render_template, request
+
+
+def can_view_ai_costs(user):
+    return bool(user and user.get("role_key") == "super_admin")
+
+
+_PRIVATE_COST_FIELDS = frozenset({
+    "generation_budget", "generation_cost_summary", "cost_cap_yuan",
+    "spent_yuan", "reserved_yuan", "remaining_yuan", "cap_yuan", "cost_yuan",
+    "cost_nano", "reserved_nano", "cap_nano", "budget_limit_enabled",
+    "estimated_cost_cny", "cost_known", "cost_status", "rate_metadata",
+    "pricing_source", "pricing_verified_on",
+})
+_COST_DIAGNOSTICS = (
+    "费用记录", "费用待确认", "调用费用", "剩余预算", "本次预算",
+    "历史费用", "待确认费用", "已记录费用", "预留费用", "模型计费估算",
+)
+
+
+def hide_ai_costs(value, *, diagnostic=False):
+    """Copy public payloads; never modify durable ledgers or worker state."""
+    if isinstance(value, dict):
+        return {key: hide_ai_costs(item, diagnostic=diagnostic or key in {
+            "message", "error", "errors", "logs", "log", "blocked_reason", "last_error",
+        }) for key, item in value.items() if key not in _PRIVATE_COST_FIELDS}
+    if isinstance(value, list):
+        return [hide_ai_costs(item, diagnostic=diagnostic) for item in value]
+    if isinstance(value, str):
+        # Product snapshots and persisted task results can be JSON strings.
+        if value.lstrip().startswith(("{", "[")):
+            try:
+                decoded = json.loads(value)
+            except (ValueError, TypeError):
+                pass
+            else:
+                cleaned = hide_ai_costs(decoded, diagnostic=diagnostic)
+                return json.dumps(cleaned, ensure_ascii=False) if cleaned != decoded else value
+        if diagnostic and any(marker in value for marker in _COST_DIAGNOSTICS):
+            return "生成任务需要重试或人工处理，已保留生成结果。"
+    return value
+
+
+def install_cost_visibility(app, current_user):
+    @app.after_request
+    def filter_public_ai_costs(response):
+        # DB transport is authenticated separately and must retain worker ledgers.
+        if (not request.path.startswith("/api/") or request.path.startswith("/api/db/")
+                or not response.is_json or response.is_streamed):
+            return response
+        payload = response.get_json(silent=True)
+        if payload is None:
+            return response
+        cleaned = hide_ai_costs(payload)
+        if cleaned == payload:
+            return response
+        user = (getattr(g, "internal_agent_user", None)
+                or getattr(g, "browser_extension_user", None)
+                or getattr(g, "local_executor_user", None) or current_user())
+        response.headers["Cache-Control"] = "no-store"
+        if not can_view_ai_costs(user):
+            response.set_data(app.json.dumps(cleaned))
+        return response
 
 
 def actor_context(user, selected_organization=""):
@@ -65,6 +128,8 @@ def create_blueprint(*, login_required, current_user, selected_organization, sto
     @blueprint.get("/ai-billing")
     @login_required
     def page():
+        if not can_view_ai_costs(current_user()):
+            abort(403)
         return render_template("ai_billing.html", user=current_user())
 
     @blueprint.get("/api/ai-billing")
@@ -73,6 +138,8 @@ def create_blueprint(*, login_required, current_user, selected_organization, sto
         user = current_user() or {}
         if not user.get("id"):
             return jsonify(status="error", message="请先登录"), 401
+        if not can_view_ai_costs(user):
+            return jsonify(status="error", message="仅超级管理员可查看 AI 账单"), 403
         scope = actor_context(user, selected_organization(user))
         # Names are display fields; ownership is always checked by immutable ID.
         manager = user.get("role_key") in {"super_admin", "enterprise_admin"}

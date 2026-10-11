@@ -3,6 +3,16 @@
 // Presentation and selection state stay separate from the listing editor.
 let aiOriginalWorkbenchRunning = false;
 
+function aiOriginalMissingCheckMessages(row, checks) {
+  const status = aiOriginalPlatformStatus(row);
+  // A newly collected row has never attempted category generation.
+  if (["pending", "processing", "waiting_off_peak"].includes(status)) return [];
+  return checks.filter(check => !check.ok).map(check => check.label === "SKU 采集原图缺失"
+    ? "SKU 未采集到原图，请更新插件后重新采集或补充图片链接"
+    : check.label === "SKU 白底主图" ? "SKU 原图已齐，执行 AI 任务补齐白底主图"
+    : `${check.label}生成失败，可重新生成`);
+}
+
 function aiOriginalListingReady(row) {
   return aiOriginalProductStatus(row) === "approved";
 }
@@ -125,7 +135,7 @@ function decorateAiOriginalWorkbench() {
       const draft = aiOriginalPlatformDraft(row);
       messages.push(...aiOriginalValidationMessages(draft, "errors"), ...aiOriginalValidationMessages(draft, "warnings"));
     }
-    const missingChecks = checks.filter(check => !check.ok).map(check => `${check.label}待修正`);
+    const missingChecks = aiOriginalMissingCheckMessages(row, checks);
     if (isMercado) {
       missingChecks.push(...aiOriginalManualListingChecks(row).filter(check => !check.ok).map(check => `${check.label}待补齐`));
       if (aiOriginalProductStatus(row) === "suspected") messages.push("疑似侵权，请核实商品和刊登资料");
@@ -230,12 +240,6 @@ document.addEventListener("DOMContentLoaded", () => {
     advanced.innerHTML = '<summary>AI 模型配置 <small>文案与白底图生成服务</small></summary>';
     settings.before(advanced);
     advanced.append(settings);
-    const actions = document.createElement("div");
-    actions.className = "ai-original-bulk-actions";
-    actions.innerHTML = '<span id="ai-original-selection-hint">选择商品后，批量生成刊登内容</span>';
-    const process = document.getElementById("ai-original-process");
-    if (process) actions.append(process);
-    advanced.after(actions);
   }
   const grid = document.getElementById("ai-original-grid");
   if (grid) {

@@ -2,10 +2,29 @@
 (() => {
     const nav = document.querySelector('.sidebar-scroll');
     if (!nav) return;
+    // Static releases also expose the guide while the server retains a cached template.
+    const guidePath = '/static/beginner-guide.html';
+    if (!nav.querySelector(`a[href="${guidePath}"]`)) {
+        const guide = document.createElement('a');
+        guide.className = 'tab-button';
+        guide.href = guidePath;
+        guide.target = '_blank';
+        guide.rel = 'noopener';
+        guide.dataset.icon = '?';
+        guide.innerHTML = '<span class="nav-label">新手教程</span>';
+        guide.title = '新窗口打开新手教程';
+        nav.append(guide);
+    }
+    const topbar = document.querySelector('.topbar-tools');
+    if (topbar && !topbar.querySelector(`a[href="${guidePath}"]`)) {
+        const guide = nav.querySelector(`a[href="${guidePath}"]`).cloneNode(true);
+        guide.className = 'topbar-plugin-download';
+        topbar.prepend(guide);
+    }
     const buttons = [...nav.querySelectorAll('.tab-button')];
     const groups = [
-        ['work', '日常工作', ['overview', '/mercado/today', '/employee-tasks', 'tasks']],
-        ['products', '选品与刊登', ['1688-products', 'mercado-collection', 'ai-original-products', 'mercado-products', 'ai-weight-price', 'ai-video', 'mercado-publish-records', 'size-charts', 'mercado-shipping-standards']],
+        ['work', '日常工作', ['overview', '/static/beginner-guide.html', '/mercado/today', 'automation-center', '/employee-tasks', 'tasks']],
+        ['products', '选品与刊登', ['1688-products', 'mercado-collection', 'ai-original-products', 'mercado-products', 'product-diagnosis', 'ai-weight-price', 'ai-video', 'mercado-publish-records', 'size-charts', 'mercado-shipping-standards']],
         ['orders', '订单与库存', ['orders', 'inventory', 'weight-dimensions-records']],
         ['shops', '店铺与营销', ['window-anomalies', 'store-tokens', 'store-links', 'promotions', 'clearance-alerts', 'yandex', 'store-operations']],
         ['service', '客服与申诉', ['pre-sale', 'customer-service', 'appeal', 'ai-appeals']],
@@ -44,7 +63,8 @@
         sections.push({section, items, summary});
     });
     // Keep future modules reachable even before they receive a category.
-    buttons.filter(b => !assigned.has(b)).forEach(b => nav.append(b));
+    const unassigned = buttons.filter(b => !assigned.has(b));
+    unassigned.forEach(b => nav.append(b));
     const empty = document.createElement('p');
     empty.className = 'nav-empty';
     empty.textContent = '没有匹配的功能';
@@ -73,6 +93,11 @@
             if (query) section.open = count > 0;
             else if (searching) section.open = beforeSearch[index];
             total += count;
+        });
+        unassigned.forEach(button => {
+            const match = !query || button.textContent.toLocaleLowerCase().includes(query);
+            button.classList.toggle('nav-search-hidden', !match);
+            if (!button.hidden && match) total++;
         });
         searching = Boolean(query);
         empty.hidden = total > 0;

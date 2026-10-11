@@ -330,3 +330,19 @@ def test_download_package_rejects_unknown_platform(tmp_path):
             enrollment_token="enrollment",
             target_platform="linux",
         )
+
+
+def test_noop_reaper_does_not_wait_for_sqlite_writer(tmp_path):
+    store = LocalAgentStore(tmp_path / 'hub.sqlite3')
+    store.heartbeat('agent-reaper-test', name='test', now=100)
+    store.enqueue_job('job-reaper-test', 'agent-reaper-test', 'daily_task', {}, now=100)
+    store.claim_job('agent-reaper-test', now=100)
+    writer = store._connect()
+    try:
+        writer.execute('BEGIN IMMEDIATE')
+        started = time.monotonic()
+        assert store.reap_expired_jobs(now=101) == 0
+        assert time.monotonic() - started < 1
+    finally:
+        writer.rollback()
+        writer.close()

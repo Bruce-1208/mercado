@@ -541,3 +541,45 @@ def test_daily_page_defaults_to_the_appropriate_executor(daily_agent_interface, 
         script = tmp_path / "workbench.js"
         script.write_text("\n".join(re.findall(r"<script[^>]*>(.*?)</script>", html, re.S)), encoding="utf-8")
         subprocess.run([node, "--check", str(script)], capture_output=True, check=True)
+
+
+@pytest.mark.parametrize('failure', ['pool', 'locked'])
+def test_agent_transient_storage_failure_returns_retryable_503(agent_interface, monkeypatch, failure):
+    import sqlite3
+    from bit.db_pool import PoolAcquireTimeout
+    _, store, client = agent_interface
+    store.heartbeat('agent-busy-test', name='test', owner_user_id=7)
+    token = bit_interface.create_local_agent_credential('agent-busy-test', 7)
+    def unavailable(*args, **kwargs):
+        if failure == 'pool':
+            raise PoolAcquireTimeout('busy')
+        raise sqlite3.OperationalError('database is locked')
+    monkeypatch.setattr(bit_interface, 'get_workbench_user', unavailable)
+    response = client.post('/api/local-agents/heartbeat',
+        headers={'X-Local-Agent-Token': token}, json={'agent_id': 'agent-busy-test'})
+    assert response.status_code == 503
+    assert response.headers['Retry-After'] == '2'
+    assert response.json['status'] == 'error'
+
+
+def test_agent_heartbeat_write_lock_returns_503(agent_interface, monkeypatch):
+    import sqlite3
+    _, store, client = agent_interface
+    store.heartbeat('agent-lock-test', name='test', owner_user_id=7)
+    token = bit_interface.create_local_agent_credential('agent-lock-test', 7)
+    def locked(*args, **kwargs):
+        raise sqlite3.OperationalError('database is locked')
+    monkeypatch.setattr(store, 'heartbeat', locked)
+    response = client.post('/api/local-agents/heartbeat',
+        headers={'X-Local-Agent-Token': token}, json={'agent_id': 'agent-lock-test'})
+    assert response.status_code == 503
+    assert response.headers['Retry-After'] == '2'
+
+
+def test_extension_version_endpoint_is_uncached(agent_interface, monkeypatch):
+    _, _, client = agent_interface
+    monkeypatch.setattr(bit_interface, 'browser_extension_version', lambda: '1.8.71')
+    response = client.get('/api/browser-extension/version')
+    assert response.status_code == 200
+    assert response.get_json()['data']['version'] == '1.8.71'
+    assert response.headers['Cache-Control'] == 'no-store'

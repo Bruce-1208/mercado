@@ -1475,24 +1475,26 @@ def test_family_payload_preserves_variant_attributes_stock_sku_and_images():
     assert json.dumps(source, sort_keys=True) == original
 
 
-def test_family_payload_keeps_ai_white_background_cover_ahead_of_supplier_variant_photos():
+def test_family_payload_uses_each_skus_own_white_cover():
     source = family_source()
-    white_cover = "/api/ai-original-products/images/1688-123456-ai-white.jpg"
+    white_cover = "/api/ai-original-products/images/1688-parent-ai-white.jpg"
     source["pictures"].insert(0, {"source": white_cover})
-    source["variations"][0]["picture_ids"] = ["123-MLM"]
-    source["variations"][1]["picture_ids"] = ["blue"]
-
+    for index, variation in enumerate(source["variations"]):
+        cover = f"/api/ai-original-products/images/1688-sku{index}-ai-white.jpg"
+        variation.update(image_url=cover, white_image_url=cover,
+                         image_generation_method="local_background_removal")
     payload = follow_sell_module.build_user_product_family_payload(
-        FamilyClient(), source, {}, net_proceeds=20
-    )
+        FamilyClient(), source, {}, net_proceeds=20)
+    assert [row["pictures"][0]["source"] for row in payload] == [
+        variation["white_image_url"] for variation in source["variations"]]
+    assert all(white_cover not in [picture["source"] for picture in row["pictures"]] for row in payload)
 
-    assert all(row["pictures"][0] == {"source": white_cover} for row in payload)
-    assert payload[0]["pictures"][1] == {
-        "source": "https://http2.mlstatic.com/D_123.jpg"
-    }
-    assert payload[1]["pictures"][1] == {
-        "source": "https://http2.mlstatic.com/D_456.jpg"
-    }
+
+def test_family_payload_blocks_parent_cover_fallback_for_missing_sku_white_image():
+    source = family_source()
+    source["pictures"].insert(0, {"source": "/api/ai-original-products/images/1688-parent-ai-white.jpg"})
+    with pytest.raises(MercadoLibreError, match="SKU 1.*白底主图"):
+        follow_sell_module.build_user_product_family_payload(FamilyClient(), source, {}, net_proceeds=20)
 
 
 def test_family_publish_records_all_products_and_ignores_single_up_reuse():

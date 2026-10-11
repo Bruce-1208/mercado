@@ -270,12 +270,13 @@
         } finally { state.starting = false; analysisControls(); }
     }
     function showPanel(name) {
-        state.panel = name === 'sources' ? 'sources' : 'records';
-        for (const panel of ['records', 'sources']) {
+        state.panel = ['sources', 'collection'].includes(name) ? name : 'records';
+        for (const panel of ['records', 'sources', 'collection']) {
             get(`knowledge-${panel}-panel`).hidden = state.panel !== panel;
             get(`knowledge-${panel}-tab`).setAttribute('aria-pressed', String(state.panel === panel));
         }
         window.WipoSync?.activate(visible());
+        window.KnowledgeProductCollection?.activate(state.active && state.panel === 'collection');
         stopPoll();
         if (visible()) loadStatus();
     }
@@ -283,6 +284,7 @@
         state.active = Boolean(active); stopPoll();
         if (state.active) { load(); analysisControls(); }
         window.WipoSync?.activate(visible());
+        window.KnowledgeProductCollection?.activate(state.active && state.panel === 'collection');
         if (visible()) loadStatus();
     }
     get('knowledge-filter-form').addEventListener('submit', event => { event.preventDefault(); search(); });

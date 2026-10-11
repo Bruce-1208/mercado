@@ -51,11 +51,20 @@ def test_net_save_updates_checklist_even_when_list_reload_fails(console_page):
     assert not errors
 
 
-def test_approval_with_missing_dimensions_updates_card_filter_and_counts(console_page):
+def generated_fields():
+    return {
+        "title_es": "Mascara", "title_pt": "Mascara", "description_es": "Descripcion",
+        "description_pt": "Descricao", "main_image_url": "/test-ai-white.jpg",
+        "ai_original": {"status": "completed", "image_generation_method": "local_background_removal",
+                        "attributes": [{"id": "MATERIAL", "value_name": "Plastic"}]},
+    }
+
+
+def test_approval_with_missing_dimensions_updates_card_and_filter(console_page):
     page = console_page
-    row = {"id": 1, "ai_status": "completed", "review_status": "suspected",
+    row = {**generated_fields(), "id": 1, "ai_status": "completed", "review_status": "suspected",
            "weight_g": 100, "weight_basis": "ai_original_manual", "net_proceeds_usd": 5,
-           "category_id": "CBT123", "ai_original": {"status": "completed"},
+           "category_id": "CBT123",
            "original_1688": {"title": "测试审核状态"}}
     def save(route):
         changes = route.request.post_data_json
@@ -75,10 +84,10 @@ def test_approval_with_missing_dimensions_updates_card_filter_and_counts(console
     page.locator("#ai-original-net-1").fill("14.75")
     page.get_by_role("button", name="保存参数并审核通过", exact=True).click()
     page.wait_for_function("aiOriginalRows[0].review_status === 'approved'")
-    page.wait_for_function("document.querySelector('.ai-original-badge')?.innerText === '通过'")
-    assert page.locator(".ai-original-badge").inner_text() == "通过"
-    assert page.locator("#ai-original-count-approved").inner_text() == "1"
-    page.locator("#ai-original-status-filter").select_option("approved")
+    page.wait_for_function("document.querySelector('.ai-original-badge')?.innerText === '待补充'")
+    assert page.locator(".ai-original-badge").inner_text() == "待补充"
+    assert page.evaluate("aiOriginalRows.filter(row => aiOriginalProductStatus(row) === 'incomplete').length") == 1
+    page.locator("#ai-original-status-filter").select_option("incomplete")
     assert page.locator(".ai-original-card").count() == 1
     page.locator(".ai-original-card").scroll_into_view_if_needed()
     assert page.locator("#ai-original-net-1").input_value() == "14.75"
@@ -87,9 +96,9 @@ def test_approval_with_missing_dimensions_updates_card_filter_and_counts(console
 
 def test_partial_bulk_review_retains_failed_inputs_and_continues_approvals(console_page):
     page = console_page
-    rows = [{"id": pid, "ai_status": "completed", "review_status": "unreviewed",
+    rows = [{**generated_fields(), "id": pid, "ai_status": "completed", "review_status": "unreviewed",
+             "package_length_cm": 10, "package_width_cm": 10, "package_height_cm": 10,
              "weight_g": 100, "net_proceeds_usd": 5, "category_id": "CBT123",
-             "ai_original": {"status": "completed"},
              "original_1688": {"title": f"批量审核 {pid}"}} for pid in (1, 2, 3)]
     def save(route):
         pid = int(route.request.url.rsplit("/", 1)[-1])
@@ -115,7 +124,7 @@ def test_partial_bulk_review_retains_failed_inputs_and_continues_approvals(conso
     assert page.locator("#ai-original-task-status").inner_text().startswith("已更新 2 件产品的审核状态，失败 1 件")
     assert page.evaluate("[...aiOriginalSelected]") == [2]
     assert page.locator("#ai-original-net-2").input_value() == "19"
-    assert page.locator("#ai-original-count-approved").inner_text() == "2"
+    assert page.evaluate("aiOriginalRows.filter(row => aiOriginalProductStatus(row) === 'approved').length") == 2
 
 
 @pytest.mark.parametrize("new_net", ["15", ""])

@@ -10,6 +10,18 @@ GROUPS = {
     '取消': ['取消-发货前', '取消-发货后'],
 }
 STATUSES = frozenset(status for values in GROUPS.values() for status in values)
+
+
+def selected_statuses(value):
+    """Validate a workflow filter and expand its optional group."""
+    value = str(value or '').strip()
+    if not value:
+        return []
+    if value.startswith('@') and value[1:] in GROUPS:
+        return list(GROUPS[value[1:]])
+    if value in STATUSES:
+        return [value]
+    raise ValueError('请选择有效的泽顺订单状态')
 LEGACY = {'找货': '', '待付款': '', '缺货': '找货-待确定',
           '审核': '审核-待审核', '配货': '转运-待收货', '转运': '转运-待收货',
           '待打印': '转运-已出库', '已发': '已发-在途中', '问题': '问题-验货异常',

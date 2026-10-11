@@ -1316,3 +1316,74 @@ def test_auto_sync_prioritizes_never_completed_before_explicit_requests(monkeypa
     ordering = queries[0].split("ORDER BY", 1)[1]
     assert ordering.index("`last_completed_at` IS NULL") < ordering.index("`requested_at` IS NOT NULL")
     assert ordering.index("`last_completed_at` IS NULL") < ordering.index("LIMIT")
+
+
+@pytest.mark.parametrize("salesperson,scope,expected_pairs", [
+    ("张三", None, [(7, "MLM"), (9, "MLB")]),
+    ("张三", [7], [(7, "MLM")]),
+    ("李四", [7], [(7, "MLB")]),
+    ("张三", [], []),
+    ("不存在", None, []),
+])
+def test_store_link_salesperson_filters_count_page_and_recent_sales(monkeypatch, salesperson, scope, expected_pairs):
+    calls = []
+
+    class Cursor:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def execute(self, sql, params=None): calls.append((sql, params))
+        def fetchone(self): return {"table_exists": 1, "total": 2}
+        def fetchall(self): return []
+
+    class Connection:
+        def cursor(self): return Cursor()
+        def close(self): pass
+
+    pairs = {(7, "MLM"): "张三", (7, "MLB"): "李四", (9, "MLB"): "张三"}
+    if scope is not None:
+        pairs = {pair: name for pair, name in pairs.items() if pair[0] in scope}
+    monkeypatch.setattr(store, "ensure_store_link_table", lambda cursor: None)
+    monkeypatch.setattr(store, "_store_link_metadata", lambda *args, **kwargs: {
+        "group_map": {}, "salesperson_map": pairs,
+        "salespeople": sorted(set(pairs.values())),
+        "groups": [], "stores": [], "store_groups": {}, "sites": [],
+        "mercado_categories": [], "summary": {"current_count": 999},
+    })
+    result = store.list_store_links(salesperson=salesperson, token_ids=scope,
+                                   sort_by="sales_14d", page_size=25, connection_factory=Connection)
+    count_sql, count_params = next((sql, params) for sql, params in calls if "COUNT(*) AS `total`" in sql)
+    page_sql, page_params = next((sql, params) for sql, params in calls if "LIMIT %s OFFSET %s" in sql)
+    expected_params = tuple(value for pair in expected_pairs for value in pair)
+    if expected_pairs:
+        assert count_params[-len(expected_params):] == expected_params
+        assert "links.`token_id` = %s AND links.`site_id` = %s" in count_sql
+        assert page_params[-len(expected_params)-2:-2] == expected_params
+        tokens = sorted({pair[0] for pair in expected_pairs})
+        assert page_params[:len(tokens)] == tuple(tokens)
+    else:
+        assert "1 = 0" in count_sql
+        assert "AND 1 = 0" in page_sql
+    assert result["total"] == 2
+    assert result["salespeople"] == sorted(set(pairs.values()))
+
+
+def test_store_link_salesperson_passes_through_public_route_and_database_modes(monkeypatch):
+    from bit import bit_db_api
+    client = _client()
+    with patch.object(workbench, "_authorized_token_ids_for_user", return_value={7}), patch.object(
+        bit_db_api, "list_mercado_store_links", return_value={"rows": [], "salespeople": ["张三"]}
+    ) as listing:
+        response = client.get("/api/store-links", query_string={"salesperson": " 张三 "})
+    assert response.status_code == 200
+    assert listing.call_args.kwargs["salesperson"] == "张三"
+    assert listing.call_args.kwargs["token_ids"] == [7]
+    assert response.get_json()["data"]["salespeople"] == ["张三"]
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "mysql")
+    with patch.object(bit_db_api, "_store_link_store_call", return_value={}) as local:
+        bit_db_api.list_mercado_store_links(salesperson=" 张三 ", token_ids=[7])
+    assert local.call_args.kwargs["salesperson"] == "张三"
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+    with patch.object(bit_db_api, "_request", return_value={}) as remote:
+        bit_db_api.list_mercado_store_links(salesperson=" 张三 ", token_ids=[7])
+    assert remote.call_args.kwargs["params"]["salesperson"] == "张三"
+    assert remote.call_args.kwargs["params"]["token_ids"] == [7]

@@ -466,7 +466,7 @@ def test_browser_routes_return_metadata_and_accept_management_actions(monkeypatc
     monkeypatch.setattr(
         bit_interface.bit_db_api,
         "start_store_link_sync",
-        lambda token_ids: calls.append(("sync-links", token_ids))
+        lambda token_ids, **kwargs: calls.append(("sync-links", token_ids))
         or {"started": True, "state": {"task_id": "task-new-store"}},
     )
     monkeypatch.setattr(
@@ -746,7 +746,7 @@ def test_console_template_contains_store_token_module():
     assert 'data-field="salesperson"' not in body
     assert 'data-field="group_name"' not in body
     assert 'requestAccessApi("/api/access/users")' in body
-    assert "更新声誉”通过官方 API 更新声誉和账号状态，不启动浏览器" in body
+    assert "更新声誉”通过官方 API 更新声誉，不启动浏览器" in body
     assert 'data-field="appeal_enabled"' in body
     assert 'data-field="reputation_update_enabled"' in body
     assert 'data-field="visit_stats_enabled"' in body
@@ -807,7 +807,7 @@ def test_member_exchange_binds_session_identity(monkeypatch):
     monkeypatch.setattr(bit_interface, "get_current_workbench_user", lambda: user)
     monkeypatch.setattr(bit_db_api, "exchange_mercado_store_token",
                         lambda *args, **kwargs: captured.update(kwargs) or {"id": 7})
-    monkeypatch.setattr(bit_db_api, "start_store_link_sync", lambda ids: {})
+    monkeypatch.setattr(bit_db_api, "start_store_link_sync", lambda ids, **kwargs: {})
     with bit_interface.app.test_request_context("/api/mercado-tokens/exchange", method="POST",
             json={"display_name": "店铺", "code": "TG-once", "salesperson": "其他人"}):
         response = bit_interface.api_exchange_mercado_token.__wrapped__()

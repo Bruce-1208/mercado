@@ -6,7 +6,6 @@ import secrets
 import threading
 import time
 from contextlib import contextmanager
-from decimal import Decimal, InvalidOperation
 from urllib.parse import urlsplit
 
 ORDER_URL = "https://meli.zying.net/#/order"
@@ -88,7 +87,7 @@ ORDER_API_DETAILS = r"""async ({ids, timeout}) => {
                 root: Array.isArray(data.root) ? data.root.map(row => pick(row,
                     ['order_id', 'order_no', 'order_key', 'order_cost'])) : data.root,
                 buys: Array.isArray(data.buys) ? data.buys.map(row => pick(row,
-                    ['no', 'trace'])) : data.buys
+                    ['no', 'trace', 'amount', 'cur'])) : data.buys
             }};
         } catch (error) {
             const timedOut = error?.message === 'zying-detail-timeout' ||
@@ -147,24 +146,8 @@ def parse_purchase(detail, row):
     buys = detail.get("buys")
     if not isinstance(buys, list):
         raise ValueError("智赢采购数据格式异常")
-    if not buys:
-        return None
-    changes = {}
-    for target, source in (("purchase_order", "no"), ("purchase_tracking", "trace")):
-        values = list(dict.fromkeys(clean(buy.get(source)) for buy in buys if clean(buy.get(source))))
-        if values:
-            value = ",".join(values)
-            if len(value) > 255:
-                raise ValueError("采购单号或物流号超过字段长度")
-            changes[target] = value
-    try:
-        cost = Decimal(str(root.get("order_cost")))
-    except InvalidOperation as exc:
-        raise ValueError("智赢成本缺失或不可读取") from exc
-    if not cost.is_finite() or cost < 0:
-        raise ValueError("智赢成本异常")
-    changes["purchase_cost"] = str(cost.quantize(Decimal("0.01")))
-    return changes
+    from bit.zying_order_excel import purchase_snapshot
+    return purchase_snapshot(buys)
 
 
 def snapshot_orders(reader, filters, should_stop=None, page_size=200):

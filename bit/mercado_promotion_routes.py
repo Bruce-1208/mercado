@@ -9,7 +9,9 @@ from bit.mercado_promotions import (
     enrich_item_products,
     execute_preview,
     sync_promotions,
+    stop_campaign,
     visible_store_options,
+    withdraw_listing_promotions,
 )
 from erp.mercadolibre_promotion_store import PromotionStore
 
@@ -105,6 +107,7 @@ def create_promotions_blueprint(
                 search=str(request.args.get("search") or "").strip(),
                 status=str(request.args.get("status") or "").strip(),
                 promotion_type=str(request.args.get("type") or "").strip(),
+                participated=str(request.args.get("participated") or "").strip(),
                 scope_pairs=scope_pairs,
                 # When current_scope_pairs is active, the local snapshot's
                 # salesperson/group/site values are deliberately ignored.
@@ -156,6 +159,9 @@ def create_promotions_blueprint(
                 page=request.args.get("page", 1),
                 page_size=request.args.get("page_size", 50),
                 target_item_id=str(request.args.get("target_item_id") or "").strip(),
+                enrolled=str(request.args.get("enrolled") or "").strip(),
+                product=str(request.args.get("product") or "").strip(),
+                item_id=str(request.args.get("item_id") or "").strip(),
             )
             results = store.enrollment_results(promotion_id, limit=50)
             results_total = int((promotion.get("enrollment_summary") or {}).get("total") or 0)
@@ -168,6 +174,65 @@ def create_promotions_blueprint(
                 "enrollment_results_truncated": results_total > len(results),
                 "latest_job": store.latest_job(promotion_id, result_limit=50),
             })
+        except Exception as exc:
+            return fail(exc, 500)
+
+    @blueprint.route("/api/promotions/<int:promotion_id>/withdraw", methods=["POST"])
+    @login_required
+    def withdraw_listing(promotion_id):
+        try:
+            if has_permission and not has_permission(current_user(), "promotions.execute"):
+                return fail("当前账号没有取消活动权限", 403)
+            store = PromotionStore()
+            promotion = store.get_promotion(promotion_id)
+            if not promotion:
+                return fail("活动不存在", 404)
+            allowed = allowed_ids()
+            if allowed is not None and int(promotion["token_id"]) not in allowed:
+                return fail("当前账号不能操作该店铺", 403)
+            body = request.get_json(silent=True) or {}
+            result = withdraw_listing_promotions(token_id=promotion["token_id"], site_id=promotion["site_id"],
+                item_id=str(body.get("item_id") or "").strip(), promotion_fk=promotion_id, actor=actor(), store=store)
+            return ok(result, "活动已取消")
+        except ValueError as exc:
+            return fail(exc)
+        except Exception as exc:
+            return fail(exc, 500)
+
+    @blueprint.route("/api/promotions/stop", methods=["POST"])
+    @login_required
+    def stop_promotions():
+        try:
+            if has_permission and not has_permission(current_user(), "promotions.execute"):
+                return fail("当前账号没有停止活动权限", 403)
+            body = request.get_json(silent=True) or {}
+            ids = body.get("promotion_ids")
+            if not isinstance(ids, list) or not ids or len(ids) > 50:
+                return fail("请选择 1 至 50 个活动")
+            if any(type(value) is not int or value <= 0 for value in ids):
+                return fail("活动编号无效")
+            if body.get("confirmed") is not True:
+                return fail("请确认停止所选活动下所有已报名商品")
+            store, allowed = PromotionStore(), allowed_ids()
+            promotions = []
+            # Validate the entire authorization scope before starting any mutation.
+            for pk in dict.fromkeys(ids):
+                promotion = store.get_promotion(pk)
+                if not promotion:
+                    return fail("活动不存在", 404)
+                if allowed is not None and int(promotion["token_id"]) not in allowed:
+                    return fail("当前账号不能操作所选店铺", 403)
+                promotions.append(promotion)
+            results = []
+            for promotion in promotions:
+                try:
+                    result = stop_campaign(promotion_fk=promotion["id"], actor=actor(), store=store)
+                except Exception as exc:
+                    result = {"status": "failed", "message": str(exc)}
+                results.append({**result, "promotion_id": promotion["id"], "name": promotion["name"]})
+            return ok({"results": results})
+        except (TypeError, ValueError) as exc:
+            return fail(exc)
         except Exception as exc:
             return fail(exc, 500)
 
@@ -201,7 +266,14 @@ def create_promotions_blueprint(
         try:
             store = PromotionStore()
             if request.method == "GET":
-                return ok({"rows": store.list_jobs(token_ids=allowed_ids())})
+                job_ids = request.args.getlist("job_id") or None
+                if job_ids and (len(job_ids) > 50 or any(len(value) > 64 for value in job_ids)):
+                    return fail("查询任务数量或编号无效")
+                response = ok({"rows": store.list_jobs(token_ids=allowed_ids(),
+                    job_ids=job_ids, summary_only=request.args.get("summary") == "1",
+                    action=str(request.args.get("action") or ""), status=str(request.args.get("status") or ""))})
+                response.headers["Cache-Control"] = "no-store"
+                return response
             body = request.get_json(silent=True) or {}
             if body.get("confirmed") is not True:
                 return fail("请确认已核对活动、商品和价格后再提交")

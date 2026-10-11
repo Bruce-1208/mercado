@@ -52,6 +52,7 @@
         sites: mercadoSelectedValues(mercadoPublishSite),
         quantity: Number(mercadoPublishQuantity.value),
         ratio: Number(mercadoPublishRatio.value),
+        minimumNet: Number(mercadoPublishMinimumNet?.value || 0),
     });
     window.mercadoAttributeDraftRevisions = () => {
         if (run.disabled) throw new Error('属性预检仍在进行，请等待完成');
@@ -64,6 +65,7 @@
     run.addEventListener('click', async () => {
         const state = selection();
         if (!state.ids.length || state.ids.length > 50) { output.textContent = '每次请选择 1–50 件商品。'; return; }
+        if (!Number.isFinite(state.minimumNet) || state.minimumNet < 0 || mercadoPublishMinimumNet?.checkValidity() === false) { output.textContent = '最低净收益须为非负金额（USD），最多保留两位小数。'; mercadoPublishMinimumNet?.reportValidity(); return; }
         const targets = mercadoPublishTargetPreview(state.mode, state.tokens.map(Number), state.groups, state.sites);
         if (!targets.length) { output.textContent = '请选择兼容的目标账号和站点。'; return; }
         if (signature === JSON.stringify(state)) {
@@ -88,7 +90,7 @@
             for (const target of targets) {
                 const response = await fetch('/api/mercado-products/attribute-preflight', {
                     method: 'POST', headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({product_item_ids:state.ids, token_id:Number(target.account.id), site_id:target.siteId, quantity:state.quantity, net_proceeds_ratio:state.ratio, corrections:correctionGroups[`${target.account.id}:${target.siteId}`] || {}}),
+                    body: JSON.stringify({product_item_ids:state.ids, token_id:Number(target.account.id), site_id:target.siteId, quantity:state.quantity, net_proceeds_ratio:state.ratio, minimum_net_proceeds_usd:state.minimumNet, corrections:correctionGroups[`${target.account.id}:${target.siteId}`] || {}}),
                 });
                 const body = await response.json();
                 if (!response.ok || body.status !== 'success') throw new Error(body.message || '属性预检失败');

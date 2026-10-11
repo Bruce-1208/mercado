@@ -2094,9 +2094,11 @@ def publish_job(job_id: str, link_id: int, actor: str = "") -> dict:
 
     job = get_job(job_id)
     attempt = {
+        "attempt_id": uuid.uuid4().hex,
         "link_id": int(link_id),
         "status": "uploading",
         "started_at": _now_iso(),
+        "salesperson": actor,
         "message": "正在提交美客多",
     }
     attempts = list(job.get("publish_attempts") or [])
@@ -2107,7 +2109,11 @@ def publish_job(job_id: str, link_id: int, actor: str = "") -> dict:
         path = output_path(job_id)
         with path.open("rb") as stream:
             upload = FileStorage(stream=stream, filename=path.name, content_type="video/mp4")
-            result = upload_store_link_video(int(link_id), upload)
+            result = upload_store_link_video(int(link_id), upload, actor=actor, video_metadata={
+                "job_id": job_id, "video_name": job.get("name") or "",
+                "started_at": attempt["started_at"],
+                "attempt_id": attempt["attempt_id"],
+            })
     except Exception as exc:
         attempt.update(
             status="failed",
@@ -2124,6 +2130,9 @@ def publish_job(job_id: str, link_id: int, actor: str = "") -> dict:
         clip_uuid=result.get("clip_uuid"),
         message="美客多已受理，等待平台审核",
     )
+    attempt.update({key: result.get(key, "") for key in (
+        "store_name", "group_name", "thumbnail_url", "token_id", "site_id", "title", "permalink",
+    )})
     published = list(job.get("published") or [])
     published.append(
         {
@@ -2133,7 +2142,7 @@ def publish_job(job_id: str, link_id: int, actor: str = "") -> dict:
             "published_at": _now_iso(),
             "salesperson": actor,
             **{key: result.get(key, "") for key in (
-                "store_name", "token_id", "site_id", "seller_id", "permalink", "title",
+                "store_name", "group_name", "thumbnail_url", "token_id", "site_id", "seller_id", "permalink", "title",
             )},
             "status": "UNDER_REVIEW",
         }

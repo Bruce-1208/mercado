@@ -67,7 +67,7 @@ def queue_db(tmp_path, monkeypatch):
         database.execute("CREATE TABLE mercado_store_tokens (id INTEGER PRIMARY KEY, enabled INTEGER)")
         database.executemany("INSERT INTO mercado_store_tokens VALUES (?, 1)", [(1,), (2,), (3,)])
         database.execute(f"""CREATE TABLE {store.STORE_LINK_SYNC_STATE_TABLE} (
-            token_id INTEGER PRIMARY KEY, requested_at TEXT,
+            token_id INTEGER PRIMARY KEY, requested_at TEXT, priority INTEGER NOT NULL DEFAULT 0,
             request_version INTEGER NOT NULL DEFAULT 0,
             started_request_version INTEGER NOT NULL DEFAULT 0,
             last_started_at TEXT, last_completed_at TEXT,
@@ -215,6 +215,37 @@ def test_existing_queue_schema_adds_request_generations(monkeypatch):
     monkeypatch.setattr(store, "_sync_state_schema_ready", False)
     store.ensure_store_link_sync_state_table(Cursor())
     alterations = [sql for sql in statements if "ALTER TABLE" in sql]
-    assert len(alterations) == 2
+    assert len(alterations) == 3
     assert "`request_version`" in alterations[0]
     assert "`started_request_version`" in alterations[1]
+    assert "`priority`" in alterations[2]
+
+
+def test_authorization_priority_survives_normal_requests_and_restart(queue_db):
+    store.request_store_link_sync([1, 2])
+    store.request_store_link_sync([3], priority=True)
+    store.request_store_link_sync([3])
+    assert store.list_due_store_link_token_ids()[0] == 3
+    assert store.order_store_link_token_ids_for_full_sync([1, 2, 3])[0] == 3
+    assert store.list_due_store_link_token_ids(priority_only=True) == [3]
+    store.mark_store_link_sync_started(3)
+    store.mark_store_link_sync_finished(3, "success")
+    assert saved_state(queue_db, 3)["priority"] == 0
+    assert store.list_due_store_link_token_ids(priority_only=True) == []
+
+
+def test_new_authorization_overtakes_waiting_stores(queue_db, monkeypatch):
+    store.request_store_link_sync([1, 2])
+    monkeypatch.setattr(sync, "STORE_LINK_STORE_WORKERS", 1)
+    monkeypatch.setattr(sync, "_token_records", lambda ids: [{"id": value} for value in ids])
+    monkeypatch.setattr(sync, "run_capacity_store", lambda _kind, _id, fn, record: fn(record))
+    seen = []
+    def scan(record):
+        seen.append(record["id"])
+        if record["id"] == 1:
+            store.request_store_link_sync([3], priority=True)
+        return completed_result(record)
+    monkeypatch.setattr(sync, "_sync_store", scan)
+    result = sync.run_store_link_sync([1, 2])
+    assert seen == [1, 3, 2]
+    assert result["total_stores"] == result["processed_stores"] == 3

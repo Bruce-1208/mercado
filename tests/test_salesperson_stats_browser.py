@@ -23,6 +23,7 @@ def test_statistics_ui_filters_empty_error_and_safe_names():
         page.route('**/api/salesperson-stats?*', route)
         page.route('http://stats.test/', lambda r: r.fulfill(content_type='text/html', body='<div>'+section))
         page.goto('http://stats.test/')
+        page.add_script_tag(path=str(ROOT / 'bit/static/analysis-request.js'))
         page.add_script_tag(path=str(ROOT / 'bit/static/salesperson-stats.js'))
         page.evaluate('loadSalespersonStats()')
         assert page.locator('#salesperson-stats-rows tr').count() == 1
@@ -37,7 +38,7 @@ def test_statistics_ui_filters_empty_error_and_safe_names():
         page.wait_for_function("document.getElementById('salesperson-stats-message').textContent.includes('暂无')")
         assert page.locator('#salesperson-stats-start').input_value() == ''
         state['mode'] = 'error'
-        page.evaluate('loadSalespersonStats()')
+        page.evaluate('loadSalespersonStats(true)')
         assert '服务不可用' in page.locator('#salesperson-stats-message').inner_text()
         assert page.locator('#salesperson-stats-rows tr').count() == 0
         browser.close()

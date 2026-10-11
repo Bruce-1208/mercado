@@ -41,7 +41,7 @@ def flow(monkeypatch, tmp_path):
 
     def make_image(*args, **kwargs):
         state["images"] += 1
-        return "/api/ai-original-products/images/white.jpg", "local_background_removal", str(image_path)
+        return f"/api/ai-original-products/images/1688-{args[0].get('source_1688_item_id')}-ai-white.jpg", "local_background_removal", str(image_path)
 
     monkeypatch.setattr(products, "_prepare_original_image", make_image)
     generated = {
@@ -165,6 +165,29 @@ def test_failed_reservation_checkpoint_prevents_paid_dispatch(flow):
     assert state["calls"] == []
 
 
+@pytest.mark.parametrize('call_state', ['pending', 'unknown'])
+def test_unconfirmed_historical_usage_resumes_generation(flow, call_state):
+    row, client, state, options = flow
+    ledger = budgets.BudgetedChat().snapshot()
+    ledger['calls'].append({'state': call_state, 'reserved_nano': 5000000})
+    ledger.update(blocked_kind='usage_unknown', blocked_reason='上次调用费用尚未确认')
+    row['source_snapshot_json']['ai_original'] = {
+        'status': 'failed', 'workflow_status': 'needs_budget_review',
+        'error': ledger['blocked_reason'], 'generation_budget': ledger,
+    }
+    result = products.prepare_ai_original_product(row, category_client=client, **options)
+    draft = result['ai_original']
+    assert draft['status'] == 'completed'
+    assert draft['error'] == ''
+    saved = draft['generation_budget']
+    assert saved['status'] == 'ready'
+    assert saved['has_unconfirmed_usage'] is True
+    assert saved['reserved_yuan'] == .005
+    assert saved['spent_yuan'] == .0001
+    assert saved['calls'][0]['state'] == call_state
+    assert len(state['calls']) == 1
+
+
 def test_sku_identity_inventory_prices_and_media_are_preserved_outside_prompt(flow):
     row, client, state, options = flow
     source_skus = [{
@@ -177,8 +200,11 @@ def test_sku_identity_inventory_prices_and_media_are_preserved_outside_prompt(fl
     result = products.prepare_ai_original_product(row, category_client=client, **options)
     assert len(state["calls"]) == 2
     for actual, original in zip(result["ai_original"]["variations"], source_skus):
-        assert {key: value for key, value in actual.items() if key != "attribute_combinations"} == {
-            key: value for key, value in original.items() if key != "attribute_combinations"}
+        for key in ('id', 'seller_sku', 'price', 'available_quantity'):
+            assert actual[key] == original[key]
+        assert actual['source_image_url'] == original['image_url']
+        assert actual['image_url'] == actual['white_image_url']
+        assert actual['image_url'].endswith('-ai-white.jpg')
     copy_prompt = state["calls"][0]["messages"][0]["content"]
     assert "sku-0" in copy_prompt and "sku-1" in copy_prompt
     assert "available_quantity" not in copy_prompt and "image_url" not in copy_prompt

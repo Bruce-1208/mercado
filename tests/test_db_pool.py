@@ -114,7 +114,7 @@ def test_pool_capacity_warning_is_rate_limited(monkeypatch, caplog):
     db_pool.close_all_pools()
 
     db_pool.get_db_connection({"host": "db", "database": "mercado"})
-    db_pool.get_db_connection({"host": "db", "database": "mercado"})
+    db_pool.get_db_connection({"host": "db", "database": "mercado"}, priority=True)
 
     warnings = [
         record for record in caplog.records
@@ -207,7 +207,7 @@ def test_process_budget_includes_different_configs_and_idle_sockets(physical_con
 
 def test_exhaustion_times_out_without_opening_extra_connection(physical_connections):
     first = db_pool.get_db_connection()
-    second = db_pool.get_db_connection()
+    second = db_pool.get_db_connection(priority=True)
     started = time.monotonic()
     try:
         with pytest.raises(db_pool.PoolAcquireTimeout):
@@ -225,7 +225,7 @@ def test_exhaustion_times_out_without_opening_extra_connection(physical_connecti
 def test_prewarming_respects_remaining_process_budget(monkeypatch, physical_connections):
     monkeypatch.setenv("MYSQL_POOL_MIN_CACHED", "2")
     first = db_pool.get_db_connection()
-    second = db_pool.get_db_connection({"read_timeout": 9})
+    second = db_pool.get_db_connection({"read_timeout": 9}, priority=True)
     try:
         assert physical_connections["peak"] == 2
     finally:
@@ -461,3 +461,20 @@ def test_cursor_iteration_errors_are_classified_without_sql_replay(statement_dri
     finally:
         connection.close()
     assert db_pool.pool_status()["active"] == 0
+
+
+def test_auth_can_acquire_reserved_slot_while_business_waits(physical_connections):
+    first = db_pool.get_db_connection()
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            waiting = executor.submit(db_pool.get_db_connection)
+            auth = db_pool.get_db_connection(priority=True)
+            try:
+                assert db_pool.pool_status()['active'] == 2
+                with pytest.raises(db_pool.PoolAcquireTimeout):
+                    waiting.result(timeout=3)
+            finally:
+                auth.close()
+        assert physical_connections['peak'] == 2
+    finally:
+        first.close()

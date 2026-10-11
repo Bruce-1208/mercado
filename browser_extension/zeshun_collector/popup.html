@@ -13,9 +13,14 @@
       <h1>泽顺插件</h1>
       <p>商品采集工作台</p>
     </div>
-      <span class="version">v1.8.62</span>
+      <span class="version">v1.8.77</span>
   </header>
   <main>
+    <section id="update-notice" class="update-notice" role="status" hidden>
+      <strong id="update-notice-text"></strong>
+      <a id="update-download" target="_blank" rel="noopener">下载新版</a>
+      <p>解压覆盖原插件目录后，在浏览器扩展管理页点击“重新加载”。</p>
+    </section>
     <div class="account-card">
       <span class="account-dot"></span>
       <div id="auth-status" class="auth-line">泽顺账号：正在检查…</div>
@@ -35,6 +40,7 @@
       <section class="page-card">
         <div class="page-card-heading"><span>智赢订单同步</span><span class="platform-badge zying">智赢</span></div>
         <label class="zying-field">订单开始日期（北京时间）<input id="zying-order-date-start" type="date" required></label>
+        <label class="zying-field">泽顺订单状态<select id="zying-order-order-status"><option value="">全部泽顺订单状态</option><optgroup label="找货"><option value="@找货">全部找货</option><option value="找货-没汇总">找货-没汇总</option><option value="找货-已采购">找货-已采购</option><option value="找货-待确定">找货-待确定</option></optgroup><optgroup label="审核"><option value="@审核">全部审核</option><option value="审核-待审核">审核-待审核</option><option value="审核-已审核">审核-已审核</option></optgroup><optgroup label="转运"><option value="@转运">全部转运</option><option value="转运-待收货">转运-待收货</option><option value="转运-待出库">转运-待出库</option><option value="转运-已出库">转运-已出库</option><option value="转运-待退回">转运-待退回</option></optgroup><optgroup label="待发"><option value="@待发">全部待发</option><option value="待发">待发</option></optgroup><optgroup label="已发"><option value="@已发">全部已发</option><option value="已发-在途中">已发-在途中</option><option value="已发-异常">已发-异常</option></optgroup><optgroup label="问题"><option value="@问题">全部问题</option><option value="问题-验货异常">问题-验货异常</option><option value="问题-物流退件">问题-物流退件</option><option value="问题-亏损超重">问题-亏损超重</option></optgroup><optgroup label="交付"><option value="@交付">全部交付</option><option value="交付">交付</option></optgroup><optgroup label="取消"><option value="@取消">全部取消</option><option value="取消-发货前">取消-发货前</option><option value="取消-发货后">取消-发货后</option></optgroup></select></label>
         <label class="zying-field">订单结束日期（含当天）<input id="zying-order-date-end" type="date" required></label>
         <p class="product-batch-help">同步日期范围内全部美客多订单的采购单号、物流号和人民币成本。登录智赢后点击“确定登录”；空单号保留已有值。</p>
         <div class="zying-actions">
@@ -75,21 +81,28 @@
           <button id="product-refresh-management-categories" class="link-button" type="button" disabled>刷新泽顺分类</button>
           <div id="product-management-category-status" class="zeshun-category-status" role="status" aria-live="polite">正在检查泽顺产品分类…</div>
         </div>
+        <label class="zying-field">美客多采集价格（自动记忆）
+          <select id="product-price-mode"><option value="original" selected>原价（默认）</option><option value="discount">折扣价</option></select>
+        </label>
+        <p class="product-batch-help">适用于当前商品、列表按钮和批量采集；无折扣时使用当前售价。</p>
         <div id="product-zying-status" class="plugin-login-status checking" role="status">泽顺数据服务：等待检查</div>
         <div class="zying-grid">
           <label>采集数量<input id="product-max-items" type="number" min="1" max="500" step="1" value="20"></label>
-          <label class="collection-mode-field">采集模式
-            <select id="product-concurrency-mode">
-              <option value="normal" selected>普通模式（默认 5 个采集进程）</option>
-              <option value="gentle">缓和模式（单进程）</option>
+          <label class="collection-mode-field">采集进程数
+            <select id="product-concurrency">
+              <option value="1">1 个</option>
+              <option value="2">2 个</option>
+              <option value="3" selected>3 个（默认）</option>
+              <option value="4">4 个</option>
+              <option value="5">5 个</option>
             </select>
           </label>
-          <label>成功后休息（秒）<input id="product-success-rest-seconds" type="number" min="0" max="3600" step="0.1" value="3"></label>
+          <label>成功后休息（秒）<input id="product-success-rest-seconds" type="number" min="0" max="3600" step="0.1" value="0"></label>
           <label>最低销量<input id="product-min-sales" type="number" min="0" step="1" placeholder="不限"></label>
           <label>最高销量<input id="product-max-sales" type="number" min="0" step="1" placeholder="不限"></label>
         </div>
         <details class="collection-help"><summary>采集规则与运行说明</summary>
-        <p class="product-batch-help">每个采集通道成功后默认休息 3 秒，可调整；普通模式并发执行，单件超时后继续下一件，遇到限频自动停止且不自动重试。每件商品由泽顺后台读取销量和发货方式，无需安装或登录智赢插件。只采集自发货、半托管；海外仓、本土仓、全托管和未识别商品一律不采集。Internacional 未生效时仍按泽顺后台信息逐件筛选。</p>
+        <p class="product-batch-help">采集在独立的 640×480 后台小窗中进行，当前页面不跳转、不抢焦点；默认同时读取 3 个商品详情，可选择 1–5 个采集进程。每个采集通道成功后默认不额外休息，可调整；多进程并发执行，页面连接失败时自动恢复，连续 15 秒无法连接则继续下一件；空闲通道可继续下一页，遇到限频自动停止且不自动重试。每件商品由泽顺后台读取销量和发货方式，无需安装或登录智赢插件。只采集自发货、半托管；海外仓、本土仓、全托管和未识别商品一律不采集。Internacional 未生效时仍按泽顺后台信息逐件筛选。</p>
         </details>
         <div class="zying-actions">
           <button id="product-batch-start" class="primary" type="button" disabled>启动批量采集</button>
@@ -263,6 +276,8 @@
         <input id="purchase-date-start" type="date" required>
         <label for="purchase-date-end">美客多订单结束日期（含当天）</label>
         <input id="purchase-date-end" type="date" required>
+        <label for="purchase-order-status">泽顺订单状态</label>
+        <select id="purchase-order-status"><option value="">全部泽顺订单状态</option><optgroup label="找货"><option value="@找货">全部找货</option><option value="找货-没汇总">找货-没汇总</option><option value="找货-已采购">找货-已采购</option><option value="找货-待确定">找货-待确定</option></optgroup><optgroup label="审核"><option value="@审核">全部审核</option><option value="审核-待审核">审核-待审核</option><option value="审核-已审核">审核-已审核</option></optgroup><optgroup label="转运"><option value="@转运">全部转运</option><option value="转运-待收货">转运-待收货</option><option value="转运-待出库">转运-待出库</option><option value="转运-已出库">转运-已出库</option><option value="转运-待退回">转运-待退回</option></optgroup><optgroup label="待发"><option value="@待发">全部待发</option><option value="待发">待发</option></optgroup><optgroup label="已发"><option value="@已发">全部已发</option><option value="已发-在途中">已发-在途中</option><option value="已发-异常">已发-异常</option></optgroup><optgroup label="问题"><option value="@问题">全部问题</option><option value="问题-验货异常">问题-验货异常</option><option value="问题-物流退件">问题-物流退件</option><option value="问题-亏损超重">问题-亏损超重</option></optgroup><optgroup label="交付"><option value="@交付">全部交付</option><option value="交付">交付</option></optgroup><optgroup label="取消"><option value="@取消">全部取消</option><option value="取消-发货前">取消-发货前</option><option value="取消-发货后">取消-发货后</option></optgroup></select>
         <label for="purchase-platform">采购平台</label>
         <select id="purchase-platform"><option value="1688">1688</option><option value="taobao">淘宝 / 天猫</option><option value="pdd">拼多多</option><option value="xianyu">闲鱼</option></select>
         <div id="purchase-page-status" class="status">选择美客多下单日期范围和采购平台，仅同步范围内有采购订单号、无采购物流号的订单。</div>
@@ -271,6 +286,7 @@
           <button id="purchase-open-login" class="secondary inline-action" type="button" disabled>打开采购平台登录</button>
           <button id="purchase-confirm-login" class="primary" type="button" disabled>确定登录并开始同步</button>
         </div>
+        <button id="purchase-reset-dates" class="link-button" type="button" hidden>重新选择日期（结束等待中的任务）</button>
         <div id="purchase-task-status" class="purchase-task-status">等待同步任务</div>
         <div id="purchase-summary" class="purchase-summary">成功 0 · 未发货 0 · 未同步 0</div>
         <div id="purchase-results" class="purchase-results"></div>
@@ -279,12 +295,12 @@
     <div id="appeal-panel" class="mode-panel" hidden>
       <section class="page-card appeal-card">
         <div class="page-card-heading"><span>自动化申诉</span><span class="platform-badge mercado">当前店铺</span></div>
-        <p class="product-batch-help">使用当前浏览器已登录的美客多店铺。打开店铺后台，读取店铺后选择站点和申诉内容。</p>
+        <p class="product-batch-help">选择站点和申诉内容即可启动，插件会自动打开美客多后台执行；发现未登录时停止任务并提醒。</p>
         <label class="zying-field">当前店铺网页
-          <select id="appeal-tab"><option value="">请打开当前店铺的美客多后台</option></select>
+          <select id="appeal-tab"><option value="">自动打开美客多后台</option></select>
         </label>
         <button id="appeal-refresh" class="link-button" type="button">刷新店铺网页</button>
-        <div id="appeal-shop" class="plugin-login-status" role="status" aria-live="polite">开始后将直接打开当前店铺的声誉页面</div>
+        <div id="appeal-shop" class="plugin-login-status" role="status" aria-live="polite">开始后自动打开当前店铺后台；未登录时停止并提醒</div>
         <fieldset class="appeal-picker"><legend>申诉站点</legend><div id="appeal-sites"></div></fieldset>
         <fieldset class="appeal-picker" id="appeal-forms"><legend>申诉内容</legend>
           <label><input type="checkbox" value="延误" checked>延误</label>

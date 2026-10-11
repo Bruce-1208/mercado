@@ -293,6 +293,7 @@ def _migrate_store_link_sync_state_table(cursor: Any) -> None:
         CREATE TABLE IF NOT EXISTS `{STORE_LINK_SYNC_STATE_TABLE}` (
             `token_id` BIGINT NOT NULL,
             `requested_at` DATETIME NULL,
+            `priority` BIGINT UNSIGNED NOT NULL DEFAULT 0,
             `request_version` BIGINT UNSIGNED NOT NULL DEFAULT 0,
             `started_request_version` BIGINT UNSIGNED NOT NULL DEFAULT 0,
             `last_started_at` DATETIME NULL,
@@ -337,11 +338,11 @@ def ensure_store_link_sync_state_table(cursor: Any) -> None:
         }
         if not {"token_id", "last_completed_at", "last_error"}.issubset(columns):
             _migrate_store_link_sync_state_table(cursor)
-        elif {"request_version", "started_request_version"}.difference(columns):
+        elif {"request_version", "started_request_version", "priority"}.difference(columns):
             # Requests can arrive in the same second as a scan starts. A durable
             # generation prevents completion from clearing one of those newer
             # requests, including after a worker or service restart.
-            for name in ("request_version", "started_request_version"):
+            for name in ("request_version", "started_request_version", "priority"):
                 if name in columns:
                     continue
                 try:
@@ -360,6 +361,7 @@ def ensure_store_link_sync_state_table(cursor: Any) -> None:
 def request_store_link_sync(
     token_ids: Iterable[int],
     *,
+    priority: bool = False,
     connection_factory: Callable[[], Any] | None = None,
 ) -> int:
     """Persist an immediate sync request for one or more authorized stores."""
@@ -382,15 +384,16 @@ def request_store_link_sync(
             cursor.executemany(
                 f"""
                 INSERT INTO `{STORE_LINK_SYNC_STATE_TABLE}` (
-                    `token_id`, `requested_at`, `request_version`, `last_status`, `last_error`
-                ) VALUES (%s, %s, 1, 'queued', NULL)
+                    `token_id`, `requested_at`, `request_version`, `priority`, `last_status`, `last_error`
+                ) VALUES (%s, %s, 1, %s, 'queued', NULL)
                 ON DUPLICATE KEY UPDATE
                     `requested_at` = VALUES(`requested_at`),
                     `request_version` = `request_version` + 1,
+                    `priority` = CASE WHEN VALUES(`priority`) > 0 THEN 1 ELSE `priority` END,
                     `last_status` = 'queued',
                     `last_error` = NULL
                 """,
-                [(token_id, _now()) for token_id in ids],
+                [(token_id, _now(), int(priority)) for token_id in ids],
             )
         connection.commit()
         return len(ids)
@@ -427,7 +430,7 @@ def order_store_link_token_ids_for_full_sync(
             placeholders = ", ".join(["%s"] * len(ids))
             cursor.execute(
                 f"""
-                SELECT `token_id`, `last_completed_at`
+                SELECT `token_id`, `last_completed_at`, `priority`
                 FROM `{STORE_LINK_SYNC_STATE_TABLE}`
                 WHERE `token_id` IN ({placeholders})
                 """,
@@ -445,9 +448,12 @@ def order_store_link_token_ids_for_full_sync(
     }
     original_positions = {token_id: index for index, token_id in enumerate(ids)}
 
-    def priority(token_id: int) -> tuple[bool, str, int]:
+    priority_ids = {int(row["token_id"]) for row in rows if row.get("priority")}
+
+    def priority(token_id: int) -> tuple[bool, bool, str, int]:
         completed_at = completed_at_by_id.get(token_id)
         return (
+            token_id not in priority_ids,
             completed_at is not None,
             str(completed_at or ""),
             original_positions[token_id],
@@ -520,6 +526,8 @@ def mark_store_link_sync_finished(
                               AND `request_version` <> `started_request_version`
                             THEN 'queued' ELSE VALUES(`last_status`) END,
                         `last_error` = NULL,
+                        `priority` = CASE WHEN `request_version` = `started_request_version`
+                            THEN 0 ELSE `priority` END,
                         `requested_at` = CASE
                             WHEN `requested_at` IS NULL
                               OR `request_version` = `started_request_version`
@@ -555,6 +563,7 @@ def list_due_store_link_token_ids(
     interval_days: int = 3,
     retry_minutes: int = 60,
     limit: int = 1000,
+    priority_only: bool = False,
     connection_factory: Callable[[], Any] | None = None,
 ) -> list[int]:
     """Return queued, interrupted, or overdue stores; errors retain their backoff.
@@ -583,6 +592,7 @@ def list_due_store_link_token_ids(
                 LEFT JOIN `{STORE_LINK_SYNC_STATE_TABLE}` AS sync_state
                   ON sync_state.`token_id` = tokens.`id`
                 WHERE tokens.`enabled` = 1
+                  {"AND sync_state.`priority` > 0" if priority_only else ""}
                   AND (
                     sync_state.`requested_at` IS NOT NULL
                     OR sync_state.`last_status` = 'running'
@@ -595,6 +605,7 @@ def list_due_store_link_token_ids(
                     OR sync_state.`last_started_at` <= %s
                   )
                 ORDER BY
+                    COALESCE(sync_state.`priority`, 0) DESC,
                     CASE WHEN sync_state.`last_completed_at` IS NULL THEN 0 ELSE 1 END,
                     CASE WHEN sync_state.`requested_at` IS NOT NULL THEN 0 ELSE 1 END,
                     COALESCE(sync_state.`requested_at`, sync_state.`last_completed_at`) ASC,
@@ -1401,7 +1412,8 @@ def _query_store_link_metadata(
 
     cursor.execute(
         f"""
-        SELECT `token_id`, `site_id`, COALESCE(`group_name`, '') AS `group_name`
+        SELECT `token_id`, `site_id`, COALESCE(`group_name`, '') AS `group_name`,
+               COALESCE(`salesperson`, '') AS `salesperson`
         FROM `mercado_store_site_settings`
         {token_where}
         """,
@@ -1413,6 +1425,12 @@ def _query_store_link_metadata(
         str(row.get("group_name") or "")
         for row in site_settings
     }
+    salesperson_map = {
+        (int(row.get("token_id") or 0), str(row.get("site_id") or "").upper()):
+        str(row.get("salesperson") or "").strip()
+        for row in site_settings
+    }
+    salespeople = sorted({name for name in salesperson_map.values() if name}, key=str.casefold)
     groups = [
         {"group_name": value}
         for value in sorted(
@@ -1533,6 +1551,8 @@ def _query_store_link_metadata(
         summary[count_field] = int(summary.get(count_field) or 0)
     return {
         "group_map": group_map,
+        "salesperson_map": salesperson_map,
+        "salespeople": salespeople,
         "groups": groups,
         "stores": stores,
         "store_groups": store_groups,
@@ -1640,6 +1660,7 @@ def list_store_links(
     filter_token_ids: Iterable[int] | None = None,
     site_id: str = "",
     group_name: str = "",
+    salesperson: str = "",
     status: str = "",
     promotion_applied: Any = None,
     advertising_enabled: Any = None,
@@ -1696,6 +1717,7 @@ def list_store_links(
         conditions.append("links.`site_id` = %s")
         values.append(site_id)
     group_name = str(group_name or "").strip()[:100]
+    salesperson = str(salesperson or "").strip()[:100]
     status = str(status or "").strip()
     if status:
         conditions.append("links.`status` = %s")
@@ -1722,8 +1744,12 @@ def list_store_links(
         values.append(normalized_category_id)
     mercado_category = str(mercado_category or "").strip()
     if mercado_category:
-        category_ids = list(dict.fromkeys(value.strip() for value in mercado_category.split(",") if value.strip()))
-        if not category_ids or len(category_ids) > 100 or any(len(value) > 64 for value in category_ids):
+        if mercado_category.startswith("tree:"):
+            from erp.mercadolibre_category_tree import category_filter_ids
+            category_ids = category_filter_ids(mercado_category)
+        else:
+            category_ids = list(dict.fromkeys(value.strip() for value in mercado_category.split(",") if value.strip()))
+        if not category_ids or len(category_ids) > 20000 or any(len(value) > 64 for value in category_ids):
             raise ValueError("美客多分类列表无效")
         if len(category_ids) == 1:
             conditions.append("links.`category_id` = %s")
@@ -1795,6 +1821,8 @@ def list_store_links(
                     include_categories=include_categories,
                 )
             group_map = metadata["group_map"]
+            salesperson_map = metadata.get("salesperson_map", {})
+            salespeople = metadata.get("salespeople", [])
             groups = metadata["groups"]
             stores = metadata["stores"]
             store_groups = metadata["store_groups"]
@@ -1820,6 +1848,20 @@ def list_store_links(
 
             filtered_conditions = list(conditions)
             filtered_values = list(values)
+            if salesperson:
+                salesperson_pairs = [
+                    pair for pair, name in salesperson_map.items() if name == salesperson
+                ]
+                if salesperson_pairs:
+                    pair_sql = " OR ".join(
+                        "(links.`token_id` = %s AND links.`site_id` = %s)"
+                        for _pair in salesperson_pairs
+                    )
+                    filtered_conditions.append(f"({pair_sql})")
+                    for token_value, site_value in salesperson_pairs:
+                        filtered_values.extend([token_value, site_value])
+                else:
+                    filtered_conditions.append("1 = 0")
             if group_name:
                 if group_name == "__ungrouped__":
                     grouped_pairs = [pair for pair, name in group_map.items() if name]
@@ -1872,6 +1914,7 @@ def list_store_links(
                 and token_id in (None, "")
                 and not site_id
                 and not group_name
+                and not salesperson
                 and not status
                 and not category_filter
                 and not mercado_category
@@ -1922,6 +1965,15 @@ def list_store_links(
                     recent_token_ids = (
                         group_token_ids if recent_token_ids is None
                         else recent_token_ids & group_token_ids
+                    )
+                if salesperson:
+                    salesperson_token_ids = {
+                        token_value for token_value, site_value in salesperson_pairs
+                        if not site_id or site_value == site_id
+                    }
+                    recent_token_ids = (
+                        salesperson_token_ids if recent_token_ids is None
+                        else recent_token_ids & salesperson_token_ids
                     )
                 recent_scope_sql = ""
                 if recent_token_ids is not None:
@@ -2055,6 +2107,7 @@ def list_store_links(
         "rows": rows,
         "stores": stores,
         "store_groups": store_groups,
+        "salespeople": salespeople,
         "sites": sites,
         "groups": groups,
         "mercado_categories": mercado_categories,
@@ -2106,6 +2159,7 @@ def get_store_links_by_ids(
             cursor.execute(
                 f"""
                 SELECT `id`, `token_id`, `store_name`, `item_id`, `site_id`, `status`, `is_current`,
+                       `title`, `permalink`, `thumbnail_url`,
                        `currency_id`, `price`, `weight_g`, `package_length_cm`,
                        `package_width_cm`, `package_height_cm`, `net_proceeds_usd`
                 FROM `{STORE_LINK_TABLE}`

@@ -28,7 +28,8 @@ DEFAULT_SHIPMENT_COST_CACHE_HOURS = 6
 SHIPMENT_COST_CACHE_HOURS_ENV = "MERCADO_SHIPMENT_COST_CACHE_HOURS"
 WORKBENCH_LOCAL_TIMEZONE = timezone(timedelta(hours=8))
 DAILY_STATUS_MODE = "daily_status"
-DAILY_STATUS_STATE_KEY = "last_daily_old_order_status_refresh"
+DAILY_STATUS_STATE_KEY = "last_daily_60_day_order_refresh"
+DAILY_ORDER_WINDOW_DAYS = 60
 DEFAULT_DAILY_STATUS_HOUR = 2
 AUTO_PRINT_OPERATOR_NAME = "系统自动打印"
 AUTO_PRINT_STATE_KEY_PREFIX = "order_auto_print_started_at"
@@ -276,7 +277,9 @@ def _run_automatic_order_print(
             operator_name=AUTO_PRINT_OPERATOR_NAME,
             candidate_start_by_token=candidate_starts,
             include_first_run_backlog=False,
-            require_prepaid=True,
+            # System-generated labels are free. Interactive downloads keep
+            # using print_wallet and its normal prepaid settlement path.
+            require_prepaid=False,
             logger=lambda message: _append_log(f"系统自动打印：{message}"),
         )
         result = {**summary, "status": "partial" if summary.get("failed") or summary.get("partial") or summary.get("output_error") else "completed"}
@@ -348,25 +351,15 @@ def _as_utc(value):
     if isinstance(value, str):
         value = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if not isinstance(value, datetime):
-        raise ValueError("增量同步游标时间无效")
+        raise ValueError("订单同步游标时间无效")
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
 
 
 def _daily_status_bootstrap_from(now_utc):
-    state = bit_mysql.get_mercado_order_sync_schedule_state(DAILY_STATUS_STATE_KEY) or {}
-    updated_at = state.get("updated_at")
-    if isinstance(updated_at, str):
-        try:
-            updated_at = datetime.fromisoformat(updated_at)
-        except ValueError:
-            updated_at = None
-    if isinstance(updated_at, datetime):
-        if updated_at.tzinfo is None:
-            updated_at = updated_at.replace(tzinfo=WORKBENCH_LOCAL_TIMEZONE)
-        return updated_at.astimezone(timezone.utc)
-    return now_utc - timedelta(days=1)
+    # A complete creation-date window every day, independent of last_updated.
+    return now_utc - timedelta(days=DAILY_ORDER_WINDOW_DAYS)
 
 
 def _daily_status_run_hour():
@@ -1471,7 +1464,7 @@ def _sync_old_store_statuses(
     default_from,
     window_to,
 ):
-    """Incrementally refresh old orders and checkpoint every search page."""
+    """Fully reread the daily creation-date window, checkpointing successful pages."""
 
     token_id = int(record["id"])
     display_name = str(record.get("display_name") or record.get("nickname") or token_id)
@@ -1506,9 +1499,8 @@ def _sync_old_store_statuses(
     totals = {"fetched": 0, "inserted": 0, "updated": 0, "failed": 0}
     filters = {
         "sort": "date_asc",
-        "last_updated.from": _iso_millis(_as_utc(checkpoint["window_from"])),
-        "last_updated.to": _iso_millis(_as_utc(checkpoint["window_to"])),
-        "date_created.to": _iso_millis(_as_utc(cutoff)),
+        "date_created.from": _iso_millis(_as_utc(checkpoint["window_from"])),
+        "date_created.to": _iso_millis(_as_utc(checkpoint["window_to"])),
     }
 
     while True:
@@ -1521,6 +1513,10 @@ def _sync_old_store_statuses(
             **filters,
         )
         order_ids = list(page.get("order_ids") or [])
+        if ((int(page.get("result_count") or 0) and not order_ids)
+                or (not order_ids and offset < int(page.get("total") or 0))
+                or (order_ids and int(page.get("next_offset") or 0) <= offset)):
+            raise RuntimeError("订单搜索返回不完整分页，保留断点重试")
         details = _parallel_api_results(
             client,
             order_ids,
@@ -1535,20 +1531,36 @@ def _sync_old_store_statuses(
                 order_id,
                 (None, RuntimeError("订单详情接口未返回结果")),
             )
-            if error is not None:
+            if (error is not None or not isinstance(order, dict)
+                    or not order.get("id") or not order.get("status")):
                 page_failed += 1
-                _append_log(f"{display_name} 订单 {order_id} 状态读取失败：{error}")
+                _append_log(f"{display_name} 订单 {order_id} 状态读取失败：{error or '接口返回缺少订单编号或状态'}")
                 continue
             orders.append(order)
 
         if orders:
             shipment_result = _enrich_order_shipment_statuses(client, orders, token_id)
             page_failed += int(shipment_result.get("failed") or 0)
+            if not shipment_result.get("failed"):
+                page_failed += sum(
+                    bool((order.get("shipping") or {}).get("id"))
+                    and not order.get("_shipment_status") for order in orders
+                )
 
         result = (
             bit_mysql.upsert_mercado_synced_orders(record, orders)
             if orders else {"inserted": 0, "updated": 0}
         )
+        if orders:
+            financial_result = _sync_order_financials(
+                client, record, orders, {}, force_refresh=True,
+            )
+            page_failed += int(financial_result.get("failed") or 0)
+        if page_failed:
+            # Keep the previous successful page cursor. Retrying must reread
+            # both status and costs; never mark a partially checked page done.
+            totals["failed"] += page_failed
+            return {"store": display_name, "status": "error", **totals}
         batch_size = len(orders)
         batch_inserted = int(result.get("inserted") or 0)
         batch_updated = int(result.get("updated") or 0)
@@ -1575,21 +1587,6 @@ def _sync_old_store_statuses(
             )
 
         if not int(page.get("result_count") or 0) or offset >= int(page.get("total") or 0):
-            shipment_refresh = _refresh_old_store_shipment_statuses(
-                client,
-                record,
-                cutoff,
-            )
-            totals["fetched"] += int(shipment_refresh.get("shipments") or 0)
-            totals["updated"] += int(shipment_refresh.get("orders") or 0)
-            totals["failed"] += int(shipment_refresh.get("failed") or 0)
-            if shipment_refresh.get("yielded"):
-                return {
-                    "store": display_name,
-                    "status": "paused",
-                    "yielded": True,
-                    **totals,
-                }
             bit_mysql.complete_mercado_order_status_window(token_id)
             return {
                 "store": display_name,
@@ -1632,11 +1629,14 @@ def run_order_sync(
             "date_created.to": _iso_millis(now_utc),
         }
     else:
-        old_order_cutoff = now_utc - timedelta(hours=RECENT_ORDER_WINDOW_HOURS)
+        old_order_cutoff = now_utc
         daily_run_date = now_utc.astimezone(WORKBENCH_LOCAL_TIMEZONE).date().isoformat()
         end_text = old_order_cutoff.astimezone(WORKBENCH_LOCAL_TIMEZONE).strftime(
             "%Y-%m-%dT%H:%M"
         )
+        start_text = _daily_status_bootstrap_from(now_utc).astimezone(
+            WORKBENCH_LOCAL_TIMEZONE
+        ).strftime("%Y-%m-%dT%H:%M")
         scheduled_filters = {"old_order_cutoff": old_order_cutoff}
         daily_context = {
             "run_date": daily_run_date,
@@ -1647,7 +1647,7 @@ def run_order_sync(
     mode_messages = {
         "manual": f"正在拉取订单：{start_text} 至 {end_text}",
         "automatic": "正在更新最近 72 小时订单",
-        DAILY_STATUS_MODE: "正在执行每日老订单状态及实际运费刷新",
+        DAILY_STATUS_MODE: "正在全量刷新最近 60 天订单状态及实际运费",
     }
 
     _state_update(
@@ -1719,7 +1719,7 @@ def run_order_sync(
                     sync_options["force_refresh_financials"] = True
                 result = _sync_store(record, filters, **sync_options)
             if result.get("yielded"):
-                _append_log(f"{store_name} 已保存增量断点，让出执行权给最近 72 小时任务")
+                _append_log(f"{store_name} 已保存全量刷新断点，让出执行权给最近 72 小时任务")
             else:
                 _append_log(
                     f"{store_name} 完成：读取 {result['fetched']}，新增 {result['inserted']}，"
@@ -1753,7 +1753,7 @@ def run_order_sync(
             )
 
     if paused_for_recent:
-        message = "每日老订单增量刷新已保存断点，正在让出执行权给十五分钟任务"
+        message = "每日最近 60 天订单全量刷新已保存断点，正在让出执行权给十五分钟任务"
         _state_update(
             running=False,
             status="paused",
@@ -1848,9 +1848,9 @@ def _run_background(start_date, end_date, token_ids, mode):
             _state_update(
                 running=True,
                 status="running",
-                message="正在每日刷新全部 Shipment Costs 实际运费",
+                message="正在补齐最近 60 天订单的 Shipment Costs 实际运费",
             )
-            _append_log("每日实际运费刷新启动：重新读取今天尚未检查的全部运单")
+            _append_log("每日实际运费刷新启动：重新读取最近 60 天订单中今天尚未检查的运单")
             financial_result = refresh_daily_order_financials(limit=200)
             if financial_result.get("status") == "busy":
                 raise RuntimeError("实际运费刷新任务正在其他进程运行")
@@ -1864,25 +1864,25 @@ def _run_background(start_date, end_date, token_ids, mode):
                 daily_run_date
                 or datetime.now(WORKBENCH_LOCAL_TIMEZONE).date().isoformat()
             )
-            bit_mysql.set_mercado_order_sync_schedule_value(
-                DAILY_STATUS_STATE_KEY,
-                run_date,
-            )
             daily_status = (
                 "partial"
-                if final_status == "partial" or financial_result.get("status") == "partial"
+                if final_status != "completed" or financial_result.get("status") != "completed"
                 else "completed"
             )
+            if daily_status == "completed":
+                bit_mysql.set_mercado_order_sync_schedule_value(
+                    DAILY_STATUS_STATE_KEY, run_date,
+                )
             _state_update(
                 running=False,
                 status=daily_status,
                 message=(
                     "每日订单状态与实际运费刷新完成"
                     if daily_status == "completed"
-                    else "每日刷新完成，部分运费读取失败"
+                    else "每日刷新尚未完成，将重试失败的订单状态或运费"
                 ),
                 finished_at=_now_text(),
-                daily_status_last_run_date=run_date,
+                daily_status_last_run_date=(run_date if daily_status == "completed" else ""),
                 daily_financials=financial_result,
             )
     except _InterpreterShutdownRequested:
@@ -1930,7 +1930,7 @@ def start_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
             mode=mode,
             status="starting",
             message=(
-                "正在启动每日老订单状态及实际运费刷新"
+                "正在启动最近 60 天订单状态及实际运费全量刷新"
                 if mode == DAILY_STATUS_MODE
                 else "正在启动订单同步"
             ),
@@ -1949,7 +1949,9 @@ def start_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
 
 
 def _scheduler_loop(interval_seconds):
-    next_recent_run = time.monotonic() + interval_seconds
+    # Recover pending orders on startup; repeated service restarts must not
+    # postpone the first synchronization (and its automatic print) forever.
+    next_recent_run = time.monotonic()
     while not _scheduler_stop_event.is_set():
         now_local = datetime.now(WORKBENCH_LOCAL_TIMEZONE)
         today = now_local.date().isoformat()

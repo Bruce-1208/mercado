@@ -2,8 +2,10 @@
 (() => {
   const account = typeof document === 'undefined' ? '' : document.currentScript?.dataset.account;
   const storageKey = account ? `zeshun-today-filters:v1:${account}` : null;
-  const clean = value => Object.fromEntries(['salesperson', 'group_name'].map(key =>
-    [key, typeof value?.[key] === 'string' ? value[key].slice(0, 200) : '']));
+  const clean = value => Object.fromEntries(['salesperson', 'group_name'].map(key => {
+    const values = Array.isArray(value?.[key]) ? value[key] : [value?.[key]];
+    return [key, [...new Set(values.filter(v => typeof v === 'string').map(v => v.trim().slice(0, 200)).filter(Boolean))].sort()];
+  }));
   window.todayFilterPreferences = {
     read() {
       try {
@@ -58,11 +60,19 @@
   }
   function preload() {
     const filters = window.todayFilterPreferences.read();
-    const tasks = new URLSearchParams({include_closed: '0', ...filters, background: '1'});
-    const messages = new URLSearchParams({...filters, background: '1'});
+    const query = initial => {
+      const params = new URLSearchParams(initial);
+      for (const [key, values] of Object.entries(filters)) {
+        for (const value of values.length ? values : ['']) params.append(key, value);
+      }
+      params.set('background', '1');
+      return params;
+    };
+    const tasks = query({include_closed: '0'});
+    const messages = query({});
     for (const url of [
       `/api/mercado/today/tasks?${tasks}`,
-      `/api/mercado/today/post-sale?${messages}`,
+      `/api/mercado/today/claims?${messages}`,
     ]) {
       const snapshot = cached(url);
       requests.set(url, snapshot ? Promise.resolve(snapshot) : read(url));

@@ -9,7 +9,7 @@ from bit.zying_order_sync import AgentSync, SyncManager, parse_purchase, snapsho
 def detail(**root):
     return {"root": [{"order_id": "123", "order_no": "2000001", "order_key": "4000001",
                        "order_cost": "18.50", **root}],
-            "buys": [{"no": "P1", "trace": "T1"}, {"no": "P2", "trace": "T2"}]}
+            "buys": [{"no": "P1", "trace": "T1", "amount": "10.00", "cur": "CNY"}, {"no": "P2", "trace": "T2", "amount": "8.50", "cur": "CNY"}]}
 
 
 def test_purchase_identifiers_and_cny_cost():
@@ -20,7 +20,9 @@ def test_purchase_identifiers_and_cny_cost():
 @pytest.mark.parametrize("cost", [None, "***", "NaN", "Infinity", "-1"])
 def test_unreadable_cost_is_not_written(cost):
     with pytest.raises(ValueError):
-        parse_purchase(detail(order_cost=cost), {"id": "2000001"})
+        data = detail()
+        data["buys"][0]["amount"] = cost
+        parse_purchase(data, {"id": "2000001"})
 
 
 def test_pack_only_match_does_not_duplicate_cost():
@@ -28,12 +30,32 @@ def test_pack_only_match_does_not_duplicate_cost():
         parse_purchase(detail(), {"id": "2000002", "pack_id": "4000001"})
 
 
-def test_empty_purchase_fields_do_not_erase_local_values():
+def test_empty_purchase_fields_clear_local_values():
     data = detail(order_cost=0)
     data["buys"] = [{"no": "", "trace": None}]
-    assert parse_purchase(data, {"id": "2000001"}) == {"purchase_cost": "0.00"}
+    assert parse_purchase(data, {"id": "2000001"}) == {"purchase_order": "", "purchase_tracking": "", "purchase_cost": "0.00"}
     data["buys"] = []
-    assert parse_purchase(data, {"id": "2000001"}) is None
+    assert parse_purchase(data, {"id": "2000001"}) == {"purchase_order": "", "purchase_tracking": "", "purchase_cost": "0.00"}
+
+
+def test_cost_without_purchase_records_is_ignored():
+    data = detail(order_cost="28.75")
+    data["buys"] = []
+    assert parse_purchase(data, {"id": "2000001"}) == {"purchase_order": "", "purchase_tracking": "", "purchase_cost": "0.00"}
+
+
+@pytest.mark.parametrize("cost", [None, "", 0, "0.00"])
+def test_unpurchased_order_clears_local_cost(cost):
+    data = detail(order_cost=cost)
+    data["buys"] = []
+    assert parse_purchase(data, {"id": "2000001"}) == {"purchase_order": "", "purchase_tracking": "", "purchase_cost": "0.00"}
+
+
+def test_cost_only_pack_match_is_still_rejected():
+    data = detail()
+    data["buys"] = []
+    with pytest.raises(ValueError, match="子订单"):
+        parse_purchase(data, {"id": "2000002", "pack_id": "4000001"})
 
 
 def test_filtered_snapshot_reads_all_pages_before_writing():

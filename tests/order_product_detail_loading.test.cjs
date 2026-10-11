@@ -21,7 +21,7 @@ function setup({ignoreAbort = false} = {}) {
             this.html = value;
             this.writes++;
             this.elements = {};
-            for (const className of ['order-product-back', 'order-product-retry', 'order-product-translate-retry']) {
+            for (const className of ['order-product-back', 'order-product-retry', 'order-product-translate-retry', 'order-product-description']) {
                 if (value.includes(className)) this.elements['.' + className] = new Element();
             }
             if (value.includes('order-product-translation')) {
@@ -266,4 +266,31 @@ test('structured API errors preserve their specific backend explanation', async 
     assert.doesNotMatch(app.dialog().body.innerHTML, /商品服务通信异常/);
     assert.equal(app.requests.length, 1);
     assert.equal(app.timers.size, 0);
+});
+
+test('fast stage displays SKU content while description loads and patches only description later', async () => {
+    const app = setup();
+    const opened = app.context.openOrderProductDetail('MLM123');
+    assert.equal(app.requests[0].params.get('description'), '0');
+    app.respond(0, {...product(), description: {}, description_pending: true});
+    await opened;
+    const body = app.dialog().body, writes = body.writes;
+    assert.match(body.innerHTML, /商品描述加载中/);
+    assert.match(body.innerHTML, /全部 SKU/);
+    body.scrollTop = 240;
+    app.respond(1, {...product(), translation_error: '模型暂不可用'});
+    await tick();
+    assert.equal(body.writes, writes);
+    assert.equal(body.scrollTop, 240);
+    assert.match(body.querySelector('.order-product-description').innerHTML, /Descripción completa/);
+});
+
+test('cached translated detail does not issue another translation request', async () => {
+    const app = setup();
+    const opened = app.context.openOrderProductDetail('MLM123');
+    app.respond(0, {...product(), translations_ready: true, translations_zh: {'Zapatos para niños':'童鞋'}});
+    await opened;
+    assert.equal(app.requests.length, 1);
+    assert.match(app.dialog().body.innerHTML, /童鞋/);
+    assert.equal(app.dialog().body.querySelector('.order-product-translation').hidden, true);
 });

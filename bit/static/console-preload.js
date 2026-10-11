@@ -24,7 +24,7 @@
         const storeLinks = () => {
             const [sort, direction] = (storeLinkSalesSort.value || 'sold_quantity:desc').split(':');
             const params = new URLSearchParams({search: storeLinkSearch.value.trim(), site_id: storeLinkSiteFilter.value,
-                group_name: storeLinkGroupFilter.value, status: storeLinkStatusFilter.value,
+                group_name: storeLinkGroupFilter.value, salesperson: storeLinkSalespersonFilter.value, status: storeLinkStatusFilter.value,
                 promotion_applied: storeLinkPromotionFilter.value, advertising_enabled: storeLinkAdvertisingFilter.value,
                 video_uploaded: storeLinkVideoFilter.value, management_category_id: storeLinkProductCategoryFilter.value,
                 mercado_category: storeLinkMercadoCategoryFilter.value, include_categories: '0', sort_by: sort,
@@ -100,7 +100,7 @@
         // Evaluate once: an exception in one optional module never prevents other pages warming.
         const paths = new Set();
         modules.forEach(item => {
-            try {const requests = item.requests?.() || []; requests.forEach(address => paths.add(new URL(address, location.href).pathname)); item.requests = () => requests;}
+            try {const requests = (item.requests?.() || []).filter(address => !/^\/api\/(?:store-analysis|order-analysis\/|ad-analysis)/.test(address)); requests.forEach(address => paths.add(new URL(address, location.href).pathname)); item.requests = () => requests;}
             catch (_) {item.requests = () => [];}
         });
         runtime.configure({modules, allowedPaths: [...paths], scopeUrl: enterpriseScopedUrl});

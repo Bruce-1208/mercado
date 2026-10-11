@@ -12,6 +12,24 @@ from pathlib import Path
 SUPPORTED_AGENT_PLATFORMS = frozenset(("windows", "macos"))
 
 
+def published_agent_version(project_root, platform_name):
+    """Use the downloadable binary's release metadata, not newer source code."""
+    import re
+    root = Path(project_root)
+    target = "macos" if any(word in str(platform_name).lower() for word in ("darwin", "macos")) else "windows"
+    if any(path.is_file() for path in _executable_candidates(root, target)):
+        try:
+            data = json.loads((root / "dist" / f"{target}-agent-build.json").read_text())
+            return str(data.get("agent_version") or "")
+        except (OSError, ValueError):
+            return ""
+    try:
+        match = re.search(r'^AGENT_VERSION = "([0-9.]+)"', (root / "local_agent.py").read_text(), re.M)
+        return match.group(1) if match else ""
+    except OSError:
+        return ""
+
+
 def normalize_agent_platform(value):
     normalized = str(value or "windows").strip().lower()
     aliases = {

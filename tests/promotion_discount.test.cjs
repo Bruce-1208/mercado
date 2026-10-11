@@ -7,7 +7,7 @@ const code = html.slice(html.indexOf('function minimumDiscount'), html.indexOf('
 function setup(items, value='20') {
   const fields = {batchDiscountValue:{value}};
   items.forEach(row=>fields[`price-${row.id}`]={value:'old'});
-  const context = {state:{items,selectedItems:new Set(items.map(r=>r.id)),preview:{}}, $:id=>fields[id],feedback:()=>{}};
+  const context = {state:{items,selectedItems:new Set(items.map(r=>r.id)),preview:{}}, $:id=>fields[id],feedback:()=>{},document:{querySelectorAll:()=>[]},updateSelection:()=>{}};
   vm.createContext(context); vm.runInContext(code,context);
   return {context,fields};
 }
@@ -29,6 +29,7 @@ test('bulk discount updates eligible selected rows and skips out-of-range prices
   assert.equal(fields['price-1'].value,'80.00');
   for(const id of [2,3,4,5])assert.equal(fields[`price-${id}`].value,'old');
   assert.equal(c.state.preview,null);
+  assert.deepEqual([...c.state.selectedItems],[1]);
 });
 test('invalid discounts leave prices unchanged',()=>{
   for(const value of ['', '-1','100','NaN','Infinity']){

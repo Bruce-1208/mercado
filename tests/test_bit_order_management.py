@@ -445,7 +445,7 @@ def test_bulk_update_orders_supports_status_and_complete_purchase_order():
 def test_order_tracking_route_returns_inline_timeline_data():
     tracking = {
         "tracking_number": "SF123456",
-        "external_url": "https://www.kuaidi100.com/chaxun?com=shunfeng&nu=SF123456",
+        "external_url": "https://www.baidu.com/s?wd=SF123456%20%E7%89%A9%E6%B5%81%E6%9F%A5%E8%AF%A2",
         "events": [{"time": "2026-08-24 10:00", "description": "已揽收"}],
     }
     with patch.object(workbench.bit_db_api, "get_order_tracking", return_value=tracking):

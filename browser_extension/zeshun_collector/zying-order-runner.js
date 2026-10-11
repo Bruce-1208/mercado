@@ -94,7 +94,7 @@ globalThis.ZeshunOrderSync = (() => {
         // it back instead of replaying the POST or leaving its login tab closed.
         if (error.status && error.status < 500) throw error;
         const saved = await api("status");
-        if (!saved.running || saved.date_start !== params.date_start || saved.date_end !== params.date_end) throw error;
+        if (!saved.running || saved.date_start !== params.date_start || saved.date_end !== params.date_end || (saved.order_status || "") !== (params.order_status || "")) throw error;
         state = saved;
       }
       return state.running ? open(state) : state;

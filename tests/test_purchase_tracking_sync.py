@@ -117,8 +117,8 @@ def test_plugin_sync_skip_is_persistent_and_user_scoped(tmp_path):
     path = tmp_path / 'tracking.sqlite3'
     manager = PluginPurchaseTrackingManager(path)
     state = manager.create(7, platform='1688', orders=[
-        {'order_id': '1', 'purchase_order': 'PO-1'},
-        {'order_id': '2', 'purchase_order': 'PO-2'},
+        {'order_id': '1', 'purchase_order': '5127480146121008319'},
+        {'order_id': '2', 'purchase_order': '5127480146121008320'},
     ])
     request_id = state['request_id']
     manager.mark_waiting_login(7, request_id)
@@ -134,7 +134,7 @@ def test_plugin_sync_skip_is_persistent_and_user_scoped(tmp_path):
     assert restored.history(8) == []
     assert len(restored.history(7)) == 1
     assert final['results'][0]['recorded_at']
-    restored.create(7, platform='taobao', orders=[{'order_id': '1', 'purchase_order': 'PO-1'}])
+    restored.create(7, platform='taobao', orders=[{'order_id': '1', 'purchase_order': '3317079612288041551'}])
     assert len(restored.history(7)) == 2
 
 
@@ -180,26 +180,34 @@ def test_plugin_direct_start_and_result_routes(monkeypatch, tmp_path):
     updated = []
     monkeypatch.setattr(workbench.bit_db_api, 'get_purchase_tracking_orders',
                         lambda ids, **kwargs: read.append((ids, kwargs)) or [
-                            {'order_id': '1', 'purchase_order': 'PO-1'},
-                            {'order_id': '2', 'purchase_order': 'PO-2'},
+                            {'order_id': '1', 'purchase_order': '5127480146121008319'},
+                            {'order_id': '2', 'purchase_order': '5127480146121008320'},
+                            {'order_id': '3', 'purchase_order': '261009-557800569231682'},
                         ])
     monkeypatch.setattr(workbench.bit_db_api, 'bulk_update_orders',
                         lambda ids, **kwargs: updated.append((ids, kwargs)) or {'matched': 1})
     workbench.app.config.update(TESTING=True, SECRET_KEY='tracking-test')
     user = {'id': 7, 'username': 'collector', 'access_version': 0}
+    monkeypatch.setattr(workbench.bit_db_api, 'account_billing', lambda _: {'status': 'active'})
+    monkeypatch.setattr(workbench, 'get_current_workbench_user', lambda: user)
+    monkeypatch.setattr(workbench, '_authorized_token_ids_for_user', lambda _: None)
     token = workbench.create_browser_extension_token(user)
     headers = {'Authorization': f'Bearer {token}'}
     client = workbench.app.test_client()
     response = client.post('/api/browser-extension/purchase-tracking/start', json={'platform': '1688', 'date_start': '2026-10-01', 'date_end': '2026-10-03'}, headers=headers)
     assert response.status_code == 202, response.json
     assert read == [([], {'all_orders': True, 'date_start': '2026-10-01', 'date_end': '2026-10-03', 'missing_tracking': True})]
+    assert [row['order_id'] for row in response.json['data']['orders']] == ['1', '2']
     request_id = response.json['data']['request_id']
     for dates in ({}, {'date_start': '2026-10-04', 'date_end': '2026-10-03'}, {'date_start': 'bad', 'date_end': '2026-10-03'}):
         invalid = client.post('/api/browser-extension/purchase-tracking/start', json={'platform': '1688', **dates}, headers=headers)
         assert invalid.status_code == 400
     assert len(read) == 1
     assert client.post('/api/browser-extension/purchase-tracking/prepare', json={'request_id': request_id}, headers=headers).status_code == 200
-    assert client.post('/api/browser-extension/purchase-tracking/claim', json={'request_id': request_id}, headers=headers).status_code == 200
+    outdated = client.post('/api/browser-extension/purchase-tracking/claim', json={'request_id': request_id}, headers=headers)
+    assert outdated.status_code == 400
+    assert '更新泽顺插件' in outdated.json['message']
+    assert client.post('/api/browser-extension/purchase-tracking/claim', json={'request_id': request_id, 'query_version': 2}, headers=headers).status_code == 200
     for order_id, status, tracking in [('1', 'not_found', ''), ('2', 'synced', 'SF12345678')]:
         response = client.post('/api/browser-extension/purchase-tracking/result', headers=headers,
                                json={'request_id': request_id, 'order_id': order_id, 'status': status, 'tracking_number': tracking})
@@ -269,3 +277,70 @@ def test_tracking_date_range_and_missing_tracking_query(monkeypatch):
     assert "synced.`date_created` >= %s" in sql
     assert "synced.`date_created` < %s" in sql
     assert params == [datetime(2026, 9, 30, 16), datetime(2026, 10, 3, 16)]
+
+
+def test_plugin_reset_dates_only_ends_waiting_task(tmp_path):
+    import pytest
+    from bit.purchase_tracking_sync import PluginPurchaseTrackingManager
+
+    manager = PluginPurchaseTrackingManager(tmp_path / 'reset.sqlite3')
+    orders = [{'order_id': '1', 'purchase_order': '5127480146121008319'}]
+    state = manager.create(7, platform='1688', orders=orders)
+    manager.mark_waiting_login(7, state['request_id'])
+    result = manager.fail(7, state['request_id'], '重新选择日期', pending_only=True)
+    assert not result['running']
+    restored = PluginPurchaseTrackingManager(tmp_path / 'reset.sqlite3')
+    assert restored.status(7)['phase'] == 'error'
+    new = restored.create(7, platform='1688', orders=orders)
+    assert new['request_id'] != state['request_id']
+    restored.claim(7, new['request_id'])
+    with pytest.raises(ValueError, match='无法重新选择日期'):
+        restored.fail(7, new['request_id'], '重新选择日期', pending_only=True)
+    assert restored.status(7)['phase'] == 'syncing'
+
+
+def test_plugin_filters_platform_and_splits_procurement_numbers(tmp_path):
+    import pytest
+    from bit.purchase_tracking_sync import PluginPurchaseTrackingManager
+    manager = PluginPurchaseTrackingManager(tmp_path / 'filter.sqlite3')
+    pdd = '261009-557800569231682'
+    pdd2 = '261009-673028555121287'
+    ali = '5127480146121008319'
+    taobao = '3317079612288041551'
+    rows = [
+        {'order_id': '1', 'purchase_order': pdd + '，' + pdd2 + ';' + pdd},
+        {'order_id': '2', 'purchase_order': ali},
+        {'order_id': '3', 'purchase_order': taobao},
+        {'order_id': '4', 'purchase_order': pdd + ',' + ali},
+        {'order_id': '5', 'purchase_order': 'unknown'},
+    ]
+    for user, platform, expected in [(1, 'pdd', ['1', '4']), (2, '1688', ['2', '4']),
+                                      (3, 'taobao', ['3']), (4, 'xianyu', ['3'])]:
+        state = manager.create(user, platform=platform, orders=rows)
+        assert [row['order_id'] for row in state['orders']] == expected
+        if platform == 'pdd':
+            assert state['orders'][0]['purchase_orders'] == [pdd, pdd2]
+            assert state['orders'][1]['other_purchase_orders'] == [ali]
+    with pytest.raises(ValueError, match='没有匹配'):
+        manager.create(5, platform='pdd', orders=[rows[1]])
+
+
+def test_upgrade_preserves_legacy_log_and_releases_stuck_task(tmp_path):
+    import json
+    from bit.purchase_tracking_sync import PluginPurchaseTrackingManager
+    manager = PluginPurchaseTrackingManager(tmp_path / 'upgrade.sqlite3')
+    state = manager.create(7, platform='pdd', orders=[
+        {'order_id': '1', 'purchase_order': '261009-557800569231682'}])
+    state.pop('query_version')
+    state.update(phase='syncing', skipped=1, results=[{'order_id': 'old', 'status': 'not_found'}])
+    with manager._connect_logs() as connection:
+        connection.execute('UPDATE tracking_runs SET state=? WHERE request_id=?',
+                           (json.dumps(state), state['request_id']))
+    restored = PluginPurchaseTrackingManager(tmp_path / 'upgrade.sqlite3')
+    result = restored.status(7)
+    assert result['phase'] == 'error'
+    assert not result['running']
+    assert result['results'] == state['results']
+    assert '更新泽顺插件' in result['message']
+    new = restored.create(7, platform='pdd', orders=state['orders'])
+    assert new['query_version'] == 2

@@ -4,7 +4,7 @@ from bit import mercado_action_center as module
 
 class Store:
     def __init__(self):
-        self.tasks = {1: dict(id=1, token_id=7, organization_key='org', topic='claims', status='open'),
+        self.tasks = {1: dict(id=1, token_id=7, organization_key='org', topic='items', status='open'),
                       2: dict(id=2, token_id=8, organization_key='other', status='open')}
         self.writes = []
     def list_mercado_store_tokens(self):
@@ -77,12 +77,12 @@ def test_external_status_persists_without_changing_platform_state(monkeypatch):
 def test_new_buyer_message_reopens_handling(monkeypatch):
     client, _, _, _ = setup(monkeypatch)
     stamp = ['2026-10-09T01:00:00Z']
-    monkeypatch.setattr(module, '_unanswered_post_sale', lambda *args: {'rows':[dict(token_id=7, pack_id='P',latest_at=stamp[0])], 'errors':[]})
-    row = client.get('/api/mercado/today/post-sale').json['data']['rows'][0]
+    monkeypatch.setattr(module, '_unanswered_claims', lambda *args: {'rows':[dict(token_id=7, claim_id='C', text='（附件消息）', has_text=False,latest_at=stamp[0])], 'errors':[]})
+    row = client.get('/api/mercado/today/claims').json['data']['rows'][0]
     client.patch('/api/mercado/today/batch-status', json={'items':[{'ref':row['work_ref']}], 'status':'resolved'})
-    assert client.get('/api/mercado/today/post-sale').json['data']['rows'][0]['work_status'] == 'resolved'
+    assert client.get('/api/mercado/today/claims').json['data']['rows'][0]['work_status'] == 'resolved'
     stamp[0] = '2026-10-09T02:00:00Z'
-    assert client.get('/api/mercado/today/post-sale?refresh=1').json['data']['rows'][0]['work_status'] == 'open'
+    assert client.get('/api/mercado/today/claims?refresh=1').json['data']['rows'][0]['work_status'] == 'open'
 
 
 def test_batch_reports_partial_failure(monkeypatch):

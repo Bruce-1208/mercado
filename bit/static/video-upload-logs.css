@@ -1,0 +1,14 @@
+.video-upload-logs { min-width: 0; }
+.video-upload-logs .market-metric-note { white-space: normal; overflow-wrap: anywhere; }
+.video-upload-log-table pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.video-upload-log-table { overflow-x: auto; max-width: 100%; border: 1px solid var(--line, #e2e7ef); border-radius: 10px; }
+.video-upload-log-table table { width: 100%; min-width: 1120px; border-collapse: collapse; background: var(--panel, white); font-size: 13px; }
+.video-upload-log-table th, .video-upload-log-table td { padding: 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line, #e2e7ef); }
+.video-upload-log-table th { white-space: nowrap; background: #f7f9fc; color: #68758a; font-weight: 600; }
+.video-upload-log-table td { max-width: 240px; overflow-wrap: anywhere; }
+.video-upload-log-table small { display: block; color: #68758a; margin-top: 5px; }
+.video-upload-log-table img { width: 56px; height: 56px; object-fit: contain; border: 1px solid #e2e7ef; border-radius: 8px; background: white; }
+.video-upload-log-table a { color: #245bc4; }
+.video-upload-log-table .upload-failed { color: #b42318; }
+.video-upload-logs .ai-video-filter-bar input { min-width: 0; width: 100%; }
+@media (max-width: 640px) { .video-upload-logs .ai-video-library-head { flex-wrap: wrap; gap: 10px; } }

@@ -9,7 +9,7 @@ function setup(savedQuery = null) {
     const calls = [];
     const pending = [];
     const context = vm.createContext({
-        Date, URLSearchParams, Map, Set,
+        Date, URLSearchParams, Map, Set, Headers, setTimeout, clearTimeout,
         localStorage: savedQuery ? {getItem: () => JSON.stringify(savedQuery), setItem() {}} : undefined,
         document: {getElementById(id) {
             if (!elements.has(id)) elements.set(id, {value: id.endsWith('-metric') ? 'orders' : '', textContent: '', innerHTML: '', addEventListener() {}});
@@ -21,6 +21,7 @@ function setup(savedQuery = null) {
             return new Promise(resolve => pending.push({url, resolve}));
         },
     });
+    vm.runInContext(fs.readFileSync('bit/static/analysis-request.js', 'utf8'), context);
     vm.runInContext(source, context);
     function respond(prefix, data, ok = true) {
         const index = pending.findIndex(request => request.url.startsWith(prefix));

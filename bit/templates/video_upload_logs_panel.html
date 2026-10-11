@@ -1,0 +1,27 @@
+<section class="panel ai-video-library video-upload-logs" id="video-upload-logs" {% if job_id is defined %}data-job-id="{{ job_id }}"{% endif %}>
+    <div class="ai-video-library-head">
+        <div><h3>{% if job_id is defined %}此视频上传日志{% else %}全部视频上传日志{% endif %}</h3><p class="market-metric-note">按上传时间倒序展示{% if job_id is not defined %}；包含 AI 成品和已有视频的上传记录{% endif %}。</p></div>
+        <button class="secondary" type="button" onclick="VideoUploadLogs.load(true)">刷新日志</button>
+    </div>
+    <form class="ai-video-filter-bar" id="video-upload-log-filters" role="search" aria-label="视频上传日志筛选">
+        <label><span>业务员（上传人）</span><input name="salesperson" type="search" placeholder="输入上传人姓名"></label>
+        <label><span>店铺 / 店铺组 / 链接</span><input name="search" type="search" placeholder="名称或编号"></label>
+        <label><span>上传时间从</span><input name="from" type="date"></label>
+        <label><span>上传时间到</span><input name="to" type="date"></label>
+        <button class="secondary" type="submit">查询日志</button>
+        <button class="secondary" type="reset">重置</button>
+    </form>
+    <p id="video-upload-log-message" class="market-metric-note" role="status" aria-live="polite">正在读取上传日志…</p>
+    <div class="video-upload-log-table"><table><thead><tr>
+        <th>链接主图</th><th>链接名 / 编号</th><th>业务员（上传人）</th><th>上传时间</th>
+        <th>店铺名</th><th>店铺组</th><th>视频</th><th>上传 / 审核状态</th><th>受理编号 / 最近同步</th>
+    </tr></thead><tbody id="video-upload-log-rows"></tbody></table></div>
+    <div class="ai-video-pagination">
+        <span id="video-upload-log-summary">共 0 条</span>
+        <div class="ai-video-pagination-actions">
+            <button class="secondary" id="video-upload-log-prev" type="button" onclick="VideoUploadLogs.go(-1)" disabled>上一页</button>
+            <span id="video-upload-log-page">第 1 / 1 页</span>
+            <button class="secondary" id="video-upload-log-next" type="button" onclick="VideoUploadLogs.go(1)" disabled>下一页</button>
+        </div>
+    </div>
+</section>

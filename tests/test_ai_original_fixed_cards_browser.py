@@ -4,6 +4,25 @@ import pytest
 from test_console_ui_browser import ROOT, console_browser, console_page  # noqa: F401
 
 
+def test_unattempted_category_is_not_reported_as_failure_but_false_completion_is(console_page):
+    page = console_page
+    page.evaluate('''() => {
+        document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
+        document.getElementById('tab-ai-original-products').classList.add('active');
+        document.getElementById('ai-original-platform').value = 'mercadolibre';
+        const pending = {id:1, ai_status:'pending', category_id:'',
+            original_1688:{title:'尚未生成的商品'}, ai_original:{status:'pending'}};
+        aiOriginalRows = [pending, {...pending, id:2, ai_status:'completed',
+            ai_original:{status:'completed'}, original_1688:{title:'旧数据错误完成'}}];
+        renderAiOriginalProducts(); decorateAiOriginalWorkbench();
+    }''')
+    cards = page.locator('#ai-original-grid > .ai-original-card')
+    assert '美客多类目待修正' not in cards.nth(0).text_content()
+    assert '美客多类目生成失败' not in cards.nth(0).text_content()
+    assert cards.nth(1).locator('.ai-original-badge').text_content() == '失败'
+    assert '美客多类目生成失败，可重新生成' in cards.nth(1).text_content()
+
+
 @pytest.mark.parametrize('width', [1440, 1024, 390])
 def test_fixed_cards_bilingual_titles_and_visible_failure(console_page, width):
     page = console_page

@@ -13,6 +13,7 @@ function setup() {
   ], enrolled_promotions: [{name: '已参与', promotion_type: 'DEAL', status_raw: 'started'}]};
   const permissions = new Set(['promotions.view', 'promotions.execute']);
   const context = vm.createContext({
+    window: {addEventListener(){}},
     URLSearchParams, storeLinkRows: [row], storeLinkPage: 3, storeLinkPendingRefreshPage: null,
     storeLinkMessage: {textContent: ''}, hasWorkbenchPermission: p => permissions.has(p),
     document: {getElementById: id => id === 'promotions-frame' ? frame : null},

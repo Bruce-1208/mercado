@@ -215,6 +215,16 @@ def list_ai_video_jobs(
     return _request("GET", "/api/db/ai-videos/jobs", params=params, timeout=60)
 
 
+def list_video_upload_logs(**filters):
+    if DB_MODE == "mysql":
+        from bit.video_upload_logs import list_uploads
+        return list_uploads(**filters)
+    params = {key: value for key, value in filters.items() if value is not None}
+    if "allowed_token_ids" in params:
+        params["token_ids"] = ",".join(str(int(i)) for i in params.pop("allowed_token_ids"))
+    return _request("GET", "/api/db/ai-videos/upload-logs", params=params, timeout=60)
+
+
 def get_ai_video_job(job_id):
     if DB_MODE == "mysql":
         from bit.bit_ai_video import public_job
@@ -331,13 +341,20 @@ def advertise_mercado_store_links(link_ids, *, budget, roas_target, campaign_nam
 
 
 def get_mercado_ad_analysis(
-    *, date_from="", date_to="", token_ids=None, refresh_token_ids=None, force=False
+    *, date_from="", date_to="", token_ids=None, refresh_token_ids=None, force=False,
+    page=None, page_size=100, account="", site="", status="", search="", salesperson="", group_name="", summary_only=False
 ):
     params = {
         "date_from": str(date_from or "").strip(),
         "date_to": str(date_to or "").strip(),
         "force": "1" if force else "0",
     }
+    view = dict(page_size=page_size, account=account, site=site, status=status, search=search,
+                salesperson=salesperson, group_name=group_name, summary_only=summary_only)
+    if page is not None:
+        view['page'] = page
+    if page is not None or summary_only:
+        params.update(view)
     if token_ids is not None:
         params["token_ids"] = [
             int(value) for value in token_ids or [] if int(value or 0) > 0
@@ -354,7 +371,7 @@ def get_mercado_ad_analysis(
             date_to=params["date_to"],
             token_ids=params.get("token_ids"),
             refresh_token_ids=params.get("refresh_token_ids"),
-            force=bool(force),
+            force=bool(force), **view,
         )
     remote_params = dict(params)
     if token_ids is not None and not remote_params.get("token_ids"):
@@ -1024,6 +1041,9 @@ def list_orders(
     include_summary=True,
     summary_only=False,
     sync_identifiers_only=False,
+    purchase_platform="",
+    freight_difference_min=None,
+    freight_difference_max=None,
 ):
     normalized_store_ids = [int(value) for value in store_ids or [] if str(value or "").lstrip("-").isdigit() and int(value) != 0]
     normalized_salespeople = [
@@ -1045,6 +1065,11 @@ def list_orders(
         "page": int(page or 1),
         "page_size": int(page_size or 50),
     }
+    for key, value in (("freight_difference_min", freight_difference_min), ("freight_difference_max", freight_difference_max)):
+        if value is not None and str(value).strip():
+            local_params[key] = str(value)
+    if purchase_platform:
+        local_params["purchase_platform"] = purchase_platform
     if not include_summary:
         local_params["include_summary"] = False
     if summary_only:
@@ -1316,6 +1341,7 @@ def list_mercado_store_links(
     filter_token_ids=None,
     site_id="",
     group_name="",
+    salesperson="",
     status="",
     promotion_applied=None,
     advertising_enabled=None,
@@ -1334,6 +1360,7 @@ def list_mercado_store_links(
         "search": search or "",
         "site_id": str(site_id or "").strip().upper(),
         "group_name": str(group_name or "").strip(),
+        "salesperson": str(salesperson or "").strip(),
         "status": status or "",
         "promotion_applied": promotion_applied,
         "advertising_enabled": advertising_enabled,
@@ -1371,6 +1398,7 @@ def list_mercado_store_links(
             filter_token_ids=params.get("filter_token_ids"),
             site_id=params["site_id"],
             group_name=params["group_name"],
+            salesperson=params["salesperson"],
             status=params["status"],
             promotion_applied=params["promotion_applied"],
             advertising_enabled=params["advertising_enabled"],
@@ -1390,6 +1418,16 @@ def list_mercado_store_links(
     return _request("GET", "/api/db/store-links", params=params)
 
 
+def price_competition_call(action, payload, *, allowed_token_ids=None, actor=""):
+    if DB_MODE == "mysql":
+        from bit.price_competition import dispatch
+        return dispatch(action, payload, allowed_token_ids=allowed_token_ids, actor=actor)
+    return _request("POST", f"/api/db/price-competition/{action}", json={
+        "payload": payload, "actor": actor,
+        "allowed_token_ids": sorted(allowed_token_ids) if allowed_token_ids is not None else None,
+    }, timeout=(15, 180), max_attempts=1)
+
+
 def size_chart_call(action, payload, *, organization_key, allowed_token_ids=None):
     """Keep templates and chart submissions on the central workbench server."""
     if DB_MODE == "mysql":
@@ -1400,6 +1438,17 @@ def size_chart_call(action, payload, *, organization_key, allowed_token_ids=None
         "payload": payload, "organization_key": organization_key,
         "allowed_token_ids": sorted(allowed_token_ids) if allowed_token_ids is not None else None,
     }, timeout=(15, 600), max_attempts=1)
+
+
+def product_diagnosis(operation, payload, *, allowed_token_ids=None, actor=""):
+    if DB_MODE == "mysql":
+        from bit.product_diagnosis import dispatch
+        return dispatch(operation, payload, allowed_token_ids=allowed_token_ids, actor=actor)
+    return _request("POST", "/api/db/product-diagnosis", json={
+        "operation": operation, "payload": payload,
+        "allowed_token_ids": None if allowed_token_ids is None else sorted(allowed_token_ids),
+        "actor": actor,
+    }, max_attempts=1)
 
 
 def list_clearance_alerts(*, allowed_token_ids=None, **filters):
@@ -1455,13 +1504,15 @@ def get_mercado_store_link_remote_update_status():
     return _request("GET", "/api/db/store-links/bulk-update/status")
 
 
-def start_store_link_sync(token_ids=None):
+def start_store_link_sync(token_ids=None, *, priority=False):
     payload = {"token_ids": [int(value) for value in token_ids or []]}
     if DB_MODE == "mysql":
         from bit.bit_store_link_sync import start_store_link_sync as local_start
 
-        started, state = local_start(payload["token_ids"])
+        started, state = local_start(payload["token_ids"], **({"priority": True} if priority else {}))
         return {"started": bool(started), "state": state}
+    if priority:
+        payload["priority"] = True
     return _request("POST", "/api/db/store-links/sync/start", json=payload)
 
 
@@ -1575,11 +1626,15 @@ def get_order_access_contexts(order_ids):
     return _request("POST", "/api/db/orders/access-contexts", json={"order_ids": ids})
 
 
-def get_purchase_tracking_orders(order_ids, *, all_orders=False, date_start=None, date_end=None, missing_tracking=False):
+def get_purchase_tracking_orders(order_ids, *, all_orders=False, date_start=None, date_end=None, missing_tracking=False, status="", allowed_token_ids=None):
     payload = {"order_ids": [str(value) for value in order_ids or []]}
     if all_orders:
         payload["all_orders"] = True
     filters = {"date_start": date_start, "date_end": date_end, "missing_tracking": missing_tracking} if date_start or date_end or missing_tracking else {}
+    if status:
+        filters["status"] = status
+    if allowed_token_ids is not None:
+        filters["allowed_token_ids"] = list(allowed_token_ids)
     payload.update(filters)
     if DB_MODE == "mysql":
         return _local_call("get_mercado_purchase_tracking_orders", payload["order_ids"], **({"all_orders": True} if all_orders else {}), **filters)
@@ -2529,6 +2584,7 @@ def list_mercado_product_items(
     collector_salesperson="", generator_salesperson="", weight_status="",
     collector_salesperson_exact=False, target_platform="mercadolibre",
     include_generator_options=False, include_total=True,
+    salesperson="", include_salesperson_options=False,
 ):
     params = {
         "weight_status": str(weight_status or "").strip().lower(),
@@ -2553,6 +2609,10 @@ def list_mercado_product_items(
         "zying_category": str(zying_category or "").strip(),
         "product_developer_id": str(product_developer_id or "").strip(),
     }
+    if str(salesperson or "").strip():
+        params["salesperson"] = str(salesperson).strip()
+    if include_salesperson_options:
+        params["include_salesperson_options"] = True
     if not include_total:
         params["include_total"] = False
     if collector_salesperson:
@@ -2585,6 +2645,38 @@ def list_mercado_product_items(
         return _collection_store_call(
             "list_product_items", **params
         )
+
+
+def list_mercado_product_mercado_categories(token_ids=None):
+    params = {}
+    if token_ids is not None:
+        params["token_ids"] = sorted({
+            int(value) for value in token_ids or () if int(value or 0) > 0
+        })
+    if DB_MODE == "mysql":
+        return _collection_store_call("list_product_mercado_categories", **params)
+    if token_ids is not None and not params["token_ids"]:
+        # Keep an explicit empty scope over query-string serialization.
+        params["token_ids"] = [""]
+    path = "/api/db/mercado-products/mercado-categories"
+    try:
+        return _request("GET", path, params=params, timeout=(3, 25), max_attempts=1)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("list_product_mercado_categories", **params)
+
+
+def list_mercado_product_salespeople(token_ids=None):
+    params = {}
+    if token_ids is not None:
+        params["token_ids"] = sorted({int(value) for value in token_ids or () if int(value or 0) > 0})
+    if DB_MODE == "mysql":
+        return _collection_store_call("list_product_salespeople", **params)
+    if token_ids is not None and not params["token_ids"]:
+        params["token_ids"] = [""]
+    return _request("GET", "/api/db/mercado-products/salespeople", params=params,
+                    timeout=(3, 5), max_attempts=1)
 
 
 def list_mercado_product_developers(token_ids=None):
@@ -2638,6 +2730,22 @@ def update_1688_product(product_item_id, changes):
         return _collection_store_call("update_1688_product", row_id, payload)
 
 
+def update_1688_product_items(product_item_ids, changes):
+    ids = [int(value) for value in product_item_ids or []]
+    payload = {"product_item_ids": ids, "changes": dict(changes or {})}
+    if DB_MODE == "mysql":
+        return _collection_store_call("update_1688_product_items", ids, payload["changes"])
+    path = "/api/db/1688-products/bulk-dimensions"
+    try:
+        return _request("PATCH", path, timeout=120, json=payload)
+    except RuntimeError as exc:
+        if "1688 产品不存在" in str(exc):
+            raise KeyError("部分 1688 产品不存在或已移除") from exc
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("update_1688_product_items", ids, payload["changes"])
+
+
 def upsert_ai_original_product(product, created_by=""):
     payload = {"product": dict(product or {}), "created_by": str(created_by or "")}
     if DB_MODE == "mysql":
@@ -2676,7 +2784,9 @@ def update_ai_original_product_items(product_item_ids, changes):
         return _collection_store_call(
             "update_ai_original_product_items", item_ids, payload
         )
-    path = "/api/db/ai-original-products/bulk-dimensions"
+    path = ("/api/db/ai-original-products/bulk-net-proceeds"
+            if set(payload).intersection({"net_proceeds_usd", "net_proceeds_ratio"})
+            else "/api/db/ai-original-products/bulk-dimensions")
     try:
         return _request(
             "PATCH", path, timeout=120,
@@ -3155,7 +3265,7 @@ def update_mercado_product_publish_record(record_id, **changes):
 def list_mercado_product_publish_records(
     search="", status="", store_name="", site_id="", group_name="",
     start_date="", end_date="", limit=500, offset=0, token_ids=None,
-    filter_token_ids=None,
+    filter_token_ids=None, salesperson="",
 ):
     params = {
         "search": str(search or ""),
@@ -3168,6 +3278,8 @@ def list_mercado_product_publish_records(
         "limit": int(limit),
         "offset": int(offset),
     }
+    if str(salesperson or "").strip():
+        params["salesperson"] = str(salesperson).strip()
     if token_ids is not None:
         params["token_ids"] = [
             int(value) for value in token_ids or [] if int(value or 0) > 0
@@ -3285,6 +3397,9 @@ def _mercado_action_center_local(operation, payload=None):
     from bit import bit_mysql
 
     data = dict(payload or {})
+    if operation == "automation_center":
+        from bit.automation_center import local
+        return local(data)
     if operation == "employee_tasks":
         from bit.employee_tasks import employee_tasks_local
         return employee_tasks_local(data)
@@ -3564,15 +3679,17 @@ def employee_tasks(payload):
 
 
 def get_order_product_detail(order_ids, product_id, allowed_token_ids=None, *,
-                             include_translation=False, force_refresh=False):
+                             include_translation=False, force_refresh=False, include_description=True):
     if DB_MODE == "mysql":
         from bit.order_product_details import get_order_product_detail as read
         return read(order_ids, product_id, allowed_token_ids,
-                    include_translation=include_translation, force_refresh=force_refresh)
+                    include_translation=include_translation, force_refresh=force_refresh,
+                    include_description=include_description)
     return _request("POST", "/api/db/orders/product-detail", json={
         "order_ids": order_ids, "product_id": product_id,
         "allowed_token_ids": None if allowed_token_ids is None else list(allowed_token_ids),
         "include_translation": bool(include_translation), "force_refresh": bool(force_refresh),
+        "include_description": bool(include_description),
     }, timeout=(3, 45) if include_translation else (3, 35), max_attempts=1)
 
 

@@ -1655,13 +1655,17 @@ def build_user_product_family_payload(
             child["price"] = raw_variation["price"]
         variation_picture_urls = list(variation.get("picture_ids") or [])
         main_picture_url = str(pictures[0].get("source") or "") if pictures else ""
-        # AI-original rows carry a locally generated white-background cover.
-        # Keep it first even when the supplier exposes per-variation photos;
-        # otherwise those photos replace the clean cover and can put seller
-        # banners/text back in the marketplace's moderation thumbnail.
+        # Each AI-original SKU owns its cover; a parent cover can depict a
+        # different color/model and must never replace a child's white image.
         is_ai_white_cover = "-ai-white." in urlparse(main_picture_url).path.lower()
-        if is_ai_white_cover and variation_picture_urls:
-            ordered_urls = list(dict.fromkeys([main_picture_url, *variation_picture_urls]))
+        if is_ai_white_cover or raw_variation.get("white_image_url"):
+            from erp.ai_original_images import variation_white_image_ready
+            if not variation_white_image_ready(raw_variation):
+                raise MercadoLibreError(f"SKU {index} 尚未完成白底主图处理，请重新执行 AI 任务")
+            ordered_urls = list(dict.fromkeys([
+                raw_variation["white_image_url"], *variation_picture_urls,
+                *(picture["source"] for picture in pictures if picture.get("source") != main_picture_url),
+            ]))
             child["pictures"] = [
                 {"source": url} for url in ordered_urls[:MAX_PICTURES_PER_LISTING]
             ]

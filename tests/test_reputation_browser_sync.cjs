@@ -35,14 +35,6 @@ test('warning text escapes HTML and preserves the entire detail', () => {
     assert.ok(!render('暂无 API 告警（仅限接口可获取记录）').includes('data-warning-detail='));
 });
 
-test('site state distinguishes confirmed ban, no ban and missing evidence', () => {
-    const render = loadFunction('renderReputationSiteStatus', 'async function openReputationBrowser', {escapeHtml});
-    assert.match(render('已封禁（站点销售暂停）'), /reputation-site-status risk/);
-    assert.match(render('未封禁'), /reputation-site-status normal/);
-    assert.match(render('待确认（API 仅返回公开 active）'), /reputation-site-status unconfirmed/);
-    assert.match(render('待确认（限制刊登，销售权限未提供）'), /unconfirmed/);
-});
-
 test('the reputation update UI has no browser dispatch controls or requests', () => {
     assert.ok(!template.includes('id="reputation-browser-sync-btn"'));
     assert.ok(!template.includes('runReputationBrowserSync'));

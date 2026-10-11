@@ -185,19 +185,22 @@
 - 页面同时显示平台建议价、最终售价、预计净收益和利润红线；
 - 任一促销写操作可追溯到操作人和官方响应。
 
-### 阶段 5：Catalog 竞争与智能调价（第 10 周）
+### 阶段 5：价格竞争中心与智能调价（第 10 周）
 
 #### 官方资源
 
-- `GET /marketplace/items/{item_id}/price_to_win?...`
+- 普通商品：`GET /marketplace/benchmarks/items/{item_id}/details`（官方参考价可能缺失）；
+- Catalog 商品：`GET /marketplace/items/{item_id}/price_to_win?caller.id=...&client.id=...`；
 - `marketplace item competition` 通知主题。
 
 #### 开发内容
 
 - 在店铺链接增加竞争状态：winning、sharing_first_place、losing、listed；
+- 按实时 `catalog_listing` 区分普通商品和 Catalog 商品，不混用参考价与竞争目标价；
+- 并排展示当前售价、官方参考价、竞争目标价、最低可接受价和调整后预计利润；
 - 展示 `price_to_win`、当前价、价差，以及 fulfillment、free shipping 等 boosts；
 - 结合现有成本模型计算最低安全售价和调整后利润；
-- 第一版只给出建议并支持人工确认；观察稳定后再开发规则化自动调价；
+- 第一版只给出建议并支持人工确认核对记录，实际改价沿用店铺链接流程；观察稳定后再开发规则化自动调价；
 - 自动调价必须设置单次最大降幅、每日最大次数、最低利润、活动价冲突保护和冷却时间。
 
 #### 验收标准

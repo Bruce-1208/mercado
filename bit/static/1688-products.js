@@ -7,6 +7,9 @@ const PRODUCTS_1688_PAGE_SIZES = [50, 100, 200];
 let products1688PageSize = 50;
 let products1688Categories = [];
 let products1688CategorySaving = false;
+let products1688BulkIds = [];
+let products1688BulkSaving = false;
+const PRODUCTS_1688_BULK_FIELDS = ["weight_g", "package_length_cm", "package_width_cm", "package_height_cm"];
 let products1688EditState = null;
 let products1688EditSaving = false;
 let products1688EditRevision = 0;
@@ -205,6 +208,8 @@ function products1688UpdateSelection() {
     selectAll.checked = visible > 0 && products1688Rows.every(row => products1688Selected.has(Number(row.id)));
     selectAll.indeterminate = count > 0 && !selectAll.checked;
   }
+  const bulkButton = document.getElementById("products-1688-bulk-edit");
+  if (bulkButton) bulkButton.disabled = !count || products1688Loading || products1688BulkSaving || products1688EditSaving;
   const deleteButton = document.getElementById("products-1688-delete");
   if (deleteButton) deleteButton.disabled = products1688Loading || !products1688Selected.size || aiOriginalDeleteRunning;
   const reviewButton = document.getElementById("products-1688-review-submit");
@@ -249,7 +254,7 @@ function products1688RenderRows() {
       <td data-label="采集时间">${products1688Escape(products1688Date(original.collected_at || row.added_at))}</td>
       <td data-label="操作"><div class="p1688-row-actions">${window.catalogVisibilityControl ? window.catalogVisibilityControl(row, "products") : ""}<button class="secondary" type="button" onclick="products1688OpenDetail(${Number(row.id)})">查看详情</button><button class="secondary" type="button" onclick="products1688OpenEdit(${Number(row.id)})">修改资料</button><button class="secondary" type="button" onclick="products1688OpenAiEditor(${Number(row.id)})">编辑刊登内容</button>${sourceUrl ? `<a href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">打开1688</a>` : ""}</div></td>
     </tr>`;
-  }).join("") : '<tr><td class="p1688-empty" colspan="12">暂无 1688 商品；请先在 1688 商品页使用泽顺插件采集。</td></tr>';
+  }).join("") : '<tr><td class="p1688-empty" colspan="12">没有符合当前条件的 1688 商品，请调整或清空筛选条件。<button type="button" onclick="products1688ResetFilters()">清空筛选</button></td></tr>';
   const total = Number(document.getElementById("products-1688-total-value")?.dataset.total || products1688Rows.length);
   const totalPages = Math.max(1, Math.ceil(total / products1688PageSize));
   const indicator = document.getElementById("products-1688-page-indicator");
@@ -294,6 +299,8 @@ function products1688Query() {
     review_status: "products-1688-review-filter",
     price_min: "products-1688-price-min",
     price_max: "products-1688-price-max",
+    weight_min: "products-1688-weight-min",
+    weight_max: "products-1688-weight-max",
     date_from: "products-1688-date-from",
     date_to: "products-1688-date-to"
   };
@@ -344,7 +351,7 @@ async function products1688FetchOptions() {
 }
 
 function products1688ResetFilters() {
-  ["search", "salesperson", "category-filter", "status-filter", "review-filter", "price-min", "price-max", "date-from", "date-to"].forEach(name => {
+  ["search", "salesperson", "category-filter", "status-filter", "review-filter", "price-min", "price-max", "weight-min", "weight-max", "date-from", "date-to"].forEach(name => {
     const control = document.getElementById(`products-1688-${name}`);
     if (control) control.value = "";
   });
@@ -386,6 +393,77 @@ async function products1688ApplyCategory() {
   }
 }
 
+function products1688BulkMessage(message, kind = "") {
+  const node = document.getElementById("products-1688-bulk-message");
+  if (node) { node.textContent = message; node.className = `p1688-edit-message ${kind}`.trim(); }
+}
+
+function products1688SetBulkBusy(busy) {
+  products1688BulkSaving = busy;
+  ["save", "cancel", "close", ...PRODUCTS_1688_BULK_FIELDS].forEach(key => {
+    const node = document.getElementById(`products-1688-bulk-${key}`);
+    if (node) node.disabled = busy;
+  });
+  products1688UpdateSelection();
+}
+
+function products1688OpenBulkEdit() {
+  if (products1688BulkSaving || products1688EditSaving || products1688Loading) return;
+  products1688BulkIds = products1688SelectedRows().map(row => Number(row.id));
+  if (!products1688BulkIds.length) return;
+  PRODUCTS_1688_BULK_FIELDS.forEach(key => { document.getElementById(`products-1688-bulk-${key}`).value = ""; });
+  document.getElementById("products-1688-bulk-selection").textContent = `将修改已勾选的 ${products1688BulkIds.length} 件产品`;
+  products1688BulkMessage("");
+  products1688SetBulkBusy(false);
+  document.getElementById("products-1688-bulk-dialog").showModal();
+}
+
+function products1688CloseBulkEdit() {
+  if (products1688BulkSaving) return;
+  document.getElementById("products-1688-bulk-dialog")?.close();
+  products1688BulkIds = [];
+}
+
+async function products1688SaveBulkEdit(event) {
+  event?.preventDefault();
+  if (products1688BulkSaving || !products1688BulkIds.length) return;
+  const changes = {};
+  for (const [key, label] of PRODUCTS_1688_EDIT_FIELDS.filter(([key]) => PRODUCTS_1688_BULK_FIELDS.includes(key))) {
+    const input = document.getElementById(`products-1688-bulk-${key}`);
+    const value = input.value.trim();
+    if (input.validity?.badInput || value && (!Number.isFinite(Number(value)) || Number(value) <= 0)) {
+      products1688BulkMessage(`${label}必须填写大于 0 的有效数字`, "error");
+      input.focus();
+      return;
+    }
+    if (value) changes[key] = Number(value);
+  }
+  if (!Object.keys(changes).length) { products1688BulkMessage("请至少填写一个需要修改的字段", "error"); return; }
+  const ids = [...products1688BulkIds];
+  products1688SetBulkBusy(true);
+  products1688BulkMessage("正在保存所选产品…");
+  try {
+    const response = await fetch("/api/1688-products/bulk-dimensions", {
+      method: "PATCH", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({product_item_ids: ids, changes})
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
+    products1688EditRevision++;
+    products1688SetBulkBusy(false);
+    products1688CloseBulkEdit();
+    const refreshed = await load1688Products(false, true);
+    products1688SetStatus(`已保存 ${Number(payload.data?.changed ?? ids.length)} 件产品的重量 / 尺寸${refreshed === false ? "，列表刷新失败，请刷新数据查看" : ""}`, refreshed === false ? "partial" : "success");
+    if (typeof loadAiOriginalProducts === "function") {
+      Promise.resolve().then(() => loadAiOriginalProducts({preserveTaskStatus: true})).catch(error => console.warn("1688 批量修改已保存，AI 列表刷新失败", error));
+    }
+  } catch (error) {
+    products1688BulkMessage(`保存失败：${error.message || error}`, "error");
+  } finally {
+    products1688SetBulkBusy(false);
+  }
+}
+
 function products1688EditValue(row, key) {
   const value = key === "net_proceeds_usd" ? row[key] : products1688SourceValue(row, key);
   return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) && Number(value) > 0 ? String(value) : "";
@@ -421,7 +499,7 @@ function products1688SetEditBusy(busy) {
 }
 
 function products1688OpenEdit(id) {
-  if (products1688EditSaving) return;
+  if (products1688EditSaving || products1688BulkSaving) return;
   const row = products1688Rows.find(item => Number(item.id) === Number(id));
   const dialog = document.getElementById("products-1688-edit-dialog");
   if (!row || !dialog) return;
@@ -549,6 +627,18 @@ async function products1688ApplyReviewStatus() {
 }
 
 async function load1688Products(resetPage = true, preserveRowsOnError = false) {
+  for (const [key, label] of [["weight", "重量"], ["price", "采购价"]]) {
+    const minimum = document.getElementById(`products-1688-${key}-min`);
+    const maximum = document.getElementById(`products-1688-${key}-max`);
+    if ([minimum, maximum].some(input => input?.validity?.badInput || input?.value && (!Number.isFinite(Number(input.value)) || Number(input.value) < 0))) {
+      products1688SetStatus(`${label}区间请填写有效的非负数字`, "error");
+      return false;
+    }
+    if (minimum?.value && maximum?.value && Number(minimum.value) > Number(maximum.value)) {
+      products1688SetStatus(`最低${label}不能大于最高${label}`, "error");
+      return false;
+    }
+  }
   const loadSequence = ++products1688LoadSequence;
   const editRevision = products1688EditRevision;
   if (resetPage) products1688Page = 1;
@@ -714,7 +804,7 @@ function products1688SendSelectedToWorkflow() {
     if (reason) failures.push(`产品 ${id}：${reason}`);
     else ids.push(id);
   });
-  const message = `已转入 ${ids.length} 件产品${failures.length ? `，未通过 ${failures.length} 件：${failures.slice(0, 3).join("；")}` : ""}`;
+  const message = `已转入 ${ids.length} 件产品，1688 原始资料继续保留${failures.length ? `，未通过 ${failures.length} 件：${failures.slice(0, 3).join("；")}` : ""}`;
   const kind = failures.length ? (ids.length ? "partial" : "error") : "success";
   products1688SetStatus(message, kind);
   if (!ids.length) return;
@@ -744,7 +834,7 @@ document.addEventListener("DOMContentLoaded", () => {
       load1688Products(false);
     });
   }
-  ["products-1688-search", "products-1688-salesperson", "products-1688-price-min", "products-1688-price-max", "products-1688-date-from", "products-1688-date-to"].forEach(id => {
+  ["products-1688-search", "products-1688-salesperson", "products-1688-price-min", "products-1688-price-max", "products-1688-weight-min", "products-1688-weight-max", "products-1688-date-from", "products-1688-date-to"].forEach(id => {
     document.getElementById(id)?.addEventListener("keydown", event => { if (event.key === "Enter") load1688Products(); });
   });
   document.getElementById("products-1688-status-filter")?.addEventListener("change", () => load1688Products());
@@ -753,6 +843,10 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("products-1688-review-filter")?.addEventListener("change", () => load1688Products());
   document.getElementById("products-1688-review-status")?.addEventListener("change", products1688UpdateSelection);
   document.getElementById("products-1688-batch-category")?.addEventListener("change", products1688UpdateSelection);
+  document.getElementById("products-1688-bulk-dialog")?.addEventListener("cancel", event => {
+    if (products1688BulkSaving) event.preventDefault();
+    else products1688BulkIds = [];
+  });
   document.getElementById("products-1688-edit-dialog")?.addEventListener("cancel", event => {
     if (products1688EditSaving) event.preventDefault();
     else products1688EditState = null;

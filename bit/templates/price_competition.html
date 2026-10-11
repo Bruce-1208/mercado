@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>价格竞争中心</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='price-competition.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261010-clean">
+    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261011-compact">
+</head>
+<body class="zs-standalone" data-can-manage="{{ '1' if can_manage else '0' }}">
+{% if not embedded %}<header><strong>泽顺工作台</strong><a href="/">返回工作台</a></header>{% endif %}
+<main>
+    <div class="heading"><div><div class="eyebrow">美客多 · 商品定价</div><h1>价格竞争中心</h1>
+        <p>普通商品看官方参考价，Catalog 商品看竞争目标价与销售条件。</p></div><span class="mode">人工确认模式</span></div>
+    <div class="intro-grid">
+        <section class="intro"><span class="kind ordinary">普通商品</span><h2>发现售价缺乏竞争力的商品</h2>
+            <p>读取官方价格参考，仅在建议适用且当前售价更高时提供降价建议。部分商品没有参考价。</p>
+            <a href="https://global-selling.mercadolibre.com/devsite/en_us/user-products-cbt/pricing-reference" target="_blank" rel="noopener">官方价格参考 ↗</a></section>
+        <section class="intro"><span class="kind catalog">Catalog 商品</span><h2>结合价格与条件参与竞争</h2>
+            <p>读取 price_to_win、竞争状态及配送、免运费等条件。目标价可能缺失，也会随竞争变化。</p>
+            <a href="https://global-selling.mercadolibre.com/devsite/en_us/support-for-integrators/catalog-competition-gs" target="_blank" rel="noopener">官方 Catalog 竞争文档 ↗</a></section>
+    </div>
+    <section class="workspace">
+        <form id="filters" class="filters">
+            <label>店铺<select id="store"><option value="">全部授权店铺</option></select></label>
+            <label>站点<select id="site"><option value="">全部站点</option></select></label>
+            <label class="search">商品<input id="search" placeholder="搜索商品名称、编号或 SKU"></label>
+            <button type="submit" class="primary">查询</button>
+            {% if can_manage %}<button type="button" id="refresh-page">检测本页</button>{% endif %}
+        </form>
+        <div class="toolbar"><div class="tabs" role="group" aria-label="筛选本页商品类型">
+            <button type="button" class="active" data-kind="all">本页全部</button>
+            <button type="button" data-kind="ordinary">普通商品</button>
+            <button type="button" data-kind="catalog">Catalog 商品</button>
+            <button type="button" data-kind="unknown">待检测 / 类型未知</button>
+        </div><span id="count" class="muted"></span></div>
+        <div id="message" role="status" aria-live="polite" hidden></div>
+        <div class="table-wrap"><table><thead><tr><th class="product-col">商品 / 竞争条件</th>
+            <th>当前售价</th><th>官方参考价</th><th>竞争目标价</th><th>最低可接受价</th><th>调整后预计利润</th><th>建议 / 操作</th>
+        </tr></thead><tbody id="rows"><tr><td colspan="7" class="empty">正在加载商品…</td></tr></tbody></table></div>
+        <div class="pagination"><span id="page-info" class="muted"></span><button id="previous" type="button">上一页</button><button id="next" type="button">下一页</button></div>
+    </section>
+    <p class="footnote">利润基于人工核实的同币种成本模型估算。确认建议会保存核对记录，平台价格不会修改；实际改价请前往店铺链接。自动调价尚未启用。</p>
+</main>
+<dialog id="cost-dialog"><form id="cost-form"><h2>核实成本与利润底线</h2><p id="cost-item" class="muted"></p>
+    <p class="notice">所有金额使用商品售价币种。请先将采购、物流和其他费用换算到该币种；勿重复计入按售价计算的费用。</p>
+    <label>币种<input id="cost-currency" readonly required></label>
+    <label>每件固定成本合计<input id="fixed-cost" type="number" min="0" step="any" required placeholder="采购、物流、固定费用等"></label>
+    <label>按售价计费比例（%）<input id="variable-rate" type="number" min="0" max="99.9999" step="any" required placeholder="佣金、按售价计的税费等"></label>
+    <label>每件最低利润<input id="minimum-profit" type="number" min="0" step="any" required placeholder="需保留的利润金额"></label>
+    <p class="muted formula">预计利润 = 建议价 × (1 − 计费比例) − 固定成本<br>最低可接受价 = (固定成本 + 最低利润) ÷ (1 − 计费比例)</p>
+    <div class="dialog-actions"><button type="button" data-close="cost-dialog">取消</button><button type="submit" class="primary">保存核实资料</button></div>
+    <p id="cost-error" role="alert" class="error" hidden></p>
+</form></dialog>
+<dialog id="preview-dialog"><h2>人工确认价格建议</h2><p id="preview-item" class="muted"></p>
+    <div id="preview-values" class="preview-values"></div>
+    <p class="notice">预览有效期 5 分钟。确认时将重新核对官方价格与竞争条件。此操作仅保存已核对建议，平台价格不会修改。</p>
+    <label class="checkbox"><input id="acknowledged" type="checkbox">我已核对售价、成本和利润底线</label>
+    <div class="dialog-actions"><button type="button" data-close="preview-dialog">取消</button><button type="button" id="confirm" class="primary" disabled>确认建议</button></div>
+    <p id="preview-error" role="alert" class="error" hidden></p>
+</dialog>
+<script src="{{ url_for('static', filename='price-competition.js') }}?v=20261011-audit" defer></script>
+</body></html>

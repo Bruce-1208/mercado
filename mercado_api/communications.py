@@ -287,6 +287,49 @@ class MercadoCommunicationsClient:
         return result
 
     # 售前 Questions & Answers
+    def get_question_products(self, item_ids: Any) -> dict[str, Any]:
+        """Batch-read the titles and primary pictures used by question rows."""
+        if isinstance(item_ids, str):
+            item_ids = item_ids.split(",")
+        if not isinstance(item_ids, list):
+            raise ValueError("产品编号必须是数组或逗号分隔的文本")
+        identifiers = list(dict.fromkeys(str(value or "").strip().upper() for value in item_ids))
+        if not identifiers or len(identifiers) > 40:
+            raise ValueError("单次读取 1 至 40 个产品")
+        if any(not re.fullmatch(r"[A-Z]{3}\d+", value) for value in identifiers):
+            raise ValueError("产品编号格式错误")
+        products = {}
+        errors = {}
+        for start in range(0, len(identifiers), 20):
+            batch = identifiers[start:start + 20]
+            result = self.request("GET", "/items", params={"ids": ",".join(batch)})
+            if not isinstance(result, list):
+                raise MercadoCommunicationError("产品接口返回格式错误", payload=result)
+            for entry in result:
+                if not isinstance(entry, dict):
+                    continue
+                body = entry.get("body") or {}
+                if entry.get("code") != 200 or not isinstance(body, dict):
+                    continue
+                identifier = str(body.get("id") or "").strip().upper()
+                if identifier not in batch:
+                    continue
+                pictures = body.get("pictures") or []
+                picture = next((picture for picture in pictures if isinstance(picture, dict)), {})
+                image_url = str(picture.get("secure_url") or picture.get("url")
+                                or body.get("secure_thumbnail") or body.get("thumbnail") or "")
+                if image_url.startswith("http://"):
+                    image_url = "https://" + image_url[7:]
+                products[identifier] = {
+                    "id": identifier,
+                    "title": str(body.get("title") or ""),
+                    "image_url": image_url,
+                }
+            for identifier in batch:
+                if identifier not in products:
+                    errors[identifier] = "产品信息暂时无法读取"
+        return {"products": products, "errors": errors}
+
     def search_questions(
         self,
         *,
@@ -649,8 +692,56 @@ class MercadoCommunicationsClient:
 
     def get_claim_bundle(self, claim_id: Any, *, section: str = "all") -> dict[str, Any]:
         """返回工作台展示投诉所需的详情、处理说明、消息及声誉影响。"""
-        if section not in {"all", "core", "extras"}:
+        if section not in {"all", "core", "extras", "messages", "metadata"}:
             raise ValueError("不支持的索赔详情分组")
+        if section == "messages":
+            messages, legacy = self._get_claim_messages_compatible(claim_id)
+            return {"messages": messages, "api_version": "claims_1" if legacy else "claims_2"}
+        if section == "metadata":
+            claim, legacy = self._get_claim_compatible(claim_id)
+            return {"claim": claim, "api_version": "claims_1" if legacy else "claims_2"}
+        if section == "core":
+            # Claim metadata and messages are independent. Use separate sessions
+            # and share refresh coordination for single-use refresh tokens.
+            _required_identifier(claim_id, "投诉 ID")
+            initial_token = self.access_token
+
+            def refresh_current():
+                with self._refresh_lock:
+                    if self.access_token == initial_token:
+                        self._refresh()
+                    return self.access_token
+
+            def read_core(name):
+                session = requests.Session()
+                session.trust_env = getattr(self.session, "trust_env", False)
+                worker = MercadoCommunicationsClient(
+                    initial_token, refresh_access_token=refresh_current,
+                    session=session, timeout=self.timeout, max_attempts=self.max_attempts,
+                )
+                try:
+                    if name == "claim":
+                        return worker._get_claim_compatible(claim_id)
+                    return worker._get_claim_messages_compatible(claim_id)
+                finally:
+                    session.close()
+
+            errors = {}
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                claim_future = pool.submit(read_core, "claim")
+                messages_future = pool.submit(read_core, "messages")
+                claim, claim_legacy = claim_future.result()
+                try:
+                    messages, messages_legacy = messages_future.result()
+                except MercadoCommunicationError as exc:
+                    messages, messages_legacy = [], False
+                    errors["messages"] = str(exc)
+            return {
+                "claim": claim, "messages": messages, "detail": {}, "reason": {},
+                "affects_reputation": {}, "expected_resolutions": [],
+                "api_version": "claims_1" if claim_legacy or messages_legacy else "claims_2",
+                "resource_errors": errors, "extras_pending": True,
+            }
         claim, claim_legacy = self._get_claim_compatible(claim_id)
         reason_id = claim.get("reason_id")
         resource_errors: dict[str, str] = {}

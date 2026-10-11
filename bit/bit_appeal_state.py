@@ -1,4 +1,22 @@
 """Execution outcomes are independent of the platform's appeal decision."""
+import re
+
+
+def business_outcome(execution, response=""):
+    """Only explicit structured platform outcomes may claim acceptance/resolution."""
+    if execution.get("business_status") in {"accepted", "resolved"}:
+        return execution["business_status"]
+    text = str(response or execution.get("response") or "")
+    clarification = re.search(
+        r"(?:请|需要).{0,20}(?:确认|提供|补充|切换)|"
+        r"(?:please|need you to|could you|por favor|necesit[oa]|precis[oa]).{0,80}"
+        r"(?:confirm|provid|inform|switch|fulfillment|log[ií]st)|"
+        r"(?:confirm|switch|cambiar|alterar).{0,40}(?:log[ií]st|fulfillment|shipping)",
+        text, re.I | re.S,
+    )
+    if execution.get("needs_human") or execution.get("reply_status") == "needs_human" or clarification:
+        return "needs_human"
+    return "pending_confirmation"
 
 STATUS_LABELS = {
     "no_data": "无可申诉数据",

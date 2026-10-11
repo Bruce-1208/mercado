@@ -194,3 +194,80 @@ def test_whole_sku_retry_uses_cleaned_facts_and_keeps_raw_remarks():
     assert [variation["price"] for variation in result] == [2, 3]
     assert all(variation["source_remarks"] == [SHARED_REMARK] for variation in result)
     assert original == before
+
+
+def test_shoulder_to_hem_size_preserves_real_lengths_without_guessing_standard_size():
+    original = {'title': '披风', 'variations': [
+        {'id': str(length), 'price': 20, 'attribute_combinations': [
+            {'name': '规格2', 'value_name': f'肩到裙摆{length}cm'}]}
+        for length in [130, 180]]}
+    schema = [{'id': 'SIZE', 'value_type': 'string', 'hierarchy': 'CHILD_PK',
+               'values': [{'id': 'large', 'name': 'L'}]},
+              {'id': 'LENGTH', 'value_type': 'number_unit', 'hierarchy': 'CHILD_DEPENDENT',
+               'allowed_units': [{'id': 'cm', 'name': 'cm'}]}]
+    result = normalize_marketplace_variations(original, schema, chat=lambda messages, **kw: json.dumps({
+        'options': [{'option_id': row['option_id'], 'attributes': []} for row in source_options(messages)]}))
+    for length, sku in zip([130, 180], result):
+        attrs = {a['id']: a['value_name'] for a in sku['attribute_combinations']}
+        assert attrs == {'SIZE': f'Shoulder to hem {length} cm', 'LENGTH': f'{length} cm'}
+    assert original['variations'][0]['attribute_combinations'][0]['value_name'] == '肩到裙摆130cm'
+
+
+def test_two_tone_colors_use_one_field_and_remain_distinct():
+    original = {'variations': [{'id': str(i), 'attribute_combinations': [
+        {'name': '规格1', 'value_name': raw}]} for i, raw in enumerate(['黑加绿', '黑加宝蓝'])]}
+    result = normalize_marketplace_variations(original, [{**COLOR_SCHEMA[0], 'value_type': 'string',
+        'values': [{'id': 'black', 'name': 'Black'}, {'id': 'green', 'name': 'Green'}]}],
+        chat=lambda messages, **kw: json.dumps({
+        'options': [{'option_id': o['option_id'], 'attributes': [
+            {'id': 'COLOR', 'value_name': 'Black'}, {'id': 'COLOR', 'value_name': 'Green'}]}
+            for o in source_options(messages)]}))
+    assert [v['attribute_combinations'][0]['value_name'] for v in result] == ['Black / Green', 'Black / Royal blue']
+
+
+def test_full_sku_translation_supplies_model_identity_when_gender_is_only_family():
+    original = {'variations': [{'id': str(i), 'attribute_combinations': [
+        {'name': '完整SKU规格', 'value_name': raw}]} for i, raw in enumerate([
+            '女款全套: 连体衣+眼罩 / 身高150cm', '男款全套: 连体衣+眼罩 / 身高150cm'])]}
+    schema = [{'id': 'SIZE', 'hierarchy': 'CHILD_PK'}, {'id': 'MODEL', 'hierarchy': 'PARENT_PK'},
+              {'id': 'GENDER', 'hierarchy': 'FAMILY', 'value_type': 'list', 'values': [
+                  {'id': 'woman', 'name': 'Woman'}, {'id': 'man', 'name': 'Man'}]}]
+    result = normalize_marketplace_variations(original, schema, chat=lambda messages, **kw: json.dumps({
+        'options': [{'option_id': o['option_id'],
+                     'source_value_en': ['Women set, bodysuit and eye mask, 150 cm', 'Men set, bodysuit and eye mask, 150 cm'][o['option_id']],
+                     'attributes': [{'id': 'SIZE', 'value_name': '150 cm'}]}
+                    for o in source_options(messages)]}))
+    attrs = [{a['id']: a['value_name'] for a in v['attribute_combinations']} for v in result]
+    assert attrs[0]['GENDER'] == 'Woman'
+    assert attrs[1]['GENDER'] == 'Man'
+    assert attrs[0]['MODEL'] != attrs[1]['MODEL']
+
+
+def test_unmapped_numbered_options_retry_full_sku_with_model_identity():
+    original = {'title': '汽车卡扣', 'variations': [
+        {'id': str(i), 'price': i / 100, 'available_quantity': 100 + i,
+         'attribute_combinations': [{'name': '规格1', 'value_name': f'{i}号'}]}
+        for i in range(1, 7)
+    ]}
+    before = copy.deepcopy(original)
+    calls = []
+
+    def chat(messages, **kwargs):
+        options = source_options(messages)
+        calls.append(options)
+        if len(calls) > 1:
+            assert all(o['source']['name'] == '完整SKU规格' for o in options)
+        return json.dumps({'options': [
+            {'option_id': o['option_id'], 'source_value_en': f"No. {o['option_id'] + 1}",
+             'attributes': []} for o in options
+        ]})
+
+    result = normalize_marketplace_variations(original, [
+        {'id': 'MODEL', 'hierarchy': 'PARENT_PK', 'value_type': 'string', 'tags': {'hidden': True}}
+    ], chat=chat)
+    assert len(calls) == 2
+    assert original == before
+    for i, row in enumerate(result, 1):
+        assert row['attribute_combinations'] == [{'id': 'MODEL', 'name': 'Model', 'value_name': f'No. {i}'}]
+        assert {k: v for k, v in row.items() if k != 'attribute_combinations'} == {
+            k: v for k, v in before['variations'][i - 1].items() if k != 'attribute_combinations'}

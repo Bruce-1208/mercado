@@ -52,6 +52,7 @@ def test_saved_developers_are_visible_and_filter_products_without_zying_login(co
     }))
     page.evaluate("switchTab('mercado-products')")
     page.wait_for_function("mercadoProductDeveloperFilter.options.length === 3 && mercadoListRows.length === 2")
+    page.locator("#mercado-product-filters .zs-advanced-filters > summary").click()
     selector = page.locator("#mercado-product-developer-filter")
     assert selector.is_visible()
     assert selector.locator("option").all_text_contents() == ["全部产品开发", "开发甲", "开发乙"]
@@ -91,6 +92,7 @@ def test_directory_failure_can_retry_and_keeps_the_selected_filter(console_page)
     page.route("**/api/mercado-products/developers", directory)
     page.evaluate("switchTab('mercado-products')")
     page.wait_for_function("mercadoProductDeveloperFilter.options.length === 2")
+    page.locator("#mercado-product-filters .zs-advanced-filters > summary").click()
     selector = page.locator("#mercado-product-developer-filter")
     selector.select_option("17")
     page.wait_for_function("mercadoListRows.length === 1")
@@ -116,6 +118,7 @@ def test_empty_directory_is_refreshed_after_products_arrive(console_page):
 
     page.route("**/api/mercado-products/developers", directory)
     page.evaluate("switchTab('mercado-products')")
+    page.locator("#mercado-product-filters .zs-advanced-filters > summary").click()
     page.locator("#mercado-product-developer-status").filter(has_text="暂无已记录的产品开发").wait_for()
     page.evaluate("searchMercadoList()")
     page.wait_for_function("mercadoProductDeveloperFilter.options.length === 2")

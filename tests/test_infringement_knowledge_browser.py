@@ -91,7 +91,7 @@ def test_knowledge_review_first_layout_and_source_panel(console_page, width):
     assert page.locator("#knowledge-sources-panel").is_hidden()
     assert page.locator("#infringement-knowledge-pending").inner_text() == "51"
     assert page.locator("#infringement-knowledge-total").inner_text() == "53"
-    assert page.locator(".knowledge-table thead th").count() == 6
+    assert page.locator("#knowledge-records-panel .knowledge-table thead th").count() == 6
     pending_row = page.locator("#infringement-knowledge-body tr").first
     assert "待复核" in pending_row.inner_text()
     assert "不侵权" not in pending_row.inner_text()

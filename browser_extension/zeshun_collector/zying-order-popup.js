@@ -16,6 +16,7 @@ globalThis.ZeshunOrderPopup = (() => {
     element("start").disabled = !authenticated || locked;
     startDate.disabled = locked;
     endDate.disabled = locked;
+    element("order-status").disabled = locked;
     element("open").hidden = !state.running;
     element("open").disabled = !authenticated || busy;
     element("confirm").disabled = !authenticated || busy || state.phase !== "waiting_login";
@@ -23,7 +24,7 @@ globalThis.ZeshunOrderPopup = (() => {
   };
   const render = value => {
     state = value || {};
-    if (state.running && state.date_start) {startDate.value = state.date_start; endDate.value = state.date_end;}
+    if (state.running && state.date_start) {startDate.value = state.date_start; endDate.value = state.date_end; element("order-status").value = state.order_status || "";}
     element("status").textContent = state.message || "选择下单日期范围后启动同步";
     element("summary").textContent = state.phase === "loading"
       ? `准备订单 ${state.prepared || 0} / ${state.total || 0} · 可先登录智赢`
@@ -59,7 +60,7 @@ globalThis.ZeshunOrderPopup = (() => {
       return;
     }
     element("status").textContent = "正在启动同步并打开智赢…";
-    void action("START_ZYING_ORDER_SYNC", {date_start: startDate.value, date_end: endDate.value});
+    void action("START_ZYING_ORDER_SYNC", {date_start: startDate.value, date_end: endDate.value, order_status: element("order-status").value});
   });
   element("open").addEventListener("click", () => void action("OPEN_ZYING_ORDER_LOGIN"));
   element("confirm").addEventListener("click", () => void action("CONFIRM_ZYING_ORDER_LOGIN"));

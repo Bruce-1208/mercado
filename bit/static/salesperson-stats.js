@@ -9,7 +9,7 @@ async function fetchSalespersonStats(url, force) {
     const cached = salespersonStatsResults.get(url);
     if (!force && cached && Date.now() - cached.time < salespersonStatsCacheMs) return cached.data;
     const pending = (async () => {
-        const response = await fetch(url, {cache: 'no-store'});
+        const response = await fetchAnalysis(url, {cache: 'no-store', deadlineMs: 90000});
         const result = await response.json();
         if (!response.ok || result.status !== 'success') throw new Error(result.message || '加载失败');
         const data = result.data || {};
@@ -63,7 +63,13 @@ async function loadSalespersonStats(force = false) {
         message.textContent = rows.length
             ? `共 ${rows.length} 位业务员 · 打印面单 ${data.print_count} 单 · 新增采购 ${data.purchase_count} 单`
             : '当前范围暂无操作记录';
+        const completedAt = salespersonStatsResults.get(url)?.time;
+        body.dataset.lastSuccess = completedAt ? new Date(completedAt).toLocaleString('zh-CN', {timeZone: 'Asia/Shanghai', hour12: false}) : '';
+        if (body.dataset.lastSuccess) message.textContent += ` · 最近查询成功 ${body.dataset.lastSuccess}（北京时间）`;
     } catch (error) {
-        if (sequence === salespersonStatsSequence) message.textContent = `加载失败：${error.message}`;
+        if (sequence === salespersonStatsSequence) {
+            message.textContent = `加载失败：${error.message}。可点击查询重试。`;
+            if (body.children.length) message.textContent += ` 下方保留上次成功结果${body.dataset.lastSuccess ? `（${body.dataset.lastSuccess} 北京时间）` : ''}，可能不符合当前筛选。`;
+        }
     }
 }

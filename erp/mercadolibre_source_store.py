@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from erp.mercadolibre_follow_sell import extract_item_id
+from erp.mercadolibre_page_facts import repair_source_facts
 
 
 DEFAULT_TABLE = "erp_mercadolibre_source_items"
@@ -61,7 +62,7 @@ def _decimal_or_none(value: Any) -> Decimal | None:
 
 def normalize_snapshot(snapshot: Mapping[str, Any]) -> dict[str, Any]:
     """Normalize one browser/API snapshot into database columns."""
-    source = dict(snapshot.get("source") or {})
+    source = repair_source_facts(dict(snapshot.get("source") or {}))
     source_url = str(snapshot.get("source_url") or source.get("permalink") or "").strip()
     item_hint = str(snapshot.get("item_id") or source.get("id") or source_url)
     try:

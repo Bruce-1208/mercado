@@ -1,7 +1,7 @@
 (function (root) {
     'use strict';
     const API = '/api/infringement-knowledge/wipo';
-    const STATUS_LABELS = {idle:'等待同步', running:'正在同步', success:'同步成功', continuing:'等待续传', error:'同步失败', failed:'同步失败', interrupted:'同步已中断，进度已保留', disabled:'自动更新已关闭'};
+    const STATUS_LABELS = {action_required:'需调整同步配置', idle:'等待同步', running:'正在同步', success:'同步成功', continuing:'等待续传', error:'同步失败', failed:'同步失败', interrupted:'同步已中断，进度已保留', disabled:'自动更新已关闭'};
     const COUNT_LABELS = {fetched:'拉取', unique:'去重后', cached_download_bytes:'已缓存字节', archive_bytes:'文件总字节', processed:'已处理', total:'本批品牌', inserted:'新增黑名单', updated:'更新黑名单', historical_blacklisted:'历史转黑名单', unchanged:'未变化', restored:'恢复', skipped_manual:'保留人工', skipped_deleted:'保留删除'};
 
     function chinaToday(now = new Date()) {
@@ -91,6 +91,7 @@
             get('source-mode').value = madrid ? 'madrid' : 'feed';
             get('madrid-from-date').value = settings.madrid_from_date || '';
             get('madrid-from-date').max = chinaToday();
+            get('madrid-from-date').min = settings.madrid_next_date ? '' : settings.madrid_available_from || '';
             get('feed-url').value = settings.feed_url || '';
             get('format').value = ['auto', 'json', 'csv'].includes(settings.format) ? settings.format : 'auto';
             get('interval').value = String(settings.interval_hours || 24);
@@ -113,6 +114,8 @@
             state.seenStatus = true;
             state.lastFinished = finished;
             get('status').textContent = data.message || STATUS_LABELS[data.status] || '等待同步';
+            if (data.madrid_available_from && !state.settings?.madrid_next_date) get('madrid-from-date').min = data.madrid_available_from;
+            if (data.status === 'action_required') error('自动同步等待配置修正：' + data.message);
             get('summary').textContent = summaryLabel(data.summary);
             get('times').textContent = `本次开始：${timeLabel(data.started_at)} · 本次完成：${timeLabel(data.finished_at)}\n最近成功：${timeLabel(data.last_success_at)} · 下次自动更新：${timeLabel(data.next_run_at)}`;
             get('log').textContent = Array.isArray(data.logs) && data.logs.length ? data.logs.map(log => typeof log === 'string' ? log : log?.message || JSON.stringify(log)).join('\n') : '同步尚未启动';

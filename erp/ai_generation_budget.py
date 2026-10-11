@@ -143,8 +143,9 @@ class BudgetedChat:
     ``transport`` returns ``{content, usage, ...}`` like
     ``chat_deepseek_with_usage``. ``on_update`` must raise if durable storage
     fails. ``before_request`` may wait for an offpeak slot; no funds have been
-    reserved when it runs. Pending/unknown calls on restore block further
-    calls because an interrupted request may already have been billed.
+    reserved when it runs. Capped runs block on pending/unknown calls because an interrupted request
+    may already have been billed. Uncapped retries retain those reservations
+    for accounting while allowing new calls.
     """
 
     def __init__(self, ledger: dict | None = None, *, on_update: Callable | None = None,
@@ -180,8 +181,13 @@ class BudgetedChat:
                 if entry["state"] == "complete":
                     self._int(entry["cost_nano"])
                 elif entry["state"] in {"pending", "unknown"}:
-                    self._ledger["blocked_reason"] = "上次调用费用尚未确认，已保留预算；请核对模型供应商账单后人工处理。"
-                    self._ledger["blocked_kind"] = "usage_unknown"
+                    # Unknown charges only block capped runs. Never replace a
+                    # storage/provider safety failure with a retryable reason.
+                    if self.enforce_cap and self._ledger.get("blocked_kind", "") in {
+                        "", "budget_exhausted", "usage_unknown",
+                    }:
+                        self._ledger["blocked_reason"] = "上次调用费用尚未确认，已保留预算；请核对模型供应商账单后人工处理。"
+                        self._ledger["blocked_kind"] = "usage_unknown"
                 else:
                     raise ValueError("invalid call state")
             if not isinstance(self._ledger.get("cache"), dict):
@@ -189,7 +195,9 @@ class BudgetedChat:
         except (KeyError, TypeError, ValueError) as exc:
             raise GenerationBudgetError("商品费用记录损坏，已停止付费调用。", kind="invalid_ledger") from exc
 
-        if not self.enforce_cap and self._ledger.get("blocked_kind") == "budget_exhausted":
+        # Uncapped retries retain unknown charges for accounting, but a past
+        # interrupted request must not permanently prevent new generation.
+        if not self.enforce_cap and self._ledger.get("blocked_kind") in {"budget_exhausted", "usage_unknown"}:
             self._ledger.update(blocked_reason="", blocked_kind="")
 
     @staticmethod
@@ -216,6 +224,7 @@ class BudgetedChat:
             "spent_yuan": _yuan(spent), "reserved_yuan": _yuan(reserved),
             "remaining_yuan": self.remaining_yuan if self.enforce_cap else None,
             "budget_limit_enabled": self.enforce_cap,
+            "has_unconfirmed_usage": any(e["state"] in {"pending", "unknown"} for e in snapshot["calls"]),
             "total_tokens": sum(e.get("prompt_tokens", 0) + e.get("completion_tokens", 0)
                                 for e in snapshot["calls"] if e["state"] == "complete"),
             "status": "blocked" if snapshot.get("blocked_reason") else "ready",
@@ -227,6 +236,15 @@ class BudgetedChat:
             if "cost_nano" in entry:
                 entry["cost_yuan"] = _yuan(entry["cost_nano"])
         return snapshot
+
+    def reject_response(self, response):
+        """Evict rejected content, preserving every billed attempt."""
+        with self._lock:
+            keys = [key for key, value in self._ledger["cache"].items() if value == response]
+            if keys:
+                for key in keys:
+                    del self._ledger["cache"][key]
+                self._save()
 
     def _save(self):
         self._ledger["revision"] += 1
@@ -318,7 +336,10 @@ class BudgetedChat:
             entry["state"] = "unknown"
             # Provider exception text may contain credentials or request data.
             entry["error_type"] = type(exc).__name__
-            self._block("模型调用未取得可确认用量，已保留本次预算并停止重试；请核对账单后人工处理。", "usage_unknown")
+            message = ("模型调用中断，本次费用待确认；可重新生成继续，历史预留费用已保留。"
+                       if not self.enforce_cap else
+                       "模型调用未取得可确认用量，已保留本次预算并停止重试；请核对账单后人工处理。")
+            self._block(message, "usage_unknown")
         ended = _beijing(self._now())
         try:
             if not isinstance(result, dict) or not isinstance(result.get("content"), str):
@@ -331,7 +352,10 @@ class BudgetedChat:
         except (TypeError, ValueError) as exc:
             entry["state"] = "unknown"
             entry["error_type"] = type(exc).__name__
-            self._block("模型未返回可靠 Token 用量，已保留本次预算并停止重试；请核对账单后人工处理。", "usage_unknown")
+            message = ("模型未返回可靠用量，本次费用待确认；可重新生成继续，历史预留费用已保留。"
+                       if not self.enforce_cap else
+                       "模型未返回可靠 Token 用量，已保留本次预算并停止重试；请核对账单后人工处理。")
+            self._block(message, "usage_unknown")
         offpeak = _interval_offpeak(started, ended)
         rates = qwen_rates(hit + miss) if self.is_qwen else (OFFPEAK_RATES if offpeak else PEAK_RATES)
         cost = hit * rates[0] + miss * rates[1] + completion * rates[2]

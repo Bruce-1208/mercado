@@ -178,3 +178,16 @@ def test_long_description_is_allowed_for_offline_translation():
     )
 
     assert translated == [f"pt:{long_text.strip()}"]
+
+
+def test_message_cache_reuses_overlapping_batches_and_duplicate_texts(monkeypatch):
+    translation_module._TRANSLATION_CACHE.clear()
+    calls = []
+    def translate(texts, source, target):
+        calls.append(texts)
+        return ['中文:' + text for text in texts]
+    monkeypatch.setattr(translation_module, '_argos_batch_translate', translate)
+    translate_texts = translation_module.translate_texts
+    assert translate_texts(['Hola', 'Gracias', 'Hola'], 'es', 'zh-CN') == ['中文:Hola', '中文:Gracias', '中文:Hola']
+    assert translate_texts(['Gracias', 'Nuevo', 'Hola'], 'es', 'zh-CN') == ['中文:Gracias', '中文:Nuevo', '中文:Hola']
+    assert calls == [['Hola', 'Gracias'], ['Nuevo']]

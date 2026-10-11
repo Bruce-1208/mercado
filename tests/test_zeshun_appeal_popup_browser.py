@@ -146,8 +146,9 @@ def test_domain_prefix_does_not_match_other_hosts_or_redirect_parameters(popup):
     ];}""")
     count = popup.evaluate("messages.filter(m=>m.type==='GET_APPEAL_CONTEXT').length")
     popup.locator("#appeal-refresh").click()
-    popup.wait_for_function("document.querySelector('#appeal-shop').textContent.includes('请在此浏览器')")
-    assert popup.locator("#appeal-start").is_disabled()
+    popup.wait_for_function("document.querySelector('#appeal-tab').options.length === 1")
+    assert popup.locator("#appeal-start").is_enabled()
+    assert popup.locator("#appeal-tab").input_value() == ""
     assert popup.evaluate("messages.filter(m=>m.type==='GET_APPEAL_CONTEXT').length") == count
 
 
@@ -163,3 +164,24 @@ def test_refresh_preserves_selected_sites(popup):
     popup.locator('#appeal-sites input[value="MLB"]').check()
     popup.locator('#appeal-refresh').click()
     assert popup.locator('#appeal-sites input[value="MLB"]').is_checked()
+
+
+def test_no_backend_tab_starts_directly_without_login_preflight(popup):
+    popup.evaluate("mockTabs=[]")
+    popup.locator("#appeal-refresh").click()
+    popup.wait_for_function("document.querySelector('#appeal-tab').options.length === 1")
+    popup.locator("#appeal-start").click()
+    message = popup.evaluate("messages.find(m=>m.type==='START_APPEAL')")
+    assert message["tabId"] == 0
+    assert popup.evaluate("messages.filter(m=>m.type==='GET_APPEAL_CONTEXT').length") == 0
+
+
+def test_logged_out_task_reminder_survives_reopening(popup):
+    popup.evaluate("""mockAppeal={running:false,status:'failed',
+      error:'当前美客多店铺未登录，申诉任务已停止。请登录后台后重新启动',
+      message:'当前美客多店铺未登录，申诉任务已停止。请登录后台后重新启动'}""")
+    popup.locator("#product-mode").click()
+    popup.locator("#appeal-mode").click()
+    assert "未登录，申诉任务已停止" in popup.locator("#appeal-status").inner_text()
+    assert popup.locator("#appeal-start").is_enabled()
+    assert popup.locator("#appeal-stop").is_disabled()

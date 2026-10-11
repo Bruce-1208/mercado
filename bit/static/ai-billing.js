@@ -75,8 +75,10 @@
       const price = number(item.estimated_cost_cny);
       const details = known ? `<div class="token-detail"><small>输入 ${esc(count(item.input_tokens))}</small><small>输出 ${esc(count(item.output_tokens))}</small></div>${number(item.cached_tokens) > 0 ? `<small>其中缓存 ${esc(count(item.cached_tokens))}</small>` : ''}` : '';
       const taskType = taskLabels.get(String(item.task_type)) || item.task_type || '其他任务';
-      const salesperson = item.salesperson || item.actor_name || '系统任务';
-      const actor = item.actor_name && item.actor_name !== salesperson ? `<small>操作人：${esc(item.actor_name)}</small>` : '';
+      const missingOriginalActor = item.task_type === 'ai_original' && !Number(item.actor_id) &&
+        (!item.salesperson || item.salesperson === '系统任务');
+      const salesperson = missingOriginalActor ? '业务员待核实' : (item.salesperson || item.actor_name || '系统任务');
+      const actor = !missingOriginalActor && item.actor_name && item.actor_name !== salesperson ? `<small>操作人：${esc(item.actor_name)}</small>` : '';
       const taskId = item.task_id ? `<small>任务编号：${esc(item.task_id)}</small>` : '';
       const request = item.request_id ? `<small>请求：${esc(item.request_id)}</small>` : '';
       return `<tr><td class="time-cell">${esc(date)}${time ? `<small>${esc(time)}</small>` : ''}</td><td class="task-cell"><span class="task-type">${esc(taskType)}</span><br><strong>${esc(item.task_name || taskType)}</strong>${taskId}${request}</td><td>${esc(salesperson)}${actor}</td><td class="model-cell">${esc(item.model || '模型待确认')}${item.provider ? `<small>${esc(item.provider)}</small>` : ''}</td><td class="number-cell">${usage}${details}</td><td class="number-cell">${price === null ? '<span class="pending">待确认</span>' : `<strong>${esc(money(price))}</strong>`}</td></tr>`;

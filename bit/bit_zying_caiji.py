@@ -9,6 +9,7 @@ import subprocess
 import sys
 import threading
 import time
+from contextvars import ContextVar
 from contextlib import contextmanager
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -132,9 +133,16 @@ class ZyingAuthenticationError(RuntimeError):
     """智赢登录凭证缺失或已失效，需要用户在可视窗口中重新登录。"""
 
 
+class ZyingRateLimitError(RuntimeError):
+    """Upstream asks us to stop issuing requests for this run."""
+
+
 class ZyingCollectionStopped(RuntimeError):
     """智赢采集收到用户结束指令。"""
 
+
+_ZYING_RUN_CATEGORY_CACHE = ContextVar("zying_run_category_cache", default=None)
+ZYING_READ_BATCH_SIZE = min(6, ZYING_DETAIL_WORKERS)
 
 _ZYING_STOP_STATE_LOCK = threading.RLock()
 _ZYING_ACTIVE_STOP_EVENT = None
@@ -201,6 +209,7 @@ const done = arguments[arguments.length - 1];
 const prefix = arguments[0];
 const action = arguments[1];
 const payload = arguments[2];
+const batch = arguments[3] === true;
 const done = arguments[arguments.length - 1];
 (async () => {
   try {
@@ -261,6 +270,24 @@ const done = arguments[arguments.length - 1];
       }
       throw new Error('没有找到智赢前端产品接口模块');
     };
+    if (batch) {
+      if (!['sale', 'meli_category'].includes(prefix) || action !== 'detail' ||
+          !Array.isArray(payload) || payload.length > 6) {
+        throw new Error('仅允许最多六个只读详情请求');
+      }
+      const api = await findApi();
+      const responses = await Promise.all(payload.map(async item => {
+        try {
+          return {ok: true, response: await api.handleProduct(prefix, action, item)};
+        } catch (error) {
+          const data = error?.response?.data || error?.data || {};
+          return {ok: false, status: error?.response?.status || error?.status || null,
+                  error: data.message || data.msg || error?.message || String(error)};
+        }
+      }));
+      done({ok: true, responses});
+      return;
+    }
     const response = prefix === 'logins'
       ? await callFreeStyleApi()
       : await (await findApi()).handleProduct(prefix, action, payload);
@@ -462,6 +489,8 @@ const done = arguments[arguments.length - 1];
             message = result.get("error") or "未知错误"
             if status in (401, 403) or "登录" in message:
                 raise ZyingAuthenticationError(f"智赢登录状态已失效：{message}")
+            if str(status) == "429":
+                raise ZyingRateLimitError(f"智赢接口限频，已停止本次同步：{message}")
             raise RuntimeError(f"智赢接口 {command} 请求失败：{message}")
         response = result.get("response")
         if not isinstance(response, dict):
@@ -469,6 +498,28 @@ const done = arguments[arguments.length - 1];
                 f"智赢接口 {command} 响应格式错误：{type(response).__name__}"
             )
         return response
+
+    def call_api_many(self, credential, command, payloads):
+        """One driver command, up to six concurrent reads in the official client."""
+        if command not in {"sale.detail", "meli_category.detail"}:
+            raise ValueError("智赢批量通道仅支持只读详情接口")
+        if not 1 <= len(payloads) <= ZYING_READ_BATCH_SIZE:
+            raise ValueError("智赢只读请求批次超过并发上限")
+        prefix, action = command.rsplit(".", 1)
+        _raise_if_zying_collection_stopped()
+        with self._lock:
+            _raise_if_zying_collection_stopped()
+            self._configure_credential_locked(credential)
+            result = self.driver.execute_async_script(
+                self.API_CALL_SCRIPT, prefix, action, payloads, True,
+            )
+        _raise_if_zying_collection_stopped()
+        if not isinstance(result, dict) or not result.get("ok"):
+            raise RuntimeError(f"智赢接口 {command} 批量读取失败")
+        responses = result.get("responses")
+        if not isinstance(responses, list) or len(responses) != len(payloads):
+            raise RuntimeError(f"智赢接口 {command} 批量响应数量不匹配")
+        return responses
 
     def close(self):
         driver, self.driver = self.driver, None
@@ -536,8 +587,12 @@ def _reuse_zying_frontend_signer(func):
     @wraps(func)
     def wrapped(*args, **kwargs):
         with _zying_collection_stop_scope(kwargs.get("stop_event")):
-            with _hold_zying_frontend_signer():
-                return func(*args, **kwargs)
+            cache_token = _ZYING_RUN_CATEGORY_CACHE.set({})
+            try:
+                with _hold_zying_frontend_signer():
+                    return func(*args, **kwargs)
+            finally:
+                _ZYING_RUN_CATEGORY_CACHE.reset(cache_token)
 
     return wrapped
 
@@ -1148,32 +1203,73 @@ def _signed_api_headers(token, path, body, timestamp=None):
     }
 
 
-def _zying_api_post(session, token, command, payload):
-    del session  # Requests are executed by Zying's own frontend inside headless Edge.
+def _zying_api_data(result, command):
+    code = str(result.get("code") or "")
+    message = str(result.get("message") or result.get("msg") or f"业务状态码 {code}")
+    if code in {"401", "403"} or "登录" in message:
+        raise ZyingAuthenticationError(f"智赢登录状态已失效：{message}")
+    if code == "429" or any(word in message.lower() for word in (
+        "频繁", "限频", "too many requests", "rate limit",
+    )):
+        raise ZyingRateLimitError(f"智赢接口限频，已停止本次同步，请稍后重试：{message}")
+    if code != "200":
+        raise RuntimeError(f"智赢接口 {command} 请求失败：{message}")
+    return result.get("data") or {}
+
+
+def _zying_api_post(session, token, command, payload, *, max_attempts=3):
+    del session  # Requests use Zying's official authenticated frontend.
     last_error = None
     with _zying_frontend_signer_session() as frontend:
-        for attempt in range(3):
+        for attempt in range(max_attempts):
             _raise_if_zying_collection_stopped()
             try:
                 result = frontend.call_api(token, command, payload)
                 _raise_if_zying_collection_stopped()
-                if result.get("code") == 200:
-                    return result.get("data") or {}
-                message = result.get("message") or f"业务状态码 {result.get('code')}"
-                if result.get("code") == 401:
-                    raise ZyingAuthenticationError(f"智赢登录状态已失效：{message}")
-                last_error = RuntimeError(f"智赢接口 {command} 请求失败：{message}")
-            except (ZyingAuthenticationError, ZyingCollectionStopped):
+                return _zying_api_data(result, command)
+            except (ZyingAuthenticationError, ZyingCollectionStopped, ZyingRateLimitError):
                 raise
             except Exception as exc:
-                last_error = (
-                    exc
-                    if isinstance(exc, RuntimeError)
-                    else RuntimeError(f"智赢接口 {command} 请求失败：{exc}")
-                )
-            if attempt < 2:
+                last_error = exc if isinstance(exc, RuntimeError) else RuntimeError(
+                    f"智赢接口 {command} 请求失败：{exc}")
+            if attempt < max_attempts - 1:
                 time.sleep(0.5 * (attempt + 1))
     raise last_error
+
+
+def _zying_api_read_many(token, command, payloads):
+    """Preserve request order and retry only failed reads, never successful ones."""
+    if command not in {"sale.detail", "meli_category.detail"}:
+        raise ValueError("智赢批量通道仅支持只读详情接口")
+    results = []
+    with _zying_frontend_signer_session() as frontend:
+        for offset in range(0, len(payloads), ZYING_READ_BATCH_SIZE):
+            _raise_if_zying_collection_stopped()
+            batch = payloads[offset:offset + ZYING_READ_BATCH_SIZE]
+            responses = frontend.call_api_many(token, command, batch)
+            decoded, failed = [], []
+            for index, response in enumerate(responses):
+                if not isinstance(response, dict):
+                    raise RuntimeError("智赢批量响应格式错误")
+                raw = response.get("response") if response.get("ok") else {
+                    "code": response.get("status"), "message": response.get("error"),
+                }
+                if not isinstance(raw, dict):
+                    raise RuntimeError("智赢批量响应格式错误")
+                try:
+                    decoded.append(_zying_api_data(raw, command))
+                except (ZyingAuthenticationError, ZyingRateLimitError):
+                    raise
+                except RuntimeError:
+                    decoded.append(None)
+                    failed.append(index)
+            # Inspect every result for login/rate-limit errors before any retry.
+            for index in failed:
+                decoded[index] = _zying_api_post(
+                    None, token, command, batch[index], max_attempts=2,
+                )
+            results.extend(decoded)
+    return results
 
 
 def validate_zying_auth_token(token):
@@ -1502,6 +1598,8 @@ def _finalize_zying_listing_snapshot(record):
             "product_developer_name": record.get("product_developer_name") or "",
             "zying_status": record.get("zying_status") or "",
             "salesperson": _clean_text(record.get("salesperson")),
+            "category_lookup_status": record.get("category_lookup_status") or "",
+            "category_lookup_warning": record.get("category_lookup_warning") or "",
         },
         "weight_g": detail.get("sale_weight"),
         "package_length_cm": package_size[0],
@@ -1611,10 +1709,31 @@ def _load_product_category(token, site, category_id):
             "meli_category.detail",
             {"site": site, "id": category_id},
         )
-    category_rows = category_data.get("root") or []
-    if not category_rows:
-        raise RuntimeError(f"分类接口未返回数据：{site}{category_id}")
-    return category_rows[0]
+    return _resolve_product_category_response(token, site, category_id, category_data)
+
+
+def _resolve_product_category_response(token, site, category_id, data):
+    """An absent category label must not discard an otherwise complete page."""
+    for attempt in range(2):
+        # Only an explicit empty root is eligible for the reference-only fallback.
+        # Malformed replies and API/auth/rate-limit errors still stop the page.
+        rows = data.get("root") if isinstance(data, dict) else None
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            raise RuntimeError(f"分类接口响应格式错误：{site}{category_id}，本页未入库")
+        if rows:
+            if not (rows[0].get("cate_cateid") or rows[0].get("cate_id")):
+                raise RuntimeError(f"分类接口缺少分类编号：{site}{category_id}，本页未入库")
+            return rows[0]
+        if attempt == 0:
+            data = _zying_api_post(
+                None, token, "meli_category.detail", {"site": site, "id": category_id},
+                max_attempts=1,
+            )
+    if not re.fullmatch(r"[A-Z]{3}", site) or not re.fullmatch(r"[0-9]+", category_id):
+        raise RuntimeError(f"产品详情分类编号格式错误：{site}{category_id}，本页未入库")
+    warning = f"分类接口未返回数据：{site}{category_id}；已保留原始分类编号，分类名称待补全"
+    print(warning, flush=True)
+    return {"cate_cateid": f"{site}{category_id}", "_lookup_warning": warning}
 
 
 def _merge_category_record(record, category):
@@ -1635,6 +1754,9 @@ def _merge_category_record(record, category):
 
     record["product_category_id"] = category_id
     record["product_category"] = " | ".join(paths)
+    warning = _clean_text(category.get("_lookup_warning"))
+    record["category_lookup_status"] = "missing" if warning else "resolved"
+    record["category_lookup_warning"] = warning
     record.pop("_category_site", None)
     record.pop("_category_id", None)
 
@@ -1643,6 +1765,8 @@ def _merge_category_record(record, category):
         category_lines.append(f"分类编号: {category_id}")
     if record["product_category"]:
         category_lines.append(f"产品分类: {record['product_category']}")
+    if warning:
+        category_lines.append(warning)
     if category_lines:
         raw_text = str(record.get("raw_text") or "").rstrip()
         record["raw_text"] = "\n".join(filter(None, (raw_text, *category_lines)))
@@ -1660,35 +1784,19 @@ def _enrich_product_categories(token, records):
             )
         category_records.setdefault((site, category_id), []).append(record)
 
-    failures = []
-    worker_count = min(ZYING_DETAIL_WORKERS, len(category_records))
-    with ThreadPoolExecutor(max_workers=worker_count) as executor:
-        future_categories = {
-            executor.submit(_load_product_category, token, site, category_id): (
-                site,
-                category_id,
-            )
-            for site, category_id in category_records
-        }
-        for future in as_completed(future_categories):
-            key = future_categories[future]
-            try:
-                category = future.result()
-                for record in category_records[key]:
-                    _merge_category_record(record, category)
-            except ZyingCollectionStopped:
-                for pending in future_categories:
-                    pending.cancel()
-                raise
-            except Exception as exc:
-                failures.append(f"{key[0]}{key[1]}: {exc}")
-    if failures:
-        preview = "；".join(failures[:3])
-        suffix = f"；另有 {len(failures) - 3} 个分类失败" if len(failures) > 3 else ""
-        raise RuntimeError(
-            f"智赢产品分类补全失败 {len(failures)}/{len(category_records)} 个，"
-            f"为避免不完整数据，本次未入库。{preview}{suffix}"
-        )
+    cache = _ZYING_RUN_CATEGORY_CACHE.get()
+    if cache is None:
+        cache = {}
+    missing = [key for key in category_records if key not in cache]
+    if missing:
+        responses = _zying_api_read_many(token, "meli_category.detail", [
+            {"site": site, "id": category_id} for site, category_id in missing
+        ])
+        for key, data in zip(missing, responses):
+            cache[key] = _resolve_product_category_response(token, *key, data)
+    for key, grouped_records in category_records.items():
+        for record in grouped_records:
+            _merge_category_record(record, cache[key])
     return records
 
 
@@ -2077,26 +2185,17 @@ def _enrich_product_records(driver, records, token=None):
     if not records:
         return records
     token = token or _browser_auth_token(driver)
-    failures = []
-    worker_count = min(ZYING_DETAIL_WORKERS, len(records))
-    with ThreadPoolExecutor(max_workers=worker_count) as executor:
-        future_records = {
-            executor.submit(_enrich_product_record, record, token): record
-            for record in records
-        }
-        for future in as_completed(future_records):
-            record = future_records[future]
-            try:
-                future.result()
-            except Exception as exc:
-                failures.append(f"{record.get('title')!r}: {exc}")
-    if failures:
-        preview = "；".join(failures[:3])
-        suffix = f"；另有 {len(failures) - 3} 条失败" if len(failures) > 3 else ""
-        raise RuntimeError(
-            f"智赢产品详情补全失败 {len(failures)}/{len(records)} 条，"
-            f"为避免不完整数据，本次未入库。{preview}{suffix}"
-        )
+    # Detail workers previously serialized network waits on the shared driver's
+    # lock. Execute small parallel read batches inside that single browser instead.
+    search_rows = [_find_product_search_row(None, token, record) for record in records]
+    responses = _zying_api_read_many(token, "sale.detail", [
+        {"id": row["id"]} for row in search_rows
+    ])
+    for record, search_row, data in zip(records, search_rows, responses):
+        rows = data.get("root") or []
+        if not rows:
+            raise RuntimeError(f"产品 {search_row['id']} 的详情接口未返回数据，本页未入库")
+        _merge_detail_record(record, search_row, rows[0])
     _enrich_product_categories(token, records)
     return records
 
@@ -3064,6 +3163,7 @@ def collect_zying_products_api(
             else range(start_page, page_count + 1)
         )
         for page_number in pages:
+            page_started = time.perf_counter()
             _raise_if_zying_collection_stopped(stop_event)
             payload = {
                 "page": page_number,
@@ -3145,8 +3245,10 @@ def collect_zying_products_api(
                 checked_product_ids,
             )
             skipped_existing_count += skipped
+            detail_started = time.perf_counter()
             if page_records:
                 _enrich_product_records(None, page_records, token=token)
+            detail_seconds = time.perf_counter() - detail_started
             _raise_if_zying_collection_stopped(stop_event)
             if category_selection:
                 matched_records = [
@@ -3202,6 +3304,12 @@ def collect_zying_products_api(
                 page_count,
                 product_writer=product_writer,
                 product_mirror_writer=product_mirror_writer,
+            )
+            print(
+                f"智赢第 {page_label} 页完成：本页 {len(page_records)} 条，"
+                f"详情及分类 {detail_seconds:.2f} 秒，整页 {time.perf_counter() - page_started:.2f} 秒；"
+                f"累计入库 {inserted_count} 条、已有跳过 {skipped_existing_count} 条",
+                flush=True,
             )
             records.extend(page_records)
             seen.update({_record_key(record) for record in page_records})

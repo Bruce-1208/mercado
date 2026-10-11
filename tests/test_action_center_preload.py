@@ -113,7 +113,7 @@ def test_cached_post_sale_rechecks_permissions_on_every_read(monkeypatch):
     assert client.get('/api/mercado/today/post-sale?salesperson=1').json['data']['rows'] == []
 
 
-@pytest.mark.parametrize('endpoint,method', [('tasks', '_refresh_order_watch_tasks'), ('post-sale', '_unanswered_post_sale')])
+@pytest.mark.parametrize('endpoint,method', [('tasks', '_refresh_order_watch_tasks'), ('post-sale', '_unanswered_post_sale'), ('claims', '_unanswered_claims')])
 def test_cold_endpoint_reports_pending_then_returns_completed_snapshot(monkeypatch, endpoint, method):
     release = threading.Event()
     def load(*args):
@@ -147,7 +147,7 @@ def test_saturated_background_cache_defers_instead_of_failing():
     assert cache.read(2, lambda: 'second') == ('second', False)
 
 
-@pytest.mark.parametrize('endpoint', ['tasks', 'post-sale'])
+@pytest.mark.parametrize('endpoint', ['tasks', 'post-sale', 'claims'])
 def test_admin_can_page_every_store_beyond_cache_capacity(monkeypatch, endpoint):
     class ManyStores(Store):
         def list_mercado_store_tokens(self):
@@ -158,6 +158,7 @@ def test_admin_can_page_every_store_beyond_cache_capacity(monkeypatch, endpoint)
         calls.extend(t['id'] for t in tokens)
         return {'rows': [], 'errors': []}
     monkeypatch.setattr(module, '_unanswered_post_sale', messages)
+    monkeypatch.setattr(module, '_unanswered_claims', messages)
     client = make_app(ManyStores(), None).test_client()
     for page in range(1, 9):
         response = client.get(f'/api/mercado/today/{endpoint}?store_page={page}')
@@ -170,7 +171,7 @@ def test_admin_can_page_every_store_beyond_cache_capacity(monkeypatch, endpoint)
 def test_one_store_failure_keeps_other_sections_and_event_paging(monkeypatch):
     class PartialStore(Store):
         def list_mercado_operator_tasks(self, **kwargs):
-            return {'rows': [{'id': 1, 'topic': 'claims', 'status': 'open'}]}
+            return {'rows': [{'id': 1, 'topic': 'items', 'status': 'open'}]}
         def list_mercado_notification_events(self, **kwargs):
             assert kwargs['offset'] == 100
             assert kwargs['limit'] == 50

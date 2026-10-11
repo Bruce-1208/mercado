@@ -19,9 +19,9 @@ from typing import Any, Iterable, Mapping
 
 from bit import bit_mysql
 from bit.bit_runtime_lock import InterProcessLock
+from bit.store_link_item_lock import store_link_item_locks
 from bit.bit_store_link_sync import (
     STORE_LINK_DETAIL_ATTRIBUTES,
-    STORE_LINK_SYNC_LOCK_KEY,
     _client_and_token,
 )
 from erp.mercadolibre_collection_store import (
@@ -59,6 +59,7 @@ _state_guard = threading.RLock()
 _recovery_guard = threading.Lock()
 _recovery_thread: threading.Thread | None = None
 _recovery_wakeup = threading.Event()
+REMOTE_UPDATE_TASK_LOCK_KEY = "mercado_store_link_remote_update_task"
 REMOTE_UPDATE_RECOVERY_LOCK_KEY = "mercado_store_link_remote_update_recovery"
 _PENDING_STATUSES = ("queued", "starting", "running")
 _SAVED_ROW_FIELDS = (
@@ -327,6 +328,20 @@ def _update_one_link(
             "errors": [str(exc)],
         }
 
+    if "net_proceeds_usd" in changes:
+        try:
+            from bit.mercado_promotions import withdraw_listing_promotions
+            outcome = withdraw_listing_promotions(
+                token_id=row["token_id"], site_id=row.get("site_id") or item_id[:3],
+                item_id=item_id, actor="店铺链接修改净收益自动取消活动", verify_live=True,
+            )
+            if outcome["cancelled_count"]:
+                remote_groups.append(f"取消活动 {outcome['cancelled_count']} 项")
+        except Exception as exc:
+            return {"link_id": int(row["id"]), "item_id": item_id,
+                    "store": str(row.get("store_name") or ""), "status": "error",
+                    "applied_fields": [], "errors": [f"取消活动失败，未修改净收益：{exc}"]}
+
     for label, payload, fields in groups:
         try:
             client.update_global_item(item_id, payload)
@@ -409,6 +424,11 @@ def _update_one_link(
     }
 
 
+def _update_one_link_locked(row, token, changes):
+    with store_link_item_locks(row["token_id"], [row["item_id"]], owner="remote-update"):
+        return _update_one_link(row, token, changes)
+
+
 @audited
 def run_store_link_remote_update(
     rows: Iterable[Mapping[str, Any]],
@@ -474,7 +494,7 @@ def run_store_link_remote_update(
                 results.append(result)
                 _append_log(f"{item_id} 失败：{result['errors'][0]}")
                 continue
-            futures[executor.submit(contextual_target(_update_one_link), row, token_records[token_id], changes)] = row
+            futures[executor.submit(contextual_target(_update_one_link_locked), row, token_records[token_id], changes)] = row
 
         for future in as_completed(futures):
             row = futures[future]
@@ -538,19 +558,19 @@ def run_store_link_remote_update(
 
 def _run_background(rows: list[dict[str, Any]], changes: dict[str, Any], task_id: str = "") -> None:
     task_lock = InterProcessLock(
-        STORE_LINK_SYNC_LOCK_KEY,
+        REMOTE_UPDATE_TASK_LOCK_KEY,
         owner="bit_store_link_remote_update",
         metadata={"task_id": task_id or _update_state.get("task_id"), "type": "remote_update"},
     )
-    _state_update(message="正在等待当前店铺链接同步完成")
-    _append_log("正在等待店铺链接同步锁，取得锁后再写入美客多后台")
+    _state_update(message="正在准备修改美客多后台链接")
+    _append_log("修改任务独立执行，仅与同一商品的同步读写互斥")
     _persist_task_state(task_id)
     if not task_lock.acquire(timeout=None):
         return
     try:
         previous_results = []
         if task_id:
-            # Read checkpoints only after taking the shared listing-write lock.
+            # Read checkpoints only after taking the remote-update task lock.
             # A different process may have finished this queued job meanwhile.
             task = _load_task(task_id)
             if not task or task["status"] not in _PENDING_STATUSES:

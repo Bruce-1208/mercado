@@ -172,6 +172,13 @@ def _row_references(rows: Iterable[Mapping[str, Any]]) -> str:
     return "、".join(visible) + suffix
 
 
+def uses_manual_publish_review(row: Mapping[str, Any]) -> bool:
+    """Imported products enter publication once the operator approves them."""
+    return str(row.get("source_type") or "").strip().lower() in {
+        "zying", "collected", "pulled",
+    }
+
+
 def product_publish_issues(product_row: Mapping[str, Any], *, defer_infringement: bool = False, site_id: str | None = None) -> list[str]:
     """Return every local reason that prevents a product from being published."""
 
@@ -195,6 +202,10 @@ def product_publish_issues(product_row: Mapping[str, Any], *, defer_infringement
             title = str(prepared.get(field) or "").strip()
             if not title or len(title) > 60:
                 issues.append(f"{label}标题为空或超过 60 个字符")
+            from erp.mercadolibre_translation import title_language_issue
+            language_issue = title_language_issue(title, "es" if field == "title_es" else "pt-BR")
+            if language_issue:
+                issues.append(f"{label}{language_issue}")
         if not str(prepared.get("description_es") or "").strip() or not str(
             prepared.get("description_pt") or ""
         ).strip():
@@ -211,6 +222,11 @@ def product_publish_issues(product_row: Mapping[str, Any], *, defer_infringement
         ]
         if not ai_attributes:
             issues.append("AI 商品属性尚未生成")
+        from erp.ai_original_images import missing_variation_white_images
+        missing_sku_images = missing_variation_white_images(prepared, raw_snapshot.get("original_1688"))
+        if missing_sku_images:
+            issues.append("SKU 白底主图未完成（SKU " + "、".join(map(str, missing_sku_images[:10]))
+                          + "），请重新执行 AI 任务补齐后再上架")
         if any(
             re.fullmatch(r"规格\s*\d+", str(attribute.get("name") or "").strip())
             and not attribute.get("id")
@@ -226,6 +242,11 @@ def product_publish_issues(product_row: Mapping[str, Any], *, defer_infringement
             issues.append("首图尚未完成 AI 白底生成")
     if row.get("review_status") != "approved":
         issues.append("审核状态未通过")
+    if uses_manual_publish_review(row):
+        # Collection diagnostics describe an earlier fetch, not the operator's
+        # reviewed listing. Validate pricing and the actual platform payload in
+        # the per-item publisher so failures retain the product and are retryable.
+        return issues
     if row.get("source_type") == "ai_original" and any(
         (_decimal_value(row.get(field)) or Decimal("0")) <= 0
         for field in ("package_length_cm", "package_width_cm", "package_height_cm")
@@ -285,6 +306,7 @@ def validate_publishable_products(product_rows: Iterable[Mapping[str, Any]], *, 
             "只有审核状态为“通过”的产品可以上架："
             f"{_row_references(unapproved)}"
         )
+    rows = [row for row in rows if not uses_manual_publish_review(row)]
     missing_weight = [
         row for row in rows
         if (_actual_weight_value(row) or Decimal("0")) <= 0
@@ -342,9 +364,22 @@ def management_category_listing_ratio(row: Mapping[str, Any]) -> Decimal:
     return ratio
 
 
-def discounted_net_proceeds_usd(
-    row: Mapping[str, Any], discount_rate: Any, net_proceeds_ratio: Any = 100
-) -> float:
+def minimum_publish_net_proceeds_usd(value: Any = None) -> Decimal:
+    """Validate the optional USD floor shared by preflight, publish and retries."""
+    if value in (None, ""):
+        return Decimal("0.00")
+    amount = _decimal_value(value)
+    if amount is None or amount < 0 or amount > Decimal("1000000000000"):
+        raise ValueError("最低净收益必须是 0 至 1000000000000 之间的有效金额（USD）")
+    rounded = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if rounded != amount:
+        raise ValueError("最低净收益最多保留两位小数（USD）")
+    return rounded
+
+
+def _calculated_net_proceeds_usd(
+    row: Mapping[str, Any], discount_rate: Any, net_proceeds_ratio: Any,
+) -> Decimal:
     net_proceeds = _decimal_value(row.get("net_proceeds_usd"))
     if net_proceeds is None or net_proceeds <= 0:
         raise ValueError("产品净收益必须大于 0")
@@ -355,11 +390,19 @@ def discounted_net_proceeds_usd(
     if base_ratio is None or base_ratio <= 0 or base_ratio > 10000:
         raise ValueError("本次上架比例必须大于 0 且不超过 10000")
     category_ratio = management_category_listing_ratio(row)
-    amount = (
+    return (
         net_proceeds * category_ratio / Decimal("100")
         * rate / Decimal("100")
         * base_ratio / Decimal("100")
     ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def discounted_net_proceeds_usd(
+    row: Mapping[str, Any], discount_rate: Any, net_proceeds_ratio: Any = 100,
+    minimum_net_proceeds_usd: Any = None,
+) -> float:
+    minimum = minimum_publish_net_proceeds_usd(minimum_net_proceeds_usd)
+    amount = max(_calculated_net_proceeds_usd(row, discount_rate, net_proceeds_ratio), minimum)
     if amount <= 0:
         raise ValueError("计算后的上架售价必须大于 0")
     return float(amount)
@@ -525,6 +568,9 @@ def _prepared_listing_from_product_row(
             # the 1688 attributes remain untouched in ``original_1688``.
             source["attributes"] = generated_attributes
         generated_variations = []
+        from erp.ai_original_images import missing_variation_white_images
+        if missing_variation_white_images(prepared, raw_snapshot.get("original_1688")):
+            raise ValueError("每个 SKU 都需要白底主图，请重新执行 AI 任务补齐后再上架")
         for raw_variation in prepared.get("variations") or []:
             if not isinstance(raw_variation, Mapping):
                 continue
@@ -632,6 +678,7 @@ def publish_product_batch(
     workers: int = 16,
     discount_rate: Any = None,
     net_proceeds_ratio: Any = 100,
+    minimum_net_proceeds_usd: Any = None,
     update_state: Callable[..., Any],
     on_progress: Callable[[dict[str, Any]], None] | None = None,
     client: MercadoLibreClient | None = None,
@@ -646,6 +693,7 @@ def publish_product_batch(
     infringement_preflight: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     rows = [dict(row) for row in product_rows or []]
+    minimum = minimum_publish_net_proceeds_usd(minimum_net_proceeds_usd)
     if not rows:
         raise ValueError("请至少勾选一个产品")
     regular_rows = [row for row in rows if str(row.get("source_type") or "").lower() != "ai_original"]
@@ -784,7 +832,10 @@ def publish_product_batch(
         source_url = str(row.get("source_url") or source_item_id)
         source_net_proceeds = float(_decimal_value(row.get("net_proceeds_usd")) or 0)
         is_ai_original = str(row.get("source_type") or "").strip().lower() == "ai_original"
-        pricing_metadata = {}
+        pricing_metadata = {
+            "listing_ratio_percent": float(resolved_net_proceeds_ratio),
+            "minimum_net_proceeds_usd": float(minimum),
+        }
         try:
             from bit.infringement_publish import validate_publication
             validate_publication(row, site_id)
@@ -793,6 +844,9 @@ def publish_product_batch(
                 if issues:
                     raise ValueError("、".join(issues))
             publish_net_proceeds = discounted_net_proceeds_usd(
+                row, resolved_discount_rate, resolved_net_proceeds_ratio, minimum
+            )
+            calculated_net_proceeds = _calculated_net_proceeds_usd(
                 row, resolved_discount_rate, resolved_net_proceeds_ratio
             )
             pricing_metadata = {
@@ -806,6 +860,9 @@ def publish_product_batch(
                 ),
                 "store_site_ratio_percent": float(resolved_discount_rate),
                 "publish_net_proceeds_usd": publish_net_proceeds,
+                "calculated_net_proceeds_usd": float(calculated_net_proceeds),
+                "minimum_net_proceeds_usd": float(minimum),
+                "minimum_applied": calculated_net_proceeds < minimum,
             }
             if account_listing_blocked.is_set():
                 raise MercadoLibreError(
@@ -895,6 +952,8 @@ def publish_product_batch(
                 "source_net_proceeds_usd": source_net_proceeds,
                 "publish_net_proceeds_usd": publish_net_proceeds,
                 "timings": dict(publication.get("timings") or {}),
+                "minimum_net_proceeds_usd": float(minimum),
+                "minimum_applied": pricing_metadata["minimum_applied"],
                 "message": (
                     (
                         "已复用现有 User Product 并开通目标站点；"
@@ -908,8 +967,10 @@ def publish_product_batch(
                         f"{float(pricing_metadata['category_ratio_percent']):g}% × 店铺站点比例 "
                         f"{float(resolved_discount_rate):g}% × 上架比例 "
                         f"{float(resolved_net_proceeds_ratio):g}% = "
-                        f"USD {publish_net_proceeds:.2f}"
+                        f"USD {calculated_net_proceeds:.2f}"
                     )
+                    + (f"；低于最低净收益 USD {minimum:.2f}，按 USD {publish_net_proceeds:.2f} 上架"
+                       if pricing_metadata["minimum_applied"] else "")
                     + f"{state_warning}"
                 ),
             }

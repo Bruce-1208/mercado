@@ -29,6 +29,8 @@ STATEFUL_PREFIXES = (
     "/api/infringement-knowledge/wipo/", "/api/db/infringement-knowledge/wipo/",
     "/api/size-charts/", "/api/db/size-charts/",
     "/api/clearance-alerts", "/api/db/clearance-alerts",
+    "/api/price-competition", "/api/db/price-competition/",
+    "/api/product-diagnosis", "/api/db/product-diagnosis",
     "/api/local-agents/zying-sync/",
     "/api/order-sync/", "/api/db/order-sync/", "/api/store-links/sync/",
     "/api/db/store-links/sync/", "/api/prohibited-listings/sync/",
@@ -98,7 +100,8 @@ def is_worker_path(path, method=None):
         return False
     # Saved filter choices are a read-only Web query; they do not share the
     # scheduler's collection/publishing task state.
-    if path in {"/api/mercado-products/developers", "/api/db/mercado-products/developers"}:
+    if path in {"/api/mercado-products/developers", "/api/db/mercado-products/developers",
+                "/api/mercado-products/salespeople", "/api/db/mercado-products/salespeople"}:
         return False
     if isolation_enabled() and request_group(path) != "worker":
         return True

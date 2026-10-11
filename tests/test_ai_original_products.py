@@ -213,7 +213,7 @@ def test_ai_white_background_image_uses_image_model_callback(tmp_path):
     assert url == "/api/ai-original-products/images/1688-123456789-ai-white.jpg"
 
 
-def test_prepare_persists_white_image_before_invalid_copy_response(tmp_path):
+def test_invalid_copy_stops_before_image_processing(tmp_path):
     Image = pytest.importorskip("PIL.Image")
     source = Image.new("RGB", (320, 240), (30, 80, 180))
     source_buffer = BytesIO()
@@ -253,10 +253,8 @@ def test_prepare_persists_white_image_before_invalid_copy_response(tmp_path):
             on_image_ready=lambda url, method: persisted.append((url, method)),
         )
 
-    assert persisted == [(
-        "/api/ai-original-products/images/1688-123456789-ai-white.jpg",
-        "ai_image_edit",
-    )]
+    assert persisted == []
+    assert not list(tmp_path.glob("*-ai-white.jpg"))
 
 
 def _record_infringement_check(row, risk_level=0):
@@ -611,7 +609,7 @@ def test_source_and_generator_owners_are_independent():
     ("api_ai_original_products", "generator_salesperson"),
 ])
 def test_product_routes_forward_owner_filter_and_source_net(endpoint, owner_field, monkeypatch):
-    monkeypatch.setattr("erp.ai_original_cost_control.generation_cost_summary", lambda: {"total_tokens": 123})
+    monkeypatch.setattr("erp.ai_original_cost_control.generation_cost_summary", lambda **kwargs: {"total_tokens": 123})
     import ast
     import logging
     from flask import Flask, request, jsonify
@@ -624,7 +622,7 @@ def test_product_routes_forward_owner_filter_and_source_net(endpoint, owner_fiel
         calls.append(kwargs)
         return {"total": 1, "rows": [{"net_proceeds_usd": 99, "suggested_net_proceeds_usd": 3}]}
     namespace = dict(request=request, jsonify=jsonify, logging=logging,
-                     db_list_mercado_product_items=list_rows,
+                     db_list_mercado_product_items=list_rows, can_view_ai_costs=lambda user: True, get_current_workbench_user=lambda: {},
                      _parse_int_param=lambda args, key, default, low, high: int(args.get(key, default)))
     exec(compile(ast.Module(body=[node], type_ignores=[]), '<route>', 'exec'), namespace)
     with Flask(__name__).test_request_context('/?' + owner_field + '=张三'):
@@ -691,7 +689,10 @@ def test_ai_original_publish_preflight_rejects_legacy_placeholder_specs():
     row = _ai_row()
     snapshot = json.loads(row['source_snapshot_json'])
     snapshot['ai_original']['variations'] = [
-        {'attribute_combinations': [{'name': '规格1', 'value_name': '红色'}]},
+        {'attribute_combinations': [{'name': '规格1', 'value_name': '红色'}],
+         'white_image_url': '/api/ai-original-products/images/1688-sku-ai-white.jpg',
+         'image_url': '/api/ai-original-products/images/1688-sku-ai-white.jpg',
+         'image_generation_method': 'local_background_removal'},
     ]
     row['source_snapshot_json'] = snapshot
     assert any('变体规格尚未转换' in issue for issue in product_publish_issues(row))
@@ -837,19 +838,21 @@ def test_same_url_image_revision_survives_resume_and_changes_after_regeneration(
 
     monkeypatch.setattr(original, '_prepare_original_image', generated_image)
     monkeypatch.setattr(original, 'generate_marketplace_copy', lambda *args, **kwargs: copy)
+    monkeypatch.setattr(original, 'complete_marketplace_category', lambda *args, **kwargs: {
+        'category_id': 'CBT123', 'category_name': 'Boxes', 'attributes': [], 'variations': []})
     fixture['source_snapshot_json'] = {'original_1688': {
         'source_1688_item_id': '123', 'title': '普通收纳盒',
         'main_image_url': 'https://cbu01.alicdn.com/original.jpg',
         'images': ['https://cbu01.alicdn.com/original.jpg'],
     }}
-    first = prepare_ai_original_product(fixture, image_dir=tmp_path)
+    first = prepare_ai_original_product(fixture, image_dir=tmp_path, category_client=object())
     first_revision = first['ai_original']['image_content_revision']
     assert first_revision == hashlib.sha256(image_path.read_bytes()).hexdigest()
 
     resume_snapshot = json.loads(first['source_snapshot_json'])
     resume_snapshot['ai_original']['status'] = 'failed'
     fixture['source_snapshot_json'] = resume_snapshot
-    resumed = prepare_ai_original_product(fixture, image_dir=tmp_path)
+    resumed = prepare_ai_original_product(fixture, image_dir=tmp_path, category_client=object())
     assert resumed['main_image_url'] == first['main_image_url']
     assert resumed['ai_original']['image_content_revision'] == first_revision
     assert calls == ['blue']
@@ -858,7 +861,7 @@ def test_same_url_image_revision_survives_resume_and_changes_after_regeneration(
     fixture['source_snapshot_json'] = json.loads(resumed['source_snapshot_json'])
     fixture['source_snapshot_json']['ai_original']['status'] = 'failed'
     fixture['source_snapshot_json']['ai_original']['preparation']['image_ready'] = False
-    regenerated = prepare_ai_original_product(fixture, image_dir=tmp_path)
+    regenerated = prepare_ai_original_product(fixture, image_dir=tmp_path, category_client=object())
     assert regenerated['main_image_url'] == first['main_image_url']
     assert regenerated['ai_original']['image_content_revision'] != first_revision
     assert regenerated['ai_original']['image_content_revision'] == hashlib.sha256(image_path.read_bytes()).hexdigest()

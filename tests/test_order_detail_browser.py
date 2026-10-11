@@ -40,7 +40,7 @@ def test_order_freight_displays_api_quote_and_actual_only_after_shipment(console
     assert settlement_freight.inner_text() == "$7.25"
     assert detail.get_by_text("标价运费", exact=True).count() == 1
     assert balance.inner_text() == "$9.75"
-    assert balance_cell.inner_text() == "$9.75"
+    assert balance_cell.locator(".order-money").inner_text() == "$9.75"
     assert "发货后结算" not in detail.inner_text()
 
     # A quote or the legacy freight alias must not fill an unavailable actual charge.
@@ -64,7 +64,7 @@ def test_order_freight_displays_api_quote_and_actual_only_after_shipment(console
     assert settlement_freight.inner_text() == "$9.50"
     assert detail.get_by_text("实际运费", exact=True).count() == 1
     assert balance.inner_text() == "$7.50"
-    assert balance_cell.inner_text() == "$7.50"
+    assert balance_cell.locator(".order-money").inner_text() == "$7.50"
 
     page.evaluate("orderRows[0].quoted_freight_usd = null; renderOrderRows(orderRows)")
     assert freight_cell.locator("strong").inner_text() == "标价 待同步"
@@ -92,7 +92,7 @@ def test_order_detail_defers_optional_requests_and_resets_for_next_order(console
     assert not calls
     detail = page.locator("#order-detail-dialog")
     assert detail.is_visible()
-    assert "汇率" not in detail.inner_text()
+    assert "人民币汇率待获取" in detail.inner_text()
     assert "来源" not in detail.inner_text()
     assert detail.locator(".order-detail-item > span", has_text="采购成本").count() == 1
     assert "Camisa" in detail.inner_text()
@@ -116,7 +116,8 @@ def test_order_detail_defers_optional_requests_and_resets_for_next_order(console
     assert calls[-1] == "/api/orders/101/logs"
 
 
-def test_product_is_readable_while_translation_pending_and_keeps_image_nodes(console_page):
+@pytest.mark.parametrize("progressive", [False, True])
+def test_product_is_readable_while_translation_pending_and_keeps_image_nodes(console_page, progressive):
     page = console_page
     translations = []
     calls = []
@@ -131,14 +132,14 @@ def test_product_is_readable_while_translation_pending_and_keeps_image_nodes(con
         if params.get("translate") == ["1"]:
             translations.append(route)
         else:
-            route.fulfill(content_type="application/json", body=json.dumps({"status": "success", "data": data}))
+            route.fulfill(content_type="application/json", body=json.dumps({"status": "success", "data": {**data, "description": {}, "description_pending": True} if progressive else data}))
 
     page.route("**/api/orders/product-detail?**", product)
     open_detail(page)
     page.get_by_role("button", name="产品详情", exact=True).click()
     page.locator("#order-product-detail h2").wait_for()
     assert page.locator("#order-product-detail h2").inner_text() == "Camisa"
-    assert page.locator("#order-product-detail .order-product-description").inner_text() == "Ropa cómoda"
+    assert page.locator("#order-product-detail .order-product-description").inner_text() == ("商品描述加载中…" if progressive else "Ropa cómoda")
     page.wait_for_function("document.querySelector('.order-product-translation').textContent.includes('加载中')")
     assert translations
     page.evaluate("window.originalProductImage = document.querySelector('#order-product-detail img')")
@@ -146,4 +147,70 @@ def test_product_is_readable_while_translation_pending_and_keeps_image_nodes(con
     translations[0].fulfill(content_type="application/json", body=json.dumps({"status": "success", "data": translated}))
     page.wait_for_function("document.querySelector('#order-product-detail h2').textContent.includes('衬衫')")
     assert page.evaluate("window.originalProductImage === document.querySelector('#order-product-detail img')")
+    assert "舒适服装" in page.locator("#order-product-detail .order-product-description").inner_text()
     assert [entry["translate"] for entry in calls] == [["0"], ["1"]]
+    page.locator("#order-product-detail .order-picture-zoom").click()
+    assert page.locator("#order-image-viewer").is_visible()
+    assert page.locator("#order-image-viewer img").get_attribute("src") == "https://images.test/one.png"
+    page.keyboard.press("Escape")
+    assert not page.locator("#order-image-viewer").is_visible()
+    assert page.locator("#order-product-detail").is_visible()
+
+
+def test_profit_panel_uses_rmb_balance_and_platform_filter_is_in_advanced(console_page):
+    page = console_page
+    open_detail(page, amount=5.01, fee=0.78, actual_freight_usd=2.25,
+                quoted_freight_usd=2.25, balance=1.98, balance_cny=13.25,
+                income=33.53, cost=9.88, profit=3.37)
+    panel = page.locator('[aria-label="人民币利润"]')
+    assert panel.locator('.order-detail-finance-formula').inner_text() == '结余人民币 − 成本 = 利润'
+    assert panel.get_by_text('￥13.25', exact=True).count() == 1
+    assert panel.get_by_text('￥3.37', exact=True).count() == 1
+    assert panel.get_by_text('￥33.53', exact=True).count() == 0
+    page.locator('#order-detail-dialog .order-detail-close').click()
+    assert page.locator('.zs-advanced-filters #order-purchase-platform-filter').count() == 1
+    page.locator('#order-purchase-platform-filter').evaluate("el => el.value = 'pdd'")
+    assert page.evaluate("orderQueryParams().get('purchase_platform')") == 'pdd'
+    page.evaluate('resetOrderFilters()')
+    assert page.locator('#order-purchase-platform-filter').input_value() == ''
+
+
+@pytest.mark.parametrize('width',[1440,390])
+def test_advanced_freight_difference_range_supports_negative_zero_and_reset(console_page,width):
+    page=console_page
+    page.set_viewport_size({'width':width,'height':950})
+    page.evaluate("document.querySelectorAll('.tab-page').forEach(el=>el.classList.remove('active'));document.getElementById('tab-orders').classList.add('active')")
+    advanced=page.locator('#tab-orders .zs-advanced-filters')
+    advanced.locator('summary').click()
+    low=advanced.locator('#order-freight-difference-min')
+    high=advanced.locator('#order-freight-difference-max')
+    low.fill('-2.50');high.fill('0')
+    assert page.evaluate("orderQueryParams().get('freight_difference_min')")=='-2.50'
+    assert page.evaluate("orderQueryParams().get('freight_difference_max')")=='0'
+    assert low.is_visible() and high.is_visible()
+    assert page.evaluate('document.documentElement.scrollWidth<=window.innerWidth')
+    page.screenshot(path=str(Path(__file__).resolve().parents[1]/f'artifacts/order-freight-range-20261010/range-{width}.png'))
+    page.evaluate('resetOrderFilters()')
+    assert low.input_value()=='' and high.input_value()==''
+
+
+@pytest.mark.parametrize('cost',[None,0])
+def test_missing_or_zero_cost_does_not_hide_numeric_profit_and_margin(console_page,cost):
+    page=console_page
+    open_detail(page,amount=7.54,fee=0.94,actual_freight_usd=None,quoted_freight_usd=2.60,
+                status='找货-没汇总',balance=4,balance_cny=26.77,income=50.46,cost=cost,profit=26.77)
+    page.evaluate("renderOrderRows(orderRows);renderOrderMetrics({total:1,summary:{amount:7.54,income:50.46,balance_cny:26.77,cost:0,profit:26.77,cost_missing_count:orderRows[0].cost==null?1:0}})")
+    panel=page.locator('[aria-label="人民币利润"]')
+    assert panel.get_by_text('￥26.77',exact=True).count()==2
+    assert '利润率 53.1%' in panel.inner_text()
+    assert '待核算' not in panel.inner_text()
+    cost_note=panel.get_by_text('成本未填，暂按0',exact=True)
+    assert cost_note.count()==(1 if cost is None else 0)
+    cells=page.locator('#order-table-body tr td')
+    assert cells.nth(8).inner_text()=='￥26.77'
+    assert cells.nth(9).inner_text()=='53.1%'
+    summary=page.locator('#order-metric-profit').inner_text()
+    assert '￥26.77 / 53.1%' in summary
+    assert '待核算' not in summary
+    if cost is None:
+        page.screenshot(path=str(Path(__file__).resolve().parents[1]/'artifacts/order-profit-display-20261011/profit-detail.png'))

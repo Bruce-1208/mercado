@@ -218,7 +218,9 @@ def test_worker_restores_latest_budget_preserves_checkpoints_and_reports_cost(mo
 
     monkeypatch.setattr(products, "prepare_ai_original_product", prepare)
     stale_row = {"id": 1, "source_type": "ai_original", "source_snapshot_json": {"ai_original": {"generation_budget": {"spent_yuan": 0}}}}
-    fixture.run([stale_row], workers=1, cost_control=True)
+    fixture.run([stale_row], workers=1, cost_control=True,
+                billing_actor={"actor_id": 7, "actor_name": "业务员",
+                               "salesperson": "业务员", "organization_key": "test-org"})
     assert fixture.events == ["wait", ("lock", 1), ("reload", [1]), "wait", "check_owner", "check_owner", "model", "check_owner", "unlock"]
     guarded_writes = [change["expected_generation_budget_revision"] for change in fixture.saved
                       if "expected_generation_budget_revision" in change]

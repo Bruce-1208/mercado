@@ -330,3 +330,56 @@ test('failed metadata can retry without discarding loaded products', async () =>
   await h.run('load1688Products()');
   assert.equal(h.calls.filter(call => call.url === '/api/1688-products/options').length, 2);
 });
+
+test('bulk measurement edits snapshot the selection and omit unchanged blank fields', async () => {
+  const h = harness((url) => url.endsWith('/bulk-dimensions') ? response({changed: 1}) : null);
+  h.run('products1688Toggle(17, true); products1688OpenBulkEdit()');
+  h.get('products-1688-bulk-weight_g').value = '680';
+  h.get('products-1688-bulk-package_width_cm').value = '12.5';
+  h.run('products1688Selected.clear()');
+  await h.run('products1688SaveBulkEdit()');
+  const call = h.calls.find(call => call.url.endsWith('/bulk-dimensions'));
+  assert.deepEqual(JSON.parse(call.options.body), {product_item_ids: [17], changes: {weight_g: 680, package_width_cm: 12.5}});
+  assert.equal(h.get('products-1688-bulk-dialog').open, false);
+});
+
+test('invalid or empty bulk edits do not write and failed writes retain user input', async () => {
+  const h = harness(url => url.endsWith('/bulk-dimensions') ? {ok: false, status: 500, json: async () => ({status:'error', message:'写入失败'})} : null);
+  h.run('products1688Toggle(17, true); products1688OpenBulkEdit()');
+  await h.run('products1688SaveBulkEdit()');
+  h.get('products-1688-bulk-weight_g').value = '-1';
+  await h.run('products1688SaveBulkEdit()');
+  assert.equal(h.calls.length, 0);
+  h.get('products-1688-bulk-weight_g').value = '700';
+  await h.run('products1688SaveBulkEdit()');
+  assert.equal(h.get('products-1688-bulk-dialog').open, true);
+  assert.equal(h.get('products-1688-bulk-weight_g').value, '700');
+  assert.match(h.get('products-1688-bulk-message').textContent, /写入失败/);
+});
+
+test('weight range reaches the paginated query, validates bounds and resets', async () => {
+  const h = harness();
+  h.get('products-1688-weight-min').value = '200';
+  h.get('products-1688-weight-max').value = '800';
+  await h.run('load1688Products()');
+  const query = new URL(h.calls.find(call => call.url.startsWith('/api/1688-products?')).url, 'https://erp.test').searchParams;
+  assert.equal(query.get('weight_min'), '200');
+  assert.equal(query.get('weight_max'), '800');
+  const before = h.calls.length;
+  h.get('products-1688-weight-min').value = '900';
+  await h.run('load1688Products()');
+  assert.equal(h.calls.length, before);
+  assert.match(h.get('products-1688-status').textContent, /最低重量不能大于最高重量/);
+  h.run('products1688ResetFilters()');
+  assert.equal(h.get('products-1688-weight-min').value, '');
+  assert.equal(h.get('products-1688-weight-max').value, '');
+});
+
+test('sending to AI keeps source rows and collected details in the 1688 library', () => {
+  const h = harness();
+  const original = h.run('JSON.stringify(products1688Rows)');
+  h.run('var aiOriginalSelected = new Set(); products1688OpenAiWorkflow = () => {}; products1688Toggle(17, true); products1688SendSelectedToWorkflow()');
+  assert.equal(h.run('JSON.stringify(products1688Rows)'), original);
+  assert.equal(h.run('aiOriginalSelected.has(17)'), true);
+  assert.match(h.get('products-1688-status').textContent, /原始资料继续保留/);
+});

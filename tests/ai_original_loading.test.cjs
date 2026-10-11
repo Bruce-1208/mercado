@@ -8,6 +8,7 @@ function setup() {
   const requests = [];
   const context = vm.createContext({
     AbortController,
+    currentWorkbenchUser: {role_key: 'super_admin'},
     document: {addEventListener() {}, getElementById(id) {
       if (!nodes.has(id)) nodes.set(id, {value: '', textContent: ''});
       return nodes.get(id);

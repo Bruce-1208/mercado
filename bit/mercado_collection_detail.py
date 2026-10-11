@@ -105,6 +105,7 @@ def attribute_rows(value):
 
 
 def build_collection_detail(row):
+    from erp.mercadolibre_collection_quality import collection_quality_issues, finite_number
     source = parsed(row.get("source_json") or row.get("source"), {})
     page = parsed(row.get("page_snapshot_json") or row.get("page_snapshot"), {})
     plugin = parsed(row.get("plugin_snapshot_json") or row.get("plugin_snapshot"), {})
@@ -174,14 +175,13 @@ def build_collection_detail(row):
     def fields(pairs):
         return [{"name": name, "value": display(value)} for name, value in pairs]
 
-    money = row.get("sale_price_usd")
-    shipping = row.get("shipping_fee_usd")
+    money = finite_number(row.get("sale_price_usd"))
+    shipping = finite_number(row.get("shipping_fee_usd"))
     commission, net = None, None
-    try:
+    if money is not None and money > 0:
         commission = Decimal(str(money)) * Decimal("0.15")
-        net = Decimal(str(money)) - commission - Decimal(str(shipping))
-    except (InvalidOperation, ValueError):
-        pass
+        if shipping is not None and shipping >= 0:
+            net = Decimal(str(money)) - commission - Decimal(str(shipping))
     current_description = (row.get("description_text") or description_text(description)
                            or description_text(source.get("description")) or description_text(page.get("description")))
     descriptions = [{"name": "商品描述", "title": "", "text": current_description}]
@@ -206,6 +206,7 @@ def build_collection_detail(row):
     used = {"id", "title", "site_id", "price", "currency_id", "condition", "available_quantity", "permalink",
             "pictures", "images", "image_urls", "attributes", "variations", "sale_terms", "description", "category_id"}
     return {
+        "quality_issues": collection_quality_issues(row),
         "id": row.get("id"), "item_id": row.get("source_item_id") or source.get("id") or "—",
         "title": row.get("title") or source.get("title") or "未识别标题",
         "source_url": safe_url(row.get("final_url") or row.get("source_url") or source.get("permalink")),

@@ -48,7 +48,7 @@ class ExtensionOrderSync:
         if not job:
             return {"phase": "idle", "running": False, "results": []}
         return {**job["result"], "results": job["result"].get("results", [])[-100:], "request_id": job["job_id"],
-                "date_start": job["date_start"], "date_end": job["date_end"]}
+                "date_start": job["date_start"], "date_end": job["date_end"], "order_status": job.get("order_status", "")}
 
     def status(self, owner):
         with self.connection() as connection:
@@ -75,6 +75,7 @@ class ExtensionOrderSync:
             job = {"job_id": secrets.token_hex(16), "agent_id": "extension", "status": "running",
                    "created_by_id": owner, "created_by_name": user.get("display_name") or user.get("username") or "",
                    "date_start": filters["start_date"], "date_end": filters["end_date"],
+                   "order_status": filters.get("status", ""),
                    "preparation_owner": PREPARATION_OWNER, "preparation_updated_at": time.time(),
                    "payload": {"rows": []}, "result": {
                        "phase": "loading", "running": True, "message": "正在读取日期范围内的全部订单…",

@@ -501,15 +501,25 @@ class PluginPurchaseTrackingManager:
                 history = self.history(key)
                 if history:
                     self._states[key] = history[0]
+            state = self._states.get(key)
+            if state and state.get("running") and state.get("query_version", 0) < 2:
+                state.update(
+                    running=False, phase="error",
+                    message="物流查询流程已升级，请更新泽顺插件至 1.8.77 或更新版本，并按原日期重新启动同步；原日志已保留",
+                    finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                )
+                self._save(state)
             return self._public_state(self._states.get(key) or self._idle_state())
 
-    def create(self, user_id, *, platform, orders):
+    def create(self, user_id, *, platform, orders, order_status=""):
         key = self._normalize_user_id(user_id)
         if platform not in PLATFORMS:
             raise ValueError("请选择 1688、淘宝、拼多多或闲鱼")
-        normalized = PurchaseTrackingSyncManager._normalize_orders(orders)
+        from bit.order_purchase_platform import tracking_orders_for_platform
+        candidates = PurchaseTrackingSyncManager._normalize_orders(orders)
+        normalized = tracking_orders_for_platform(candidates, platform)
         if not normalized:
-            raise ValueError("所选订单还没有填写采购订单号")
+            raise ValueError("所选范围内没有匹配该采购平台的采购订单号；请检查采购平台和单号格式")
         with self._lock:
             current = self.status(key)
             if current.get("running") or current.get("phase") in self._PENDING_PHASES:
@@ -522,6 +532,8 @@ class PluginPurchaseTrackingManager:
                 "phase": "waiting_plugin",
                 "message": "请打开泽顺插件接收同步任务",
                 "platform": platform,
+                "order_status": order_status,
+                "query_version": 2,
                 "total": len(normalized),
                 "orders": normalized,
                 "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -636,12 +648,14 @@ class PluginPurchaseTrackingManager:
                 })
             return self._save(state)
 
-    def fail(self, user_id, request_id, message):
+    def fail(self, user_id, request_id, message, *, pending_only=False):
         key = self._normalize_user_id(user_id)
         with self._lock:
             state = self._states.get(key)
             if not state or state.get("request_id") != str(request_id or "").strip():
                 raise ValueError("物流号同步任务不存在或已过期")
+            if pending_only and state.get("phase") not in self._PENDING_PHASES:
+                raise ValueError("任务已开始同步或已结束，无法重新选择日期")
             state.update({
                 "running": False,
                 "phase": "error",

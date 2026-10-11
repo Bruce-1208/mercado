@@ -2,104 +2,66 @@ const assert = require('node:assert/strict');
 const {test} = require('node:test');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const template = fs.readFileSync(require('node:path').join(__dirname, '../bit/templates/index.html'), 'utf8');
-const source = template.slice(template.indexOf('        async function loadStoreLinkCategoryPaths()'), template.indexOf('        function toggleStoreLinkCategoryPicker()'));
-
-function setup(responses, rows = [{category_id: 'CBT2'}]) {
+const source = fs.readFileSync(require('node:path').join(__dirname, '../bit/static/mercado-category-picker.js'), 'utf8');
+function setup(responses = [], rows = [{category_id: 'CBT2'}]) {
     const calls = [];
-    const context = vm.createContext({
-        storeLinkCategoryRows: rows,
-        storeLinkCategoryPaths: {},
-        storeLinkCategoryPathLoading: false,
-        storeLinkCategoryOptionsLoading: false,
-        storeLinkCategoryColumns: {}, storeLinkMessage: {},
-        escapeHtml: String,
-        renderStoreLinkMercadoCategories(rows) { context.storeLinkCategoryRows = rows; },
-        renderStoreLinkCategoryTree() {},
-        async fetch(url, options) {
-            calls.push({url, ids: options.body ? JSON.parse(options.body).category_ids : []});
-            const result = responses.shift();
-            if (result instanceof Error) throw result;
-            return {ok: true, json: async () => ({status: 'success', data: result})};
-        },
-    });
+    const context = vm.createContext({window: {}, setTimeout, clearTimeout, async fetch(url, options = {}) {
+        calls.push({url, ids: options.body ? JSON.parse(options.body).category_ids : []});
+        const result = responses.shift();
+        if (result instanceof Error) throw result;
+        return {ok: true, json: async () => ({status: 'success', data: result})};
+    }});
     vm.runInContext(source, context);
-    return {context, calls};
+    const picker = Object.create(context.window.MercadoCategoryPicker.prototype);
+    Object.assign(picker, {rows, paths: {}, generation: 0, panel: {hidden: true}, endpoint: '/options', rowsKey: 'rows',
+        status(message) { this.message = message; }, render() { this.tree = context.window.buildMercadoCategoryTree(this.rows, this.paths); this.message = ''; }});
+    return {picker, calls, build: context.window.buildMercadoCategoryTree};
 }
-const path = [{id: 'CBT2', name: 'Refrigerators'}];
-
-test('reopening retries failed name loading even when category options are cached', async () => {
-    const {context, calls} = setup([new Error('timeout'), {CBT2: path}]);
-    await context.loadStoreLinkCategoryOptions();
-    assert.match(context.storeLinkMessage.textContent, /timeout/);
-    await context.loadStoreLinkCategoryOptions();
-    assert.equal(context.storeLinkCategoryPaths.CBT2[0].name, 'Refrigerators');
-    assert.equal(calls.length, 2);
-    await context.loadStoreLinkCategoryOptions();
-    assert.equal(calls.length, 2);
+const path = [{id: 'CBT1', name: '家电'}, {id: 'CBT2', name: '冰箱'}];
+test('reopening retries failed loading, cached Chinese paths avoid duplicate requests', async () => {
+    const {picker, calls} = setup([new Error('timeout'), {CBT2: path}]);
+    await picker.load(); assert.match(picker.message, /timeout/);
+    await picker.load(); assert.equal(picker.paths.CBT2[1].name, '冰箱');
+    await picker.load(); assert.equal(calls.length, 2);
 });
-
-test('partial results and newly added categories fetch only missing names and retain existing paths', async () => {
-    const {context, calls} = setup([{}, {CBT2: path}, {MLB3: [{id: 'MLB3', name: 'Test'}]}]);
-    await context.loadStoreLinkCategoryOptions();
-    await context.loadStoreLinkCategoryOptions();
-    context.storeLinkCategoryRows.push({category_id: 'MLB3'});
-    await context.loadStoreLinkCategoryOptions();
+test('partial and newly added categories fetch only missing paths', async () => {
+    const {picker, calls} = setup([{}, {CBT2: path}, {MLB3: [{id: 'MLB3', name: '工具'}]}]);
+    await picker.load(); await picker.load();
+    picker.rows.push({category_id: 'MLB3'}); await picker.load();
     assert.deepEqual(calls.map(call => call.ids), [['CBT2'], ['CBT2'], ['MLB3']]);
-    assert.equal(context.storeLinkCategoryPaths.CBT2[0].name, 'Refrigerators');
 });
-
-test('initial options request loads names, concurrent opens do not duplicate requests', async () => {
-    const {context, calls} = setup([{mercado_categories: [{category_id: 'CBT2'}]}, {CBT2: path}], []);
-    await Promise.all([context.loadStoreLinkCategoryOptions(), context.loadStoreLinkCategoryOptions()]);
+test('initial catalog and concurrent opens share one request', async () => {
+    const {picker, calls} = setup([{rows: [{category_id: 'CBT2'}]}, {CBT2: path}], null);
+    await Promise.all([picker.load(), picker.load()]);
     assert.equal(calls.length, 2);
-    assert.equal(context.storeLinkCategoryPaths.CBT2[0].name, 'Refrigerators');
 });
-
-test('a failed catalog does not discard names loaded from another catalog', async () => {
-    const {context, calls} = setup([new Error('timeout'), {MLB3: [{id: 'MLB3', name: 'Test'}]}, {CBT2: path}], [{category_id: 'CBT2'}, {category_id: 'MLB3'}]);
-    await context.loadStoreLinkCategoryOptions();
-    assert.equal(context.storeLinkCategoryPaths.MLB3[0].name, 'Test');
-    assert.match(context.storeLinkMessage.textContent, /还有 1 个/);
-    await context.loadStoreLinkCategoryOptions();
-    assert.deepEqual(calls.map(call => call.ids), [['CBT2'], ['MLB3'], ['CBT2']]);
-    assert.equal(context.storeLinkMessage.textContent, '');
+test('one failed site preserves another site and retries only the failed site', async () => {
+    const {picker, calls} = setup([new Error('timeout'), {MLB3: [{id: 'MLB3', name: '工具'}]}, {CBT2: path}], [{category_id: 'CBT2'}, {category_id: 'MLB3'}]);
+    await picker.load(); assert.equal(picker.paths.MLB3[0].name, '工具');
+    await picker.load(); assert.deepEqual(calls.map(call => call.ids), [['CBT2'], ['MLB3'], ['CBT2']]);
 });
-
-test('unresolved categories remain selectable without an artificial site level', () => {
-    const context = vm.createContext({storeLinkCategoryRows: [{category_id: 'MLB3', category_name: '测试分类', link_count: 7}], storeLinkCategoryPaths: {}});
-    vm.runInContext(template.slice(template.indexOf('        function storeLinkCategoryTree()'), template.indexOf('        function renderStoreLinkCategoryTree()')), context);
-    const root = context.storeLinkCategoryTree();
-    assert.equal(root.children.size, 1);
-    assert.equal(root.children.get('MLB3').name, '测试分类');
-    assert.equal(root.children.get('MLB3').selectable, true);
-    assert.equal(root.children.get('MLB3').count, 7);
+test('missing hierarchy and untranslated names never become bogus first-level options', () => {
+    const {build} = setup();
+    const tree = build([{category_id: 'CBT2', category_name: '冰箱'}, {category_id: 'MLB3'}], {MLB3: [{id: 'MLB3', name: 'Refrigerators'}]});
+    assert.equal(tree.root.children.size, 0); assert.equal(tree.pending, 2);
 });
-
-test('same category path merges across sites and retains every filter id', () => {
-    const context = vm.createContext({storeLinkCategoryRows: [{category_id:'MLA2',link_count:3},{category_id:'MLM2',link_count:4}],storeLinkCategoryPaths:{MLA2:[{id:'MLA1',name:'Tools'},{id:'MLA2',name:'Hammers'}],MLM2:[{id:'MLM1',name:'Tools'},{id:'MLM2',name:'Hammers'}]}});
-    vm.runInContext(template.slice(template.indexOf('        function storeLinkCategoryTree()'), template.indexOf('        function renderStoreLinkCategoryTree()')), context);
-    const root=context.storeLinkCategoryTree();
-    assert.equal(root.children.size,1);
-    const parent=[...root.children.values()][0];
-    assert.equal(parent.count,7);
-    assert.equal(parent.children.size,1);
-    assert.deepEqual(Array.from([...parent.children.values()][0].categoryIds),['MLA2','MLM2']);
+test('same Chinese paths merge across sites and retain all parent and leaf filter IDs', () => {
+    const {build} = setup();
+    const tree = build([{category_id: 'CBT2'}, {category_id: 'MLB2'}], {CBT2: path, MLB2: [{id: 'MLB1', name: '家电'}, {id: 'MLB2', name: '冰箱'}]});
+    assert.equal(tree.root.children.size, 1);
+    const parent = tree.root.children.get('家电');
+    assert.deepEqual([...parent.ids], ['CBT1', 'MLB1']);
+    assert.deepEqual([...parent.children.get('冰箱').ids], ['CBT2', 'MLB2']);
 });
-
-test('categories without names or paths remain separate selectable options', () => {
-    const context = vm.createContext({
-        storeLinkCategoryRows: [{category_id: 'MLB3', link_count: 7}, {category_id: 'CBT2', category_name: '', link_count: 2}],
-        storeLinkCategoryPaths: {},
-    });
-    vm.runInContext(template.slice(template.indexOf('        function storeLinkCategoryTree()'), template.indexOf('        function renderStoreLinkCategoryTree()')), context);
-    const root = context.storeLinkCategoryTree();
-    assert.equal(root.children.size, 2);
-    for (const [id, count] of [['MLB3', 7], ['CBT2', 2]]) {
-        const node = root.children.get(id);
-        assert.equal(node.name, '分类名称待同步');
-        assert.equal(node.selectable, true);
-        assert.equal(node.count, count);
-        assert.deepEqual(Array.from(node.categoryIds), [id]);
-    }
+test('untranslated paths refresh after background translation', async () => {
+    const {picker, calls} = setup([{CBT2: path}]);
+    picker.paths.CBT2 = [{id: 'CBT2', name: 'Refrigerators', name_source: 'Refrigerators'}];
+    await picker.load(); await picker.load();
+    assert.equal(picker.paths.CBT2[1].name, '冰箱'); assert.equal(calls.length, 1);
+});
+test('tree retains more than five levels', () => {
+    const {build} = setup();
+    const path = Array.from({length: 8}, (_, n) => ({id: `CBT${n + 1}`, name: `分类${n + 1}`}));
+    let node = build([{category_id: 'CBT8'}], {CBT8: path}).root;
+    for (const part of path) { node = node.children.get(part.name); assert.ok(node); }
 });

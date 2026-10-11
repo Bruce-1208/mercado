@@ -20,7 +20,7 @@ def row(pid, status="pending", platform="mercadolibre", serialized=False):
     snapshot = {"original_1688": {"title": "供应商商品"},
                 "ai_original": draft if platform == "mercadolibre" else {},
                 "marketplace_listings": {platform: draft}}
-    return {"id": pid, "source_type": "ai_original",
+    return {"id": pid, "source_type": "ai_original", "category_id": "CBT123",
             "source_snapshot_json": json.dumps(snapshot) if serialized else snapshot}
 
 
@@ -170,3 +170,35 @@ def test_parallel_workers_keep_initiating_catalog_account(monkeypatch):
     assert accounts == [user, user]
     assert fixture.state["completed_count"] == 2
     assert product_access.actor() is None
+
+
+def test_recovery_workers_keep_explicit_billing_account(monkeypatch):
+    from erp.ai_usage_billing import current_usage_context
+    fixture = worker(monkeypatch, [row(1), row(2)])
+    contexts = []
+    def prepare(item, **kwargs):
+        contexts.append(current_usage_context())
+        return fixture.prepare(item, **kwargs)
+    monkeypatch.setattr(products, "prepare_ai_original_product", prepare)
+    actor = {"actor_id": 7, "actor_name": "向子立", "salesperson": "向子立",
+             "organization_key": "test-org"}
+    fixture.run([row(1), row(2)], workers=2, generated_by="向子立", billing_actor=actor)
+    assert len(contexts) == 2
+    for context in contexts:
+        assert all(context[key] == value for key, value in actor.items())
+    assert {context["task_id"] for context in contexts} == {"1", "2"}
+
+
+def test_original_generation_without_billing_actor_stops_before_paid_call(monkeypatch):
+    from erp import ai_usage_billing
+    monkeypatch.setattr(ai_usage_billing, "_context_resolver", None)
+    monkeypatch.delenv("AI_BILLING_ACTOR_ID", raising=False)
+    fixture = worker(monkeypatch, [row(1)])
+    monkeypatch.setattr(products, "_listing_json_chat",
+                        lambda **kwargs: lambda *a, **k: pytest.fail("paid call without actor"))
+    def prepare(item, **kwargs):
+        kwargs["chat"]([])
+    monkeypatch.setattr(products, "prepare_ai_original_product", prepare)
+    fixture.run([row(1)], workers=1)
+    assert fixture.state["failed_count"] == 1
+    assert "缺少业务员账号" in str(fixture.state["results"])

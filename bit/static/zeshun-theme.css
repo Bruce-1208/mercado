@@ -3,15 +3,15 @@
     --zs-brand: #2563eb;
     --zs-brand-hover: #1d4ed8;
     --zs-brand-tint: #eff6ff;
-    --zs-canvas: #f3f5f9;
+    --zs-canvas: #f6f8fa;
     --zs-card: #fff;
     --zs-card-soft: #f8fafc;
     --zs-heading: #172033;
     --zs-copy: #344054;
     --zs-secondary: #64748b;
-    --zs-stroke: #dce3ec;
-    --zs-shadow: 0 2px 10px rgba(15, 23, 42, .045);
-    --zs-corner: 12px;
+    --zs-stroke: #e3e8ee;
+    --zs-shadow: none;
+    --zs-corner: 10px;
     --zs-control-corner: 8px;
 }
 
@@ -214,7 +214,7 @@ body.zs-auth :is(h1, .login-header h1) { color: var(--zs-heading); }
     --zs-control-height: 38px;
     --zs-space: 16px;
     --zs-control-corner: 8px;
-    --zs-corner: 12px;
+    --zs-corner: 10px;
 }
 :is(body.zs-console, body.zs-standalone) :is(.tab-heading, .heading, .panel-heading) { gap: 16px; }
 :is(body.zs-console, body.zs-standalone) :is(.tab-heading h2, .page-heading h1) { font-size: 20px; line-height: 1.4; margin: 0; }
@@ -604,3 +604,44 @@ input.zs-empty-date:not(:focus)::-webkit-datetime-edit {
 input.zs-empty-date:not(:focus) {
     color: transparent;
 }
+
+/* A lighter shared surface for independent workspaces and account pages. */
+body.zs-standalone > header {
+    background: #fff;
+    color: var(--zs-heading);
+    border-bottom: 1px solid var(--zs-stroke);
+}
+body.zs-standalone > header nav { display: flex; flex-wrap: wrap; gap: 12px 20px; }
+body.zs-standalone :is(.hero, .page-heading) { box-shadow: none; }
+body.zs-standalone :is(.filters, .filter-panel) { background: #fff; }
+body.zs-standalone :is(.stat, .metric, .task, .section, .provider, .panel, .group-card) { box-shadow: none; }
+body.zs-standalone :is(.toolbar, .actions, .table-head, .section-heading) { flex-wrap: wrap; }
+body.zs-standalone :is(.toolbar, .actions, .table-head, .section-heading) > * { min-width: 0; max-width: 100%; }
+body.zs-standalone .scroll { max-width: 100%; overflow: auto; overscroll-behavior-x: contain; }
+body.zs-account main { margin: 24px auto; }
+body.zs-account h1 { font-size: 24px; line-height: 1.4; }
+body.zs-account :is(.metric.featured, .plans .featured) { background: var(--zs-brand-tint); color: var(--zs-heading); border-color: #cddff6; }
+body.zs-account :is(.metric.featured, .plans .featured) p { color: var(--zs-secondary); }
+body.zs-account .metric.featured strong { color: var(--zs-brand-hover); }
+body.zs-account .plans h2 { font-size: 28px; }
+body.zs-account .heading p { font-weight: 400; }
+@media (max-width: 600px) {
+    body.zs-standalone > header { display: flex; flex-wrap: wrap; gap: 12px; padding: 14px; }
+    body.zs-account main { padding-left: 14px; padding-right: 14px; }
+    body.zs-standalone :is(.toolbar, .actions) { gap: 8px; }
+}
+
+body.zs-standalone .metric::after { display: none; }
+body.zs-standalone .metric { min-height: 96px; }
+body.zs-standalone.awp-workspace .live-console { background: var(--zs-card-soft); color: var(--zs-copy); border-color: var(--zs-stroke); box-shadow: none; }
+body.zs-standalone.awp-workspace .live-console h2 { color: var(--zs-heading); }
+body.zs-standalone.awp-workspace :is(.live-task, .live-refresh-state, .live-log-details summary) { color: var(--zs-secondary); }
+body.zs-standalone.awp-workspace :is(.live-counter, .live-console .small) { background: #fff; color: var(--zs-copy); border-color: var(--zs-stroke); }
+body.zs-standalone.awp-workspace .live-console .small:hover:not(:disabled) { background: var(--zs-brand-tint); }
+body.zs-standalone.awp-workspace .live-log-list { border-color: var(--zs-stroke); }
+body.zs-standalone.awp-workspace .live-log-message { color: var(--zs-copy); }
+body.zs-standalone.awp-workspace :is(.live-log-time, .live-empty) { color: var(--zs-secondary); }
+body.zs-standalone.awp-workspace .live-log-level { color: var(--zs-brand-hover); }
+body.zs-standalone.awp-workspace .live-log-row.warning .live-log-level { color: #945b0c; }
+body.zs-standalone.awp-workspace .live-log-row.error .live-log-level { color: #b42318; }
+body.zs-account .metric.featured > span { color: var(--zs-secondary); }

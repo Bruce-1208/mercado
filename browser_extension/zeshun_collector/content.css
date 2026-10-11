@@ -290,3 +290,6 @@
 .zeshun-1688-preferences { position: fixed; right: 20px; bottom: 85px; z-index: 2147483646; width: 265px; padding: 12px; border: 1px solid #dfcba5; border-radius: 10px; background: #fffaf0; color: #684c21; font: 13px/1.5 sans-serif; box-shadow: 0 4px 16px #0002; }
 .zeshun-1688-preferences select { width: 100%; margin: 8px 0; padding: 6px; }
 .zeshun-1688-preferences button { cursor: pointer; padding: 4px 8px; }
+
+/* Keep native currency and amount intact for Mercado and collection parsers. */
+.zeshun-usd-price { display: inline-block; margin: 4px 0 4px 8px; color: #147344; font: 600 13px/1.5 Arial, sans-serif; white-space: nowrap; vertical-align: middle; }

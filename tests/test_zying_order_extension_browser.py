@@ -32,6 +32,8 @@ def test_page_search_details_concurrency_and_compact_payload(fallback):
             assert result["detail"]["root"][0]["order_id"] == str(100 + index)
             assert "customer" not in result["detail"]["root"][0]
             assert set(result["detail"]) == {"root", "buys"}
+            assert result["detail"]["buys"][0]["amount"] == "18.50"
+            assert result["detail"]["buys"][0]["cur"] == "CNY"
         assert page.evaluate("window.fetch.name") != "wrappedFetch"
 
 
@@ -125,7 +127,7 @@ def test_popup_dates_login_progress_and_stop():
               if(message.type==='GET_STATE') return callback({ok:true,authenticated:true,user:{username:'test'},queueLength:0});
               if(message.type==='GET_ZESHUN_CATEGORIES') return callback({ok:true,rows:[]});
               if(message.type==='START_ZYING_ORDER_SYNC') orderState={request_id:'run1',phase:'loading',running:true,
-                date_start:message.date_start,date_end:message.date_end,total:12,prepared:10,message:'正在准备订单，可先登录智赢'};
+                date_start:message.date_start,date_end:message.date_end,order_status:message.order_status,total:12,prepared:10,message:'正在准备订单，可先登录智赢'};
               if(message.type==='CONFIRM_ZYING_ORDER_LOGIN') orderState={...orderState,phase:'syncing',message:'正在同步',completed:10,updated:8,skipped:1,failed:1};
               if(message.type==='STOP_ZYING_ORDER_SYNC') orderState={...orderState,phase:'stopped',running:false,message:'任务已结束'};
               callback({ok:true,state:structuredClone(orderState)});
@@ -140,6 +142,7 @@ def test_popup_dates_login_progress_and_stop():
         page.locator("#zying-order-start").click()
         assert "有效" in page.locator("#zying-order-status").inner_text()
         assert not page.evaluate("messages.some(m => m.type === 'START_ZYING_ORDER_SYNC')")
+        page.locator("#zying-order-order-status").select_option("@转运")
         page.locator("#zying-order-date-start").fill("2026-10-01")
         page.locator("#zying-order-start").click()
         page.wait_for_function("document.getElementById('zying-order-summary').textContent.includes('准备订单 10 / 12')")
@@ -150,7 +153,8 @@ def test_popup_dates_login_progress_and_stop():
         page.wait_for_function("!document.getElementById('zying-order-confirm').disabled")
         assert page.locator("#zying-order-date-start").is_disabled()
         assert page.evaluate("messages.find(m => m.type === 'START_ZYING_ORDER_SYNC')") == {
-            "type": "START_ZYING_ORDER_SYNC", "date_start": "2026-10-01", "date_end": "2026-10-08"}
+            "type": "START_ZYING_ORDER_SYNC", "date_start": "2026-10-01", "date_end": "2026-10-08", "order_status": "@转运"}
+        assert page.locator("#zying-order-order-status").is_disabled()
         page.locator("#zying-order-confirm").click()
         page.wait_for_function("document.getElementById('zying-order-summary').textContent.includes('10 / 12')")
         artifact = ROOT / "artifacts/zying-order-extension-20261008"

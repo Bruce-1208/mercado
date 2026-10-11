@@ -59,16 +59,22 @@ def select_known_cbt_category(original, query, chat, *, api_key='', model='', ba
                           'candidates': candidates}, ensure_ascii=False)
         )
         selected_id = None
+        messages = [{'role': 'user', 'content': prompt}]
         for _ in range(2):
-            response = chat([{'role': 'user', 'content': prompt}], api_key=api_key or None,
+            response = chat(messages, api_key=api_key or None,
                             model=model or None, base_url=base_url or None, temperature=0.1,
                             max_tokens=1000, response_format={'type': 'json_object'})
             try:
                 selected_id = _json_object(response).get('category_id')
             except ValueError:
-                continue
+                selected_id = None
             if isinstance(selected_id, str) and selected_id in choices:
                 break
+            reject = getattr(chat, 'reject_response', None)
+            if reject is not None:
+                reject(response)
+            messages = [*messages, {'role': 'assistant', 'content': response},
+                        {'role': 'user', 'content': '上次回答不是当前 candidates 中的有效分类编号。请重新选择，仅返回 JSON category_id。'}]
         else:
             raise ValueError('AI 未返回已知 CBT 目录中的有效分类编号')
         prefix.append(dict(choices[selected_id]))

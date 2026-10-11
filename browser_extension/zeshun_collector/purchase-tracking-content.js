@@ -4,6 +4,8 @@
 // instead of collecting credentials.  The browser's own cookies are the only
 // login state used by this content script.
 (function () {
+  if (globalThis.__zeshunPurchaseContent) return;
+  globalThis.__zeshunPurchaseContent = true;
   const platformForHost = () => {
     const host = String(location.hostname || "").toLowerCase();
     if (host.includes("1688.com")) return "1688";
@@ -30,7 +32,7 @@
   function isLoginPage() {
     const url = String(location.href || "").toLowerCase();
     if (/(^|[/?._-])(login|signin|sign-in|passport)([/?._-]|$)/.test(url)) return true;
-    return Boolean(document.querySelector("input[type='password']")) &&
+    return [...document.querySelectorAll("input[type='password']")].some(visible) &&
       /登录|登 录|验证码|扫码登录|短信验证|账号/.test(text().slice(0, 4000));
   }
 
@@ -56,7 +58,7 @@
   }
 
   function findAction(label, scope) {
-    return [...scope.querySelectorAll("button,a,[role='button'],span")]
+    return [...scope.querySelectorAll("button,a,[role='button'],span,div")]
       .find(element => visible(element) && String(element.textContent || "").trim() === label);
   }
 
@@ -98,8 +100,8 @@
         const orderLabels = value.match(/(?:订单号|订单编号|订单号码)\s*[：:]?\s*([A-Za-z0-9_-]+)/g) || [];
         if (orderLabels.some(label => !matchesOrder(label))) break;
         // An order number proves the order exists even before shipping controls
-        // appear. Keep the smallest labelled scope as a safe no-tracking fallback.
-        if (!matchedOrder && orderLabels.some(matchesOrder)) matchedOrder = scope;
+        // appear. Keep its enclosing single-order scope to read shipping status.
+        if (orderLabels.some(matchesOrder)) matchedOrder = scope;
         if (/物流单号|快递单号|运单号|物流编号|快递编号/.test(value) ||
             ["查看物流", "物流详情", "查看快递", "订单详情", "查看详情"].some(label => findAction(label, scope))) return scope;
       }
@@ -107,46 +109,130 @@
     return matchedOrder;
   }
 
-  async function fetchTracking(purchaseOrder) {
+  function pageProblem() {
+    if (isLoginPage() || /请先登录|请登录后|立即登录|扫码登录|短信验证登录/.test(text())) {
+      return {status: "not_logged_in", message: "采购平台尚未登录或登录已失效"};
+    }
+    if (/安全验证|请完成验证|拖动滑块|访问过于频繁|操作过于频繁|网络异常|加载失败/.test(text())) {
+      return {status: "failed", fatal: true, message: "采购平台出现验证、限流或加载异常，请在采购平台处理后重试"};
+    }
+    return null;
+  }
+
+  function capturedOrder(order) {
+    let result = null;
+    const listener = event => {
+      try {
+        const value = JSON.parse(event.detail);
+        if (value.order === order) result = value;
+      } catch (_) {}
+    };
+    document.addEventListener("zeshun-purchase-result", listener);
+    document.dispatchEvent(new CustomEvent("zeshun-purchase-read", {detail: order}));
+    document.removeEventListener("zeshun-purchase-result", listener);
+    return result;
+  }
+
+  function unshipped(value) {
+    return /等待卖家发货|等待商家发货|待发货|尚未发货|未发货|等待买家付款|待付款/.test(String(value || ""));
+  }
+
+  function explicitMissing() {
+    return /订单不存在|订单不属于该用户|没有符合条件的订单|未找到相关订单|没有找到相关订单|暂无相关订单/.test(text());
+  }
+
+  function navigation(action, order) {
+    const href = action.closest("a[href]")?.getAttribute("href");
+    if (!href || /^(javascript:|#)/i.test(href)) return null;
+    const url = new URL(href, location.href);
+    if (url.protocol !== "https:" || url.href === location.href) return null;
+    return {status: "navigate", url: url.href, bound_order: order};
+  }
+
+  async function fetchTracking(purchaseOrder, options = {}) {
     const order = String(purchaseOrder || "").trim();
     if (!order) return {status: "failed", message: "采购订单号为空"};
-    if (isLoginPage()) return {status: "not_logged_in", message: "采购平台尚未登录"};
+    const problem = pageProblem();
+    if (problem) return problem;
     const platform = platformForHost();
-    const search = findSearchInput(platform);
-    if (search) {
+    const direct = platform === "pdd" && new URL(location.href).searchParams.get("order_sn") === order;
+    let scope = findOrderScope(order);
+    let queried = direct || options.boundOrder === order || options.querySubmitted === true;
+    let changed = false;
+    let observer;
+    if (!scope && !queried) {
+      const search = findSearchInput(platform);
+      if (!search) {
+        return {status: "failed", fatal: true, message: "未找到订单查询入口，未执行查询；请打开采购订单列表后重试"};
+      }
+      // Observe results, not our own input value. Old empty results cannot prove
+      // that the new query completed.
+      observer = new MutationObserver(() => { changed = true; });
       setInputValue(search, order);
-      search.dispatchEvent(new KeyboardEvent("keydown", {key: "Enter", code: "Enter", bubbles: true}));
-      search.dispatchEvent(new KeyboardEvent("keyup", {key: "Enter", code: "Enter", bubbles: true}));
-      try { if (search.form) search.form.requestSubmit(); } catch (_) {}
-      await sleep(1800);
+      observer.observe(document.body, {childList: true, subtree: true, characterData: true});
+      const root = search.form || search.closest("[role='search']") || document.body;
+      const submit = ["搜索", "查询", "搜索订单", "查询订单"].map(label => findAction(label, root)).find(Boolean)
+        || search.form?.querySelector("button[type='submit'],input[type='submit']");
+      if (submit) submit.click();
+      else if (search.form) search.form.requestSubmit();
+      else {
+        search.dispatchEvent(new KeyboardEvent("keydown", {key: "Enter", code: "Enter", bubbles: true}));
+        search.dispatchEvent(new KeyboardEvent("keyup", {key: "Enter", code: "Enter", bubbles: true}));
+      }
+      queried = true;
     }
-    if (isLoginPage()) return {status: "not_logged_in", message: "采购平台登录已失效"};
-    const scope = findOrderScope(order);
-    if (!scope) {
-      return {status: "not_found", message: "平台未找到该采购订单"};
-    }
-    const existingDialogs = new Set([...document.querySelectorAll("[role='dialog'],dialog,.ant-modal,.el-dialog")].filter(visible));
-    for (const label of ["查看物流", "物流详情", "查看快递", "订单详情", "查看详情"]) {
-      const action = findAction(label, scope);
-      if (!action) continue;
-      try {
-        action.click();
-        await sleep(1200);
-        break;
-      } catch (_) {}
-    }
-    if (isLoginPage()) return {status: "not_logged_in", message: "采购平台登录已失效"};
-    const dialog = [...document.querySelectorAll("[role='dialog'],dialog,.ant-modal,.el-dialog")]
-      .find(element => visible(element) && !existingDialogs.has(element));
-    const result = extractTracking(dialog ? dialog.innerText : scope.innerText);
-    if (dialog) {
-      const close = dialog.querySelector("[aria-label='Close'],[aria-label='关闭'],.ant-modal-close,.el-dialog__headerbtn");
+    const dialogsBefore = new Set([...document.querySelectorAll("[role='dialog'],dialog,.ant-modal,.el-dialog")].filter(visible));
+    const clicked = new Set();
+    let activeDialog = null;
+    const deadline = Date.now() + 15000;
+    try {
+      while (Date.now() < deadline) {
+        const problem = pageProblem();
+        if (problem) return problem;
+        // PDD's order page loads its own authenticated JSON response. Accept
+        // only shipping fields bound to this exact order, including packages.
+        const record = direct ? capturedOrder(order) : null;
+        if (record?.tracking_number) return {status: "synced", tracking_number: record.tracking_number,
+          logistics_company: extractTracking(record.logistics_company).logistics_company};
+        scope = findOrderScope(order);
+        activeDialog = [...document.querySelectorAll("[role='dialog'],dialog,.ant-modal,.el-dialog")]
+          .find(element => visible(element) && !dialogsBefore.has(element));
+        let value = String((activeDialog || scope)?.innerText || "");
+        // A followed logistics link may omit the order label. Its binding was
+        // established from the matching order's own read-only link.
+        if (!value && options.boundOrder === order) value = text();
+        const labels = [...value.matchAll(/(?:订单号|订单编号|订单号码)\s*[：:]?\s*([A-Za-z0-9_-]+)/g)].map(match => match[1]);
+        if (labels.some(id => id !== order)) {
+          return {status: "failed", fatal: true, message: "物流详情订单号不匹配，已停止以避免串单"};
+        }
+        if (scope || activeDialog || options.boundOrder === order) {
+          const result = extractTracking(value);
+          if (result.tracking_number && result.tracking_number !== order) return {status: "synced", ...result};
+          if (unshipped(value)) return {status: "pending", message: "未发货"};
+          const action = ["查看物流", "查看物流详情", "物流详情", "查看快递", "订单详情", "查看详情"]
+            .map(label => findAction(label, activeDialog || scope || document.body))
+            .find(element => element && !clicked.has(element));
+          if (action) {
+            const target = navigation(action, order);
+            if (target) return target;
+            clicked.add(action);
+            action.click();
+          }
+        }
+        if (record && unshipped(record.status_text)) return {status: "pending", message: "未发货"};
+        if (!scope && queried && (direct || changed || options.querySubmitted === true) && explicitMissing()) {
+          return {status: "not_found", message: "平台明确返回该采购订单不存在或不属于当前账号"};
+        }
+        await sleep(250);
+      }
+      return {status: "failed", fatal: !scope, message: scope
+        ? "已找到采购订单，但未读到物流号或明确的未发货状态，请检查物流详情"
+        : "订单查询超时或查询未生效，未确认订单不存在，请检查采购平台页面"};
+    } finally {
+      observer?.disconnect();
+      const close = activeDialog?.querySelector("[aria-label='Close'],[aria-label='关闭'],.ant-modal-close,.el-dialog__headerbtn");
       if (close) close.click();
     }
-    if (!result.tracking_number) {
-      return {status: "pending", message: "未发货"};
-    }
-    return {status: "synced", ...result};
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -158,12 +244,12 @@
         return {
           ok: true,
           platform: platformForHost(),
-          loggedIn: !isLoginPage(),
+          loggedIn: !pageProblem(),
           url: location.href,
         };
       }
       if (message?.type === "FETCH_PURCHASE_TRACKING") {
-        return {ok: true, ...(await fetchTracking(message.purchaseOrder))};
+        return {ok: true, ...(await fetchTracking(message.purchaseOrder, message))};
       }
     };
     run().then(sendResponse, error => sendResponse({

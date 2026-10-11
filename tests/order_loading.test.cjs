@@ -11,7 +11,7 @@ function setup() {
         AbortController, URLSearchParams,
         orderTableBody: {}, orderStartDate: {}, orderEndDate: {},
         orderLoadSequence: 0, orderLoadController: null, orderSummaryController: null, orderStatusLoadTimer: null,
-        updateOrderSortIndicators() {},
+        updateOrderSortIndicators() {}, loadOrderDisplayRate() {},
         orderRefreshButton: {}, orderPaginationSummary: {},
         ordersLoading: false, orderPages: 1, orderRows: [],
         clearOrderSelection() {}, orderQueryParams: () => new URLSearchParams(),

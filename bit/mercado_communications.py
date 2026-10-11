@@ -249,7 +249,7 @@ def execute_store_communication(
         if data.get("background") is True:
             from bit.communication_preload import claim_translation_preload
             digest = hashlib.sha256(json.dumps(raw_texts, ensure_ascii=False).encode()).hexdigest()
-            key = (int(token_id), str(data.get("claim_id") or ""), digest)
+            key = (int(token_id), str(data.get("claim_id") or ""), str(data.get("site_id") or ""), digest)
             state = claim_translation_preload.read(key, lambda: execute_store_communication(
                 token_id, action, {**data, "background": False}, get_token=get_token,
                 refresh_token=refresh_token, get_order_contexts=get_order_contexts,
@@ -265,15 +265,28 @@ def execute_store_communication(
                 raise RuntimeError(state["error"])
             return state["data"]
         from erp.mercadolibre_translation import detect_text_language
-        _, local_language = _claim_language(client, token, token_id, data.get("claim_id"), get_order_contexts)
+        client.timeout = min(client.timeout, 8)
+        client.max_attempts = 2
+        # Incoming display translation can reuse the site already read by the
+        # UI. Sending still resolves the authoritative marketplace separately.
+        site_id = str(data.get("site_id") or "").strip().upper()
+        if site_id in PRE_SALE_SPANISH_SITES or site_id == "MLB":
+            local_language = _pre_sale_site_language(site_id)
+        else:
+            _, local_language = _claim_language(client, token, token_id, data.get("claim_id"), get_order_contexts)
         if len(raw_texts) > 100:
             raise ValueError("单次最多翻译 100 条文本")
-        translations = []
-        for text in raw_texts:
-            # Short Portuguese/Spanish messages are ambiguous in isolation;
-            # the order's marketplace provides a reliable language context.
+        translations = [""] * len(raw_texts)
+        language_groups = {}
+        for index, text in enumerate(raw_texts):
+            # Resolve the marketplace once per batch and translate each language
+            # together while preserving the original message order.
             source = detect_text_language(str(text or ""), local_language)
-            translations.extend(translate_texts([text], source, "zh-CN", translator=translator))
+            language_groups.setdefault(source, []).append((index, text))
+        for source, group in language_groups.items():
+            translated = translate_texts([text for _, text in group], source, "zh-CN", translator=translator)
+            for (index, _), text in zip(group, translated):
+                translations[index] = text
         return {"translations": translations}
 
     if normalized_action == "claims-attachment":
@@ -306,6 +319,8 @@ def execute_store_communication(
             "target_language": target_language,
         }
 
+    if normalized_action == "pre-sale-products":
+        return client.get_question_products(data.get("item_ids"))
     if normalized_action == "pre-sale-list":
         if not seller_id and not str(data.get("item_id") or "").strip():
             raise ValueError("该授权没有 Seller ID，不能读取售前问题")

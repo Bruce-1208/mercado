@@ -27,7 +27,7 @@ def test_public_detail_forwards_stages_and_keeps_authorization(query, translate,
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == "no-store"
     read.assert_called_once_with(["100", "101"], "MLM123", {7},
-                                 include_translation=translate, force_refresh=refresh)
+                                 include_translation=translate, force_refresh=refresh, include_description=True)
 
 
 def test_detail_requires_login():
@@ -48,7 +48,7 @@ def test_internal_detail_uses_boolean_flags(flag, expected):
         })
     assert response.status_code == 200
     read.assert_called_once_with(["100"], "MLM123", [7],
-                                 include_translation=expected, force_refresh=expected)
+                                 include_translation=expected, force_refresh=expected, include_description=True)
 
 
 def test_internal_detail_failure_stays_json():
@@ -59,3 +59,33 @@ def test_internal_detail_failure_stays_json():
         })
     assert response.status_code == 502
     assert response.get_json()["status"] == "error"
+
+
+def test_display_exchange_rate_requires_login():
+    with patch('bit.order_display_rates.latest_order_display_rate') as read:
+        response = workbench.app.test_client().get('/api/orders/display-exchange-rate')
+    assert response.status_code == 401
+    read.assert_not_called()
+
+
+def test_display_exchange_rate_returns_dated_snapshot():
+    snapshot = {'cny_per_usd':7.12, 'rate_date':'2026-10-08', 'source':'欧洲央行参考汇率'}
+    with patch('bit.order_display_rates.latest_order_display_rate', return_value=snapshot):
+        response = client().get('/api/orders/display-exchange-rate')
+    assert response.status_code == 200
+    assert response.json['data'] == snapshot
+    assert response.headers['Cache-Control'] == 'no-store'
+
+
+def test_display_exchange_rate_failure_is_explicit():
+    with patch('bit.order_display_rates.latest_order_display_rate', side_effect=ValueError('missing')):
+        response = client().get('/api/orders/display-exchange-rate')
+    assert response.status_code == 502
+    assert response.json['status'] == 'error'
+
+
+def test_fast_detail_stage_is_forwarded():
+    with patch.object(workbench, '_authorized_token_ids_for_user', return_value={7}), patch.object(workbench.bit_db_api, 'get_order_product_detail', return_value={}) as read:
+        response = client().get('/api/orders/product-detail?product_id=MLM123&order_id=100&description=0')
+    assert response.status_code == 200
+    assert read.call_args.kwargs['include_description'] is False

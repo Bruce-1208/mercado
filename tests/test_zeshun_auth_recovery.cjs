@@ -63,6 +63,13 @@ const response = (status, data) => ({ok: status === 200, status,
   json: async () => status === 200 ? {status:'success', data} : {status:'error', message:'expired'}});
 const session = {token:'fresh-token', user:{username:'test',role_key:'super_admin'}, expires_in:3600};
 
+test('request timeout identifies the endpoint and preserves the login',async()=>{
+  const {context,run,stored}=setup();
+  context.fetch=async()=>{throw Object.assign(new Error('signal timed out'),{name:'TimeoutError'});};
+  await assert.rejects(run('apiRequest("/api/browser-extension/appeal/plan-status")'),/请求超时.*appeal\/plan-status/);
+  assert.equal(stored.local.browserExtensionAuth.token,'test-token');
+});
+
 test('console login restores missing plugin auth and concurrent callers share the request', async () => {
   const {context, run, requests, stored} = setup({authMode:null});
   context.fetch = async (url, options) => { requests.push({url,options}); return response(200,session); };

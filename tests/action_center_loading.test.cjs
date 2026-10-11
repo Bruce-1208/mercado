@@ -4,10 +4,10 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 
-test('post-sale refresh shares in-flight requests and retries after completion', async () => {
+test('claim refresh shares in-flight requests and retries after completion', async () => {
   const html = fs.readFileSync(path.join(__dirname, '../bit/templates/mercado_action_center.html'), 'utf8');
-  const script = html.slice(html.indexOf('    let postSaleGeneration'), html.indexOf('    async function loadData'));
-  const elements = Object.fromEntries(['salesperson', 'group_name', 'post-sale-count', 'post-sale-tasks'].map(key => [key, {value: ''}]));
+  const script = html.slice(html.indexOf('    function filterValues'), html.indexOf('    async function loadData'));
+  const elements = Object.fromEntries(['salesperson', 'group_name', 'claim-count', 'claim-tasks'].map(key => [key, {value: ''}]));
   const pending = [];
   const context = vm.createContext({
     URLSearchParams,
@@ -16,30 +16,30 @@ test('post-sale refresh shares in-flight requests and retries after completion',
     dateLabel: value => value,
     fetch: () => new Promise(resolve => pending.push(resolve)),
   });
-  vm.runInContext(script, context);
-  const first = context.loadPostSale();
-  const second = context.loadPostSale();
+  vm.runInContext('let claimRows=[]; let claimData={}; const pageRows=(key,rows)=>rows;'+script, context);
+  const first = context.loadClaims();
+  const second = context.loadClaims();
   assert.equal(pending.length, 1);
   elements.salesperson.value = 'B';
-  const changed = context.loadPostSale();
+  const changed = context.loadClaims();
   assert.equal(pending.length, 2);
   pending[1]({ok: true, json: async () => ({status: 'success', data: {rows: [], errors: []}})});
   await changed;
-  const current = elements['post-sale-tasks'].innerHTML;
+  const current = elements['claim-tasks'].innerHTML;
   pending[0]({ok: false, json: async () => ({message: 'old request failed'})});
   await Promise.all([first, second]);
-  assert.equal(elements['post-sale-tasks'].innerHTML, current);
+  assert.equal(elements['claim-tasks'].innerHTML, current);
   elements.salesperson.value = '';
-  const retry = context.loadPostSale();
+  const retry = context.loadClaims();
   assert.equal(pending.length, 3);
   pending[2]({ok: true, json: async () => ({status: 'success', data: {rows: [], errors: []}})});
   await retry;
 });
 
-test('background post-sale polling preserves snapshots and does not report pending as empty', async () => {
+test('background claim polling preserves snapshots and does not report pending as empty', async () => {
   const html = fs.readFileSync(path.join(__dirname, '../bit/templates/mercado_action_center.html'), 'utf8');
-  const script = html.slice(html.indexOf('    let postSaleGeneration'), html.indexOf('    async function loadData'));
-  const elements = Object.fromEntries(['salesperson', 'group_name', 'post-sale-count', 'post-sale-tasks'].map(key => [key, {value: ''}]));
+  const script = html.slice(html.indexOf('    function filterValues'), html.indexOf('    async function loadData'));
+  const elements = Object.fromEntries(['salesperson', 'group_name', 'claim-count', 'claim-tasks'].map(key => [key, {value: ''}]));
   const timers = [];
   let data = {rows: [], errors: [], pending: true, refreshing: true};
   const context = vm.createContext({URLSearchParams,
@@ -47,14 +47,14 @@ test('background post-sale polling preserves snapshots and does not report pendi
     setTimeout: callback => {timers.push(callback); return timers.length;}, clearTimeout: () => {},
     fetch: async () => ({ok: true, json: async () => ({status: 'success', data})}),
   });
-  vm.runInContext(script, context);
-  await context.loadPostSale();
-  assert.equal(elements['post-sale-count'].textContent, '核对中');
-  assert.doesNotMatch(elements['post-sale-tasks'].innerHTML, /没有未回复/);
+  vm.runInContext('let claimRows=[]; let claimData={}; const pageRows=(key,rows)=>rows;'+script, context);
+  await context.loadClaims();
+  assert.equal(elements['claim-count'].textContent, '核对中');
+  assert.doesNotMatch(elements['claim-tasks'].innerHTML, /没有未回复/);
   assert.equal(timers.length, 1);
-  data = {rows: [{token_id: 1, store_name: '店铺', pack_id: 'P', text: '未回复'}], errors: [], refreshing: false};
+  data = {rows: [{token_id: 1, store_name: '店铺', claim_id: 'P', text: '未回复'}], errors: [], refreshing: false};
   await timers[0]();
-  assert.match(elements['post-sale-tasks'].innerHTML, /未回复/);
+  assert.match(elements['claim-tasks'].innerHTML, /未回复/);
   assert.equal(timers.length, 1);
 });
 

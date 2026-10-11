@@ -38,7 +38,7 @@ function setup() {
         attributes: [{id: 'MATERIAL', value_name: 'Plastic'}], image_generation_method: 'ai_image_edit'
       }};
     aiOriginalRows = [ready, {...ready, id: 2, review_status: 'unreviewed'},
-      {...ready, id: 3, review_status: 'unreviewed', ai_original: {...ready.ai_original, attributes: []}}];
+      {...ready, id: 3, review_status: 'unreviewed', net_proceeds_usd: null}];
     aiOriginalSelected = new Set([1, 2, 3]);
     aiOriginalSelectedSiteIds = () => ['MLM'];
     loadAiOriginalPublishStatus = () => {};
@@ -46,6 +46,17 @@ function setup() {
   `);
   return {run, nodes, requests, confirmations};
 }
+
+test('unattempted categories are not errors and invalid completed categories can retry', () => {
+  const {run} = setup();
+  run(`globalThis.pendingCategory = {...ready, category_id:'', ai_status:'pending', ai_original:{}};
+       globalThis.badCategory = {...ready, category_id:'', ai_status:'completed'};`);
+  assert.equal(run('aiOriginalPlatformStatus(pendingCategory)'), 'pending');
+  assert.equal(run('aiOriginalMissingCheckMessages(pendingCategory, aiOriginalListingChecks(pendingCategory)).length'), 0);
+  assert.equal(run('aiOriginalPlatformStatus(badCategory)'), 'failed');
+  assert.equal(run('aiOriginalProductStatus(badCategory)'), 'failed');
+  assert.match(run('aiOriginalMissingCheckMessages(badCategory, aiOriginalListingChecks(badCategory)).join()'), /美客多类目生成失败，可重新生成/);
+});
 
 test('mixed selection enables publishing and sends only products with unified passed status', async () => {
   const {run, nodes, requests, confirmations} = setup();
@@ -148,7 +159,7 @@ test('five page states do not alter the AI generation result', () => {
   assert.equal(run('aiOriginalProductStatus(aiOriginalRows[2])'), 'incomplete');
   for (const field of ['package_length_cm', 'package_width_cm', 'package_height_cm', 'weight_g', 'net_proceeds_usd']) {
     run(`var original = aiOriginalRows[0]; var changed = {...original, ${field}: null};`);
-    assert.equal(run('aiOriginalProductStatus(changed)'), 'approved', field);
+    assert.equal(run('aiOriginalProductStatus(changed)'), 'incomplete', field);
     assert.equal(run('aiOriginalProductStatus({...changed, review_status:"unreviewed"})'), 'incomplete', field);
     assert.equal(run('aiOriginalPlatformStatus(changed)'), 'completed', field);
     assert.equal(run('aiOriginalListingChecks(changed).every(check => check.ok)'), true, field);
@@ -172,4 +183,24 @@ test('counts, filter and selection agree on the same five statuses', () => {
     assert.equal(run('aiOriginalSelected.size'), 1);
     assert.equal(run('aiOriginalProductStatus(aiOriginalRows.find(row => aiOriginalSelected.has(row.id)))'), status);
   }
+});
+
+
+test('generated content omissions are failures even after approval and with missing manual values', () => {
+  const {run} = setup();
+  for (const field of ['category_id', 'title_es', 'title_pt', 'description_es', 'description_pt', 'main_image_url']) {
+    assert.equal(run(`aiOriginalProductStatus({...aiOriginalRows[0], ${field}: '', weight_g: null})`), 'failed', field);
+  }
+  assert.equal(run(`aiOriginalProductStatus({...aiOriginalRows[0], ai_original: {...aiOriginalRows[0].ai_original, attributes: []}})`), 'failed');
+  assert.equal(run(`aiOriginalProductStatus({...aiOriginalRows[0], ai_original: {...aiOriginalRows[0].ai_original, missing_required_attributes:[{id:'GENDER'}]}})`), 'failed');
+  assert.equal(run(`aiOriginalProductStatus({...aiOriginalRows[0], ai_status:'failed'})`), 'failed');
+});
+
+
+test('unfinished or missing SKU mappings cannot be pending manual fields', () => {
+  const {run} = setup();
+  assert.equal(run(`aiOriginalProductStatus({...aiOriginalRows[0], weight_g:null,
+    original_1688:{variations:[{id:'one'}]}})`), 'failed');
+  assert.equal(run(`aiOriginalProductStatus({...aiOriginalRows[0], weight_g:null,
+    ai_original:{...aiOriginalRows[0].ai_original, preparation:{variations_ready:false}}})`), 'failed');
 });

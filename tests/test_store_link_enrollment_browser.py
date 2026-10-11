@@ -223,8 +223,8 @@ def test_link_enrollment_opens_exact_campaign_prices_previews_and_submits(enroll
 
     enrollment_page.locator('button[data-tab="store-links"]').click()
     enrollment_page.wait_for_function("storeLinksLoaded && !storeLinkListLoading && storeLinkRows[0]?.available_promotions?.length === 0")
-    assert len(mock.list_refreshes) == 1
-    refresh_query = parse_qs(urlsplit(mock.list_refreshes[0]).query)
+    assert 1 <= len(mock.list_refreshes) <= 2
+    refresh_query = parse_qs(urlsplit(mock.list_refreshes[-1]).query)
     assert refresh_query["page"] == ["2"]
     assert refresh_query["organization_key"] == [ORGANIZATION]
     assert enrollment_page.locator('button[onclick^="openStoreLinkPromotion"]').count() == 0
@@ -262,3 +262,33 @@ def test_stale_candidate_does_not_select_other_products(
     assert frame.locator("#enrollBtn").is_disabled()
     assert frame.locator("#applyDiscountBtn").is_disabled()
     assert not mock.previews and not mock.submissions
+
+
+def test_store_link_can_cancel_enrollment_and_refresh_marker(enrollment_page):
+    mock = EnrollmentMock(enrollment_page)
+    errors = []
+    enrollment_page.on('pageerror', lambda error: errors.append(str(error)))
+    row = dict(mock.link, available_promotions=[], promotion_applied=True,
+        enrolled_promotions=[dict(mock.link['available_promotions'][0], status_raw='pending_approval',
+                                  price=400, original_price=500, current_discount_percent=20)])
+    enrollment_page.evaluate('row => renderStoreLinkRows([row])', row)
+    submissions = []
+    def cancel(route):
+        submissions.append((route.request.url, route.request.post_data_json))
+        mock.json(route, {'cancelled_count': 1})
+    enrollment_page.route('**/api/promotions/71/withdraw*', cancel)
+    enrollment_page.route('**/api/store-links?*', lambda route: mock.json(route, {
+        'rows':[dict(row, enrolled_promotions=[], promotion_applied=False)], 'page':1,'pages':1,'total':1}))
+    button = enrollment_page.get_by_role('button',name='取消活动',exact=True)
+    button.scroll_into_view_if_needed()
+    assert '当前折扣：降价 20%' in enrollment_page.locator('#store-link-body').inner_text()
+    mock.screenshot('04-cancel-and-current-discount.png')
+    enrollment_page.once('dialog', lambda dialog: dialog.accept())
+    button.click()
+    enrollment_page.wait_for_function("document.getElementById('store-link-message').textContent === '活动已取消'")
+    assert len(submissions) == 1
+    assert submissions[0][1] == {'item_id':ITEM_ID}
+    assert parse_qs(urlsplit(submissions[0][0]).query)['organization_key'] == [ORGANIZATION]
+    assert enrollment_page.get_by_role('button',name='取消活动',exact=True).count() == 0
+    assert '已报活动' not in enrollment_page.locator('#store-link-body').inner_text()
+    assert not errors

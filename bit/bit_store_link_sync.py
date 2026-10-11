@@ -6,12 +6,13 @@ from erp.store_link_audit import audited, contextual_target
 import os
 import threading
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from datetime import datetime, timedelta
 
 from bit.sync_capacity import run_store as run_capacity_store, due_batch
 from bit import bit_mysql, mercado_tokens
 from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
+from bit.store_link_item_lock import store_link_item_locks
 from erp.mercadolibre_store_link_store import (
     finalize_store_snapshot,
     invalidate_store_link_metadata_cache,
@@ -377,6 +378,15 @@ def _sync_store(record: dict) -> dict:
             }
 
             def write_batch(item_ids, items):
+                # Hold only a small set of item leases from remote read through
+                # both local writes. An edit never waits for the whole scan or
+                # a 200-item detail batch, and stale snapshots cannot win later.
+                for offset in range(0, len(item_ids), 8):
+                    chunk_ids = item_ids[offset:offset + 8]
+                    with store_link_item_locks(token_id, chunk_ids, owner="store-link-sync"):
+                        write_chunk(chunk_ids, items[offset:offset + 8])
+
+            def write_chunk(item_ids, items):
                 _state_update(
                     message=f"正在读取 {store_name} 商品详情：{totals['details']}/{totals['discovered'] + len(item_ids)}"
                 )
@@ -502,7 +512,7 @@ def run_store_link_sync(token_ids=None) -> dict:
         f"任务启动，共 {len(records)} 家店铺；{worker_count} 家店铺并行，"
         f"每家最多 {STORE_LINK_DETAIL_WORKERS} 个详情线程"
     )
-    _append_log("同步排序：尚未完成首次拉取的店铺优先，其余按最久未同步优先")
+    _append_log("同步排序：刚授权店铺优先，其次首次拉取店铺，其余按最久未同步优先")
     results = []
 
     def sync_one_store(record: dict) -> dict:
@@ -538,10 +548,35 @@ def run_store_link_sync(token_ids=None) -> dict:
         max_workers=worker_count,
         thread_name_prefix="mercado-store-sync",
     ) as executor:
-        futures = [executor.submit(contextual_target(run_capacity_store), "links", record["id"], sync_one_store, record) for record in records]
-        for future in as_completed(futures):
-            result = future.result()
-            results.append(result)
+        pending = list(records)
+        submitted_ids = set()
+        futures = set()
+        while pending or futures:
+            # Only submit work for free slots so newly authorized stores can
+            # overtake the backlog without interrupting an active store scan.
+            if len(futures) < worker_count:
+                priority_ids = list_due_store_link_token_ids(priority_only=True)
+                priority_ids = [value for value in priority_ids if value not in submitted_ids]
+                if priority_ids:
+                    priority_records = _token_records(priority_ids)
+                    priority_set = {int(row["id"]) for row in priority_records}
+                    pending = priority_records + [row for row in pending if int(row["id"]) not in priority_set]
+                    targets = list(dict.fromkeys(
+                        [int(row["id"]) for row in records] + [int(row["id"]) for row in pending]
+                    ))
+                    _state_update(target_token_ids=targets, total_stores=len(targets))
+                    records = list({int(row["id"]): row for row in records + pending}.values())
+                while pending and len(futures) < worker_count:
+                    record = pending.pop(0)
+                    submitted_ids.add(int(record["id"]))
+                    futures.add(executor.submit(
+                        contextual_target(run_capacity_store), "links", record["id"], sync_one_store, record,
+                    ))
+            if not futures:
+                break
+            done, futures = wait(futures, return_when=FIRST_COMPLETED)
+            for future in done:
+                results.append(future.result())
             _state_update(
                 processed_stores=len(results),
                 failed_count=sum(1 for row in results if row.get("status") == "error"),
@@ -600,7 +635,7 @@ def _run_background(token_ids) -> None:
 
 
 @audited
-def start_store_link_sync(token_ids=None) -> tuple[bool, dict]:
+def start_store_link_sync(token_ids=None, *, priority=False) -> tuple[bool, dict]:
     selected_ids = _token_ids(token_ids)
     if selected_ids:
         selected_ids = [int(row["id"]) for row in _token_records(selected_ids)]
@@ -612,7 +647,7 @@ def start_store_link_sync(token_ids=None) -> tuple[bool, dict]:
             if bool(row.get("enabled", True))
         )
     if queued_ids:
-        request_store_link_sync(queued_ids)
+        request_store_link_sync(queued_ids, **({"priority": True} if priority else {}))
     with _state_guard:
         if _sync_state.get("running"):
             return False, store_link_sync_status()

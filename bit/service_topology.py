@@ -39,6 +39,7 @@ def request_group(path):
     }:
         return 'orders'
     if path.startswith(('/api/store-links/sync/', '/api/db/store-links/sync/',
+                        '/api/product-diagnosis', '/api/db/product-diagnosis',
                         '/api/store-links/bulk-update', '/api/db/store-links/bulk-update',
                         '/api/prohibited-listings/sync/', '/api/db/prohibited-listings/sync/',
                         '/api/official-infractions/sync', '/api/db/official-infractions/sync', '/api/db/official-infractions/live',

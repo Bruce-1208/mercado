@@ -18,7 +18,7 @@ function setup({authMode = 'token'} = {}) {
   const stored = {
     local: authMode ? {browserExtensionAuth: {
       mode: authMode, token: 'test-token', user: {username: 'test'}
-    }} : {},
+    }} : {consoleAuthSyncDisabled: true},
     sync: {consoleUrl: 'https://console.test', consoleUrlDefaultMigration: 1}, session: {}
   };
   const event = () => ({addListener() {}, removeListener() {}});
@@ -41,7 +41,7 @@ function setup({authMode = 'token'} = {}) {
       create: async () => ({id: 3})}
   };
   const context = vm.createContext({
-    chrome, URL, setTimeout, clearTimeout, setInterval, clearInterval,
+    chrome, URL, AbortController, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval,
     fetch: async (url, options) => {
       requests.push({url, options});
       return {ok: true, status: 200, json: async () => ({status: 'success', data: {

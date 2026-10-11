@@ -7,12 +7,12 @@ function statsSetup() {
     const nodes = new Map();
     const requests = [];
     let organization = 'first';
-    const makeNode = () => ({value: '', textContent: '', children: [], listeners: {},
+    const makeNode = () => ({value: '', textContent: '', children: [], listeners: {}, dataset: {},
         addEventListener(name, callback) { this.listeners[name] = callback; },
         appendChild(child) { this.children.push(child); },
         replaceChildren(fragment) { this.children = fragment ? [...fragment.children] : []; },
     });
-    const context = vm.createContext({Date, URLSearchParams,
+    const context = vm.createContext({Date, URLSearchParams, Headers, AbortController, DOMException, setTimeout, clearTimeout,
         enterpriseScopedUrl: url => `${url}&enterprise_key=${organization}`,
         document: {
             getElementById(id) { if (!nodes.has(id)) nodes.set(id, makeNode()); return nodes.get(id); },
@@ -21,6 +21,7 @@ function statsSetup() {
         },
         fetch(url) { return new Promise(resolve => requests.push({url, resolve})); },
     });
+    vm.runInContext(fs.readFileSync('bit/static/analysis-request.js', 'utf8'), context);
     vm.runInContext(fs.readFileSync('bit/static/salesperson-stats.js', 'utf8'), context);
     const reply = (index, salesperson, ok = true) => requests[index].resolve({ok,
         json: async () => ({status: ok ? 'success' : 'error', message: 'temporary failure',

@@ -2,7 +2,7 @@
 (() => {
   const states = new Map();
   const labels = {open:'待处理', in_progress:'处理中', resolved:'已完成'};
-  const identity = row => row.work_ref ? `${row.token_id}:${row.pack_id || row.infraction_id || row.id}:${row.latest_at || ''}` : String(row.id);
+  const identity = row => row.work_ref ? `${row.token_id}:${row.claim_id || row.pack_id || row.infraction_id || row.id}:${row.latest_at || ''}` : String(row.id);
   const item = row => row.work_ref ? {ref:row.work_ref} : {id:Number(row.id)};
   function render(key, rows) {
     if (!canExecute) return;
@@ -19,7 +19,7 @@
       toolbar.style.cssText = 'margin:12px 0;flex-wrap:wrap';
       toolbar.innerHTML = '<label><input type="checkbox" data-all> 全选本页</label><span data-count></span><select aria-label="批量处理状态" data-status><option value="open">待处理</option><option value="in_progress">处理中</option><option value="resolved">已完成</option></select><input data-note maxlength="2000" aria-label="批量处理备注" placeholder="处理备注（可选）"><button class="button primary" data-save type="button">更新所选状态</button><span role="status" data-result></span>';
       container.before(toolbar);
-      if (['post-sale-tasks','rights-cases','events'].includes(key)) {
+      if (['claim-tasks','rights-cases','events'].includes(key)) {
         const hint = document.createElement('span'); hint.className='hint';
         hint.textContent='这里记录人工处理状态；回复或通知执行结果以平台和系统记录为准。'; toolbar.append(hint);
       }
@@ -41,7 +41,7 @@
           for(const row of chosen) if(completed.has(JSON.stringify(item(row)))) state.selected.delete(identity(row));
           window.clearTodaySnapshots?.();
           output.textContent=`已更新 ${result.data.results.length} 条`+(result.data.errors.length?`，${result.data.errors.length} 条失败，保留勾选可重试`:'');
-          if(key==='post-sale-tasks') await loadPostSale(); else await loadData(false,true);
+          if(key==='claim-tasks') await loadClaims(); else await loadData(false,true);
         } catch(error) {output.textContent=error.message;}
         finally {state.busy=false; render(key,state.rows);}
       });
@@ -53,7 +53,7 @@
     if(key==='events') state.visible=rows;
     cards.forEach((card,index)=>{
       const row=state.visible[index]; if(!row) return;
-      if(['rights-cases','post-sale-tasks','events'].includes(key) && !row.work_ref) return;
+      if(['rights-cases','claim-tasks','events'].includes(key) && !row.work_ref) return;
       card.querySelector('[data-batch-choice]')?.remove();
       const label=document.createElement('label'); label.dataset.batchChoice='';
       label.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:8px';

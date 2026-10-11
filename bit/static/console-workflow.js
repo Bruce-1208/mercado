@@ -40,10 +40,18 @@
         refresh();
     }
     foldFilters(document.querySelector('#tab-orders .order-filters'), [
-        'order-freight-variance-filter', 'order-remark-search',
+        'order-salesperson-filter', 'order-group-filter', 'order-start-date', 'order-end-date', 'order-freight-variance-filter', 'order-remark-search', 'order-purchase-platform-filter', 'order-freight-difference-min',
     ], '.order-filter-field');
+    const orderRegion = document.querySelector('.order-filter-region');
+    if (orderRegion) {
+        const extra = element('details', 'order-extra-tools');
+        extra.append(element('summary', '', '地区与批量操作'));
+        [...orderRegion.children].filter(node => node.matches('.order-market-bar, .order-bulk-bar, .order-sync-note')).forEach(node => extra.append(node));
+        orderRegion.append(extra);
+    }
     foldFilters(byId('mercado-product-filters'), [
         'mercado-platform-category-filter', 'mercado-zying-category-filter',
+        'mercado-product-developer-filter', 'mercado-infringement-filter',
         'mercado-weight-status-filter',
         'mercado-weight-min', 'mercado-price-min', 'mercado-net-min', 'mercado-date-from',
     ], '.market-filter-field');
@@ -55,6 +63,7 @@
     foldFilters(supplierFilters, [
         'products-1688-status-filter', 'products-1688-review-filter',
         'products-1688-price-min', 'products-1688-price-max',
+        'products-1688-weight-min', 'products-1688-weight-max',
         'products-1688-date-from', 'products-1688-date-to',
     ], '.p1688-field');
     // Keep the feedback after all filters and before the batch toolbar.
@@ -146,6 +155,10 @@
                 return false;
             }
         }
+        const minimumNet = byId('mercado-publish-minimum-net');
+        if (minimumNet && !minimumNet.checkValidity()) {
+            showSettings(); minimumNet.focus(); minimumNet.reportValidity(); return false;
+        }
         const schedule = byId('mercado-publish-schedule-at');
         schedule.setCustomValidity(schedule.value && (!Number.isFinite(new Date(schedule.value).getTime()) || new Date(schedule.value) <= new Date()) ? '请选择晚于当前时间的上架时间' : '');
         if (!schedule.checkValidity()) {
@@ -169,6 +182,9 @@
         }
         const pairs = [
             ['所选商品', byId('mercado-selection-summary').textContent],
+            ['最低净收益（USD）', Number(byId('mercado-publish-minimum-net')?.value || 0) > 0
+                ? `低于 ${Number(byId('mercado-publish-minimum-net').value).toFixed(2)} 时按最低值上架`
+                : '不设下限'],
             [mode === 'groups' ? '账号分组' : '上架账号', selectedLabels(mode === 'groups' ? 'mercado-publish-group' : 'mercado-publish-store')],
             ['目标站点', selectedLabels('mercado-publish-site')],
             ['可用账号 / 站点组合', String(targets.length)],
@@ -178,7 +194,7 @@
         ];
         if (mode === 'groups') pairs.push(['分配方式', selectedLabels('mercado-group-publish-mode')]);
         pairs.forEach(([label, value]) => list.append(element('dt', '', label), element('dd', '', value)));
-        review.append(list, element('p', 'zs-review-note', '最终售价还会应用产品分类和店铺站点的上架比例。资料不完整的商品将按现有规则退回采集列表；提交前请确认商品和目标账号。'));
+        review.append(list, element('p', 'zs-review-note', '上架净收益按产品分类、店铺站点和本次上架比例计算；低于最低净收益时按最低值上架。资料不完整的商品将按现有规则退回采集列表；提交前请确认商品和目标账号。'));
         stage = 'review';
         settings.hidden = true;
         review.hidden = false;

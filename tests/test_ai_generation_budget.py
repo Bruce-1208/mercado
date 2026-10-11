@@ -279,12 +279,43 @@ def test_uncapped_restores_exhausted_ledger_and_preserves_spend_and_output():
     assert chat.snapshot()['budget_limit_enabled'] is False
 
 
-def test_uncapped_keeps_unknown_usage_blocked():
+@pytest.mark.parametrize('state', ['pending', 'unknown'])
+def test_uncapped_unknown_usage_can_retry_without_erasing_reservation(state):
     ledger = make_chat(lambda **kw: response()).snapshot()
+    ledger['calls'].append({'state': state, 'reserved_nano': 5000000})
     ledger.update(blocked_kind='usage_unknown', blocked_reason='unknown charge')
-    chat = make_chat(lambda **kw: pytest.fail('must not call'), ledger=ledger, enforce_cap=False)
-    with pytest.raises(GenerationBudgetError, match='unknown charge'):
+    chat = make_chat(lambda **kw: response(), ledger=ledger, enforce_cap=False)
+    chat(MESSAGES)
+    saved = chat.snapshot()
+    assert saved['status'] == 'ready'
+    assert saved['reserved_yuan'] == .005
+    assert saved['has_unconfirmed_usage'] is True
+    assert saved['spent_yuan'] == .0005
+    assert saved['calls'][0]['state'] == state
+
+
+def test_rejected_response_is_not_replayed_and_spend_is_preserved():
+    calls = []
+    chat = make_chat(lambda **kw: calls.append(1) or response(), enforce_cap=False)
+    content = chat(MESSAGES)
+    chat.reject_response(content)
+    chat(MESSAGES)
+    assert len(calls) == 2
+    assert chat.snapshot()['spent_yuan'] == .001
+
+
+@pytest.mark.parametrize('enforce_cap', [True, False])
+@pytest.mark.parametrize('kind', ['ledger_save_failed', 'unsupported_provider', 'usage_bound_exceeded'])
+def test_unknown_reservation_does_not_erase_other_safety_failures(enforce_cap, kind):
+    ledger = make_chat(lambda **kw: response()).snapshot()
+    ledger['calls'].append({'state': 'pending', 'reserved_nano': 5000000})
+    ledger.update(blocked_kind=kind, blocked_reason='safety failure')
+    chat = make_chat(lambda **kw: pytest.fail('must not call'), ledger=ledger,
+                     enforce_cap=enforce_cap)
+    with pytest.raises(GenerationBudgetError) as caught:
         chat(MESSAGES)
+    assert caught.value.kind == kind
+    assert chat.snapshot()['reserved_yuan'] == .005
 
 
 @pytest.mark.parametrize('prompt,expected', [(32000, .00648), (32001, .0194406), (256001, .3076812)])

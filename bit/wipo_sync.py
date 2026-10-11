@@ -361,6 +361,10 @@ class WipoSyncService:
     def settings(self, *, manage=True):
         with self.database() as db:
             data = self._read(db, "settings", DEFAULT_SETTINGS)
+            state = self._read(db, "state", DEFAULT_STATE)
+            data["madrid_available_from"] = state.get("madrid_available_from", "")
+            data["madrid_next_date"] = ((datetime.fromisoformat(state["madrid_through_date"]) + timedelta(days=1)).date().isoformat()
+                                        if state.get("madrid_through_date") else "")
         encrypted = data.pop("token_encrypted", "")
         data["has_token"] = bool(encrypted)
         if not manage:
@@ -390,6 +394,13 @@ class WipoSyncService:
             if date > datetime.now(LOCAL).date():
                 raise ValueError("增量起始日期不能晚于今天")
             data["madrid_from_date"] = date.isoformat()
+            state = self._read(db, "state", DEFAULT_STATE)
+            earliest = state.get("madrid_available_from", "")
+            effective = data["madrid_from_date"]
+            if existing["madrid_from_date"] == effective and state.get("madrid_through_date"):
+                effective = (datetime.fromisoformat(state["madrid_through_date"]) + timedelta(days=1)).date().isoformat()
+            if data["enabled"] and data["source_mode"] == "madrid" and earliest and effective < earliest:
+                raise ValueError(f"起始日期早于官方可用范围 {earliest}；请调整日期或先导入历史授权数据")
             if not isinstance(data["feed_url"], str):
                 raise ValueError("数据源地址无效")
             data["feed_url"] = data["feed_url"].strip()
@@ -410,6 +421,8 @@ class WipoSyncService:
                 state["madrid_through_date"] = ""
             if not state["running"]:
                 state["next_run_at"] = now_text() if data["enabled"] else ""
+                if state.get("status") == "action_required":
+                    state.update(status="idle", message="配置已调整，等待同步")
             self._write(db, "state", state)
         return self.settings()
 
@@ -546,6 +559,9 @@ class WipoSyncService:
         except ValueError as exc:
             # Only controlled parser/validation messages are exposed.
             message = str(exc)
+            if getattr(exc, "available_from", ""):
+                summary["madrid_available_from"] = exc.available_from
+                outcome = "action_required"
             if getattr(exc, "summary", {}).get("resume_pending"):
                 summary = exc.summary
                 outcome = "continuing"
@@ -575,6 +591,10 @@ class WipoSyncService:
                         wait = timedelta()
                     state["next_run_at"] = ((datetime.now(LOCAL) + wait).isoformat(timespec="seconds")
                                             if current["enabled"] else "")
+                    if summary.get("madrid_available_from"):
+                        state["madrid_available_from"] = summary["madrid_available_from"]
+                    if outcome == "action_required":
+                        state["next_run_at"] = ""
                     self._write(db, "state", state)
                     db.execute("INSERT INTO wipo_history(data) VALUES (?)", (json.dumps(state, ensure_ascii=False),))
                     db.execute("DELETE FROM wipo_history WHERE id NOT IN (SELECT id FROM wipo_history ORDER BY id DESC LIMIT 50)")
@@ -583,7 +603,7 @@ class WipoSyncService:
 
     def tick(self):
         settings, state = self.settings(), self.status()
-        if not settings["enabled"] or state["running"]:
+        if not settings["enabled"] or state["running"] or state.get("status") == "action_required":
             return False
         due = state["next_run_at"]
         needs_migration = (self.writer is None and state["blacklist_policy_version"] < BLACKLIST_POLICY_VERSION

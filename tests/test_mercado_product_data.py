@@ -102,3 +102,26 @@ def test_same_sku_different_prices_share_lookup_but_not_estimate(tmp_path):
     assert [r["requested_price"] for r in rows] == [900,200]
     assert [r["product"]["weight_freight_usd"] for r in rows] == [12.5,9]
     assert len([c for c in calls if c["action"] == "products"]) == 1
+
+
+def test_display_rates_share_cache_and_refresh_after_expiry(tmp_path):
+    calls = []
+    service = ProductDataService(tmp_path, provider(calls))
+    snapshot = service.exchange_rates()
+    assert snapshot["rates_to_usd"]["MXN"] == pytest.approx(35 / 670.585)
+    assert snapshot["rates_to_usd"]["USD"] == 1
+    assert "ARS" not in snapshot["rates_to_usd"]
+    assert snapshot["expires_at"] - snapshot["fetched_at"] == 1800
+    assert service.exchange_rates() == snapshot
+    assert len(calls) == 1
+    with service.database() as db:
+        db.execute("UPDATE cache SET expires=0 WHERE key='meta:exchange'")
+    service.exchange_rates()
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("rates", [{}, {"USD":0}, {"USD":float("nan")}, None])
+def test_invalid_display_rates_are_not_used(tmp_path, rates):
+    service = ProductDataService(tmp_path, lambda msg:(rates, None))
+    with pytest.raises(DataError):
+        service.exchange_rates()

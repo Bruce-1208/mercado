@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ detail.title if detail else '采集详情' }} · 美客多跟卖采集</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='mercado-collection-detail.css') }}?v=20261008">
+  <link rel="stylesheet" href="{{ url_for('static', filename='mercado-collection-detail.css') }}?v=20261010-quality">
   <script defer src="{{ url_for('static', filename='mercado-collection-detail.js') }}?v=20261008"></script>
 </head>
 <body>
@@ -21,6 +21,7 @@
   {% else %}
   <div class="detail-title"><div><p class="detail-eyebrow">MERCADO LIBRE · 商品资料</p><h1>{{ detail.title }}</h1><p class="detail-muted">{{ detail.item_id }} · 采集详情</p></div>{% if detail.source_url %}<a class="detail-button" href="{{ detail.source_url }}" target="_blank" rel="noopener noreferrer">打开源商品 ↗</a>{% endif %}</div>
   <nav class="detail-sections" aria-label="详情内容"><a href="#pictures">全部图片（{{ detail.images|length }}）</a><a href="#attributes">商品属性</a><a href="#description">商品描述</a><a href="#variants">规格变体</a><a href="#records">采集记录</a></nav>
+  {% if detail.quality_issues %}<section class="detail-panel detail-quality" role="note" aria-label="资料待补充"><h2>资料待补充</h2><ul>{% for issue in detail.quality_issues %}<li>{{ issue.message }}</li>{% endfor %}</ul></section>{% endif %}
   <div class="detail-overview">
     <section id="pictures" class="detail-panel"><h2>全部商品图片 <span>{{ detail.images|length }}</span></h2>
       {% if detail.images %}

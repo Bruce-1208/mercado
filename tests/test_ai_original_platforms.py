@@ -140,7 +140,9 @@ def test_mercado_still_uses_original_path_and_adds_profile_snapshot(monkeypatch)
     })
     row = {"source_snapshot_json": {"original_1688": {"source_1688_item_id": "123456789", "main_image_url": "https://cbu01.alicdn.com/source.jpg"},
                                     "marketplace_listings": {"amazon": draft()}}}
-    prepared = products.prepare_ai_original_product(row)
+    monkeypatch.setattr(products, "complete_marketplace_category", lambda *a, **kw: {
+        "category_id": "CBT123", "category_name": "Boxes", "attributes": [], "variations": []})
+    prepared = products.prepare_ai_original_product(row, category_client=object())
     snapshot = json.loads(prepared["source_snapshot_json"])
     assert snapshot["marketplace_listings"]["mercadolibre"] == snapshot["ai_original"]
     assert snapshot["marketplace_listings"]["amazon"] == draft()

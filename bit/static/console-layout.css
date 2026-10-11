@@ -29,19 +29,22 @@ body.zs-console .sidebar .tab-button:hover { transform: none; }
 body.zs-console .nav-label { line-height: 20px; }
 body.zs-console .sidebar-scroll { flex: 1 1 auto; }
 body.zs-console .tab-heading {
-    min-height: 80px;
-    padding: 16px 20px;
+    min-height: 64px;
+    padding: 4px 0 16px;
     margin-bottom: var(--zs-layout-gap);
     gap: 16px 24px;
-    border-color: var(--zs-stroke);
-    box-shadow: var(--zs-shadow);
+    border: 0;
+    border-bottom: 1px solid var(--zs-stroke);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 }
 body.zs-console .tab-heading > :first-child { flex: 1 1 240px; }
 body.zs-console .tab-heading h2 { margin: 0; font-size: 20px; line-height: 1.4; }
 body.zs-console .tab-heading p { margin: 6px 0 0; color: var(--zs-secondary); line-height: 1.6; }
 body.zs-console .tab-heading:has(> h2) { flex-direction: column; align-items: flex-start; gap: 6px; }
 body.zs-console .tab-heading > h2:first-child { flex: 0 1 auto; }
-body.zs-console .tab-heading > h2 + p { margin: 0; }
+body.zs-console .tab-heading > h2 + p { margin: 0; align-self: flex-start; text-align: left; }
 body.zs-console :is(.order-heading-tools, .inventory-heading-actions, .products-1688-heading-actions, .market-flow-indicator) {
     min-width: 0;
     max-width: 100%;
@@ -181,7 +184,7 @@ body.zs-console :is(.overview-hero, .overview-bottom-grid) { margin-bottom: var(
     body.zs-console .sidebar :is(.nav-label, .sidebar-footer-copy) { display: block; }
     body.zs-console .sidebar .sidebar-footer { display: flex; justify-content: flex-start; }
     body.zs-console.zs-mobile-nav-open .zs-nav-backdrop { display: block; position: fixed; inset: 0; z-index: 1090; width: 100%; height: 100%; border: 0; background: rgb(15 23 42 / 40%); padding: 0; cursor: pointer; }
-    body.zs-console .tab-heading { padding: 16px; min-height: 0; flex-direction: column; align-items: stretch; }
+    body.zs-console .tab-heading { padding: 4px 0 12px; min-height: 0; flex-direction: column; align-items: stretch; }
     body.zs-console .tab-heading > :first-child { flex: 0 1 auto; }
     body.zs-console .tab-heading > :last-child:not(:first-child) { margin-left: 0; width: 100%; justify-content: flex-start; }
     body.zs-console :is(.order-heading-tools, .inventory-heading-actions, .products-1688-heading-actions) > :is(button, a) { flex: 1 1 130px; text-align: center; }
@@ -217,3 +220,144 @@ body.zs-console :is(.overview-hero, .overview-bottom-grid) { margin-bottom: var(
     body.zs-console :is(.overview-metrics, .inventory-metrics, .ai-original-metrics) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     body.zs-console .quick-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Quiet page hierarchy: headings lead, controls follow, data keeps the focus. */
+body.zs-console :is(.overview-hero, .collector-plugin-hero) {
+    background: #fff;
+    border-color: var(--zs-stroke);
+    box-shadow: none;
+}
+body.zs-console .overview-hero { min-height: 112px; padding: 20px 24px; }
+body.zs-console .overview-hero h2 { font-size: 24px; }
+body.zs-console .overview-date { border: 0; background: var(--zs-card-soft); box-shadow: none; }
+body.zs-console :is(.overview-metric, .quick-card, .overview-date, .inventory-metrics article, .p1688-summary-card) {
+    box-shadow: none;
+    border-color: var(--zs-stroke);
+    border-radius: var(--zs-corner);
+}
+body.zs-console :is(button.overview-metric, .quick-card):hover { transform: none; box-shadow: none; }
+body.zs-console .sidebar .tab-button.active { box-shadow: none; }
+body.zs-console .sidebar .nav-section > summary.has-active { background: transparent; }
+body.zs-console .workspace-tab { box-shadow: none; }
+body.zs-console :is(.zs-filter-panel, .p1688-toolbar, .inventory-toolbar, .store-link-audit-filters) {
+    background: #fff;
+    box-shadow: none;
+}
+body.zs-console :is(#tab-prohibited-listings, #tab-risk-check) .zs-filter-panel { background: #fff; }
+body.zs-console :is(.zs-advanced-filters, .zs-operation-help) > summary { font-weight: 500; color: var(--zs-secondary); }
+body.zs-console .zs-advanced-filters[open] > summary { color: var(--zs-brand); }
+body.zs-console .zs-advanced-grid { border-top: 1px solid var(--zs-stroke); margin-top: 4px; padding-top: 16px; }
+body.zs-console :is(.market-list-toolbar, .store-link-bulk, .order-bulk-bar, .p1688-batch-bar) {
+    box-shadow: none;
+    border-color: var(--zs-stroke);
+}
+body.zs-console :is(.market-section-head, .infractions-header, .panel-header) { gap: 12px; flex-wrap: wrap; }
+body.zs-console :is(.market-section-head, .infractions-header, .panel-header) > div { min-width: 0; }
+body.zs-console :is(.market-section-head, .infractions-header, .panel-header) button { white-space: nowrap; }
+body.zs-console .market-section-head p,
+body.zs-console .infractions-header p { font-weight: 400; color: var(--zs-secondary); line-height: 1.6; }
+body.zs-console :is(.risk-source-icon, .market-source-option-icon) {
+    background: var(--zs-brand-tint);
+    color: var(--zs-brand);
+    box-shadow: none;
+}
+/* Put source selection first, with enough space to scan every entry. */
+body.zs-console #mercado-product-sources {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 18px;
+    margin: 0 0 16px;
+    gap: 14px;
+    border: 1px solid #cbdcf5;
+    background: #f4f8ff;
+    border-radius: 12px;
+}
+body.zs-console #mercado-product-sources .market-source-filter-heading {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+}
+body.zs-console #mercado-product-sources .market-source-filter-heading strong { font-size: 16px; font-weight: 650; }
+body.zs-console #mercado-product-sources .market-source-filter-heading span { font-size: 12px; margin: 0; }
+body.zs-console #mercado-product-sources .market-source-options { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+body.zs-console #mercado-product-sources .market-source-option {
+    grid-template-columns: 36px minmax(0, 1fr);
+    min-height: 76px;
+    padding: 12px;
+    background: #fff;
+    border-radius: 10px;
+}
+body.zs-console #mercado-product-sources .market-source-option-icon { width: 36px; height: 36px; font-size: 14px; }
+body.zs-console #mercado-product-sources .market-source-option-copy strong { font-size: 15px; font-weight: 650; }
+body.zs-console #mercado-product-sources .market-source-option-copy small { font-size: 11px; margin-top: 5px; }
+body.zs-console #mercado-product-sources .market-source-option.active { background: #e6efff; border-color: #5284dc; box-shadow: inset 0 0 0 1px #5284dc; }
+body.zs-console #mercado-product-sources .market-source-option:focus-visible { outline: 2px solid var(--zs-brand); outline-offset: 3px; }
+body.zs-console #mercado-list-module.product-mode #mercado-product-filters.zs-simple-filters { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+body.zs-console #mercado-product-filters .market-filter-actions { grid-column: 1 / -1; justify-content: flex-end; }
+@media (max-width: 1100px) {
+    body.zs-console #mercado-product-sources .market-source-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    body.zs-console #mercado-list-module.product-mode #mercado-product-filters.zs-simple-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 650px) {
+    body.zs-console #mercado-product-sources { padding: 12px; }
+    body.zs-console #mercado-product-sources .market-source-options { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    body.zs-console #mercado-product-sources .market-source-option { min-height: 72px; padding: 10px; grid-template-columns: 28px minmax(0, 1fr); gap: 6px; }
+    body.zs-console #mercado-product-sources .market-source-option-icon { width: 28px; height: 28px; }
+    body.zs-console #mercado-product-sources .market-source-option-copy strong { font-size: 14px; }
+    body.zs-console #mercado-list-module.product-mode #mercado-product-filters.zs-simple-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    body.zs-console #mercado-list-module.product-mode .market-list-toolbar-right { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    body.zs-console #mercado-list-module.product-mode #mercado-list-search { grid-column: 1 / -1; }
+    body.zs-console #mercado-list-module.product-mode .market-list-toolbar-right > button { width: 100%; min-width: 0; }
+}
+body.zs-console .risk-source-card { min-height: 62px; padding: 10px; }
+body.zs-console .risk-source-card:hover { transform: none; }
+body.zs-console .risk-source-card:has(input:checked) { box-shadow: none; }
+body.zs-console .risk-source-card:has(input:focus-visible) { outline: 2px solid var(--zs-brand); outline-offset: 2px; }
+body.zs-console #tab-risk-check .infractions-panel { background: #fff; box-shadow: none; border-color: var(--zs-stroke); }
+body.zs-console .risk-scope-card { background: var(--zs-card-soft); }
+body.zs-console .risk-scope-card:is(.pulled, .zying) { border-left: 1px solid var(--zs-stroke); }
+body.zs-console #tab-prohibited-listings > .tab-heading { background: transparent; border: 0; border-bottom: 1px solid var(--zs-stroke); box-shadow: none; padding: 4px 0 16px; }
+body.zs-console #tab-prohibited-listings > .tab-heading h2 { font-size: 20px; }
+body.zs-console :is(.tab-heading, .infractions-header) p { max-width: 80ch; }
+
+/* Keep every metric and status, using one compact row on larger screens. */
+body.zs-console #tab-ai-original-products .ai-original-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+body.zs-console #tab-ai-original-products .ai-original-metric { padding: 12px 14px; box-shadow: none; border-radius: 8px; gap: 6px; background: #fff; border-color: var(--zs-stroke); }
+body.zs-console #tab-ai-original-products .ai-original-metric strong { font-size: 23px; }
+body.zs-console #tab-ai-original-products .ai-original-metric small { font-size: 11px; color: var(--zs-secondary); line-height: 1.5; }
+body.zs-console #tab-ai-original-products .ai-original-metric:has(#ai-original-count-suspected) strong { color: #a15c08; }
+body.zs-console #tab-ai-original-products .ai-original-heading { padding: 4px 0 16px; background: transparent; border: 0; border-bottom: 1px solid var(--zs-stroke); box-shadow: none; border-radius: 0; }
+body.zs-console #tab-ai-original-products .ai-original-heading h2 { font-size: 20px; }
+body.zs-console #tab-ai-original-products .ai-original-platform-rules { background: var(--zs-card-soft); border-color: var(--zs-stroke); padding: 12px 14px; }
+body.zs-console :is(.ai-original-eyebrow, .section-kicker, .overview-eyebrow) { font-size: 10px; font-weight: 500; letter-spacing: .06em; color: var(--zs-secondary); }
+body.zs-console .inventory-metrics article::after { display: none; }
+body.zs-console :is(.inventory-metrics, .p1688-summary) { gap: 10px; }
+body.zs-console :is(.inventory-metrics article, .p1688-summary-card) { padding: 14px 16px; }
+@media (min-width: 1280px) {
+    body.zs-console #tab-ai-original-products .ai-original-metrics { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    body.zs-console #tab-ai-original-products .ai-original-metric { grid-template-columns: minmax(0, 1fr); }
+    body.zs-console #tab-ai-original-products .ai-original-metric strong { grid-row: 2; }
+}
+@media (max-width: 760px) {
+    body.zs-console #tab-ai-original-products .ai-original-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    body.zs-console :is(.overview-hero, #tab-ai-original-products .ai-original-heading) { padding: 12px 0; }
+    body.zs-console .overview-hero { padding: 16px; }
+    body.zs-console :is(.market-section-head, .infractions-header, .panel-header) { align-items: flex-start; }
+}
+
+/* Execution logs remain readable without a large dark block beside the form. */
+body.zs-console .risk-check-log-card,
+body.zs-console #tab-risk-check .risk-check-log-card {
+    background: var(--zs-card-soft);
+    border-color: var(--zs-stroke);
+    box-shadow: none;
+}
+body.zs-console .risk-check-log-header { color: var(--zs-copy); border-color: var(--zs-stroke); font-weight: 600; }
+body.zs-console :is(#risk-check-log, #zying-collection-log) { background: var(--zs-card-soft); color: var(--zs-copy); }
+body.zs-console .risk-check-live-indicator { color: var(--zs-secondary); }
+
+body.zs-console .risk-check-mode-note { color: var(--zs-secondary); font-weight: 400; line-height: 1.6; }
+body.zs-console .model-balance-alert { padding: 10px 14px; gap: 10px; border-left-width: 3px; border-radius: 8px; }
+body.zs-console .model-balance-copy p { margin: 3px 0; }
+body.zs-console .model-balance-actions { gap: 10px; }
+body.zs-console .tab-page:not(#tab-orders) > .panel + .panel { margin-top: var(--zs-layout-gap); }

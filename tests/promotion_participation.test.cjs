@@ -1,0 +1,20 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const html = fs.readFileSync('bit/templates/mercado_promotions.html', 'utf8');
+test('campaign participation composes with existing filters and clears for all activities', () => {
+  const fields = {participatedFilter: {value: '1'}, siteFilter: {value: 'MLM'}, searchFilter: {value: ' sale '}};
+  const context = {URLSearchParams, state: {selectedStores: new Set([7])}, $: id => fields[id] || {value: ''}};
+  vm.createContext(context);
+  vm.runInContext(html.slice(html.indexOf('function queryString()'), html.indexOf('\nasync function loadPromotions')), context);
+  let params = new URLSearchParams(context.queryString());
+  assert.equal(params.get('participated'), '1');
+  assert.equal(params.get('site_id'), 'MLM');
+  assert.equal(params.get('token_id'), '7');
+  assert.equal(params.get('search'), 'sale');
+  fields.participatedFilter.value = '0';
+  assert.equal(new URLSearchParams(context.queryString()).get('participated'), '0');
+  fields.participatedFilter.value = '';
+  assert.equal(new URLSearchParams(context.queryString()).has('participated'), false);
+});

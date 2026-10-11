@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import tempfile
 import threading
@@ -58,6 +59,7 @@ def _category_source_language(category_id):
 def _translate_category_names(paths, category_level):
     """Translate the selected category names once and reuse them across requests."""
     labels_by_id = {}
+    ready = {}
     names_by_language = defaultdict(set)
     for item_category_id, path in paths.items():
         if len(path) < category_level:
@@ -66,6 +68,9 @@ def _translate_category_names(paths, category_level):
         category_id = str(node.get("id") or "").strip().upper()
         name = str(node.get("name") or "").strip()
         if not category_id or not name:
+            continue
+        if any("\u3400" <= character <= "\u9fff" for character in name):
+            ready[category_id] = name
             continue
         language = _category_source_language(item_category_id)
         labels_by_id[category_id] = (language, name)
@@ -83,7 +88,11 @@ def _translate_category_names(paths, category_level):
                     pending.append(name)
         for offset in range(0, len(pending), 100):
             batch = pending[offset:offset + 100]
-            translated = translate_texts(batch, language, "zh-CN")
+            try:
+                translated = translate_texts(batch, language, "zh-CN")
+            except Exception:
+                logging.exception("店铺分析类目翻译失败：%s", language)
+                continue
             with _CATEGORY_TRANSLATION_LOCK:
                 for source_name, chinese_name in zip(batch, translated):
                     _CATEGORY_TRANSLATION_CACHE[(language, source_name)] = chinese_name
@@ -92,10 +101,11 @@ def _translate_category_names(paths, category_level):
                     _CATEGORY_TRANSLATION_CACHE.clear()
                     _CATEGORY_TRANSLATION_CACHE.update(translated_by_label)
 
-    return {
+    ready.update({
         category_id: translated_by_label.get((language, name), "")
         for category_id, (language, name) in labels_by_id.items()
-    }
+    })
+    return ready
 
 
 def _dates(start_date: str, end_date: str):
@@ -221,6 +231,8 @@ def _read_persisted_analysis(key):
         result = payload.get("result")
         if not isinstance(result, dict) or not result.get("computed_at"):
             return None
+        if result.get("category_translation_warning"):
+            return None
         return result
     except (OSError, ValueError, TypeError):
         return None
@@ -264,7 +276,7 @@ def list_store_analysis(start_date, end_date, *, metric="orders", salesperson=""
             raise ValueError("店铺参数无效")
         if scope is not None and token_id not in scope:
             raise PermissionError("无权查看所选店铺")
-    key = ("order-trend-v1", start_date, end_date, metric, salesperson, group_name, token_id, scope, category_level)
+    key = ("category-translation-v2", start_date, end_date, metric, salesperson, group_name, token_id, scope, category_level)
     # Coalesce concurrent identical requests without serializing all analysis work.
     with _ANALYSIS_REQUEST_LOCKS[hash(key) % len(_ANALYSIS_REQUEST_LOCKS)]:
         if not refresh:
@@ -287,7 +299,8 @@ def list_store_analysis(start_date, end_date, *, metric="orders", salesperson=""
             allowed_token_ids=scope, category_level=category_level,
         )
         result["computed_at"] = datetime.now(timezone(timedelta(hours=8))).isoformat(timespec="seconds")
-        _write_persisted_analysis(key, result)
+        if not result.get("category_translation_warning"):
+            _write_persisted_analysis(key, result)
         with _ANALYSIS_CACHE_LOCK:
             _ANALYSIS_CACHE[key] = (time.monotonic() + _ANALYSIS_CACHE_SECONDS, deepcopy(result))
             _ANALYSIS_CACHE.move_to_end(key)
@@ -428,8 +441,8 @@ def _compute_store_analysis(start_date, end_date, *, metric="orders", salesperso
     try:
         category_names_zh = _translate_category_names(visible_paths, category_level)
     except Exception:
+        logging.exception("店铺分析类目中文名称读取失败")
         category_names_zh = {}
-        translation_warning = "中文类目名称暂不可用，请运行 python3 scripts/install_argos_translation_models.py 安装本地翻译模型。"
     for site in sites:
         for category in site["top_categories"]:
             name = category_names_zh.get(category["category_id"], "")
@@ -437,6 +450,8 @@ def _compute_store_analysis(start_date, end_date, *, metric="orders", salesperso
             category["name"] = name or (original if any("\u3400" <= c <= "\u9fff" for c in original) else "分类名称暂不可用")
             if name:
                 category["name_zh"] = name
+            elif category["name"] == "分类名称暂不可用":
+                translation_warning = "部分中文类目名称暂不可用，请稍后刷新重试。"
     return {"sites": sites, "order_trend": summarize_order_trend(trend_rows, start_date, end_date),
             "start_date": start_date, "end_date": end_date, "metric": metric,
             "category_level": category_level,

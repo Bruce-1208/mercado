@@ -204,3 +204,29 @@ def test_appeal_retries_obey_shared_backoff_and_recover(clock, monkeypatch):
     returned, result = ai.connect_bit_browser("test-window")
     assert returned is driver and result["success"] is True
     assert attempts == [1000, 1010, 1030]
+
+
+def test_appeal_driver_startup_preserves_original_error_before_process_exists(monkeypatch):
+    from bit import bit_appeal_ai as ai
+
+    class UnstartedService:
+        def stop(self):
+            pytest.fail("an unstarted Selenium service must not be stopped")
+
+    monkeypatch.setattr(
+        ai,
+        "openBrowser",
+        lambda _window: {
+            "success": True,
+            "data": {"driver": "missing-driver", "http": "localhost:1234"},
+        },
+    )
+    monkeypatch.setattr(ai, "Service", lambda _path: UnstartedService())
+    monkeypatch.setattr(
+        ai.webdriver,
+        "Chrome",
+        lambda **_kwargs: (_ for _ in ()).throw(FileNotFoundError("driver missing")),
+    )
+
+    with pytest.raises(FileNotFoundError, match="driver missing"):
+        ai.connect_bit_browser("test-window")

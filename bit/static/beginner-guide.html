@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="泽顺 ERP 新手教程：账号准备、插件安装、店铺授权、商品采集与刊登、订单处理及日常运营。">
+  <title>新手教程 · 泽顺 ERP</title>
+  <link rel="stylesheet" href="beginner-guide.css?v=20261011">
+  <script src="beginner-guide.js?v=20261011" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">跳到教程内容</a>
+<header class="topbar"><a class="brand" href="/" aria-label="泽顺运营中心工作台"><img src="images/zeshun-monogram-gold.png" alt=""><span>泽顺 ERP<small>新手学习中心</small></span></a><div class="header-actions"><button type="button" id="print-guide" hidden>打印教程</button><a class="button primary" href="/">返回工作台 <span aria-hidden="true">↗</span></a></div></header>
+<div class="layout">
+  <aside class="sidebar" aria-label="教程导航">
+    <p class="eyebrow">从这里开始</p><h2>第一次使用泽顺</h2><p class="muted sidebar-intro">先跑通一个商品，再开始日常运营。</p>
+    <nav aria-label="章节目录">
+      <a href="#start" aria-current="location"><span>01</span>认识工作台</a>
+      <a href="#setup"><span>02</span>账号与插件准备</a>
+      <a href="#stores"><span>03</span>连接你的店铺</a>
+      <a href="#collect"><span>04</span>采集第一个商品</a>
+      <a href="#publish"><span>05</span>审核与刊登</a>
+      <a href="#orders"><span>06</span>处理第一笔订单</a>
+      <a href="#daily"><span>07</span>建立每日工作习惯</a>
+      <a href="#faq"><span>08</span>常见问题</a>
+    </nav>
+    <div class="side-note"><strong>找不到对应菜单？</strong><p>可见功能和店铺由账号权限决定。请联系管理员核对功能权限、企业和店铺归属。</p></div>
+  </aside>
+  <main id="main">
+    <section class="hero">
+      <div class="hero-copy"><span class="hero-tag">新手入门 · 美客多核心流程</span><h1>从第一次登录，<br>到完成第一笔业务。</h1><p>跟着步骤认识泽顺 ERP，把店铺、商品和订单串起来。<br class="desktop-break">每一章都有操作入口，也告诉你怎样确认做对了。</p><div class="hero-actions"><a class="button primary" href="#setup">开始学习 <span aria-hidden="true">→</span></a><a href="#faq">遇到问题？先看这里</a></div><div class="hero-meta"><span>8 个章节</span><span>建议先用 1 个商品练习</span><span>适用业务员与管理员</span></div></div>
+      <div class="route-map" aria-label="业务流程：准备账号，连接店铺，采集商品，审核刊登，处理订单"><div class="route-heading"><span>你的上手路线</span><span class="route-dot">开始</span></div><ol><li><b>01</b><div><strong>准备账号与插件</strong><small>登录 · 安装 · 确认权限</small></div></li><li><b>02</b><div><strong>连接店铺，采集商品</strong><small>授权 · 选品 · 补全资料</small></div></li><li><b>03</b><div><strong>审核刊登，处理订单</strong><small>核价 · 上架 · 采购发货</small></div></li></ol><p>先完成一条流程，再逐步使用批量和自动化功能。</p></div>
+    </section>
+    <div class="search-bar" id="search-bar" hidden><label for="guide-search">查找教程</label><input type="search" id="guide-search" placeholder="输入关键词，例如：插件、采购、上架失败" autocomplete="off"><button type="button" id="clear-search">清空</button><span id="search-status" role="status" aria-live="polite"></span></div>
+    <div class="reading-layout">
+    <div class="chapters">
+      <p id="no-results" class="empty" hidden>没有找到相关章节。试试“店铺”“采集”“订单”，或清空搜索查看全部教程。</p>
+      <section class="chapter" id="start" data-chapter>
+        <div class="chapter-heading"><span class="chapter-number">01</span><div><p class="eyebrow">先认识，再操作</p><h2>认识工作台</h2></div><span class="chapter-tag">所有人</span></div>
+        <p>登录后先看「总览」，再从左侧导航进入业务页面。左侧的「搜索功能」可以快速找到菜单；顶部常用工作区可以切换订单、商品和店铺页面。</p>
+        <div class="module-grid"><a href="/?tab=store-tokens"><b>店铺授权</b><span>连接账号，核对站点与业务员</span><i aria-hidden="true">↗</i></a><a href="/?tab=mercado-products"><b>产品列表</b><span>管理商品资料，审核并刊登</span><i aria-hidden="true">↗</i></a><a href="/?tab=orders"><b>订单管理</b><span>查订单，跟进采购与发货</span><i aria-hidden="true">↗</i></a><a href="/mercado/today"><b>今日必办</b><span>查看当天需要跟进的事项</span><i aria-hidden="true">↗</i></a></div>
+        <div class="callout"><strong>先确认你的工作范围</strong><p>核对右上角登录账号。企业管理员负责分配功能与店铺权限；业务员只处理自己有权限的店铺。教程中的入口仍遵循系统权限，未登录时需要先登录。</p></div>
+      </section>
+      <section class="chapter" id="setup" data-chapter>
+        <div class="chapter-heading"><span class="chapter-number">02</span><div><p class="eyebrow">完成首次准备</p><h2>账号与插件准备</h2></div><span class="chapter-tag">首次使用</span></div>
+        <ol class="steps"><li><strong>登录并完善个人资料</strong><p>使用已开通的泽顺账号登录。在右上角「个人资料」核对姓名和联系方式，需要时修改登录密码；修改密码后重新登录。</p></li><li><strong>下载并解压泽顺插件</strong><p>点击工作台右上角「下载插件」，将 ZIP 解压到固定文件夹，安装后保留该文件夹。</p></li><li><strong>在 Chrome 或 Edge 中安装</strong><p>在浏览器地址栏输入 <code>chrome://extensions</code> 或 <code>edge://extensions</code>，开启「开发者模式」，点击「加载已解压的扩展程序」，选择直接包含 <code>manifest.json</code> 的文件夹。</p></li><li><strong>登录插件，刷新商品页面</strong><p>打开泽顺插件，在插件设置中登录泽顺账号，然后刷新已经打开的美客多或 1688 页面。插件更新后也需要重新加载扩展并刷新商品页。</p></li></ol>
+        <div class="success"><strong>完成标志</strong>插件显示已登录，打开受支持的商品页面后能看到采集入口。</div>
+        <details class="inline-details"><summary>插件、Agent、集成设置分别是什么？</summary><p><b>插件</b>用于在浏览器里采集商品及执行支持的浏览器任务。<b>Agent</b>是本机执行端，仅在功能要求选择本机 Agent 时按管理员安排安装，并确认在线。<b>集成设置</b>用于配置模型等服务凭证；使用 AI 功能前先确认对应服务已配置。普通商品采集不需要先配置所有模型。</p></details>
+        <div class="chapter-links"><a href="/settings/profile">个人资料 ↗</a><a href="/api/browser-extension/download" download>下载泽顺插件 ↓</a><a href="/settings/integrations">集成设置 ↗</a></div>
+      </section>
+      <section class="chapter" id="stores" data-chapter>
+        <div class="chapter-heading"><span class="chapter-number">03</span><div><p class="eyebrow">让商品和订单有归属</p><h2>连接你的店铺</h2></div><span class="chapter-tag">由授权人员操作</span></div>
+        <p>先在「店铺授权」查看是否已有目标店铺。已授权的店铺核对状态即可；看不到店铺时，先请管理员检查归属与权限。</p>
+        <ol class="steps"><li><strong>选择开发者应用并打开授权链接</strong><p>进入「新增店铺授权」，选择用于本次授权及后续刊登的开发者应用，点击授权链接旁的「打开」，登录对应美客多店铺并同意授权。</p></li><li><strong>兑换并保存授权</strong><p>回到泽顺，填写「自定义店铺名称」，粘贴「TG Code 或完整回调链接」，点击「兑换并保存」。授权码失效或已使用时，重新走一次授权流程。</p></li><li><strong>核对店铺和工作范围</strong><p>在「已授权店铺」中核对名称和授权状态，由有权限的人员检查业务员、分组及站点任务设置。开始任务前再次确认目标店铺与站点。</p></li></ol>
+        <div class="success"><strong>完成标志</strong>目标店铺出现在已授权店铺列表，且对应业务页面可选择该店铺。</div><div class="chapter-links"><a href="/?tab=store-tokens">打开店铺授权 ↗</a><a href="/?tab=store-links">查看店铺链接 ↗</a></div>
+      </section>
+      <section class="chapter" id="collect" data-chapter>
+        <div class="chapter-heading"><span class="chapter-number">04</span><div><p class="eyebrow">从一件商品开始</p><h2>采集第一个商品</h2></div><span class="chapter-tag">选品人员</span></div>
+        <div class="two-paths"><div><span class="path-label">路径 A · 美客多跟卖</span><h3>从美客多商品页采集</h3><ol><li>打开目标商品详情页，核对标题、图片与规格。</li><li>通过泽顺插件的「采集到泽顺」入口采集，等待成功提示。</li><li>回到「美客多跟卖采集」，找到该商品，检查价格、图片、属性与变体资料。</li><li>补齐缺失内容，选择资料完整的候选商品加入「产品列表」。</li></ol><a href="/?tab=mercado-collection">打开美客多跟卖采集 ↗</a></div><div><span class="path-label">路径 B · 1688 货源</span><h3>从 1688 商品页采集</h3><ol><li>打开目标 1688 商品页，确认货源及规格。</li><li>使用泽顺插件采集，等待成功提示。</li><li>在「1688产品区」检查主图、规格、采购信息及可识别的重量。</li><li>需要原创文案和图片时，再进入「AI原创产品」工作流，生成后人工审核。</li></ol><a href="/?tab=1688-products">打开 1688产品区 ↗</a></div></div>
+        <div class="callout"><strong>采集成功后，还要检查资料</strong><p>采集不会直接上架。重点检查价格币种、SKU 规格对应的图片、库存、包装重量与长宽高；采集不到的字段需要补齐。商品资料与风险检查完成后，再进入刊登流程。</p></div><div class="success"><strong>完成标志</strong>能在对应商品区找到刚采集的商品，且详情与源商品一致。</div>
+      </section>
+      <section class="chapter" id="publish" data-chapter>
+        <div class="chapter-heading"><span class="chapter-number">05</span><div><p class="eyebrow">确认无误，再提交</p><h2>审核与刊登</h2></div><span class="chapter-tag">刊登人员</span></div>
+        <ol class="steps"><li><strong>在产品列表检查商品资料</strong><p>打开商品详情，审核标题、描述、图片、类目及必填属性；有多个规格时逐一检查 SKU、图片和库存。服装等需要尺码表的商品，先准备对应尺码资料。</p></li><li><strong>核对成本、重量和收益</strong><p>检查采购成本、包装重量与尺寸、运费和页面显示的净收益／到手价，注意各字段币种。缺失数据先补全，不把页面中的空值当作零成本。</p></li><li><strong>选择目标店铺和站点</strong><p>先选一件准备好的商品，确认刊登账号、目标站点以及页面要求的刊登参数。检查侵权风险与禁限售情况，处理阻断提示后再提交。</p></li><li><strong>提交并检查最终结果</strong><p>使用「批量上架」提交后，查看「产品上架记录」。任务创建或进入队列只表示已受理；逐项核对最终成功、失败及商品编号。部分失败时先看原因，再处理失败项。</p></li></ol>
+        <div class="success"><strong>完成标志</strong>上架记录中目标商品及站点显示成功，并有可核对的商品编号；再到店铺链接或平台确认。</div><div class="chapter-links"><a href="/?tab=mercado-products">打开产品列表 ↗</a><a href="/?tab=mercado-publish-records">查看产品上架记录 ↗</a><a href="/?tab=risk-check">侵权检测 ↗</a></div>
+      </section>
+      <section class="chapter" id="orders" data-chapter>
+        <div class="chapter-heading"><span class="chapter-number">06</span><div><p class="eyebrow">跟进订单全流程</p><h2>处理第一笔订单</h2></div><span class="chapter-tag">运营与仓库</span></div>
+        <div class="order-flow" aria-label="订单处理顺序"><span>查订单</span><b>→</b><span>录采购</span><b>→</b><span>跟物流</span><b>→</b><span>出库发货</span></div>
+        <ol class="steps"><li><strong>找到需要处理的订单</strong><p>进入「订单管理」，按店铺、日期、订单状态筛选，或搜索订单号。打开订单详情，核对商品、规格、数量和站点；数据缺失时先检查筛选条件及同步结果。</p></li><li><strong>添加或修改采购单</strong><p>在订单详情点击「添加 / 修改采购单」，录入真实采购单号、金额及页面要求的信息。批量操作前核对选中的订单，保存后检查采购记录和成本。</p></li><li><strong>跟进采购物流与入库</strong><p>核对采购物流号及实际到货情况。需要同步采购物流时，按页面要求使用已登录对应采购平台的插件；没有物流号时先确认供应商是否发货。库存相关操作在「库存管理」处理。</p></li><li><strong>按权限完成出库与面单操作</strong><p>核对实物、数量和物流信息，再由对应岗位按页面状态执行「申请出库」或确认操作，并打印美客多面单。发货后继续跟踪平台揽收和交付状态。</p></li></ol>
+        <div class="callout"><strong>订单金额会随数据补全而变化</strong><p>缺少成本时先补齐采购资料；实际运费在发货后同步，结余也会随之更新。面单打印完成后，仍需跟进实际交接和物流状态。</p></div><div class="success"><strong>完成标志</strong>采购信息与物流记录匹配实际业务，订单进入正确的下一阶段。</div><div class="chapter-links"><a href="/?tab=orders">打开订单管理 ↗</a><a href="/?tab=inventory">打开库存管理 ↗</a></div>
+      </section>
+      <section class="chapter" id="daily" data-chapter>
+        <div class="chapter-heading"><span class="chapter-number">07</span><div><p class="eyebrow">每天从待办开始</p><h2>建立每日工作习惯</h2></div><span class="chapter-tag">日常运营</span></div>
+        <div class="routine"><div><span>开始工作</span><h3>先看异常与待办</h3><p>打开「今日必办」，检查订单、店铺授权和待处理事项，优先跟进超时或异常记录。</p></div><div><span>处理业务</span><h3>再处理订单与客户</h3><p>检查待采购、待收货、待出库订单；在「售前问答」「售后处理」跟进客户问题，核对店铺与会话后回复。</p></div><div><span>结束前</span><h3>复查任务最终结果</h3><p>检查采集、刊登、同步和申诉记录。记录失败原因、关联商品或订单编号，以及下一步处理人。</p></div></div>
+        <details class="inline-details"><summary>熟悉基础后，还可以使用哪些功能？</summary><p>按岗位逐步学习「活动管理」「店铺分析」「广告分析」「AI核重核价」和「自动化执行中心」。先确认数据、执行范围及所需权限，再使用批量或自动化任务。AI 生成内容也需审核后使用。</p><div class="chapter-links"><a href="/?tab=promotions">活动管理 ↗</a><a href="/?tab=store-analysis">店铺分析 ↗</a><a href="/?tab=automation-center">自动化执行中心 ↗</a></div></details><div class="chapter-links"><a href="/mercado/today">今日必办 ↗</a><a href="/?tab=pre-sale">售前问答 ↗</a><a href="/?tab=customer-service">售后处理 ↗</a></div>
+      </section>
+      <section class="chapter" id="faq" data-chapter>
+        <div class="chapter-heading"><span class="chapter-number">08</span><div><p class="eyebrow">遇到问题，按顺序排查</p><h2>常见问题</h2></div></div>
+        <details class="faq"><summary>看不到功能菜单，或找不到自己的店铺？</summary><p>先核对当前账号及筛选条件。请管理员检查功能权限、企业、业务员与店铺归属；有查看权限不一定有执行权限。不要为了解决店铺不可见而重复添加授权。</p></details>
+        <details class="faq"><summary>插件已安装，但商品页没有采集按钮？</summary><p>确认浏览器已启用插件，且插件内已登录泽顺账号；刷新受支持的商品页。刚更新时，在扩展管理页重新加载插件，然后再刷新商品页。仍无入口时，记录页面地址和插件版本供管理员排查。</p></details>
+        <details class="faq"><summary>采集成功，为什么产品列表里没有商品？</summary><p>先到对应来源区查找：美客多商品进入「美客多跟卖采集」，1688 商品进入「1688产品区」。检查搜索、分类等筛选条件；美客多候选商品需检查资料后加入「产品列表」，不会直接刊登。</p></details>
+        <details class="faq"><summary>商品上架失败，或者只有部分站点成功？</summary><p>打开「产品上架记录」，查看对应商品和站点的错误。核对店铺授权、类目必填属性、规格图片、库存、价格及重量尺寸；修正后处理失败项。提交超时但结果不明时，先核对记录和平台商品，避免重复提交。</p></details>
+        <details class="faq"><summary>订单没有出现，或采购、物流信息没有更新？</summary><p>先检查日期、店铺、订单状态和搜索条件，再看同步任务结果。确认店铺授权有效；采购物流需要真实采购单号及对应平台登录态。任务显示失败或需要登录时，处理提示后再同步。</p></details>
+        <details class="faq"><summary>任务一直排队，或提示 Agent 不在线？</summary><p>检查任务选择的执行端。使用本机 Agent 的任务需要该电脑上的 Agent 已连接且在线；插件任务要确认插件已登录、相关页面可访问。先看状态与日志，再决定是否重试，避免连续重复启动。</p></details>
+        <details class="faq"><summary>AI 功能无法生成，或生成后资料不完整？</summary><p>先查看具体错误，再到「集成设置」核对对应服务是否配置，检查页面提示的余额或额度。生成完成后仍要核对标题、图片、规格和类目；资料缺失时先补齐，再审核刊登。</p></details>
+        <div class="support-note"><strong>需要协助时，提供这 4 项信息</strong><p>所在功能页面 · 店铺及商品／订单编号 · 出错时间 · 错误提示或已遮挡敏感信息的截图。</p></div>
+      </section>
+    </div>
+    <aside class="learning-panel" aria-label="学习清单">
+      <div class="checklist-card"><span class="eyebrow">我的入门清单</span><h2>准备好开始了吗？</h2><p class="muted">完成一项，勾选一项。</p><div id="progress-ui" hidden><div class="progress-heading"><strong id="progress-text" role="status" aria-live="polite">已完成 0 / 6</strong><span id="progress-percent">0%</span></div><progress id="learning-progress" value="0" max="6" aria-label="学习完成进度"></progress></div>
+      <div class="checklist"><label><input type="checkbox" value="account">已确认账号与工作范围</label><label><input type="checkbox" value="plugin">已安装并登录泽顺插件</label><label><input type="checkbox" value="store">已确认目标店铺可用</label><label><input type="checkbox" value="collect">已采集并检查一个商品</label><label><input type="checkbox" value="publish">已理解刊登与结果核对</label><label><input type="checkbox" value="order">已了解订单处理流程</label></div><p id="storage-note" class="storage-note">勾选只用于记录学习进度，不会执行实际业务。</p><button class="reset-button" id="reset-progress" type="button" hidden>重置学习进度</button></div>
+      <div class="learning-tip"><span aria-hidden="true">↗</span><h3>边学边操作</h3><p>章节底部可以直达对应功能。先读「完成标志」，再检查自己的操作结果。</p><a href="/">进入工作台 →</a></div>
+    </aside>
+    </div>
+    <footer><span>泽顺 ERP · 新手教程</span><span>内容核对：2026 年 10 月 11 日 · 具体功能以账号权限及当前页面为准</span><a href="#main">回到顶部 ↑</a></footer>
+  </main>
+</div>
+</body>
+</html>

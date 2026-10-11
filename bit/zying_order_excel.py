@@ -52,6 +52,40 @@ def money(value):
         raise ValueError("人民币采购成本无效") from exc
 
 
+def purchase_snapshot(buys):
+    """Replace purchase fields with the complete, numbered purchase snapshot."""
+    amounts, numbers, tracking = {}, [], []
+    for buy in buys:
+        if not isinstance(buy, dict):
+            raise ValueError("智赢采购数据格式异常")
+        number = identifier(buy.get("no"))
+        if not number:
+            continue
+        parts = list(dict.fromkeys(part for part in re.split(r"[,，;；\s]+", number) if part))
+        if not parts:
+            continue
+        key = tuple(sorted(parts))
+        currency = str(buy.get("cur") or "CNY").strip().upper()
+        if currency not in {"CNY", "RMB", "人民币", "元", "¥", "￥"}:
+            raise ValueError("采购单金额不是人民币，无法汇总成本")
+        if buy.get("amount") in (None, ""):
+            raise ValueError("采购单金额缺失，请更新泽顺插件并重新同步；Excel 请填写采购成本")
+        amount = Decimal(money(buy["amount"]))
+        if key in amounts and amounts[key] != amount:
+            raise ValueError("同一采购单存在不同成本，请核对后重新同步")
+        if key not in amounts and any(set(key).intersection(old) for old in amounts):
+            raise ValueError("采购单组合重叠，无法确定成本归属")
+        amounts[key] = amount
+        numbers.extend(parts)
+        tracking.extend(part for part in re.split(r"[,，;；\s]+", identifier(buy.get("trace"))) if part)
+    changes = {"purchase_order": ",".join(dict.fromkeys(numbers)),
+               "purchase_tracking": ",".join(dict.fromkeys(tracking)),
+               "purchase_cost": money(sum(amounts.values(), Decimal(0)))}
+    if any(len(changes[key]) > 255 for key in ("purchase_order", "purchase_tracking")):
+        raise ValueError("采购单号或物流号超过 255 个字符")
+    return changes
+
+
 def read_excel(content, filename):
     if Path(filename).suffix.casefold() not in {".xlsx", ".xlsm"}:
         raise ValueError("请上传 .xlsx 或 .xlsm 文件；旧版 .xls 请先另存为 .xlsx")
@@ -98,25 +132,17 @@ def read_excel(content, filename):
                 else:
                     identity_error = "缺少平台订单号" if not order_id else ""
                 record = records.setdefault(order_id or f"__row_{count}", {
-                    "order_id": order_id, "changes": {}, "locations": [], "error": "",
+                    "order_id": order_id, "changes": {}, "locations": [], "error": "", "_buys": [],
                 })
                 record["locations"].append(location)
                 try:
                     if identity_error:
                         raise ValueError(identity_error)
-                    for key in ("purchase_order", "purchase_tracking", "purchase_cost"):
-                        if raw[key] is None or not str(raw[key]).strip():
-                            continue
-                        value = money(raw[key]) if key == "purchase_cost" else identifier(raw[key])
-                        previous = record["changes"].get(key)
-                        if key == "purchase_cost" and previous is not None and previous != value:
-                            raise ValueError("同一订单存在不同成本，无法确定订单总成本")
-                        if key != "purchase_cost":
-                            parts = re.split(r"[,，;；\n]+", (previous + "," if previous else "") + value)
-                            value = ",".join(dict.fromkeys(part.strip() for part in parts if part.strip()))
-                            if len(value) > 255:
-                                raise ValueError("采购单号或物流号超过 255 个字符")
-                        record["changes"][key] = value
+                    if columns["purchase_order"] is None or columns["purchase_cost"] is None:
+                        raise ValueError("请同时提供采购单号和采购成本列，成本按每笔采购单填写")
+                    record["_buys"].append({"no": raw["purchase_order"],
+                        "trace": raw["purchase_tracking"], "amount": raw["purchase_cost"]})
+                    record["changes"] = purchase_snapshot(record["_buys"])
                 except ValueError as exc:
                     record["error"] = f"{location}：{exc}"
     finally:
@@ -125,4 +151,6 @@ def read_excel(content, filename):
         raise ValueError("未识别到订单表：需要平台订单号（或订单号）以及采购成本、采购单号、物流号中的至少一列")
     if not records:
         raise ValueError("Excel 中没有订单数据")
+    for record in records.values():
+        record.pop("_buys", None)
     return list(records.values())

@@ -58,6 +58,27 @@ class ListingTranslationError(RuntimeError):
     """Listing text could not be translated safely."""
 
 
+def title_language_issue(text, language):
+    """Conservative validation: keep brands/numbers, reject obvious wrong copy."""
+    text = str(text or "").strip()
+    if language in {"es", "pt-BR"} and re.search(r"[\u3400-\u9fff]", text):
+        return "标题含中文，请在编辑器中修正目标语言后重新校验"
+    if language in {"es", "pt-BR"} and len(re.findall(r"[A-Za-zÀ-ÿ]+", text)) >= 5:
+        try:
+            if detect_text_language(text) == "en":
+                return "标题疑似整段英文，请修正为目标语言并保留品牌、型号"
+        except ListingTranslationError:
+            return "标题语言无法核实，请检查语言识别服务后重试"
+    return ""
+
+
+def commerce_glossary(text, source, target):
+    if target != "zh-CN" or source not in {"pt-BR", "auto"}:
+        return None
+    phrase = re.sub(r"[?？.!¡¿]", "", str(text).strip().casefold()).strip()
+    return {"são de dar corda": "是上发条的吗？", "é de dar corda": "是上发条的吗？"}.get(phrase)
+
+
 def normalize_marketplace_site(site_id: Any) -> str:
     normalized = str(site_id or "").strip().upper()
     if normalized not in MARKETPLACE_SITES:
@@ -182,34 +203,34 @@ def _cached_default_translate(
             source = detect_text_language(value)
             results.append(value if source == target_language else _cached_default_translate([value], source, target_language)[0])
         return results
-    encoded = json.dumps(
-        [source_language, target_language, texts],
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    cache_key = hashlib.sha256(encoded).hexdigest()
-    now = time.monotonic()
+    # Cache individual messages: an appended reply or changed batch boundary
+    # must not force the entire conversation through the local models again.
+    keys = [hashlib.sha256(json.dumps([source_language, target_language, text],
+            ensure_ascii=False).encode("utf-8")).hexdigest() for text in texts]
     with _TRANSLATION_CACHE_LOCK:
-        cached = _TRANSLATION_CACHE.get(cache_key)
-        if cached and now - cached[0] < _TRANSLATION_CACHE_TTL_SECONDS:
-            return list(cached[1])
-        key_lock = _TRANSLATION_KEY_LOCKS.setdefault(cache_key, threading.Lock())
+        key_lock = _TRANSLATION_KEY_LOCKS.setdefault(
+            f"{source_language}:{target_language}", threading.Lock())
     with key_lock:
+        now = time.monotonic()
+        found = {}
         with _TRANSLATION_CACHE_LOCK:
-            cached = _TRANSLATION_CACHE.get(cache_key)
-            if cached and time.monotonic() - cached[0] < _TRANSLATION_CACHE_TTL_SECONDS:
-                return list(cached[1])
-        translated = _argos_batch_translate(texts, source_language, target_language)
-        with _TRANSLATION_CACHE_LOCK:
-            _TRANSLATION_CACHE[cache_key] = (time.monotonic(), list(translated))
-            if len(_TRANSLATION_CACHE) > 5000:
-                oldest = min(
-                    _TRANSLATION_CACHE,
-                    key=lambda key: _TRANSLATION_CACHE[key][0],
-                )
-                _TRANSLATION_CACHE.pop(oldest, None)
-                _TRANSLATION_KEY_LOCKS.pop(oldest, None)
-        return list(translated)
+            for key in keys:
+                cached = _TRANSLATION_CACHE.get(key)
+                if cached and now - cached[0] < _TRANSLATION_CACHE_TTL_SECONDS:
+                    found[key] = cached[1][0]
+        missing = {key: text for key, text in zip(keys, texts) if key not in found}
+        if missing:
+            translated = _argos_batch_translate(list(missing.values()), source_language, target_language)
+            if len(translated) != len(missing) or any(not str(value or "").strip() for value in translated):
+                raise ListingTranslationError("翻译结果数量不一致或包含空文本")
+            with _TRANSLATION_CACHE_LOCK:
+                for key, value in zip(missing, translated):
+                    found[key] = value
+                    _TRANSLATION_CACHE[key] = (time.monotonic(), [value])
+                while len(_TRANSLATION_CACHE) > 5000:
+                    oldest = min(_TRANSLATION_CACHE, key=lambda key: _TRANSLATION_CACHE[key][0])
+                    _TRANSLATION_CACHE.pop(oldest, None)
+        return [found[key] for key in keys]
 
 
 def translate_texts(
@@ -235,6 +256,9 @@ def translate_texts(
         raise ListingTranslationError("单条待翻译文本不能超过 50,000 字符")
     if source == target:
         return values
+    glossary = [commerce_glossary(value, source, target) for value in values]
+    if all(glossary):
+        return glossary
     translated_values = (
         translator(values, source, target)
         if translator is not None
@@ -243,6 +267,7 @@ def translate_texts(
     if not isinstance(translated_values, list) or len(translated_values) != len(values):
         raise ListingTranslationError("翻译结果数量与原文不一致")
     result = [str(value or "").strip() for value in translated_values]
+    result = [known or translated for known, translated in zip(glossary, result)]
     if any(not value for value in result):
         raise ListingTranslationError("翻译结果包含空文本")
     return result

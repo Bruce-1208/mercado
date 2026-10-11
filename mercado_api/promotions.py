@@ -13,8 +13,12 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Iterator
 
 import requests
+import time
+from email.utils import parsedate_to_datetime
+from datetime import datetime, timezone
 
 from mercado_api.client import MercadoAPIError, MercadoLibreClient
+from mercado_api.request_budget import AdmissionTimeout, admission
 
 
 WRITABLE_TYPES = frozenset({"DEAL", "MARKETPLACE_CAMPAIGN", "PRICE_DISCOUNT"})
@@ -161,16 +165,15 @@ class MercadoPromotionsClient:
             seen_cursors.add(next_cursor)
             cursor = next_cursor
 
-    def get_item_promotions(self, user_id: str, item_id: str) -> dict[str, Any]:
-        return dict(
-            self.client.request(
-                "GET",
-                f"/marketplace/seller-promotions/items/{_required(item_id, '商品编号')}",
-                params={"user_id": _required(user_id, "子账号 user_id")},
-                headers=self._headers(),
-            )
-            or {}
+    def get_item_promotions(self, user_id: str, item_id: str) -> list[dict[str, Any]]:
+        payload = self.client.request(
+            "GET", f"/marketplace/seller-promotions/items/{_required(item_id, '商品编号')}",
+            params={"user_id": _required(user_id, "子账号 user_id")}, headers=self._headers(),
         )
+        rows = payload.get("results") if isinstance(payload, dict) else payload
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            raise MercadoAPIError("商品活动响应格式无效，无法确认是否仍有促销")
+        return [dict(row) for row in rows]
 
     def enroll_item(
         self,
@@ -239,18 +242,22 @@ class MercadoPromotionsClient:
     ) -> dict[str, Any]:
         """Submit once, allowing only one unambiguous 401 refresh retry."""
         refreshed = False
+        retries = 0
         while True:
             headers = self._headers(json_body=payload is not None)
             headers["Authorization"] = f"Bearer {self.client.access_token}"
             try:
-                response = self.client.session.request(
-                    method,
-                    f"{self.client.BASE_URL}{path}",
-                    params=params,
-                    headers=headers,
-                    json=payload,
-                    timeout=self.client.timeout,
-                )
+                with admission(self.client.access_token, timeout=30):
+                    response = self.client.session.request(
+                        method,
+                        f"{self.client.BASE_URL}{path}",
+                        params=params,
+                        headers=headers,
+                        json=payload,
+                        timeout=self.client.timeout,
+                    )
+            except AdmissionTimeout as exc:
+                raise MercadoAPIError("平台请求队列繁忙，当前商品未提交，请稍后重试") from exc
             except requests.RequestException as exc:
                 raise MercadoAPIError(
                     f"{method} {path} 连接中断，结果未知；请先同步官方状态，禁止直接重试"
@@ -259,6 +266,26 @@ class MercadoPromotionsClient:
                 self.client._refresh_access_token()
                 refreshed = True
                 continue
+            transient_rejection = response.status_code in {423, 429} or (
+                response.status_code == 409 and "internal_capacity_conflict" in response.text
+            )
+            if transient_rejection and retries < 2:
+                retry_after = (getattr(response, "headers", None) or {}).get("Retry-After")
+                delay = 2 ** (retries + 1)
+                if retry_after:
+                    try:
+                        delay = max(0, float(retry_after))
+                    except (ValueError, TypeError):
+                        try:
+                            delay = max(0, (parsedate_to_datetime(retry_after) - datetime.now(timezone.utc)).total_seconds())
+                        except (ValueError, TypeError):
+                            delay = 2 ** (retries + 1)
+                # A long platform cooldown must not hold up the whole batch.
+                # Stop instead of retrying sooner than the requested delay.
+                if delay <= 30:
+                    retries += 1
+                    time.sleep(delay)
+                    continue
             if response.status_code >= 500:
                 raise MercadoAPIError(
                     f"{method} {path} 网关或平台异常 ({response.status_code})，结果未知；请先同步官方状态，禁止直接重试"
@@ -269,5 +296,8 @@ class MercadoPromotionsClient:
                 )
             if response.status_code == 204 or not getattr(response, "content", b""):
                 return {}
-            data = response.json()
+            try:
+                data = response.json()
+            except ValueError as exc:
+                raise MercadoAPIError(f"{method} {path} 已响应但返回内容无效，结果未知；请核实官方状态") from exc
             return dict(data or {}) if isinstance(data, dict) else {"result": data}

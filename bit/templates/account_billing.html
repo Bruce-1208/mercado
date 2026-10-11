@@ -6,8 +6,11 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='print-wallet.css') }}?v=20261006-billing-print">
 <link rel="stylesheet" href="{{ url_for('static', filename='date-filter-controls.css') }}?v=20261008">
 <script defer src="{{ url_for('static', filename='date-filter-controls.js') }}?v=20261008"></script>
-<script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261008"></script></head>
-<body data-admin="{{ 'true' if billing_admin else 'false' }}" data-user-id="{{ current_user.id }}">
+<script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261008"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261010-clean">
+    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261011-compact">
+</head>
+<body class="zs-standalone zs-account" data-admin="{{ 'true' if billing_admin else 'false' }}" data-user-id="{{ current_user.id }}">
 <header><strong>ZS · 泽顺运营中心</strong><nav><a href="/">返回工作台</a><a href="/settings/profile">个人资料</a><a href="/logout">退出登录</a></nav></header>
 <main><div class="heading"><div><p class="eyebrow">PAYMENT MANAGEMENT</p><h1>支付管理</h1><p>统一管理账户订阅与业务员打印费用。金额变动保留明细，所有时间均为北京时间。</p></div></div>
 <div class="billing-tabs" role="tablist" aria-label="支付管理模块"><button id="subscription-tab" type="button" role="tab" aria-controls="subscription" aria-selected="true">账户订阅</button><button id="print-wallet-tab" type="button" role="tab" aria-controls="print-wallet" aria-selected="false" tabindex="-1">业务员打印余额</button></div>

@@ -68,3 +68,27 @@ def test_model_account_failure_is_not_swallowed(taxonomy):
         raise products.OriginalModelAccountError('AI account unavailable')
     with pytest.raises(products.OriginalModelAccountError):
         products._select_marketplace_category({}, 'keys', [], object(), chat=chat)
+
+
+@pytest.mark.parametrize('invalid', ['not JSON', '{"category_id":"CBT999"}'])
+def test_rejected_metered_answers_do_not_poison_second_submission(taxonomy, invalid):
+    from datetime import datetime
+    from erp.ai_generation_budget import BudgetedChat, QWEN_MODEL, BEIJING
+    calls = []
+    def transport(**kwargs):
+        calls.append(kwargs['messages'])
+        content = invalid if len(calls) <= 2 else json.dumps({
+            'category_id': 'CBT1' if len(calls) == 3 else 'CBT2'})
+        return {'content': content, 'model': QWEN_MODEL, 'finish_reason': 'stop',
+                'usage': {'prompt_tokens': 100, 'completion_tokens': 10}}
+    options = dict(transport=transport, model=QWEN_MODEL, enforce_cap=False,
+                   now=lambda: datetime(2026, 10, 9, 10, tzinfo=BEIJING))
+    first = BudgetedChat(**options)
+    with pytest.raises(ValueError, match='有效分类'):
+        catalog.select_known_cbt_category({}, 'keycaps', first, api_key='test')
+    assert len(calls) == 2  # Both attempts reached transport, never a cached failure.
+    assert first.snapshot()['cache'] == {}
+    second = BudgetedChat(ledger=first.snapshot(), **options)
+    result = catalog.select_known_cbt_category({}, 'keycaps', second, api_key='test')
+    assert result['category_id'] == 'CBT2'
+    assert len(calls) == 4

@@ -311,7 +311,7 @@ def test_publish_job_persists_success_and_failure_attempts(monkeypatch, tmp_path
     monkeypatch.setattr(
         bit_store_link_video,
         "upload_store_link_video",
-        lambda link_id, _upload: {"link_id": link_id, "item_id": "MLM123", "clip_uuid": "clip-1"},
+        lambda link_id, _upload, **kwargs: {"link_id": link_id, "item_id": "MLM123", "clip_uuid": "clip-1"},
     )
     result = video.publish_job(created["id"], 42)
     saved = video.get_job(created["id"])
@@ -320,7 +320,7 @@ def test_publish_job_persists_success_and_failure_attempts(monkeypatch, tmp_path
     assert saved["publish_attempts"][-1]["clip_uuid"] == "clip-1"
     assert saved["published"][-1]["link_id"] == 42
 
-    def reject(_link_id, _upload):
+    def reject(_link_id, _upload, **kwargs):
         raise ValueError("商品物流类型不完整")
 
     monkeypatch.setattr(bit_store_link_video, "upload_store_link_video", reject)

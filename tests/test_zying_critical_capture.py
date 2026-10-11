@@ -97,6 +97,8 @@ def test_api_task_carries_salesperson_to_both_writers(monkeypatch):
         return {"root": [{"sale_id": 123, "sale_cur": "CNY", "sale_cost": 50}]}
 
     monkeypatch.setattr(collector, "_zying_api_post", api_post)
+    monkeypatch.setattr(collector, "_zying_api_read_many",
+                        lambda token, command, payloads: [api_post(None, token, command, payload) for payload in payloads])
     monkeypatch.setattr(collector, "_enrich_product_categories", lambda *args: None)
     writes = []
     collector.collect_zying_products(

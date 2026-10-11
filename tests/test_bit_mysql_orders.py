@@ -546,3 +546,47 @@ def test_fast_order_page_preserves_financial_filters_and_defers_only_summary(sor
     assert result['page_size'] == 50
     assert result['summary'] is None and result['summary_pending'] is True
     connection.close.assert_called_once()
+
+
+@pytest.mark.parametrize('query,args', [
+    (bit_mysql.list_mercado_pending_shipment_costs, (8,)),
+    (bit_mysql.list_mercado_pending_shipment_cost_rows, ()),
+])
+def test_automatic_cost_queries_only_include_last_sixty_days(query, args):
+    connection = MagicMock()
+    cursor = connection.cursor.return_value.__enter__.return_value
+    cursor.fetchall.return_value = []
+    with (patch('bit.bit_mysql.pymysql.connect', return_value=connection),
+          patch('bit.bit_mysql._ensure_mercado_synced_orders_table'),
+          patch('bit.bit_mysql._ensure_mercado_store_tokens_table')):
+        query(*args)
+    sql = cursor.execute.call_args.args[0]
+    assert 'synced.`date_created` >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 60 DAY)' in sql
+    # Completed orders are not excluded from the daily cost sweep.
+    assert 'synced.`status` NOT IN' not in sql
+
+
+@pytest.mark.parametrize('same_day,completed', [(True, 0), (True, 1), (False, 0), (False, 1)])
+def test_daily_cursor_resumes_same_day_but_rescans_full_window_next_day(same_day, completed):
+    from datetime import datetime, timedelta
+    end = datetime(2026, 10, 10, 0)
+    start = end - timedelta(days=60)
+    existing = dict(token_id=8, run_date='2026-10-10' if same_day else '2026-10-09',
+                    completed_for_run=completed, completed_through=end-timedelta(days=1),
+                    window_from=start-timedelta(days=1), window_to=end-timedelta(days=1),
+                    next_offset=500)
+    connection = MagicMock()
+    cursor = connection.cursor.return_value.__enter__.return_value
+    cursor.fetchone.return_value = existing
+    with (patch('bit.bit_mysql.pymysql.connect', return_value=connection),
+          patch('bit.bit_mysql._ensure_mercado_order_daily_60d_cursors_table')):
+        result = bit_mysql.begin_mercado_order_status_window(8, '2026-10-10', start, end)
+    inserts = [call for call in cursor.execute.call_args_list if 'INSERT INTO' in call.args[0]]
+    if same_day:
+        assert inserts == []
+        assert result['next_offset'] == 500
+    else:
+        assert len(inserts) == 1
+        assert inserts[0].args[1][3:5] == (start, end)
+        assert 'mercado_order_daily_60d_cursors' in inserts[0].args[0]
+        assert '`next_offset` = 0' in inserts[0].args[0]

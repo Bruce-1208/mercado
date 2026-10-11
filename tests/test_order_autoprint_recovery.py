@@ -82,3 +82,40 @@ def test_combined_pdf_failure_preserves_successful_individual_pdf(monkeypatch):
     assert result["output_files"] == ["/tmp/individual.pdf"]
     assert result["output_error"] == "merge failed"
     assert result["download_path"] == ""
+
+
+def test_scheduler_recovers_immediately_after_restart(monkeypatch):
+    stop = Mock()
+    stop.is_set.return_value = False
+    stop.wait.return_value = True
+    monkeypatch.setattr(bit_order_sync, "_scheduler_stop_event", stop)
+    monkeypatch.setattr(bit_order_sync.time, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(bit_order_sync, "get_lock_owner", lambda _key: None)
+    monkeypatch.setattr(bit_order_sync, "_sync_state", {"running": False})
+    monkeypatch.setattr(bit_order_sync.bit_mysql, "get_mercado_order_sync_schedule_value",
+                        lambda _key: datetime.now(bit_order_sync.WORKBENCH_LOCAL_TIMEZONE).date().isoformat())
+    start = Mock(return_value=(True, {}))
+    monkeypatch.setattr(bit_order_sync, "start_order_sync", start)
+    bit_order_sync._scheduler_loop(900)
+    start.assert_called_once_with(mode="automatic")
+
+
+def test_free_automatic_labels_persist_and_audit_without_wallet(monkeypatch):
+    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(bit_print, "_scan_store_orders", lambda *_a, **_kw: {"first_run": False, "tracking_since": now})
+    monkeypatch.setattr(bit_print.bit_mysql, "list_mercado_order_print_candidates", lambda *_a, **_kw: [{"order_id": "1", "shipping_id": "a", "site_id": "MLB"}])
+    monkeypatch.setattr(print_wallet, "download_automatic_paid_labels", Mock(side_effect=AssertionError("free labels cannot charge")))
+    monkeypatch.setattr(bit_print, "_download_label", lambda *_a, **_kw: ("a", b"%PDF label", 1))
+    events = []
+    monkeypatch.setattr(bit_print, "_write_output", lambda *_a, **_kw: events.append("saved") or ("/tmp/label.pdf", "label.pdf"))
+    monkeypatch.setattr(bit_print, "_sync_printed_shipment_tracking_number", lambda *_a, **_kw: None)
+    monkeypatch.setattr(bit_print, "_record_printed_orders", lambda ids, operator_name: events.append((ids, operator_name)))
+    printed = []
+    rows = bit_print._run_shop_job(
+        {"token_id": 7, "shop_name": "shop", "sites": ["巴西"]}, persist_labels=True,
+        require_prepaid=False, operator_name="系统自动打印", printed_order_sink=printed,
+        logger=lambda _line: None,
+    )
+    assert rows[0]["status"] == "printed"
+    assert printed == ["1"]
+    assert events == ["saved", (["1"], "系统自动打印")]

@@ -126,10 +126,16 @@ def mercado_page(browser):
           window.defaultProduct = {json.dumps(PRODUCT, ensure_ascii=False)};
           window.mockMode = {json.dumps(mode)};
           window.messages = [];
+          window.exchangeMessages = [];
           window.pendingResponses = [];
           window.chrome = {{runtime: {{
             onMessage: {{addListener: listener => {{ window.extensionListener = listener; }}}},
             sendMessage: (message, callback) => {{
+              if (message.type === 'GET_MERCADO_EXCHANGE_RATES') {{
+                exchangeMessages.push(message);
+                callback(window.exchangeResponse || {{ok:true, rates_to_usd:{{MXN:.05,BRL:.2,ARS:.001,CLP:.0011,COP:.00025,UYU:.025,USD:1}},
+                  fetched_at:Date.now()/1000,expires_at:Date.now()/1000+1800,source:'测试参考汇率'}}); return;
+              }}
               messages.push(structuredClone(message));
               if (message.type !== 'GET_MERCADO_PRODUCT_INFO') {{
                 callback({{ok:false, error:'Unexpected fixture message'}}); return;
@@ -706,3 +712,24 @@ def test_single_card_collect_submits_without_navigation(mercado_page, response, 
     assert SKU[3:] in messages[0]["url"]
     toast = page.locator("#zeshun-collector-toast").inner_text()
     assert ("待传" if response.get("queued") else "已采集" if response["ok"] else response["error"]) in toast
+
+
+def test_early_extraction_waits_for_native_image_then_succeeds(mercado_page):
+    page = mercado_page(
+        '<main class="ui-pdp-container"><h1 class="ui-pdp-title">Loading gallery</h1></main>',
+        url='https://articulo.mercadolibre.com.mx/MLM-385775246-test-_JM',
+    )
+    extract = "() => new Promise(resolve => extensionListener({type:'EXTRACT_BATCH_PRODUCT'}, {}, resolve))"
+    pending = page.evaluate(extract)
+    assert pending['ok'] is False
+    assert pending.get('retryable') is not False
+    assert '主图' in pending['error']
+    page.evaluate("""() => {
+      const image = document.createElement('meta');
+      image.setAttribute('property', 'og:image');
+      image.content = 'https://example.test/product.jpg';
+      document.head.append(image);
+    }""")
+    ready = page.evaluate(extract)
+    assert ready['ok'] is True
+    assert ready['product']['scrape_status'] == 'ok'

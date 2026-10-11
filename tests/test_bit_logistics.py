@@ -1,4 +1,5 @@
 import json
+from urllib.parse import parse_qs, urlparse
 
 from bit import bit_logistics
 
@@ -15,7 +16,7 @@ def _order(**changes):
     return row
 
 
-def test_tracking_without_api_credentials_returns_official_query_link(monkeypatch):
+def test_tracking_without_api_credentials_returns_baidu_search_link(monkeypatch):
     monkeypatch.delenv("KUAIDI100_CUSTOMER", raising=False)
     monkeypatch.delenv("KUAIDI100_KEY", raising=False)
     monkeypatch.setattr(
@@ -28,8 +29,9 @@ def test_tracking_without_api_credentials_returns_official_query_link(monkeypatc
 
     assert result["configured"] is False
     assert result["events"] == []
-    assert "com=shunfeng" in result["external_url"]
-    assert "nu=SF123456" in result["external_url"]
+    url = urlparse(result["external_url"])
+    assert url.netloc == "www.baidu.com"
+    assert parse_qs(url.query)["wd"] == ["SF123456 物流查询"]
 
 
 def test_tracking_api_normalizes_and_caches_events(monkeypatch):

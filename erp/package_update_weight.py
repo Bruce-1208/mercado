@@ -15,7 +15,8 @@ def package_update_weight_g(row):
     declared = positive(row.get("declared_weight_g"))
     if actual is None:
         raise ValueError("缺少有效的实际重量")
-    if not any(value is not None and value > 500 for value in (actual, declared)):
+    candidates = (actual,) if row.get("_automation_actual_weight_only") else (actual, declared)
+    if not any(value is not None and value > 500 for value in candidates):
         return str(row["actual_weight_g"]).strip()
     pieces = re.split(r"[x×*]", str(row.get("actual_dimensions_cm") or "").lower())
     dimensions = [positive(piece.strip()) for piece in pieces]

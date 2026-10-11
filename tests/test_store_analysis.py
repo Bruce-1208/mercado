@@ -41,6 +41,49 @@ def test_store_analysis_date_bounds_use_beijing_days():
         _dates("2026-09-02", "2026-09-01")
 
 
+def test_category_translation_preserves_chinese_and_successful_languages(monkeypatch):
+    from bit import store_analysis
+    monkeypatch.setattr(store_analysis, "_CATEGORY_TRANSLATION_CACHE", {})
+    calls = []
+
+    def translate(names, source, target):
+        calls.append((names, source))
+        if source == "pt-BR":
+            raise RuntimeError("temporary model failure")
+        return ["灯具"]
+
+    monkeypatch.setattr(store_analysis, "translate_texts", translate)
+    paths = {
+        "MLM1": [{"id": "MLM1", "name": "家居", "name_source": "Hogar"}],
+        "MLM2": [{"id": "MLM2", "name": "Lamparas"}],
+        "MLB3": [{"id": "MLB3", "name": "Casa"}],
+    }
+    names = store_analysis._translate_category_names(paths, 1)
+    assert names == {"MLM1": "家居", "MLM2": "灯具", "MLB3": ""}
+    assert calls == [(["Lamparas"], "es"), (["Casa"], "pt-BR")]
+    monkeypatch.setattr(store_analysis, "translate_texts", lambda *args: ["房屋"])
+    assert store_analysis._translate_category_names(paths, 1)["MLB3"] == "房屋"
+
+
+def test_failed_translation_analysis_is_not_reused_from_disk(monkeypatch, tmp_path):
+    from bit import store_analysis
+    monkeypatch.setattr(store_analysis, "_ANALYSIS_CACHE_DIR", tmp_path)
+    key = ("test",)
+    store_analysis._write_persisted_analysis(key, {
+        "computed_at": "2026-10-10", "category_translation_warning": "temporary failure",
+    })
+    assert store_analysis._read_persisted_analysis(key) is None
+
+
+def test_failed_translation_is_not_persisted(monkeypatch):
+    from bit import store_analysis
+    monkeypatch.setattr(store_analysis, "_compute_store_analysis", lambda *a, **kw: {
+        "sites": [], "category_translation_warning": "temporary failure",
+    })
+    monkeypatch.setattr(store_analysis, "_write_persisted_analysis", lambda *args: pytest.fail("persisted failed result"))
+    assert list_store_analysis("2026-10-01", "2026-10-02", refresh=True)["category_translation_warning"]
+
+
 def test_store_analysis_respects_authorized_store_scope(monkeypatch):
     class Cursor:
         def __init__(self):

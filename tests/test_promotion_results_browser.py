@@ -1,6 +1,6 @@
 """Verify enrollment outcomes and net prices with real templates and offline APIs."""
 import json
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 
 import pytest
 from jinja2 import Environment, FileSystemLoader
@@ -95,7 +95,11 @@ class PromotionResultsMock:
             if self.item_refresh_failed or (self.submitted and self.refresh_mode == "failed"):
                 route.fulfill(status=503, content_type="application/json", body=json.dumps({"status": "error", "message": "离线刷新失败"}))
             else:
-                data = {"promotion": self.campaign, "rows": self.items()}
+                rows = self.items()
+                enrolled = parse_qs(url.query).get('enrolled', [''])[0]
+                if enrolled:
+                    rows = [row for row in rows if (row['status_raw'] == 'started') == (enrolled == '1')]
+                data = {"promotion": self.campaign, "rows": rows}
                 if not (self.submitted and self.refresh_mode == "no_job"):
                     data["latest_job"] = self.job()
                 self.json(route, data)
@@ -121,7 +125,7 @@ class PromotionResultsMock:
     def open(self):
         self.page.locator('#campaignRows button').click()
         self.page.locator("#itemsTitle").filter(has_text=self.campaign["name"]).wait_for()
-        self.page.locator("#enrollmentResults").wait_for(state="visible")
+        self.page.locator("#itemRows tr").first.wait_for()
 
     def screenshot(self, name):
         ARTIFACTS.mkdir(parents=True, exist_ok=True)
@@ -142,26 +146,26 @@ def test_saved_results_have_separate_outcomes_reasons_and_before_after_net_price
     mock.screenshot("01-activity-results.png")
     mock.open()
     headers = promotion_page.locator(".item-table thead").inner_text()
-    assert all(text in headers for text in ["报名结果", "促销前净收益价", "促销后净收益价"])
-    expected = {1: "报名成功", 2: "报名失败", 3: "待核实", 4: "已参与（官方）", 5: "未报名"}
+    assert all(text in headers for text in ["当前报名状态", "当前折扣比例", "促销前净收益价", "促销后净收益价"])
+    expected = {1: "已报名", 2: "报名失败", 3: "待核实", 4: "已报名", 5: "未报名"}
     for row_id, label in expected.items():
         assert label in promotion_page.locator(f"#item-row-{row_id} td").nth(3).inner_text()
     assert FAILURE in promotion_page.locator("#item-row-2 td").nth(3).inner_text()
-    before = promotion_page.locator("#item-row-1 td").nth(7).inner_text()
+    before = promotion_page.locator("#item-row-1 td").nth(8).inner_text()
     after = promotion_page.locator("#net-after-1").inner_text()
     assert "MXN 370.50" in before and "对应售价 MXN 500.00" in before
     assert "USD 32.20" in after and "对应售价 MXN 450.00" in after
     assert promotion_page.locator("#net-after-2").inner_text() == "待获取"
-    panel = promotion_page.locator("#enrollmentResults").inner_text()
-    assert all(text in panel for text in ["最近报名结果", "MLM100", "MLM200", "MLM300", FAILURE])
+    assert promotion_page.locator("#enrollmentResults").count() == 0
+    assert "降价 10%（9 折）" in promotion_page.locator("#item-row-1").inner_text()
     assert promotion_page.locator("#enrollmentResults img, #itemRows .result-cell img").count() == 0
     assert promotion_page.evaluate("window.outcomeXss || 0") == 0
     assert not mock.errors
     mock.screenshot("02-product-results-and-net-prices.png")
 
     promotion_page.get_by_role("button", name="刷新结果", exact=True).click()
-    promotion_page.locator("#enrollmentResults").wait_for(state="visible")
-    assert "MLM200" in promotion_page.locator("#enrollmentResults").inner_text()
+    promotion_page.locator("#item-row-2").wait_for()
+    assert "MLM200" in promotion_page.locator("#itemRows").inner_text()
     promotion_page.reload()
     mock.open()
     assert "报名失败" in promotion_page.locator("#item-row-2").inner_text()
@@ -171,12 +175,12 @@ def test_saved_results_have_separate_outcomes_reasons_and_before_after_net_price
 def test_refresh_failure_preserves_saved_results_and_allows_a_successful_retry(promotion_page):
     mock = PromotionResultsMock(promotion_page)
     mock.open()
-    saved_panel = promotion_page.locator("#enrollmentResults").inner_text()
+    saved_panel = promotion_page.locator("#itemRows").inner_text()
     mock.item_refresh_failed = True
     promotion_page.get_by_role("button", name="刷新结果", exact=True).click()
     promotion_page.wait_for_function("document.getElementById('itemsSubtitle').textContent.includes('刷新失败，保留上次读取')")
-    assert promotion_page.locator("#enrollmentResults").is_visible()
-    assert promotion_page.locator("#enrollmentResults").inner_text() == saved_panel
+    assert promotion_page.locator("#enrollmentResults").count() == 0
+    assert promotion_page.locator("#itemRows").inner_text() == saved_panel
     assert promotion_page.locator("#itemRows tr").count() == 5
     assert "报名失败" in promotion_page.locator("#item-row-2").inner_text()
     assert FAILURE in promotion_page.locator("#item-row-2").inner_text()
@@ -185,11 +189,11 @@ def test_refresh_failure_preserves_saved_results_and_allows_a_successful_retry(p
     assert promotion_page.evaluate("state.currentJob.job_id") == "saved-job-1"
 
     mock.item_refresh_failed = False
-    mock.results[0]["message"] = "刷新恢复：平台再次确认报名成功"
+    mock.results[1]["message"] = "刷新恢复：最新失败原因"
     promotion_page.get_by_role("button", name="刷新结果", exact=True).click()
-    promotion_page.wait_for_function("document.getElementById('enrollmentResults').textContent.includes('刷新恢复：平台再次确认报名成功')")
+    promotion_page.wait_for_function("document.getElementById('itemRows').textContent.includes('刷新恢复：最新失败原因')")
     assert "刷新失败" not in promotion_page.locator("#itemsSubtitle").inner_text()
-    assert "刷新恢复：平台再次确认报名成功" in promotion_page.locator("#item-row-1").inner_text()
+    assert "刷新恢复：最新失败原因" in promotion_page.locator("#item-row-2").inner_text()
     assert promotion_page.locator("#itemRows tr").count() == 5
     assert len([path for method, path, _ in mock.calls if path == "/api/promotions/71/items"]) == 3
     assert not mock.errors
@@ -202,7 +206,7 @@ def test_editing_activity_price_hides_old_net_quote_and_bulk_discount_updates_th
     price.fill("400")
     assert promotion_page.locator("#net-after-1").inner_text() == "报价已变更，待重新核价"
     assert "32.20" not in promotion_page.locator("#net-after-1").inner_text()
-    assert "MXN 370.50" in promotion_page.locator("#item-row-1 td").nth(7).inner_text()
+    assert "MXN 370.50" in promotion_page.locator("#item-row-1 td").nth(8).inner_text()
     price.fill("450.00")
     assert "USD 32.20" in promotion_page.locator("#net-after-1").inner_text()
 
@@ -313,9 +317,8 @@ def test_submission_keeps_per_item_results_visible_even_if_refresh_is_incomplete
     promotion_page.locator("#confirmBtn").click()
     promotion_page.locator("#previewDialog").wait_for(state="hidden")
     promotion_page.wait_for_function("document.getElementById('feedback').textContent.includes('提交完成')")
-    panel = promotion_page.locator("#enrollmentResults")
-    assert panel.is_visible()
-    assert all(text in panel.inner_text() for text in ["成功 1", "失败 1", "待核实 1", "MLM100", "MLM200", "MLM300", FAILURE])
+    assert promotion_page.locator("#enrollmentResults").count() == 0
+    assert all(text in promotion_page.locator("#itemRows").inner_text() for text in ["已报名", "报名失败", "待核实", "MLM100", "MLM200", "MLM300", FAILURE])
     assert "提交完成：成功 1，待核实 1，失败 1" in promotion_page.locator("#feedback").inner_text()
     assert "info" in promotion_page.locator("#feedback").get_attribute("class")
     assert promotion_page.locator("#confirmBtn").is_disabled()
@@ -327,9 +330,51 @@ def test_results_remain_accessible_in_mobile_embedded_view(promotion_page):
     promotion_page.set_viewport_size({"width": 390, "height": 844})
     mock = PromotionResultsMock(promotion_page, embedded=True)
     mock.open()
-    assert promotion_page.locator("#enrollmentResults").is_visible()
-    assert "报名失败" in promotion_page.locator("#enrollmentResults").inner_text()
+    assert promotion_page.locator("#enrollmentResults").count() == 0
+    assert "报名失败" in promotion_page.locator("#itemRows").inner_text()
     assert promotion_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     assert promotion_page.locator(".item-table").evaluate("table => table.closest('.table-wrap').scrollWidth > table.closest('.table-wrap').clientWidth")
     assert not mock.errors
     mock.screenshot("05-mobile-result-panel.png")
+
+
+def test_current_enrollment_filter_clears_selection_and_prices_do_not_change_current_discount(promotion_page):
+    mock = PromotionResultsMock(promotion_page)
+    mock.open()
+    promotion_page.locator('#itemRows input[value="2"]').check()
+    promotion_page.locator('#itemEnrollmentFilter').select_option('1')
+    promotion_page.wait_for_function("state.itemTotal === 2")
+    assert promotion_page.locator('#itemRows tr').count() == 2
+    assert promotion_page.locator('#selectionText').inner_text() == '已选择 0 件商品'
+    promotion_page.locator('#price-1').fill('350')
+    assert '降价 10%（9 折）' in promotion_page.locator('#item-row-1').inner_text()
+    promotion_page.locator('#itemEnrollmentFilter').select_option('0')
+    promotion_page.wait_for_function("state.itemTotal === 3")
+    assert promotion_page.locator('#itemRows tr').count() == 3
+    assert all('未报名' in row for row in promotion_page.locator('#itemRows tr').all_inner_texts())
+    assert not mock.errors
+
+
+def test_background_enrollment_refreshes_product_state_without_duplicate_submission(promotion_page):
+    mock = PromotionResultsMock(promotion_page)
+    mock.open()
+    submitted = []
+    def jobs(route):
+        if route.request.method == 'POST':
+            submitted.append(route.request.post_data_json)
+            mock.json(route, {'job_id':'async-job','action':'enroll','status':'running','results':[]})
+        else:
+            mock.results[1]['status'] = 'succeeded'
+            mock.json(route, {'rows':[{'job_id':'async-job','action':'enroll','status':'succeeded',
+                'success_count':1,'failed_count':0,'unknown_count':0}]})
+    promotion_page.route('**/api/promotions/jobs*', jobs)
+    promotion_page.locator('#itemRows input[value="2"]').check()
+    promotion_page.locator('#enrollBtn').click()
+    promotion_page.locator('#confirmBtn').click()
+    promotion_page.wait_for_function("state.pendingJob?.id === 'async-job'")
+    assert promotion_page.locator('#enrollBtn').is_disabled()
+    assert promotion_page.locator('#itemsView').is_visible()
+    promotion_page.wait_for_function("!state.pendingJob && document.getElementById('feedback').textContent.includes('提交完成')")
+    assert '已报名' in promotion_page.locator('#item-row-2').inner_text()
+    assert len(submitted) == 1
+    assert not mock.errors
